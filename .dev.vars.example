@@ -1,0 +1,2 @@
+# Names of the local variables; values live only in .dev.vars (ignored).
+NEXTJS_ENV=development

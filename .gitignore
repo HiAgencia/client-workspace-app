@@ -4,9 +4,11 @@ node_modules/
 .open-next/
 .wrangler/
 out/
+build/
 dist/
 coverage/
 *.tsbuildinfo
+next-env.d.ts
 
 # Secrets: names live in .env.example
 .env
@@ -15,8 +17,11 @@ coverage/
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+*.pem
 
 # OS and editors
 .DS_Store
 Thumbs.db
 *.log
+npm-debug.log*
+.pnpm-debug.log*
