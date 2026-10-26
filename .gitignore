@@ -1,0 +1,22 @@
+# Dependencies and builds
+node_modules/
+.next/
+.open-next/
+.wrangler/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets: names live in .env.example
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# OS and editors
+.DS_Store
+Thumbs.db
+*.log
