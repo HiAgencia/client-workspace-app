@@ -25,7 +25,7 @@ and the screens. When the code changes a decision described here, this document 
 | Table | Holds | Key columns |
 |---|---|---|
 | `nodes` | The tree: client or organization, project, subproject | `id`, `owner_id`, `parent_id` (null at the root), `kind` (`client` · `project` · `subproject`), `name`, `position`, `archived_at` |
-| `items` | What lives in a node: tasks, decisions, links, and things to review | `id`, `node_id`, `type` (`task` · `decision` · `link` · `review`), `title`, `body`, `url`, `status` (`open` · `done`), `priority` (1–4, tasks only), `due_on`, `source` (`manual` · `chat` · `agent`), `created_at`, `updated_at`, `completed_at`, `deleted_at` |
+| `items` | What lives in a node: tasks, decisions, links, and things to review | `id`, `node_id`, `type` (`task` · `decision` · `link` · `review`), `title`, `body`, `url`, `status` (`open` · `done`), `priority` (1–4, tasks only), `due_on`, `source` (`manual` · `chat` · `agent`), `agent_label` (the MCP token's label), `created_at`, `updated_at`, `completed_at`, `deleted_at` |
 | `google_accounts` | Each connected Google account | `id`, `owner_id`, `email`, encrypted `refresh_token`, encrypted `access_token` and its expiry, `scopes`, `status`, `is_demo` |
 | `node_accounts` | Which node an account hangs from | `node_id`, `account_id` |
 | `account_calendars` | Which calendars of each account are shown | `account_id`, `calendar_id`, `summary`, `color`, `selected` |
