@@ -9,7 +9,8 @@ import { createNode } from "@/lib/tools/tree-writes";
 type Seed = { name: string; children?: Seed[]; items?: Array<[tool: string, input: Record<string, unknown>]> };
 
 
-function seedFor(today: string): Seed[] {
+
+export function demoSeedTree(today: string): Seed[] {
   const day = (offset: number): string => {
     const date = new Date(`${today}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() + offset);
@@ -81,7 +82,7 @@ export async function seedDemo(ctx: ToolContext, today: string): Promise<{ plant
   if (error) throw new Error(`demo seed: ${error.message}`);
   if ((count ?? 0) > 0) return { planted: false };
   try {
-    await plant(ctx, seedFor(today));
+    await plant(ctx, demoSeedTree(today));
   } catch (error) {
     
     const removed = await ctx.db.from("nodes").delete().eq("owner_id", ctx.ownerId).is("parent_id", null);
