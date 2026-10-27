@@ -14,7 +14,15 @@ export function requireEnv(name: string): string {
   return value;
 }
 
-const options = { auth: { persistSession: false, autoRefreshToken: false } } as const;
+const options = {
+  auth: { persistSession: false, autoRefreshToken: false },
+  // A request that never answers fails its test after this deadline instead of holding the worker; the suite talks to
+  // one remote project over the network.
+  global: {
+    fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+      fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(30_000) }),
+  },
+} as const;
 
 export function serviceClient(): Db {
   return createClient<Database>(

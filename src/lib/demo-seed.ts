@@ -1,10 +1,9 @@
-import type { ToolContext } from "@/lib/tools/context";
-import { callTool } from "@/lib/tools/registry";
-import { isError } from "@/lib/tools/result";
-import { createNode } from "@/lib/tools/tree-writes";
+import type { Db } from "@/lib/db/client";
 
 // The demo workspace each visitor gets as their own copy: two clients, their projects, and the kind of work a small
-// agency or a freelancer carries, with tasks due around today so the Today screen has something to show.
+// agency or a freelancer carries, with tasks due around today so the Today screen has something to show. The shape lives
+// here for the tests and the first step; the database plants it through `public.seed_demo`, one statement and one round
+// trip, and a test keeps both sides equal.
 
 type Seed = { name: string; children?: Seed[]; items?: Array<[tool: string, input: Record<string, unknown>]> };
 
@@ -61,33 +60,10 @@ export function demoSeedTree(today: string): Seed[] {
   ];
 }
 
-async function plant(ctx: ToolContext, nodes: Seed[], parent?: string): Promise<void> {
-  for (const entry of nodes) {
-    const created = await createNode(ctx, { name: entry.name, parent });
-    if (isError(created)) throw new Error(`demo seed: ${created.message}`);
-    for (const [tool, input] of entry.items ?? []) {
-      const result = await callTool(tool, ctx, { ...input, node: created.node.id });
-      if (!result.ok) throw new Error(`demo seed ${tool}: ${"message" in result ? result.message : "failed"}`);
-    }
-    await plant(ctx, entry.children ?? [], created.node.id);
-  }
-}
-
-// Plants the demo only into an empty workspace, so reloading never duplicates it.
-export async function seedDemo(ctx: ToolContext, today: string): Promise<{ planted: boolean }> {
-  const { count, error } = await ctx.db
-    .from("nodes")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_id", ctx.ownerId);
+// Plants the demo only into an empty workspace, so reloading never duplicates it. One statement: it plants everything or
+// nothing, so a cut in the middle leaves no partial tree to clean up.
+export async function seedDemo(db: Db, today: string): Promise<{ planted: boolean }> {
+  const { data, error } = await db.rpc("seed_demo", { p_today: today });
   if (error) throw new Error(`demo seed: ${error.message}`);
-  if ((count ?? 0) > 0) return { planted: false };
-  try {
-    await plant(ctx, demoSeedTree(today));
-  } catch (error) {
-    // A seed cut halfway is removed whole (items go with their nodes), so trying again plants it from the start.
-    const removed = await ctx.db.from("nodes").delete().eq("owner_id", ctx.ownerId).is("parent_id", null);
-    if (removed.error) console.error("demo seed: removing a partial seed failed", removed.error.message);
-    throw error;
-  }
-  return { planted: true };
+  return { planted: data === true };
 }

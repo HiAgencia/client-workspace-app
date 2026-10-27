@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!session.user.isAnonymous) return problem(403, "the demo workspace is planted only for demo sessions");
   try {
     const today = body.value.today ?? new Date().toISOString().slice(0, 10);
-    return json({ ok: true, ...(await seedDemo(session.ctx, today)) });
+    return json({ ok: true, ...(await seedDemo(session.ctx.db, today)) });
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     return problem(500, "the demo could not be prepared: reload to try again");

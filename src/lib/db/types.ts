@@ -336,6 +336,7 @@ export type Database = {
           id: string
         }[]
       }
+      seed_demo: { Args: { p_today: string }; Returns: boolean }
       take_usage: {
         Args: { p_cap: number; p_day: string; p_kind: string; p_owner: string }
         Returns: number
