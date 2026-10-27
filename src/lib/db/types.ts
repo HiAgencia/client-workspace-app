@@ -329,6 +329,10 @@ export type Database = {
           id: string
         }[]
       }
+      take_usage: {
+        Args: { p_cap: number; p_day: string; p_kind: string; p_owner: string }
+        Returns: number
+      }
       visible_accounts: {
         Args: { node: string }
         Returns: {
