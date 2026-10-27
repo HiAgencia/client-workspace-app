@@ -3,5 +3,6 @@ nodeLinker: hoisted
 allowBuilds:
   esbuild: true
   sharp: false
+  supabase: true
   unrs-resolver: false
   workerd: true
