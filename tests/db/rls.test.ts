@@ -104,7 +104,8 @@ describe("nodes", () => {
     const { error } = await userA()
       .from("nodes")
       .insert({ owner_id: a!.id, kind: "project", name: "Intruder", parent_id: treeB.root });
-    expect(error).not.toBeNull();
+    // The parent is invisible to A, so the tree rule refuses it as a missing parent.
+    expect(error?.code).toBe("23503");
   });
 
   it("A cannot rename or delete B's node", async () => {
