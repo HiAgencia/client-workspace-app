@@ -60,7 +60,11 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
   const { messages, sendMessage, status, error, clearError } = useChat({
     id: nodeId,
     messages: initial,
-    transport: new DefaultChatTransport({ api: "/api/chat", body: { nodeId, timeZone } }),
+    // Only the new message travels; the server rebuilds the conversation from what it stored.
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      prepareSendMessagesRequest: ({ messages }) => ({ body: { nodeId, timeZone, message: messages.at(-1) } }),
+    }),
     // What the chat wrote shows in the node right away, without reloading.
     onFinish: () => touch(),
   });
@@ -158,7 +162,16 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
     if (toolName === "delete_item") request = post(`/api/items/${item.id}/restore`, {});
     else if (toolName === "update_item" && output.previous) {
       const p = output.previous;
-      request = tool("update_item", { id: item.id, title: p.title, notes: p.body, priority: p.priority, dueOn: p.dueOn, status: p.status, ...(p.url ? { url: p.url } : {}) });
+      // Every replaced value goes back, a link that was empty included (only a link item cannot lose its address).
+      request = tool("update_item", {
+        id: item.id,
+        title: p.title,
+        notes: p.body,
+        priority: p.priority,
+        dueOn: p.dueOn,
+        status: p.status,
+        ...(item.type === "link" && !p.url ? {} : { url: p.url }),
+      });
     } else request = tool("delete_item", { id: item.id });
     if (await saving(request)) setUndone(true);
   }

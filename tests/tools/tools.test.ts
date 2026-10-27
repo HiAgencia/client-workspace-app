@@ -333,7 +333,8 @@ describe("reads", () => {
   it("get_updates_since takes the access's last use when no moment is given, and asks for one otherwise", async () => {
     expect((await refuse("get_updates_since", userCtx(a), {})).code).toBe("since_required");
     const updates = await run<{ since: string }>("get_updates_since", agentCtx(treeA.web, { updatesSince: "2020-01-01T00:00:00Z" }), {});
-    expect(updates.since).toBe("2020-01-01T00:00:00.000Z");
+    // The stored mark is used as the database wrote it.
+    expect(updates.since).toBe("2020-01-01T00:00:00Z");
   });
 });
 

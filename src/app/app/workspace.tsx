@@ -40,6 +40,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const [notice, setNotice] = useState<Notice | null>(null);
   const [status, setStatus] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -73,6 +74,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       const answer = await promise;
       if (answer.ok) {
         setStatus("Saved");
+        // "Saved" says what just happened and leaves; it does not stay over the page.
+        clearTimeout(statusTimer.current);
+        statusTimer.current = setTimeout(() => setStatus(""), 2000);
         touch();
         return true;
       }
@@ -114,15 +118,21 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
             Sign out
           </Button>
         </aside>
-        <main className="flex flex-1 flex-col gap-6 p-6">{children}</main>
+        {/* Room at the bottom so the last controls can scroll above the notices' corner. */}
+        <main className="flex flex-1 flex-col gap-6 p-6 pb-24">{children}</main>
       </div>
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
-      <div className="fixed right-4 bottom-4 flex items-center gap-3" aria-live="polite">
+      {/* The notices' layer lets clicks through to the page; only a notice's own buttons take them. */}
+      <div className="pointer-events-none fixed right-4 bottom-4 flex items-center gap-3" aria-live="polite">
         {status && <span data-save-status>{status}</span>}
         {notice && (
-          <div role={notice.tone === "error" ? "alert" : "status"} className="flex items-center gap-3 rounded border bg-background p-3" data-notice>
+          <div
+            role={notice.tone === "error" ? "alert" : "status"}
+            className="pointer-events-auto flex items-center gap-3 rounded border bg-background p-3"
+            data-notice
+          >
             <span>{notice.text}</span>
             {notice.undo && (
               <Button

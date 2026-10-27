@@ -1,23 +1,24 @@
 import { createUIMessageStreamResponse, validateUIMessages, type UIMessage } from "ai";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
+import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { chatModel } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
-import { secondsToNextDay, takeUsage } from "@/lib/chat/usage";
+import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
 import { json, problem, sameOrigin, SESSION_HEADERS } from "@/lib/http";
 import { sessionContext } from "@/lib/session-context";
 import { serviceClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tools/tree";
 
-// Images travel inside the messages, so the body may be large; past this the request is refused before parsing.
-const MAX_BODY = 8 * 1024 * 1024;
-// The model reads the recent conversation, not the whole history.
-const MAX_MESSAGES = 40;
+// One new message, with at most one attached image; past this the request is refused before parsing.
+const MAX_BODY = 6 * 1024 * 1024;
+// What the panel shows of a node's conversation.
+const SHOWN_MESSAGES = 100;
 
 const body = z.object({
   nodeId: z.uuid(),
   timeZone: z.string().min(1).max(64).default("UTC"),
-  messages: z.array(z.unknown()).min(1),
+  message: z.unknown(),
 });
 
 function validTimeZone(value: string): string {
@@ -29,27 +30,22 @@ function validTimeZone(value: string): string {
   }
 }
 
-// The conversation of a node, as it was stored.
+// The conversation of a node, its latest messages in the order they were written.
 export async function GET(request: NextRequest) {
   const nodeId = request.nextUrl.searchParams.get("node") ?? "";
   if (!isUuid(nodeId)) return problem(400, "say which node");
   const session = await sessionContext("chat", nodeId);
   if (!session) return problem(401, "not signed in");
-  const { data, error } = await session.ctx.db
-    .from("chat_messages")
-    .select("id, role, parts")
-    .eq("node_id", nodeId)
-    .order("created_at")
-    .limit(200);
-  if (error) {
-    console.error("chat history:", error.message);
+  try {
+    return json({ ok: true, messages: await loadHistory(session.ctx.db, nodeId, SHOWN_MESSAGES) });
+  } catch (error) {
+    console.error("chat history:", error instanceof Error ? error.message : error);
     return problem(500, "the conversation could not be read");
   }
-  return json({ ok: true, messages: data.map((row) => ({ id: row.id, role: row.role, parts: row.parts })) });
 }
 
-// One chat turn: the cap is taken first, then the model runs with the tools scoped to the open node, and the
-// person's message and the answer are stored when the answer ends.
+// One chat turn: the browser sends only the new message; the server takes the cap, rebuilds the recent conversation
+// from what it stored, runs the model with the tools scoped to the open node, and stores the turn when it ends whole.
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
   const text = await request.text();
@@ -68,24 +64,31 @@ export async function POST(request: Request) {
   const reachable = await ctx.db.from("nodes").select("id").eq("id", parsed.data.nodeId).maybeSingle();
   if (reachable.error || !reachable.data) return problem(404, "no such node");
 
-  let messages: UIMessage[];
+  let message: UIMessage;
   try {
-    messages = await validateUIMessages({ messages: parsed.data.messages.slice(-MAX_MESSAGES) });
+    [message] = await validateUIMessages({ messages: [parsed.data.message] });
   } catch {
-    return problem(422, "the conversation is not in the expected shape");
+    return problem(422, "the message is not in the expected shape");
   }
-  const last = messages.at(-1);
-  if (!last || last.role !== "user") return problem(422, "the last message must be the person's");
+  if (message.role !== "user") return problem(422, "only the person's message is sent");
+  if (message.parts.filter((part) => part.type === "file").length > 1) return problem(422, "attach one image per message");
 
-  const taken = await takeUsage(serviceClient(), user.id, "chat_message");
+  const taken = await takeUsageFor(serviceClient(), user, "chat_message");
   if (!taken.allowed) {
     if (taken.reason === "error") return problem(503, "the chat is unavailable right now: try again");
-    return json(
-      { ok: false, code: "cap", message: "You reached today's limit of chat messages. It resets at midnight UTC." },
-      429,
-      { "Retry-After": String(secondsToNextDay()) },
-    );
+    return json({ ok: false, code: "cap", message: capMessage(taken.reason, "chat_message") }, 429, {
+      "Retry-After": String(secondsToNextDay()),
+    });
   }
+
+  let history: UIMessage[];
+  try {
+    history = await loadHistory(ctx.db, parsed.data.nodeId);
+  } catch (error) {
+    console.error("chat:", error instanceof Error ? error.message : error);
+    return problem(500, "the conversation could not be read");
+  }
+  const messages = withoutEarlierFiles([...history, message]);
 
   const { model, providerOptions } = chatModel();
   const stream = await runChat({
@@ -95,11 +98,13 @@ export async function POST(request: Request) {
     messages,
     timeZone: validTimeZone(parsed.data.timeZone),
     abortSignal: request.signal,
-    onEnd: async ({ responseMessage }) => {
-      const rows = [last, responseMessage].map((message) => ({
+    onEnd: async ({ responseMessage, isAborted }) => {
+      // A turn cut short is not stored: its half-made tool calls would be replayed to the model.
+      if (isAborted) return;
+      const rows = [message, responseMessage].map((entry) => ({
         node_id: parsed.data.nodeId,
-        role: message.role,
-        parts: JSON.parse(JSON.stringify(message.parts)),
+        role: entry.role,
+        parts: JSON.parse(JSON.stringify(entry.parts)),
       }));
       const saved = await ctx.db.from("chat_messages").insert(rows);
       if (saved.error) console.error("chat: storing the turn failed", saved.error.message);

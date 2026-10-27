@@ -80,6 +80,13 @@ export async function seedDemo(ctx: ToolContext, today: string): Promise<{ plant
     .eq("owner_id", ctx.ownerId);
   if (error) throw new Error(`demo seed: ${error.message}`);
   if ((count ?? 0) > 0) return { planted: false };
-  await plant(ctx, seedFor(today));
+  try {
+    await plant(ctx, seedFor(today));
+  } catch (error) {
+    // A seed cut halfway is removed whole (items go with their nodes), so trying again plants it from the start.
+    const removed = await ctx.db.from("nodes").delete().eq("owner_id", ctx.ownerId).is("parent_id", null);
+    if (removed.error) console.error("demo seed: removing a partial seed failed", removed.error.message);
+    throw error;
+  }
   return { planted: true };
 }

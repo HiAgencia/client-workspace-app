@@ -30,7 +30,7 @@ and the screens. When the code changes a decision described here, this document 
 | `node_accounts` | Which node an account hangs from | `node_id`, `account_id` |
 | `account_calendars` | Which calendars of each account are shown | `account_id`, `calendar_id`, `summary`, `color`, `selected` |
 | `agent_tokens` | A coding agent's access to a node | `id`, `node_id`, `token_hash`, `label`, `last_used_at`, `revoked_at` |
-| `chat_messages` | The chat conversation, per node | `id`, `node_id`, `role`, `parts` (jsonb), `created_at` |
+| `chat_messages` | The chat conversation, per node | `id`, `seq` (insertion order), `node_id`, `role`, `parts` (jsonb), `created_at` |
 | `usage_counters` | The daily cap on chat messages and transcriptions | `owner_id`, `day`, `kind`, `count` |
 
 - **Account inheritance**: an account attached to a node is visible in that node and all its descendants, computed
@@ -90,13 +90,18 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 - Every write the chat makes shows as a card saying what it did, with an undo button: a creation is deleted, a
   change gets back the values `update_item` returned as replaced, a deletion is restored.
 - The conversation is stored per node in `chat_messages` (the person's message and the answer, with their parts,
-  encrypted reasoning included) when the answer ends; the panel reads it back on opening the node. The model reads
-  the most recent messages, not the whole history.
-- **The cap**: `usage_counters` limits messages and transcriptions per user and day (cut in UTC), on the server,
+  encrypted reasoning included, ordered by `seq`) when the answer ends whole; a turn cut short is not stored. The
+  browser sends only the new message, with at most one image; the server rebuilds the recent turns from what it
+  stored, and an image travels to the model only in the turn it arrives (later turns carry a note), so one large
+  image never makes the next messages too large.
+- **The cap**: `usage_counters` limits messages and transcriptions per person and day (cut in UTC), on the server,
   taken before the model is called by `public.take_usage`, one statement that refuses past the cap, so two requests
-  at once never both pass the last unit; the answer is 429 with `Retry-After` and a sentence the panel shows. The
-  caps default to 60 messages and 20 notes a day, overridable with `CHAT_DAILY_CAP` and `TRANSCRIPTION_DAILY_CAP`.
-  Meta Model API has no hard spend cap of its own.
+  at once never both pass the last unit; the answer is 429 with `Retry-After` and a sentence the panel shows. A demo
+  session has a smaller cap of its own, and all demo sessions together share a daily total (`public.anonymous_usage`),
+  because a new demo session is one click away. Defaults (overridable): 60 messages and 20 notes a day per person
+  (`CHAT_DAILY_CAP`, `TRANSCRIPTION_DAILY_CAP`), 20 and 5 per demo session (`DEMO_CHAT_DAILY_CAP`,
+  `DEMO_TRANSCRIPTION_DAILY_CAP`), 400 and 60 for all demo sessions (`DEMO_TOTAL_CHAT_DAILY_CAP`,
+  `DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP`). Meta Model API has no hard spend cap of its own.
 - **The simulator**: with `MODEL_PROVIDER=simulated` a scripted model (`src/lib/chat/simulated.ts`) calls the tool
   a real model would for a request (create a task, record a decision, read what is pending) and transcription
   returns a fixed sentence, so the whole chat runs and is tested without spend.

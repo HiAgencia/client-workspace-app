@@ -1,6 +1,6 @@
 import { chatProvider } from "@/lib/chat/model";
 import { transcribe } from "@/lib/chat/transcribe";
-import { secondsToNextDay, takeUsage } from "@/lib/chat/usage";
+import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
 import { isSupportedWav } from "@/lib/chat/wav";
 import { serverEnv } from "@/lib/env";
 import { json, problem, sameOrigin } from "@/lib/http";
@@ -36,14 +36,12 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (!isSupportedWav(bytes)) return problem(415, "the note must be mono 16-bit WAV at 16 or 24 kHz");
 
-  const taken = await takeUsage(serviceClient(), user.id, "transcription");
+  const taken = await takeUsageFor(serviceClient(), user, "transcription");
   if (!taken.allowed) {
     if (taken.reason === "error") return problem(503, "transcription is unavailable right now: try again");
-    return json(
-      { ok: false, code: "cap", message: "You reached today's limit of voice notes. It resets at midnight UTC." },
-      429,
-      { "Retry-After": String(secondsToNextDay()) },
-    );
+    return json({ ok: false, code: "cap", message: capMessage(taken.reason, "transcription") }, 429, {
+      "Retry-After": String(secondsToNextDay()),
+    });
   }
   const result = await transcribe(chatProvider(), bytes);
   if (!result.ok) return problem(result.status, result.message);

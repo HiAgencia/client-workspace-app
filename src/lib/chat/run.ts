@@ -69,7 +69,8 @@ export async function runChat(options: {
   const result = streamText({
     model: options.model,
     system: await systemPrompt(options.ctx, options.timeZone),
-    messages: await convertToModelMessages(options.messages),
+    // A tool call left without its result (a turn cut short) is not replayed to the provider, which would refuse it.
+    messages: await convertToModelMessages(options.messages, { ignoreIncompleteToolCalls: true }),
     tools: chatTools(options.ctx),
     stopWhen: isStepCount(MAX_STEPS),
     providerOptions: options.providerOptions,

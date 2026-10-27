@@ -47,7 +47,11 @@ export async function GET(request: NextRequest) {
     for (const failure of answer.failures) failures.set(failure.accountId, failure);
   }
   // Accounts attached only below a root are reached from their own nodes.
-  const { data: links } = await ctx.db.from("node_accounts").select("node_id");
+  const { data: links, error: linksError } = await ctx.db.from("node_accounts").select("node_id");
+  if (linksError) {
+    console.error("today: reading where accounts hang", linksError.message);
+    failures.set("", { accountId: "", accountEmail: "", reason: "some calendars could not be read" });
+  }
   for (const nodeId of new Set((links ?? []).map((link) => link.node_id))) {
     const node = scope.all.get(nodeId);
     if (!node || node.parentId === null) continue;

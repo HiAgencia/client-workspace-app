@@ -3,13 +3,24 @@ import { serverEnv } from "@/lib/env";
 
 export type UsageKind = "chat_message" | "transcription";
 
-// Meta Model API has no hard spend cap of its own: each person's day carries one, on the server, taken before the
-// model is called. Overridable per deployment; the defaults keep a public demo inside a known daily spend.
-const DEFAULT_CAPS: Record<UsageKind, number> = { chat_message: 60, transcription: 20 };
+// Meta Model API has no hard spend cap of its own, so the server carries three: each signed-in person's day, each
+// demo session's day (smaller), and the day of all demo sessions together, because a new demo session is one click
+// away and must not bring a new budget. Each is overridable per deployment.
+const DEFAULTS = {
+  person: { chat_message: 60, transcription: 20 },
+  demoSession: { chat_message: 20, transcription: 5 },
+  demoTotal: { chat_message: 400, transcription: 60 },
+} as const;
 
-export function dailyCap(kind: UsageKind): number {
-  const configured = Number(serverEnv(kind === "chat_message" ? "CHAT_DAILY_CAP" : "TRANSCRIPTION_DAILY_CAP"));
-  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_CAPS[kind];
+const NAMES = {
+  person: { chat_message: "CHAT_DAILY_CAP", transcription: "TRANSCRIPTION_DAILY_CAP" },
+  demoSession: { chat_message: "DEMO_CHAT_DAILY_CAP", transcription: "DEMO_TRANSCRIPTION_DAILY_CAP" },
+  demoTotal: { chat_message: "DEMO_TOTAL_CHAT_DAILY_CAP", transcription: "DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP" },
+} as const;
+
+export function dailyCap(scope: keyof typeof DEFAULTS, kind: UsageKind): number {
+  const configured = Number(serverEnv(NAMES[scope][kind]));
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULTS[scope][kind];
 }
 
 // The day is cut in UTC, the same for everyone, so the cap cannot be reset by changing the browser's time zone.
@@ -23,14 +34,38 @@ export function secondsToNextDay(now = new Date()): number {
   return Math.ceil((next.getTime() - now.getTime()) / 1000);
 }
 
-export type TakeResult = { allowed: true; count: number } | { allowed: false; reason: "cap" | "error" };
+export type TakeResult = { allowed: true; count: number } | { allowed: false; reason: "cap" | "demo_cap" | "error" };
 
-// One unit of the day's allowance, taken atomically by the database; the service client is the only caller.
-export async function takeUsage(service: Db, ownerId: string, kind: UsageKind, cap = dailyCap(kind), now = new Date()): Promise<TakeResult> {
+// One unit of a person's day, taken atomically by the database; the service client is the only caller.
+export async function takeUsage(service: Db, ownerId: string, kind: UsageKind, cap: number, now = new Date()): Promise<TakeResult> {
   const { data, error } = await service.rpc("take_usage", { p_owner: ownerId, p_kind: kind, p_day: usageDay(now), p_cap: cap });
   if (error) {
     console.error("usage cap:", error.message);
     return { allowed: false, reason: "error" };
   }
   return typeof data === "number" ? { allowed: true, count: data } : { allowed: false, reason: "cap" };
+}
+
+// The cap that applies to who is asking: a demo session first checks the day of all demo sessions together.
+export async function takeUsageFor(
+  service: Db,
+  user: { id: string; isAnonymous: boolean },
+  kind: UsageKind,
+  now = new Date(),
+): Promise<TakeResult> {
+  if (!user.isAnonymous) return takeUsage(service, user.id, kind, dailyCap("person", kind), now);
+  const { data, error } = await service.rpc("anonymous_usage", { p_kind: kind, p_day: usageDay(now) });
+  if (error) {
+    console.error("demo usage:", error.message);
+    return { allowed: false, reason: "error" };
+  }
+  if (Number(data) >= dailyCap("demoTotal", kind)) return { allowed: false, reason: "demo_cap" };
+  return takeUsage(service, user.id, kind, dailyCap("demoSession", kind), now);
+}
+
+export function capMessage(reason: "cap" | "demo_cap", kind: UsageKind): string {
+  const what = kind === "chat_message" ? "chat messages" : "voice notes";
+  return reason === "demo_cap"
+    ? `The demo reached today's limit of ${what} for everyone. Sign in with Google to keep going, or come back after midnight UTC.`
+    : `You reached today's limit of ${what}. It resets at midnight UTC.`;
 }
