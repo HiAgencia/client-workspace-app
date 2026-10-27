@@ -5,9 +5,14 @@ export const THEME_KEY = "client-workspace:theme";
 
 export type Theme = "light" | "dark";
 
-// The color of the browser's own bar, which metadata cannot read from a CSS variable: the header's surface, `--card`
-// in styles/tokens.css for each theme. `theme.test.ts` fails when the two drift apart.
+// The color of the browser's own bar, read by the root layout's inline script before the first paint and by
+// `applyTheme`: the literal is needed because a meta tag cannot read a CSS variable. `theme.test.ts` fails when it
+// drifts from `--card` in styles/tokens.css.
 export const BROWSER_BAR: Record<Theme, string> = { light: "#ffffff", dark: "#1b1e1a" };
+
+// The web manifest's background: `--canvas` of the light theme in styles/tokens.css, the surface a system paints
+// behind the maskable icon's mark. `theme.test.ts` fails when the two drift apart.
+export const MANIFEST_BACKGROUND = "#eff1ec";
 
 export function subscribeTheme(listener: () => void): () => void {
   const observer = new MutationObserver(listener);
