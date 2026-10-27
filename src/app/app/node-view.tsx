@@ -44,13 +44,15 @@ function ancestorsOf(tree: TreeNode[] | null, nodeId: string): TreeNode[] {
 
 
 
-export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutcome: string | null }) {
-  const { version, tree } = useWorkspace();
+export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; googleOutcome: string | null; onReveal?: () => void }) {
+  const { version, tree, notify } = useWorkspace();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [done, setDone] = useState<Item[]>([]);
   const [showDone, setShowDone] = useState(false);
+  
+  const [doneSettled, setDoneSettled] = useState(false);
   const [accounts, setAccounts] = useState<{ list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked } | null>(null);
 
   useEffect(() => {
@@ -77,16 +79,26 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
 
   
   
+  
   const ready = overview !== null;
   useEffect(() => {
     if (!ready) return;
     const apply = () => {
-      const target: FocusTarget | null = takeFocusRequest(nodeId);
-      if (target) requestAnimationFrame(() => land(target));
+      const request = takeFocusRequest(nodeId);
+      if (!request) return;
+      const { target } = request;
+      onReveal?.();
+      if (target.kind === "item" && done.some((item) => item.id === target.itemId)) setShowDone(true);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const landing = land(target, { acted: request.acted });
+          if (landing === "missing" || landing === "hidden") notify({ text: notLanded(target), tone: "status" });
+        }),
+      );
     };
     apply();
     return onFocusRequest(apply);
-  }, [ready, nodeId]);
+  }, [ready, nodeId, done, onReveal, notify]);
 
   if (notFound) {
     return (
@@ -178,10 +190,27 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
         )}
         {done.length > 0 && (
           <div className="done-toggle">
-            <Button variant="quiet" size="sm" aria-expanded={showDone} aria-controls="done-tasks" onClick={() => setShowDone((v) => !v)}>
+            <Button
+              variant="quiet"
+              size="sm"
+              aria-expanded={showDone}
+              aria-controls="done-tasks"
+              onClick={() => {
+                setDoneSettled(false);
+                setShowDone((v) => !v);
+              }}
+            >
               Done ({done.length})
             </Button>
-            <div className="fold" id="done-tasks" data-open={showDone}>
+            <div
+              className="fold"
+              id="done-tasks"
+              data-open={showDone}
+              data-settled={(showDone && doneSettled) || undefined}
+              onTransitionEnd={(event) => {
+                if (event.target === event.currentTarget && event.propertyName === "grid-template-rows") setDoneSettled(showDone);
+              }}
+            >
               <div>
                 <ItemList items={done}>{(item) => <ItemRow item={item} />}</ItemList>
               </div>
@@ -213,7 +242,7 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
                 ) : (
                   <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0 }}>
                     {visible.map(({ account, from }) => (
-                      <li key={account.id} className="account-line" data-account={account.email} data-inherited={from !== nodeId}>
+                      <li key={account.id} className="account-line">
                         <span className="t-name">{account.email}</span>
                         <span className="pill" data-tone={from === nodeId ? "accent" : undefined}>
                           {from === nodeId ? "Own" : `Inherited from ${tree?.find((n) => n.id === from)?.name ?? "a parent"}`}
@@ -268,7 +297,7 @@ export function Agenda({ events, withDay = true }: { events: CalendarEvent[]; wi
   return (
     <ul className="agenda">
       {events.map((event) => (
-        <li key={`${event.accountId}:${event.id}`} className="agenda-row" data-event>
+        <li key={`${event.accountId}:${event.id}`} className="agenda-row">
           <span className="t-meta">{when(event, withDay)}</span>
           <span className="stack" style={{ gap: "0.1rem" }}>
             <span className="t-value">{event.title}</span>
@@ -318,6 +347,12 @@ export function Empty({ text, action, onAction }: { text: string; action?: strin
 
 function focusQuickAdd(nodeId: string, type: Item["type"]) {
   land({ kind: "quick-add", nodeId, type });
+}
+
+function notLanded(target: FocusTarget): string {
+  if (target.kind !== "item") return "That place is not on this page.";
+  if (target.type === "decision" || target.type === "link") return `“${target.title}” is not on this page: it lists the latest ${target.type}s.`;
+  return `“${target.title}” is not on this page anymore.`;
 }
 
 function plural(count: number, one: string, many: string): string {

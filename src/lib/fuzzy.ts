@@ -11,10 +11,17 @@ export function normalize(text: string): string {
     .replace(/\u0000/g, "ñ");
 }
 
-export function words(text: string): string[] {
+function words(text: string): string[] {
   return normalize(text)
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
+}
+
+
+export type Prepared = { words: string[]; text: string };
+
+export function prepare(text: string): Prepared {
+  return { words: words(text), text: normalize(text) };
 }
 
 
@@ -37,14 +44,14 @@ export function editDistance(a: string, b: string, max: number): number {
 }
 
 
-export function allowedTypos(word: string): number {
+function allowedTypos(word: string): number {
   if (word.length <= 3) return 0;
   if (word.length <= 6) return 1;
   return 2;
 }
 
 
-export function wordScore(typed: string, word: string): number {
+function wordScore(typed: string, word: string): number {
   if (word === typed) return 1;
   if (word.startsWith(typed)) return 0.92;
   if (typed.length >= 3 && word.includes(typed)) return 0.75;
@@ -59,25 +66,27 @@ export function wordScore(typed: string, word: string): number {
 
 
 
-export function matchScore(query: string, text: string): number {
-  const typed = words(query);
-  if (typed.length === 0) return 0;
-  const target = words(text);
-  if (target.length === 0) return 0;
+function score(query: Prepared, target: Prepared): number {
+  if (query.words.length === 0 || target.words.length === 0) return 0;
   let total = 0;
-  for (const word of typed) {
+  for (const word of query.words) {
     let best = 0;
-    for (const candidate of target) best = Math.max(best, wordScore(word, candidate));
+    for (const candidate of target.words) best = Math.max(best, wordScore(word, candidate));
     if (best === 0) return 0;
     total += best;
   }
-  const startsAsTyped = normalize(text).startsWith(normalize(query).trim()) ? 0.1 : 0;
-  return total / typed.length + startsAsTyped;
+  const startsAsTyped = target.text.startsWith(query.text.trim()) ? 0.1 : 0;
+  return total / query.words.length + startsAsTyped;
 }
 
-export function rank<T>(query: string, entries: T[], text: (entry: T) => string): Array<{ entry: T; score: number }> {
+export function matchScore(query: string, text: string): number {
+  return score(prepare(query), prepare(text));
+}
+
+export function rank<T>(query: string, entries: T[], prepared: (entry: T) => Prepared): Array<{ entry: T; score: number }> {
+  const typed = prepare(query);
   return entries
-    .map((entry) => ({ entry, score: matchScore(query, text(entry)) }))
+    .map((entry) => ({ entry, score: score(typed, prepared(entry)) }))
     .filter((hit) => hit.score > 0)
     .sort((a, b) => b.score - a.score);
 }

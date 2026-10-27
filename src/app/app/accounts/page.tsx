@@ -88,7 +88,7 @@ export default function AccountsPage() {
         ) : (
           <ul className="page plain-list fade-enter">
             {accounts.map((account) => (
-              <li key={account.id} className="card stack" data-account={account.email}>
+              <li key={account.id} className="card stack">
                 <div className="page-head-row">
                   <h2 className="t-name">{account.email}</h2>
                   {account.status !== "active" && (

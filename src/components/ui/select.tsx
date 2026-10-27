@@ -3,7 +3,7 @@
 import { Select as Base } from "@base-ui/react/select";
 import { cx } from "@/lib/utils";
 
-export type Tone = "neutral" | "accent" | "alert" | "warn" | "muted";
+type Tone = "neutral" | "accent" | "alert" | "warn" | "muted";
 export type SelectOption = { value: string; label: string; tone?: Tone };
 
 type SelectProps = {

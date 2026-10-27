@@ -162,10 +162,11 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
             })}
           </li>
         ))}
-        {busy && (
-          <li className="msg" aria-busy="true">
+        {}
+        {(busy || messages.length > 0) && (
+          <li className="msg msg-working" data-working={busy || undefined} aria-busy={busy || undefined} aria-hidden={!busy || undefined}>
             <span className="t-meta">Assistant</span>
-            <span className="typing" role="status" aria-label="Working…">
+            <span className="typing" role={busy ? "status" : undefined} aria-label={busy ? "Working…" : undefined}>
               <span />
               <span />
               <span />

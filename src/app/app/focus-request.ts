@@ -1,25 +1,45 @@
 "use client";
 
+import type { MouseEvent } from "react";
+import type { Item } from "./client-api";
+
+
 
 
 export type FocusTarget =
   | { kind: "node"; nodeId: string }
-  | { kind: "item"; nodeId: string; itemId: string }
-  | { kind: "quick-add"; nodeId: string; type: "task" | "decision" | "link" | "review" };
+  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"] }
+  | { kind: "quick-add"; nodeId: string; type: Item["type"] };
+
+export type FocusRequest = { target: FocusTarget; acted: boolean };
 
 const EVENT = "client-workspace:focus";
-let pending: FocusTarget | null = null;
+let pending: FocusRequest | null = null;
+
+
+
+function markActed() {
+  if (pending) pending.acted = true;
+}
 
 export function requestFocus(target: FocusTarget): void {
-  pending = target;
+  pending = { target, acted: false };
+  window.addEventListener("keydown", markActed, { capture: true, once: true });
+  window.addEventListener("pointerdown", markActed, { capture: true, once: true });
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
-export function takeFocusRequest(nodeId: string): FocusTarget | null {
-  if (!pending || pending.nodeId !== nodeId) return null;
-  const target = pending;
+export function takeFocusRequest(nodeId: string): FocusRequest | null {
+  if (!pending || pending.target.nodeId !== nodeId) return null;
+  const request = pending;
   pending = null;
-  return target;
+  return request;
+}
+
+
+
+export function dropFocusRequestOutside(pathname: string): void {
+  if (pending && pathname !== `/app/node/${pending.target.nodeId}`) pending = null;
 }
 
 export function onFocusRequest(listener: () => void): () => void {
@@ -29,22 +49,31 @@ export function onFocusRequest(listener: () => void): () => void {
 
 
 
+export function plainClick(event: MouseEvent): boolean {
+  return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+}
 
-export function land(target: FocusTarget, root: ParentNode = document): boolean {
+export type Landing = "landed" | "busy" | "missing" | "hidden";
+
+
+
+
+export function land(target: FocusTarget, { acted = false }: { acted?: boolean } = {}): Landing {
   const active = document.activeElement as HTMLElement | null;
-  const busy =
+  const inUse =
     active !== null &&
     active !== document.body &&
     (active.matches("input, textarea, [contenteditable='true'], [role='combobox'], [role='option']") || active.closest("dialog[open], [role='listbox']") !== null);
-  if (busy) return false;
+  if (acted && inUse) return "busy";
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let element: HTMLElement | null = null;
-  if (target.kind === "node") element = root.querySelector<HTMLElement>("[data-node-title]");
-  if (target.kind === "quick-add") element = root.querySelector<HTMLElement>(`[data-quick-add="${target.type}"] input`);
-  if (target.kind === "item") element = root.querySelector<HTMLElement>(`[data-item="${target.itemId}"] [data-item-title]`);
-  if (!element) return false;
-  element.scrollIntoView({ block: target.kind === "node" ? "start" : "center", behavior: reduced ? "instant" : "smooth" });
+  if (target.kind === "node") element = document.querySelector<HTMLElement>("[data-node-title]");
+  if (target.kind === "quick-add") element = document.querySelector<HTMLElement>(`[data-quick-add="${target.type}"] input`);
+  if (target.kind === "item") element = document.querySelector<HTMLElement>(`[data-item="${target.itemId}"] [data-item-title]`);
+  if (!element) return "missing";
   element.focus({ preventScroll: true });
+  if (document.activeElement !== element) return "hidden";
+  element.scrollIntoView({ block: target.kind === "node" ? "start" : "center", behavior: reduced ? "instant" : "smooth" });
   if (target.kind === "item") {
     const row = element.closest<HTMLElement>("[data-item]");
     if (row && !reduced) {
@@ -53,5 +82,5 @@ export function land(target: FocusTarget, root: ParentNode = document): boolean 
       row.setAttribute("data-changed", "");
     }
   }
-  return true;
+  return "landed";
 }

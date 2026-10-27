@@ -1,5 +1,6 @@
 
 
+
 export const THEME_KEY = "client-workspace:theme";
 
 export type Theme = "light" | "dark";
@@ -8,11 +9,10 @@ export type Theme = "light" | "dark";
 
 export const BROWSER_BAR: Record<Theme, string> = { light: "#ffffff", dark: "#1b1e1a" };
 
-const listeners = new Set<() => void>();
-
 export function subscribeTheme(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  const observer = new MutationObserver(listener);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => observer.disconnect();
 }
 
 export function currentTheme(): Theme {
@@ -20,17 +20,28 @@ export function currentTheme(): Theme {
 }
 
 
+export function applyTheme(next: Theme): void {
+  document.documentElement.dataset.theme = next;
+  let bar = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!bar) {
+    bar = document.createElement("meta");
+    bar.name = "theme-color";
+    document.head.append(bar);
+  }
+  bar.content = BROWSER_BAR[next];
+}
+
+
 
 export function setTheme(next: Theme): void {
   const root = document.documentElement;
   const apply = () => {
-    root.dataset.theme = next;
+    applyTheme(next);
     try {
       localStorage.setItem(THEME_KEY, next);
     } catch {
       
     }
-    listeners.forEach((listener) => listener());
   };
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduced || typeof document.startViewTransition !== "function") return apply();

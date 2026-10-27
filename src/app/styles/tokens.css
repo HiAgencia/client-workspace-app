@@ -28,7 +28,6 @@
   --accent-tint-hover: #cce6da;
   --accent-ink: #12503e;
   --alert: #b42318;
-  --alert-fill: #b42318;
   --alert-tint: #fbe8e6;
   --alert-tint-hover: #f7d7d3;
   --alert-ink: #8a1a12;
@@ -41,7 +40,6 @@
   --focus-halo: color-mix(in srgb, var(--accent) 24%, transparent);
   --selection-bg: #c6e4d6;
   --scroll-thumb: #b9bfb4;
-  --scroll-thumb-hover: #8e968a;
   --shadow-ink: #161a15;
   --shadow-card: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 6%, transparent),
     0 10px 26px -12px color-mix(in srgb, var(--shadow-ink) 14%, transparent);
@@ -80,7 +78,6 @@
   --ease-hover: cubic-bezier(0.22, 0.61, 0.36, 1);
   --dur-hover-out: 300ms;
   --ease-hover-out: cubic-bezier(0.4, 0, 0.25, 1);
-  --layer-sticky: 20;
   --layer-header: 30;
   --layer-notice: 50;
 }
@@ -118,7 +115,6 @@
   --accent-ink: #a1e5ca;
 
   --alert: #ff8a7e;
-  --alert-fill: #ff8a7e;
   --alert-tint: #3b1b18;
   --alert-tint-hover: #4a221e;
   --alert-ink: #ffb4aa;
@@ -132,7 +128,6 @@
   --focus-halo: color-mix(in srgb, var(--accent) 30%, transparent);
   --selection-bg: #24574a;
   --scroll-thumb: #464c44;
-  --scroll-thumb-hover: #6d7569;
   --shadow-ink: #000000;
   --shadow-card: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 55%, transparent),
     0 14px 28px -14px color-mix(in srgb, var(--shadow-ink) 75%, transparent);
