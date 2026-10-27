@@ -30,6 +30,8 @@ export const getUpdatesSince = defineTool({
   }),
   output: z.object({
     since: z.string(),
+    // The latest change read, by the database's clock: the next call passes it as `since` and misses nothing.
+    until: z.string(),
     newNodes: z.array(z.object({ id: z.string(), path: z.string(), kind: z.string() })),
     created: z.array(itemSchema),
     changed: z.array(itemSchema),
@@ -64,6 +66,9 @@ export const getUpdatesSince = defineTool({
       .map((id) => scope.all.get(id)!)
       .filter((node) => after(node.createdAt, sinceMs))
       .map((node) => ({ id: node.id, path: node.path, kind: node.kind }));
-    return ok({ since, newNodes, ...lists });
+    const latest = [...items.map((item) => item.updatedAt), ...newNodes.map((n) => scope.all.get(n.id)!.createdAt)]
+      .map((value) => Date.parse(value))
+      .reduce((max, value) => Math.max(max, value), sinceMs);
+    return ok({ since, until: new Date(latest).toISOString(), newNodes, ...lists });
   },
 });

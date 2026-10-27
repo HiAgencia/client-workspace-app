@@ -53,8 +53,9 @@ export function toItem(row: ItemRow, scope: Scope): Item {
   };
 }
 
-// The REST layer answers at most a page of rows with a success status, so a list that must be whole is read page by
-// page until a short page arrives.
+// The REST layer answers at most `max_rows` rows with a success status, so a list that must be whole is read page by
+// page until a short page arrives. The page must not exceed the project's `max_rows` (1000 on this project, read from
+// the Management API's PostgREST configuration): a smaller server cap would end the loop early without an error.
 const PAGE = 1000;
 
 export async function selectAllItems(

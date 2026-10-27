@@ -24,10 +24,10 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
   }
 
   useEffect(() => {
-    // Reading the session here also refreshes it in the browser before the server is asked.
+    // Reading the session here also refreshes it in the browser; without one there is nothing to ask the server.
     browserClient(config)
       .auth.getSession()
-      .then(() => refresh())
+      .then(({ data }) => (data.session ? refresh() : setState({ kind: "out" })))
       .catch(() => setError("The server did not answer. Reload the page."));
   }, [config]);
 
@@ -46,8 +46,20 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
     setBusy(true);
     setError(null);
     const { error } = await browserClient(config).auth.signInAnonymously();
+    if (error) {
+      setBusy(false);
+      return setError(`The demo could not start: ${error.message}`);
+    }
+    // Each visitor gets their own copy of the demo workspace.
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const seeded = await fetch("/api/demo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ today }),
+    });
     setBusy(false);
-    if (error) return setError(`The demo could not start: ${error.message}`);
+    if (!seeded.ok) return setError("The demo workspace could not be prepared. Reload to try again.");
     await refresh();
   }
 
@@ -77,7 +89,7 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
             Signed in {state.user.isAnonymous ? "to the demo" : `as ${state.user.email}`}.
           </p>
           <div className="flex gap-3">
-            <a className={buttonVariants()} href="/app">
+            <a className={buttonVariants()} href="/app/resume">
               Open the workspace
             </a>
             <Button variant="outline" onClick={signOut} disabled={busy}>

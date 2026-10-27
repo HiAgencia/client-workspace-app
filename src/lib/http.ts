@@ -16,8 +16,14 @@ export function sameOrigin(request: Request): boolean {
   return origin === new URL(request.url).origin;
 }
 
-// Where to land after signing in: only a path on this site, never another origin.
-export function safeNext(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return "/";
-  return value;
+// Where to land after signing in: only a path on this site, never another origin. Decided by the URL parser itself,
+// which strips tabs and line breaks, so "/\t/evil.com" resolves to another host and is refused.
+export function safeNext(value: string | null, origin: string): string {
+  if (!value) return "/";
+  try {
+    const target = new URL(value, origin);
+    return target.origin === origin ? `${target.pathname}${target.search}` : "/";
+  } catch {
+    return "/";
+  }
 }

@@ -34,7 +34,8 @@ export async function accessTokenFor(deps: GoogleDeps, account: AccountRow, now 
     answer = await refreshAccessToken(deps.fetch, deps.client, await decrypt(deps.key, account.refresh_token));
   } catch (error) {
     if (error instanceof GoogleError && error.revoked) {
-      await deps.service.from("google_accounts").update({ status: "revoked" }).eq("id", account.id);
+      const marked = await deps.service.from("google_accounts").update({ status: "revoked" }).eq("id", account.id);
+      if (marked.error) console.error("google: marking a revoked account failed", marked.error.message);
     }
     throw error;
   }
@@ -89,7 +90,7 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
 
     const accounts = await deps.service
       .from("google_accounts")
-      .select("id, email, refresh_token, access_token, access_token_expires_at")
+      .select("id, email, status, refresh_token, access_token, access_token_expires_at")
       .eq("owner_id", ownerId)
       .in("id", [...fromNode.keys()]);
     if (accounts.error) throw new Error(`reading the accounts: ${accounts.error.message}`);
@@ -104,6 +105,11 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
     const failures: EventsFailure[] = [];
     await Promise.all(
       accounts.data.map(async (account) => {
+        // A revoked authorization is not asked again on every read: only connecting the account again fixes it.
+        if (account.status === "revoked") {
+          failures.push({ accountId: account.id, accountEmail: account.email, reason: "access was revoked: connect the account again" });
+          return;
+        }
         try {
           const token = await accessTokenFor(deps, account);
           const own = calendars.data.filter((calendar) => calendar.account_id === account.id);

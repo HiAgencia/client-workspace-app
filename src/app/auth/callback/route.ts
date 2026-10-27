@@ -7,7 +7,7 @@ import { userClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const code = url.searchParams.get("code");
-  const next = safeNext(url.searchParams.get("next"));
+  const next = safeNext(url.searchParams.get("next"), url.origin);
   const failed = new URL("/", url.origin);
   failed.searchParams.set("auth", "failed");
 

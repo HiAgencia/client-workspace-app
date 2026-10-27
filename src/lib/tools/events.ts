@@ -24,7 +24,14 @@ export async function eventsForNode(
   to: string,
 ): Promise<{ events: CalendarEvent[]; failures: EventsFailure[] }> {
   if (!ctx.events) return { events: [], failures: [] };
-  return ctx.events({ db: ctx.db, ownerId: ctx.ownerId, nodeId: node.id, from, to });
+  try {
+    return await ctx.events({ db: ctx.db, ownerId: ctx.ownerId, nodeId: node.id, from, to });
+  } catch (error) {
+    // The calendar side failing never takes the node's tasks and decisions down with it.
+    const reason = error instanceof Error ? error.message : "the calendars could not be read";
+    console.error("events:", reason);
+    return { events: [], failures: [{ accountId: "", accountEmail: "", reason: "the calendars could not be read" }] };
+  }
 }
 
 const instant = z.iso
@@ -51,7 +58,10 @@ export const listEvents = defineTool({
     const resolved = resolveNode(loaded.scope, input.node);
     if (isError(resolved)) return resolved;
     const from = new Date(input.from ?? Date.now());
-    const to = new Date(input.to ?? from.getTime() + 7 * DAY_MS);
+    // A bare day as the end includes that whole day.
+    const to = input.to
+      ? new Date(Date.parse(input.to) + (/^\d{4}-\d{2}-\d{2}$/.test(input.to) ? DAY_MS : 0))
+      : new Date(from.getTime() + 7 * DAY_MS);
     if (!(to > from)) return fail("invalid_input", "the end must come after the start");
     if (to.getTime() - from.getTime() > 92 * DAY_MS) return fail("invalid_input", "ask for at most three months");
     const { events, failures } = await eventsForNode(ctx, resolved.node, from.toISOString(), to.toISOString());

@@ -65,13 +65,24 @@ export async function loadScope(ctx: ToolContext): Promise<ToolResult<{ scope: S
       segments: [],
     });
   }
-  for (const node of all.values()) {
+  // Archiving a node archives what hangs from it: a node whose chain does not reach a root through live nodes leaves
+  // the tree, so it is reached neither by id nor by a cut path.
+  for (const node of [...all.values()]) {
     const names: string[] = [];
     let cursor: TreeNode | undefined = node;
-    // A parent that is archived or missing ends the walk; the depth bound guards against a corrupt cycle.
+    let rooted = false;
+    // The depth bound guards against a corrupt cycle.
     for (let depth = 0; cursor && depth < 64; depth++) {
       names.unshift(cursor.name);
-      cursor = cursor.parentId ? all.get(cursor.parentId) : undefined;
+      if (cursor.parentId === null) {
+        rooted = true;
+        break;
+      }
+      cursor = all.get(cursor.parentId);
+    }
+    if (!rooted) {
+      all.delete(node.id);
+      continue;
     }
     node.path = names.join(PATH_SEPARATOR);
     node.segments = names.map(normalizeName);

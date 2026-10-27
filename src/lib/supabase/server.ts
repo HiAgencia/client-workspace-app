@@ -33,6 +33,8 @@ export type SessionUser = { id: string; email: string | null; isAnonymous: boole
 // Identity is checked against the auth server, so a session revoked there is not accepted from its cookie.
 export async function currentUser(db: Db): Promise<SessionUser | null> {
   const { data, error } = await db.auth.getUser();
+  // No session is the normal signed-out case; any other failure of the auth server is logged, not hidden as one.
+  if (error && error.name !== "AuthSessionMissingError") console.error("auth: reading the user failed", error.status, error.name);
   if (error || !data.user) return null;
   return { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false };
 }
