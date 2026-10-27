@@ -7,5 +7,9 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
+    setupFiles: ["tests/setup/env.ts"],
+    // Integration tests talk to the real Supabase project over the network.
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });

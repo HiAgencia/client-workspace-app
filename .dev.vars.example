@@ -1,2 +1,6 @@
 # Names of the local variables; values live only in .dev.vars (ignored).
+# The Supabase ones are written by `pnpm dev-vars` with SUPABASE_ACCESS_TOKEN set.
 NEXTJS_ENV=development
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=

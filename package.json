@@ -13,11 +13,16 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "db:types": "supabase gen types typescript --linked --schema public > src/lib/db/types.ts",
+    "db:dry-run": "node scripts/db-dry-run.mjs",
+    "db:push": "supabase db push --linked",
+    "dev-vars": "node scripts/sync-dev-vars.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@opennextjs/cloudflare": "^1.20.13",
+    "@supabase/supabase-js": "^2.118.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
     "lucide-react": "^1.61.0",
@@ -34,6 +39,7 @@
     "@types/react-dom": "^19.3.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "supabase": "^2.122.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.5",
