@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import type { Db } from "@/lib/db/client";
 import type { Database } from "@/lib/db/types";
 
-export type Db = SupabaseClient<Database>;
+export type { Db };
 
 export type DisposableUser = { id: string; email: string; client: Db };
 
