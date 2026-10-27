@@ -108,9 +108,16 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   interception file: the Workers adapter does not run Next's `proxy.ts`.
 - Server configuration, the Supabase address and publishable key included, is read per request from the Worker's
   variables and handed to the browser by the page, so one build runs anywhere with that place's variables.
-- **Connecting an account** is a separate OAuth flow per account, started from the node it hangs from:
-  `access_type=offline`, `prompt=consent`, scope `calendar.readonly` plus `openid email`. The refresh token is
-  encrypted with AES-GCM (WebCrypto) under a key kept as a Worker secret.
+- **Connecting an account** is a separate OAuth flow per account, started from the node it hangs from
+  (`/api/google/connect?node=` → `/api/google/callback`): `access_type=offline`, `prompt=consent`, scope
+  `calendar.readonly` plus `openid email`. The `state` carries the node, the person, an expiry, and a nonce, signed
+  with HMAC; the nonce also sits in an http-only cookie of the browser that started, and the callback demands both
+  and the same signed-in person. The tokens are encrypted with AES-GCM (WebCrypto) under `TOKEN_ENCRYPTION_KEY`, a
+  Worker secret, and only the service client reads them. Connecting an account again refreshes its tokens, adds the
+  node, and keeps the person's choice of calendars; a new calendar starts shown when it is the primary one or Google
+  marks it selected. A demo session does not connect accounts.
+- An access token is renewed shortly before it expires; a refresh Google refuses (`invalid_grant`) marks the account
+  `revoked`, and the screen asks to connect it again. Every call to Google carries its own deadline.
 - **Events**: `calendarList.list` on connect; `events.list` with `singleEvents=true` and `orderBy=startTime` for each
   selected calendar of each visible account, merged and colored by account.
 - The Google Cloud app is published without verification: users see Google's unverified-app screen, and
