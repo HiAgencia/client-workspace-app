@@ -159,6 +159,12 @@ describe("the daily cap", () => {
     expect(await takeUsage(service, user!.id, "transcription", 2, new Date("2026-01-16T00:00:01Z"))).toEqual({ allowed: true, count: 1 });
   });
 
+  it("a failing cap read refuses the model call rather than lets it through", async () => {
+    const broken = { rpc: async () => ({ data: null, error: { message: "boom" } }) } as unknown as ReturnType<typeof serviceClient>;
+    expect(await takeUsage(broken, user!.id, "chat_message", 60)).toEqual({ allowed: false, reason: "error" });
+    expect(await takeUsageFor(broken, { id: user!.id, isAnonymous: true }, "chat_message")).toEqual({ allowed: false, reason: "error" });
+  });
+
   it("a signed-in person cannot take units for themselves", async () => {
     const { error } = await user!.client.rpc("take_usage", { p_owner: user!.id, p_kind: "chat_message", p_day: "2026-01-15", p_cap: 1000 });
     expect(error?.code).toBe("42501");
