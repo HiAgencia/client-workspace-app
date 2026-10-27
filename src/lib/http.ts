@@ -21,9 +21,11 @@ export function sameOrigin(request: Request): boolean {
   }
   
   
+  
+  const url = new URL(request.url);
   const host = request.headers.get("host");
-  if (host && parsed.host === host) return true;
-  return origin === new URL(request.url).origin;
+  if (host && parsed.host === host && parsed.protocol === url.protocol) return true;
+  return origin === url.origin;
 }
 
 
