@@ -31,6 +31,22 @@ This puts everything current in one place:
 Everything in this repository was written during the hackathon (October 26 – November 4, 2026); the commit history
 starts on day one. Open-source dependencies are used under their licenses.
 
+## Run it locally
+
+The app runs as a Cloudflare Worker built with OpenNext, against a Supabase project.
+
+1. `pnpm install --frozen-lockfile`
+2. Create `.dev.vars` from `.dev.vars.example`: the Supabase URL and keys, a Google OAuth client to connect
+   calendars, a 32-byte base64 `TOKEN_ENCRYPTION_KEY`, and `MODEL_PROVIDER` (`simulated` runs the chat with no API
+   spend; `meta` calls Meta Model API with `MODEL_API_KEY`).
+3. Apply the schema: `pnpm db:push` (Supabase CLI linked to the project).
+4. `pnpm preview` builds the Worker and serves it at `http://localhost:8787`, exactly as it is deployed.
+5. To connect a coding agent, open a project, choose "Connect your agent", issue a token, and copy the `.mcp.json`
+   block into the repository; the token goes in the `CLIENT_WORKSPACE_TOKEN` environment variable.
+
+`pnpm check` runs route typegen, TypeScript, ESLint, and the tests (the integration tests use the Supabase project
+with throwaway users).
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md): data, tool layer, chat, MCP, Google accounts, demo, and screens.
