@@ -1,0 +1,116 @@
+
+
+
+export type Day = string;
+
+
+export const LOCALE = "en";
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+export function dayOf(date: Date): Day {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function toDate(day: Day): Date {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function today(): Day {
+  return dayOf(new Date());
+}
+
+export function addDays(day: Day, offset: number): Day {
+  const date = toDate(day);
+  date.setDate(date.getDate() + offset);
+  return dayOf(date);
+}
+
+export function addMonths(day: Day, offset: number): Day {
+  const date = toDate(day);
+  const target = new Date(date.getFullYear(), date.getMonth() + offset, 1);
+  const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(date.getDate(), last));
+  return dayOf(target);
+}
+
+
+export function shortDay(day: Day, now: Day = today()): string {
+  const date = toDate(day);
+  const sameYear = day.slice(0, 4) === now.slice(0, 4);
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
+}
+
+export function longDay(day: Day): string {
+  return new Intl.DateTimeFormat(LOCALE, { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(toDate(day));
+}
+
+export function monthTitle(day: Day): string {
+  return new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" }).format(toDate(day));
+}
+
+
+export function dueTone(day: Day | null, now: Day = today()): "alert" | "accent" | "neutral" | "muted" {
+  if (!day) return "muted";
+  if (day < now) return "alert";
+  if (day === now) return "accent";
+  return "neutral";
+}
+
+export function dueLabel(day: Day | null, now: Day = today()): string {
+  if (!day) return "No date";
+  if (day === now) return "Today";
+  if (day === addDays(now, 1)) return "Tomorrow";
+  if (day === addDays(now, -1)) return "Yesterday";
+  return shortDay(day, now);
+}
+
+
+export function firstWeekday(): number {
+  try {
+    const locale = new Intl.Locale(navigator.language) as Intl.Locale & {
+      getWeekInfo?: () => { firstDay: number };
+      weekInfo?: { firstDay: number };
+    };
+    return locale.getWeekInfo?.().firstDay ?? locale.weekInfo?.firstDay ?? 1;
+  } catch {
+    return 1;
+  }
+}
+
+
+export function monthGrid(day: Day, weekStart: number): Day[][] {
+  const date = toDate(day);
+  const first = new Date(date.getFullYear(), date.getMonth(), 1);
+  const jsStart = weekStart % 7;
+  const lead = (first.getDay() - jsStart + 7) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - lead);
+  const weeks: Day[][] = [];
+  for (let w = 0; w < 6; w++) {
+    const week: Day[] = [];
+    for (let d = 0; d < 7; d++) {
+      const cell = new Date(start);
+      cell.setDate(start.getDate() + w * 7 + d);
+      week.push(dayOf(cell));
+    }
+    weeks.push(week);
+    const nextWeekStart = new Date(start);
+    nextWeekStart.setDate(start.getDate() + (w + 1) * 7);
+    if (nextWeekStart.getMonth() !== date.getMonth() && w >= 3) break;
+  }
+  return weeks;
+}
+
+export function weekdayNames(weekStart: number): Array<{ short: string; long: string }> {
+  const base = new Date(2024, 0, 7); 
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(base);
+    date.setDate(base.getDate() + ((weekStart % 7) + i));
+    return {
+      short: new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date),
+      long: new Intl.DateTimeFormat(LOCALE, { weekday: "long" }).format(date),
+    };
+  });
+}

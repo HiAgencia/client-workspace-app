@@ -7,5 +7,9 @@ const reasons: Record<Exclude<ConnectBlocked, null>, string> = {
 };
 
 export function ConnectBlockedNote({ reason }: { reason: ConnectBlocked }) {
-  return reason ? <p data-connect-blocked={reason}>{reasons[reason]}</p> : null;
+  return reason ? (
+    <p className="inline-note" data-connect-blocked={reason}>
+      {reasons[reason]}
+    </p>
+  ) : null;
 }
