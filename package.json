@@ -23,6 +23,7 @@
     "@ai-sdk/openai": "^4.0.102",
     "@ai-sdk/react": "^4.0.157",
     "@base-ui/react": "^1.9.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@opennextjs/cloudflare": "^1.20.13",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
@@ -38,6 +39,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
