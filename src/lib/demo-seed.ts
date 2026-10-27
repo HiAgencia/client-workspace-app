@@ -1,7 +1,6 @@
-import type { ToolContext } from "@/lib/tools/context";
-import { callTool } from "@/lib/tools/registry";
-import { isError } from "@/lib/tools/result";
-import { createNode } from "@/lib/tools/tree-writes";
+import type { Db } from "@/lib/db/client";
+
+
 
 
 
@@ -61,33 +60,10 @@ export function demoSeedTree(today: string): Seed[] {
   ];
 }
 
-async function plant(ctx: ToolContext, nodes: Seed[], parent?: string): Promise<void> {
-  for (const entry of nodes) {
-    const created = await createNode(ctx, { name: entry.name, parent });
-    if (isError(created)) throw new Error(`demo seed: ${created.message}`);
-    for (const [tool, input] of entry.items ?? []) {
-      const result = await callTool(tool, ctx, { ...input, node: created.node.id });
-      if (!result.ok) throw new Error(`demo seed ${tool}: ${"message" in result ? result.message : "failed"}`);
-    }
-    await plant(ctx, entry.children ?? [], created.node.id);
-  }
-}
 
 
-export async function seedDemo(ctx: ToolContext, today: string): Promise<{ planted: boolean }> {
-  const { count, error } = await ctx.db
-    .from("nodes")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_id", ctx.ownerId);
+export async function seedDemo(db: Db, today: string): Promise<{ planted: boolean }> {
+  const { data, error } = await db.rpc("seed_demo", { p_today: today });
   if (error) throw new Error(`demo seed: ${error.message}`);
-  if ((count ?? 0) > 0) return { planted: false };
-  try {
-    await plant(ctx, demoSeedTree(today));
-  } catch (error) {
-    
-    const removed = await ctx.db.from("nodes").delete().eq("owner_id", ctx.ownerId).is("parent_id", null);
-    if (removed.error) console.error("demo seed: removing a partial seed failed", removed.error.message);
-    throw error;
-  }
-  return { planted: true };
+  return { planted: data === true };
 }

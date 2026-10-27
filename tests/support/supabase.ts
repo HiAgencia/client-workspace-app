@@ -14,7 +14,15 @@ export function requireEnv(name: string): string {
   return value;
 }
 
-const options = { auth: { persistSession: false, autoRefreshToken: false } } as const;
+const options = {
+  auth: { persistSession: false, autoRefreshToken: false },
+  
+  
+  global: {
+    fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+      fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(30_000) }),
+  },
+} as const;
 
 export function serviceClient(): Db {
   return createClient<Database>(
