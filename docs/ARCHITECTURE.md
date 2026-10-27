@@ -224,8 +224,9 @@ The principles above, as code. Components ask for a role, never for a value, so 
   for what is read and the values a person types.
 - **No native picker and no stock icon**: the dropdown, the calendar, and the checkbox are the product's own, with the
   native semantics (combobox and listbox, grid, checkbox); the mark is drawn for the product from its tree
-  (`src/components/brand-geometry.json`), and `pnpm icons` draws the site's icons from the same geometry and the
-  accent's color; a test fails when the written icons no longer match them.
+  (`src/components/brand-geometry.json`), and `pnpm icons` draws the site's icons and the web manifest's installable
+  sizes from the same geometry and the accent's color; `src/app/manifest.ts` serves the manifest every page links, and a
+  test fails when the written icons no longer match them.
 - **The theme** is the person's choice, stored in the browser and set on the root before the first paint; without a
   choice it follows the system, also when the system changes; a choice made in another tab reaches every open one, and
   the browser's own bar takes the chosen theme. Switching cross-fades the page.

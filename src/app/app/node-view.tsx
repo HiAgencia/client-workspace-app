@@ -207,6 +207,8 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
               aria-controls="done-tasks"
               onClick={() => {
                 setDoneSettled(false);
+                // A landing waiting for the fold is dropped when the fold is closed by hand.
+                pendingDone.current = null;
                 setShowDone((v) => !v);
               }}
             >
@@ -227,6 +229,11 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
                   pendingDone.current = null;
                   land(request.target, { acted: request.acted });
                 }
+              }}
+              onTransitionCancel={(event) => {
+                if (event.target !== event.currentTarget) return;
+                pendingDone.current = null;
+                setDoneSettled(false);
               }}
             >
               <div>

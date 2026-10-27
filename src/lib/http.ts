@@ -20,10 +20,12 @@ export function sameOrigin(request: Request): boolean {
     return false;
   }
   // The host the client used is the one its origin must match: behind a proxy the request's own URL may carry an
-  // internal host (wrangler dev serves `localhost` while the browser is on `127.0.0.1`).
+  // internal host (wrangler dev serves `localhost` while the browser is on `127.0.0.1`). The scheme is compared too:
+  // an `http` page on the same host must not pass for the site's `https`.
+  const url = new URL(request.url);
   const host = request.headers.get("host");
-  if (host && parsed.host === host) return true;
-  return origin === new URL(request.url).origin;
+  if (host && parsed.host === host && parsed.protocol === url.protocol) return true;
+  return origin === url.origin;
 }
 
 // Where to land after signing in: only a path on this site, never another origin. Decided by the URL parser itself,

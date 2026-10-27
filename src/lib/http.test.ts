@@ -16,9 +16,10 @@ describe("the site a write comes from", () => {
     expect(sameOrigin(pedido("https://app.example.com/api/demo", { origin: "https://app.example.com" }))).toBe(true);
   });
 
-  it("refuses another host, another port, null, and a missing origin", () => {
+  it("refuses another host, another port, another scheme, null, and a missing origin", () => {
     expect(sameOrigin(pedido("http://localhost:8787/api/demo", { origin: "http://evil.com", host: "localhost:8787" }))).toBe(false);
     expect(sameOrigin(pedido("http://localhost:8787/api/demo", { origin: "http://localhost:3000", host: "localhost:8787" }))).toBe(false);
+    expect(sameOrigin(pedido("https://localhost:8787/api/demo", { origin: "http://localhost:8787", host: "localhost:8787" }))).toBe(false);
     expect(sameOrigin(pedido("http://localhost:8787/api/demo", { origin: "null", host: "localhost:8787" }))).toBe(false);
     expect(sameOrigin(pedido("http://localhost:8787/api/demo", { host: "localhost:8787" }))).toBe(false);
   });
