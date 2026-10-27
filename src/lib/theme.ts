@@ -7,7 +7,12 @@ export type Theme = "light" | "dark";
 
 
 
+
 export const BROWSER_BAR: Record<Theme, string> = { light: "#ffffff", dark: "#1b1e1a" };
+
+
+
+export const MANIFEST_BACKGROUND = "#eff1ec";
 
 export function subscribeTheme(listener: () => void): () => void {
   const observer = new MutationObserver(listener);

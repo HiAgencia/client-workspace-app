@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BROWSER_BAR } from "./theme";
+import { BROWSER_BAR, MANIFEST_BACKGROUND } from "./theme";
+
 
 
 describe("the browser's bar color", () => {
@@ -11,5 +12,9 @@ describe("the browser's bar color", () => {
   it("follows the card's surface in each theme", () => {
     expect(BROWSER_BAR.light).toBe(card(light));
     expect(BROWSER_BAR.dark).toBe(card(dark));
+  });
+
+  it("the manifest background follows the light theme's canvas", () => {
+    expect(MANIFEST_BACKGROUND).toBe(light.match(/--canvas:\s*(#[0-9a-fA-F]{6})/)?.[1]?.toLowerCase());
   });
 });

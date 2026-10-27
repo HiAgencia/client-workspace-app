@@ -18,6 +18,7 @@ function token(name) {
 
 const ACCENT = token("--accent-fill");
 const ON_ACCENT = token("--on-accent");
+const CANVAS = token("--canvas");
 // In a square of `size` units: the tile, then three bars stepping in.
 const UNITS = geometry.size;
 const TILE_RADIUS = geometry.tileRadius;
@@ -30,7 +31,13 @@ function insideRounded(px, py, x, y, w, h, r) {
   return (px - cx) ** 2 + (py - cy) ** 2 <= r * r;
 }
 
-function draw(size, { rounded }) {
+// The mark's color at a point in geometry units, or null where the tile does not paint.
+function colorAt(px, py, rounded) {
+  if (!insideRounded(px, py, 0, 0, UNITS, UNITS, rounded ? TILE_RADIUS : 0)) return null;
+  return BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2)) ? ON_ACCENT : ACCENT;
+}
+
+function draw(size, { rounded, background = null, scale = 1 }) {
   const samples = 8;
   const pixels = Buffer.alloc(size * size * 4);
   const unit = UNITS / size;
@@ -44,9 +51,11 @@ function draw(size, { rounded }) {
         for (let sx = 0; sx < samples; sx++) {
           const px = (col + (sx + 0.5) / samples) * unit;
           const py = (row + (sy + 0.5) / samples) * unit;
-          if (!insideRounded(px, py, 0, 0, UNITS, UNITS, rounded ? TILE_RADIUS : 0)) continue;
-          const onBar = BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2));
-          const color = onBar ? ON_ACCENT : ACCENT;
+          // With `scale` below 1 the mark shrinks toward the center and what it leaves reads as the background.
+          const gx = UNITS / 2 + (px - UNITS / 2) / scale;
+          const gy = UNITS / 2 + (py - UNITS / 2) / scale;
+          const color = colorAt(gx, gy, rounded) ?? background;
+          if (!color) continue;
           r += color[0];
           g += color[1];
           b += color[2];
@@ -136,8 +145,20 @@ export function iconFiles() {
   };
 }
 
+// The manifest's icons, in public/: installable sizes, and the maskable one — its own file, the mark inside the
+// central circle a system may crop to (80% of the width), on the canvas the manifest declares as its background.
+export function manifestIconFiles() {
+  return {
+    "icon-192.png": png(192, draw(192, { rounded: true })),
+    "icon-512.png": png(512, draw(512, { rounded: true })),
+    "icon-maskable-512.png": png(512, draw(512, { rounded: false, background: CANVAS, scale: 0.8 })),
+  };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = new URL("../src/app/", import.meta.url);
   for (const [name, data] of Object.entries(iconFiles())) writeFileSync(new URL(name, root), data);
-  console.log("icon.svg, favicon.ico (16, 32, 48) and apple-icon.png (180) written in src/app/");
+  const publicDir = new URL("../public/", import.meta.url);
+  for (const [name, data] of Object.entries(manifestIconFiles())) writeFileSync(new URL(name, publicDir), data);
+  console.log("icon.svg, favicon.ico (16, 32, 48) and apple-icon.png (180) written in src/app/; icon-192.png, icon-512.png and icon-maskable-512.png in public/");
 }
