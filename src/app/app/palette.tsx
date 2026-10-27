@@ -122,8 +122,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   }, [query, tree, nodeIndex, itemIndex, actionIndex, actions]);
 
   
+  
   const flat = groups.flatMap((group) => group.entries);
-  const current = flat.find((entry) => entry.id === activeId) ?? flat[0];
+  const current = activeId === null ? flat[0] : (flat.find((entry) => entry.id === activeId) ?? null);
 
   useEffect(() => {
     if (!current) return;
@@ -140,9 +141,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (!current) return;
       const delta = event.key === "ArrowDown" ? 1 : -1;
-      setActiveId(flat[(flat.indexOf(current) + delta + flat.length) % flat.length].id);
+      const desde = current ? flat.indexOf(current) : delta > 0 ? -1 : 0;
+      if (flat.length > 0) setActiveId(flat[(desde + delta + flat.length) % flat.length].id);
     }
     if (event.key === "Enter" && current) {
       event.preventDefault();

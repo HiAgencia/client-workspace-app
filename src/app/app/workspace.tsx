@@ -10,7 +10,7 @@ import { usePiece } from "@/components/ui/use-piece";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
 import { get, tool, type TreeNode } from "./client-api";
-import { dropFocusRequestOutside } from "./focus-request";
+import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
 import { Palette } from "./palette";
 import { Tree } from "./tree";
 
@@ -148,6 +148,13 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   
   useEffect(() => dropFocusRequestOutside(pathname), [pathname]);
+
+  
+  
+  useEffect(() => {
+    if (!drawerOpen) return;
+    return onFocusRequest(() => setDrawerOpen(false));
+  }, [drawerOpen]);
 
   
   const [placeSeen, setPlaceSeen] = useState(pathname);

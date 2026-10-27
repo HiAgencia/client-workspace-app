@@ -13,6 +13,16 @@ export function problem(status: number, message: string): Response {
 export function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin || origin === "null") return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  
+  
+  const host = request.headers.get("host");
+  if (host && parsed.host === host) return true;
   return origin === new URL(request.url).origin;
 }
 
