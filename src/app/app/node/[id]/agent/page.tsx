@@ -63,12 +63,12 @@ export default function AgentPage() {
       {issued && (
         <section className="flex flex-col gap-2" aria-label="The new token" data-issued-token>
           <p>Copy it now: it is shown only once. Set it in the environment where the agent runs:</p>
-          <pre className="overflow-x-auto">{`${data.tokenEnv}=${issued}`}</pre>
+          <pre className="overflow-x-auto" tabIndex={0} aria-label="The new token">{`${data.tokenEnv}=${issued}`}</pre>
         </section>
       )}
       <section className="flex flex-col gap-2" aria-label="The .mcp.json block">
         <p>Add this to the repository&apos;s .mcp.json; the token stays in the environment variable, out of the repository:</p>
-        <pre className="overflow-x-auto" data-mcp-json>
+        <pre className="overflow-x-auto" data-mcp-json tabIndex={0} aria-label="The .mcp.json block">
           {data.mcpJson}
         </pre>
       </section>

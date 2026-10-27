@@ -114,6 +114,27 @@ describe("the MCP endpoint", () => {
     await client.close();
   });
 
+  it("a failing token lookup refuses rather than lets through", async () => {
+    // The database answering an error must make the verdict stricter: 401, never a pass.
+    const broken = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "boom" } }) }) }) }) };
+    const response = await mcpEndpoint({ service: broken as unknown as ReturnType<typeof serviceClient> })(
+      new Request(URL_MCP, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      }),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("a token on the parent reaches the node a sibling token cannot", async () => {
+    const parentToken = (await issue(ids.acme, "parent")).token;
+    const client = await connect(parentToken);
+    const reached = await client.callTool({ name: "get_overview", arguments: { node: "Acme / Mobile" } });
+    expect(parse(reached)).toMatchObject({ ok: true, node: { path: "Acme / Mobile" } });
+    await client.close();
+  });
+
   it("a token on a node does not reach its sibling", async () => {
     const client = await connect(token);
     const byId = await client.callTool({ name: "create_task", arguments: { node: ids.mobile, title: "Escape" } });

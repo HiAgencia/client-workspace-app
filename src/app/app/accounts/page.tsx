@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { get, post } from "../client-api";
 import { ConfirmButton } from "../confirm-button";
+import { ConnectBlockedNote, type ConnectBlocked } from "../connect-blocked";
 import { useWorkspace } from "../workspace";
 
 type Calendar = { id: string; name: string; color: string | null; selected: boolean };
@@ -14,14 +15,16 @@ export default function AccountsPage() {
   const { tree, saving, version } = useWorkspace();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [canConnect, setCanConnect] = useState(false);
+  const [connectBlocked, setConnectBlocked] = useState<ConnectBlocked>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectNode, setConnectNode] = useState("");
 
   useEffect(() => {
-    void get<{ accounts: Account[]; canConnect: boolean }>("/api/accounts").then((answer) => {
+    void get<{ accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked }>("/api/accounts").then((answer) => {
       if (answer.ok) {
         setAccounts(answer.accounts);
         setCanConnect(answer.canConnect);
+        setConnectBlocked(answer.connectBlocked);
         setError(null);
       } else setError(answer.message);
     });
@@ -54,7 +57,7 @@ export default function AccountsPage() {
             )}
           </>
         ) : (
-          <p>Connecting a Google account needs a Google sign-in and the server&apos;s Google configuration.</p>
+          <ConnectBlockedNote reason={connectBlocked} />
         )}
       </section>
       {accounts.length === 0 ? (

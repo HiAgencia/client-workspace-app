@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { post, type TreeNode } from "./client-api";
@@ -76,20 +76,26 @@ function NewNode({ parent, onDone }: { parent?: TreeNode; onDone: () => void }) 
   const router = useRouter();
   const [name, setName] = useState("");
   const what = !parent ? "client" : parent.kind === "client" ? "project" : "subproject";
+  // One field, one outcome: Enter creates once, Escape cancels, and the blur that follows either does nothing.
+  const settled = useRef(false);
 
   async function create() {
+    if (settled.current) return;
+    settled.current = true;
     if (!name.trim()) return onDone();
-    const request = post<{ node: { id: string } }>("/api/nodes", { name, parent: parent?.id });
-    const answer = await request;
+    const answer = await post<{ node: { id: string } }>("/api/nodes", { name, parent: parent?.id });
     if (await saving(Promise.resolve(answer))) {
       onDone();
       if (answer.ok) router.push(`/app/node/${answer.node.id}`);
-    }
+    } else settled.current = false;
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") void create();
-    if (event.key === "Escape") onDone();
+    if (event.key === "Escape") {
+      settled.current = true;
+      onDone();
+    }
   }
 
   return (

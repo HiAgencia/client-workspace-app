@@ -107,6 +107,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   return (
     <WorkspaceContext.Provider value={value}>
+      <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-10 focus:p-2">
+        Skip to content
+      </a>
       <div className="flex min-h-screen flex-col md:flex-row">
         <aside className="flex flex-col gap-4 border-b p-4 md:w-72 md:border-r md:border-b-0">
           <nav className="flex flex-col gap-1">
@@ -119,7 +122,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
           </Button>
         </aside>
         {/* Room at the bottom so the last controls can scroll above the notices' corner. */}
-        <main className="flex flex-1 flex-col gap-6 p-6 pb-24">{children}</main>
+        <main id="content" className="flex flex-1 flex-col gap-6 p-6 pb-24">
+          {children}
+        </main>
       </div>
       <p className="sr-only" role="status" aria-live="polite">
         {status}
@@ -137,6 +142,8 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
             {notice.undo && (
               <Button
                 size="sm"
+                // The deleted row held the focus; it goes to the undo of what was just deleted, not to the page.
+                autoFocus
                 onClick={() => {
                   notice.undo?.();
                   setNotice(null);

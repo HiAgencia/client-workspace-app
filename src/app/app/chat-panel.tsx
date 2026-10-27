@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { get, post, tool } from "./client-api";
@@ -127,9 +127,11 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
           <Button type="submit" disabled={busy}>
             Send
           </Button>
-          <label className="flex items-center gap-2">
-            <span>Image</span>
-            <input type="file" accept="image/*" aria-label="Attach an image" onChange={(e) => attach(e.target.files?.[0])} />
+          {/* The file input stays the real, focusable control; its label is the visible button, in the product's
+              words rather than the browser's own "choose file" text. */}
+          <label className={`${buttonVariants({ variant: "outline" })} cursor-pointer focus-within:ring-3 focus-within:ring-ring/50`}>
+            Attach an image
+            <input type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
           </label>
           <VoiceNote onText={(text) => setInput((current) => (current ? `${current} ${text}` : text))} onNotice={setNotice} />
         </div>

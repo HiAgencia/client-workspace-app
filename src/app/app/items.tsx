@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { post, tool, type Item } from "./client-api";
@@ -38,18 +38,30 @@ export function ItemRow({ item, showPath = false }: { item: Item; showPath?: boo
     });
   }
 
+  // Enter commits and the field's blur on unmounting would commit again: the first one wins.
+  const committing = useRef(false);
+
   async function commitTitle() {
+    if (committing.current) return;
+    committing.current = true;
     setEditing(false);
-    if (title.trim() && title !== item.title) {
-      if (!(await update({ title }))) setTitle(item.title);
-    } else setTitle(item.title);
+    try {
+      if (title.trim() && title !== item.title) {
+        if (!(await update({ title }))) setTitle(item.title);
+      } else setTitle(item.title);
+    } finally {
+      committing.current = false;
+    }
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") void commitTitle();
     if (event.key === "Escape") {
+      // Escape cancels; the blur that follows must not save what was discarded.
+      committing.current = true;
       setTitle(item.title);
       setEditing(false);
+      setTimeout(() => (committing.current = false), 0);
     }
   }
 
@@ -127,9 +139,24 @@ export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] 
   const [extra, setExtra] = useState("");
   const [priority, setPriority] = useState(4);
   const [dueOn, setDueOn] = useState("");
+  // While a send travels a second press does nothing: one intent makes one item.
+  const sending = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   async function add() {
+    if (sending.current) return;
     if (type === "link" ? !extra.trim() : !title.trim()) return;
+    sending.current = true;
+    setBusy(true);
+    try {
+      await send();
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function send() {
     const request =
       type === "task"
         ? tool("create_task", { node: nodeId, title, priority, ...(dueOn ? { dueOn } : {}) })
@@ -172,8 +199,8 @@ export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] 
       {(type === "decision" || type === "review") && (
         <Input aria-label={extraLabel} placeholder={extraLabel} className="max-w-xs" value={extra} onChange={(e) => setExtra(e.target.value)} onKeyDown={onKey} />
       )}
-      <Button size="sm" onClick={() => void add()}>
-        Add
+      <Button size="sm" onClick={() => void add()} aria-busy={busy}>
+        {busy ? "Adding…" : "Add"}
       </Button>
     </div>
   );

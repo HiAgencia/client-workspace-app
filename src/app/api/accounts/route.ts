@@ -22,6 +22,8 @@ export async function GET() {
   return json({
     ok: true,
     canConnect: missingGoogleConfig().length === 0 && !user.isAnonymous,
+    // Why connecting is not offered, so the screen says the real reason.
+    connectBlocked: user.isAnonymous ? "demo" : missingGoogleConfig().length > 0 ? "not_configured" : null,
     accounts: accounts.data.map((account) => ({
       id: account.id,
       email: account.email,

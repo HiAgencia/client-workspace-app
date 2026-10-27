@@ -358,6 +358,25 @@ describe("archiving", () => {
   });
 });
 
+describe("another owner's ids on the writes that have no tool", () => {
+  it("restoring another owner's item and unarchiving another owner's node are not found, and change nothing", async () => {
+    const service = serviceClient();
+    await service.from("items").update({ deleted_at: new Date().toISOString() }).eq("id", bItem);
+    const restored = await restoreItem(userCtx(a), bItem);
+    expect(restored).toMatchObject({ ok: false, code: "not_found" });
+    const stillDeleted = await service.from("items").select("deleted_at").eq("id", bItem).single();
+    expect(stillDeleted.data!.deleted_at).not.toBeNull();
+    await service.from("items").update({ deleted_at: null }).eq("id", bItem);
+
+    await service.from("nodes").update({ archived_at: new Date().toISOString() }).eq("id", bClient);
+    const unarchived = await changeNode(userCtx(a), bClient, { archived: false });
+    expect(unarchived).toMatchObject({ ok: false, code: "not_found" });
+    const stillArchived = await service.from("nodes").select("archived_at").eq("id", bClient).single();
+    expect(stillArchived.data!.archived_at).not.toBeNull();
+    await service.from("nodes").update({ archived_at: null }).eq("id", bClient);
+  });
+});
+
 describe("a scoped agent", () => {
   it("does not reach a sibling of its node, by id, by path, or through an item", async () => {
     const ctx = agentCtx(treeA.web);
@@ -367,6 +386,20 @@ describe("a scoped agent", () => {
     const sibling = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Sibling's" });
     expect((await refuse("update_item", ctx, { id: sibling.item.id, title: "Escape" })).code).toBe("not_found");
     expect((await refuse("delete_item", ctx, { id: sibling.item.id })).code).toBe("not_found");
+    // The switch off: the same service client and owner without the scope reach that sibling, so the scope is what
+    // refused it above, not the data.
+    const unscoped = agentCtx(treeA.web, { scopeNodeId: undefined });
+    const reached = await run<{ item: ItemOut }>("update_item", unscoped, { id: sibling.item.id, title: "Sibling's" });
+    expect(reached.item.nodeId).toBe(treeA.mobile);
+  });
+
+  it("the owner filter is what keeps the service client off another owner's rows", async () => {
+    const asA: ToolContext = { db: serviceClient(), ownerId: a!.id, source: "manual" };
+    expect((await refuse("update_item", asA, { id: bItem, title: "Hijacked" })).code).toBe("not_found");
+    // The switch off: the same service client with B as owner reaches B's item.
+    const asB: ToolContext = { db: serviceClient(), ownerId: b!.id, source: "manual" };
+    const reached = await run<{ item: ItemOut }>("update_item", asB, { id: bItem, title: "B secret task" });
+    expect(reached.item.id).toBe(bItem);
   });
 
   it("sees only its subtree, and a path inside it is unambiguous", async () => {

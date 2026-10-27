@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { get, tool, type CalendarEvent, type EventsFailure, type Item } from "./client-api";
+import { ConnectBlockedNote, type ConnectBlocked } from "./connect-blocked";
 import { ItemRow, QuickAdd } from "./items";
 import { useWorkspace } from "./workspace";
 
@@ -33,14 +34,14 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [done, setDone] = useState<Item[]>([]);
-  const [accounts, setAccounts] = useState<{ list: Account[]; canConnect: boolean } | null>(null);
+  const [accounts, setAccounts] = useState<{ list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked } | null>(null);
 
   useEffect(() => {
     let live = true;
     void Promise.all([
       tool<Overview>("get_overview", { node: nodeId }),
       tool<{ items: Item[] }>("list_items", { node: nodeId, type: "task", status: "done" }),
-      get<{ accounts: Account[]; canConnect: boolean }>("/api/accounts"),
+      get<{ accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked }>("/api/accounts"),
     ]).then(([answer, finished, accountsAnswer]) => {
       // An answer for a node the person already left does not paint here.
       if (!live) return;
@@ -50,7 +51,7 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
       } else if (answer.code === "not_found") setNotFound(true);
       else setError(answer.message);
       if (finished.ok) setDone(finished.items);
-      if (accountsAnswer.ok) setAccounts({ list: accountsAnswer.accounts, canConnect: accountsAnswer.canConnect });
+      if (accountsAnswer.ok) setAccounts({ list: accountsAnswer.accounts, canConnect: accountsAnswer.canConnect, connectBlocked: accountsAnswer.connectBlocked });
     });
     return () => {
       live = false;
@@ -128,7 +129,7 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
         {accounts?.canConnect ? (
           <a href={`/api/google/connect?node=${nodeId}`}>Connect a Google account here</a>
         ) : (
-          <p>Connecting a Google account needs a Google sign-in and the server&apos;s Google configuration.</p>
+          <ConnectBlockedNote reason={accounts?.connectBlocked ?? null} />
         )}
       </section>
 
