@@ -4,3 +4,11 @@ NEXTJS_ENV=development
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
+# Connecting Google accounts: the OAuth client, and a 32-byte base64 key that encrypts the stored tokens
+# (changing it makes the stored tokens unreadable).
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+TOKEN_ENCRYPTION_KEY=
+# The chat: `simulated` runs without spend; `meta` calls Meta Model API with MODEL_API_KEY.
+MODEL_PROVIDER=simulated
+MODEL_API_KEY=
