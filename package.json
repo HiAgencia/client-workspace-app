@@ -17,7 +17,8 @@
     "db:types": "supabase gen types typescript --linked --schema public > src/lib/db/types.ts",
     "db:dry-run": "node scripts/db-dry-run.mjs",
     "db:push": "supabase db push --linked",
-    "dev-vars": "node scripts/sync-dev-vars.mjs"
+    "dev-vars": "node scripts/sync-dev-vars.mjs",
+    "db:verify": "node scripts/db-verify-grants.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.102",
