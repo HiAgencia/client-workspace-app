@@ -21,8 +21,8 @@ export const getUpdatesSince = defineTool({
   name: "get_updates_since",
   description:
     "What happened in a node and everything below it since a moment: new nodes, and items created, changed, " +
-    "completed, or deleted. Without a moment, since this access was last used. Call it first when starting work " +
-    "to learn what is new in the project.",
+    "completed, or deleted. Without a moment, an agent's access reads since its previous read (the first time, " +
+    "everything in reach). Call it first when starting work to learn what is new in the project.",
   readOnly: true,
   input: z.object({
     since: z.iso.datetime({ offset: true }).optional().describe("An ISO date-time with its offset."),

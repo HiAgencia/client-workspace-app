@@ -56,7 +56,7 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 | `get_overview` | yes | A node: open tasks by priority, recent decisions, links, things to review, and upcoming events from its accounts |
 | `list_items` | yes | A node's items filtered by type and status |
 | `search_items` | yes | Text search over titles and bodies |
-| `get_updates_since` | yes | What was created, changed, completed, or deleted since a moment; with no moment, since the token's last use |
+| `get_updates_since` | yes | What was created, changed, completed, or deleted since a moment; with no moment, since the token's previous read (the first time, everything in reach), and the read moves the token's mark |
 | `list_events` | yes | Events from the accounts visible in a node, between two dates |
 | `create_task` | no | Creates a task with priority, due date, and notes |
 | `update_item` | no | Changes title, body, link, priority, due date, or status |
