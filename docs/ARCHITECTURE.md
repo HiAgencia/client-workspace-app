@@ -100,7 +100,14 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 
 ## Google accounts
 
-- **Sign-in** is Supabase Auth with Google, identity scopes only.
+- **Sign-in** is Supabase Auth with Google, identity scopes only. Google returns through `/auth/callback`, which
+  trades the one-time code for the session cookies.
+- **The session** lives in cookies the browser client keeps fresh. Route handlers read it with `auth.getUser()`,
+  which asks the auth server, and can write a refreshed session back; pages never read it on the server, because a
+  Server Component cannot store a refresh and would spend the refresh token the browser holds. There is no request
+  interception file: the Workers adapter does not run Next's `proxy.ts`.
+- Server configuration, the Supabase address and publishable key included, is read per request from the Worker's
+  variables and handed to the browser by the page, so one build runs anywhere with that place's variables.
 - **Connecting an account** is a separate OAuth flow per account, started from the node it hangs from:
   `access_type=offline`, `prompt=consent`, scope `calendar.readonly` plus `openid email`. The refresh token is
   encrypted with AES-GCM (WebCrypto) under a key kept as a Worker secret.
