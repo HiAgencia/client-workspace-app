@@ -29,23 +29,23 @@ export default function Home({ searchParams }: PageProps<"/">) {
           Tasks, decisions, links, and what is waiting for review live in the project they belong to, beside the calendars of every
           account it uses. A chat and your coding agent work on the same place, and say what they did.
         </p>
+        <div className="session-slot enter">
+          <Suspense fallback={<SignInPlaceholder />}>
+            <SessionControls searchParams={searchParams} />
+          </Suspense>
+        </div>
         <section className="landing-first enter" data-first-step aria-labelledby="first-step-title">
           <p id="first-step-title" className="t-label">
-            Start here
+            Inside the demo
           </p>
           <p className="t-value">
-            In the demo, open <span className="t-name">{DEMO_FIRST_STEP}</span>.
+            The demo opens on <span className="t-name">{DEMO_FIRST_STEP}</span>.
           </p>
           <p className="t-help">
             Add a task with the field under Tasks, or ask the chat panel to add one for you. It is your own copy; nothing
             is shared.
           </p>
         </section>
-        <div className="session-slot enter">
-          <Suspense fallback={<SignInPlaceholder />}>
-            <SessionControls searchParams={searchParams} />
-          </Suspense>
-        </div>
       </div>
       <Preview />
     </main>

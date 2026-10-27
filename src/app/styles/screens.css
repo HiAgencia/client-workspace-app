@@ -1022,11 +1022,6 @@ fieldset.stack {
   flex-direction: column;
   gap: 0.35rem;
   max-width: 34rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--card-rim);
-  border-radius: var(--radius-control);
-  background: var(--card);
-  box-shadow: var(--shadow-control);
 }
 .start-here .t-help {
   max-width: 46rem;
