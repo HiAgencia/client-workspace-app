@@ -151,7 +151,8 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   each visitor works on their own copy.
 - The demo's first screen carries a **Start here** card that opens the seeded project (Northwind Bakery / Website),
   names the field under Tasks and the chat panel; the landing names the same first step before it starts.
-- The demo's Google accounts (`is_demo`) are shown read-only; their tokens never leave the server.
+- The demo does not connect Google accounts; it shows only its sample work. A real account is connected in the
+  validation stage, not in the demo.
 - The chat runs on Meta's models under the daily cap.
 
 ## Screens
