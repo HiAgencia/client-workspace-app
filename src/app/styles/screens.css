@@ -1071,17 +1071,13 @@ fieldset.stack {
   font-size: var(--text-lead);
   max-width: 34rem;
 }
-/* The first step, said once beside the action that starts it: what to open inside the demo and where to write. */
+/* The first step, said once as text beside the action that starts it: the demo's project and where to write, with no
+   surface of its own that could read as a second action. */
 .landing-first {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   max-width: 34rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--card-rim);
-  border-radius: var(--radius-control);
-  background: var(--card);
-  box-shadow: var(--shadow-control);
 }
 /* The guide the demo opens with: its own card above the day, so the first action is in view. */
 .start-here .t-help {
