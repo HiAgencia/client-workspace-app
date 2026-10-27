@@ -17,7 +17,13 @@ export function sameOrigin(request: Request): boolean {
 }
 
 
-export function safeNext(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return "/";
-  return value;
+
+export function safeNext(value: string | null, origin: string): string {
+  if (!value) return "/";
+  try {
+    const target = new URL(value, origin);
+    return target.origin === origin ? `${target.pathname}${target.search}` : "/";
+  } catch {
+    return "/";
+  }
 }

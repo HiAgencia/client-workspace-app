@@ -33,6 +33,8 @@ export type SessionUser = { id: string; email: string | null; isAnonymous: boole
 
 export async function currentUser(db: Db): Promise<SessionUser | null> {
   const { data, error } = await db.auth.getUser();
+  
+  if (error && error.name !== "AuthSessionMissingError") console.error("auth: reading the user failed", error.status, error.name);
   if (error || !data.user) return null;
   return { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false };
 }

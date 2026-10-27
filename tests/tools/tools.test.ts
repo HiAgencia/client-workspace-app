@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ToolContext, EventsSource } from "@/lib/tools/context";
 import { restoreItem } from "@/lib/tools/items";
+import { changeNode } from "@/lib/tools/tree-writes";
 import { callTool, tools } from "@/lib/tools/registry";
 import type { ToolError } from "@/lib/tools/result";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
@@ -333,6 +334,26 @@ describe("reads", () => {
     expect((await refuse("get_updates_since", userCtx(a), {})).code).toBe("since_required");
     const updates = await run<{ since: string }>("get_updates_since", agentCtx(treeA.web, { updatesSince: "2020-01-01T00:00:00Z" }), {});
     expect(updates.since).toBe("2020-01-01T00:00:00.000Z");
+  });
+});
+
+describe("archiving", () => {
+  it("an archived node takes what hangs from it out of reach, and restoring brings it back", async () => {
+    const ctx = userCtx(a);
+    const project = await node_(a!, "Archived soon");
+    const child = await node(a!, "subproject", "Below it", project);
+    await run("create_task", ctx, { node: child, title: "Hidden with its parent" });
+    const archived = await changeNode(ctx, project, { archived: true });
+    expect(archived.ok).toBe(true);
+    const { nodes } = await run<{ nodes: Array<{ id: string }> }>("list_tree", ctx, {});
+    expect(nodes.map((n) => n.id)).not.toContain(child);
+    expect((await refuse("create_task", ctx, { node: child, title: "x" })).code).toBe("not_found");
+    expect((await refuse("create_task", ctx, { node: "Below it", title: "x" })).code).toBe("not_found");
+    const found = await run<{ items: ItemOut[] }>("search_items", ctx, { query: "Hidden with its parent" });
+    expect(found.items).toEqual([]);
+    expect((await changeNode(ctx, project, { archived: false })).ok).toBe(true);
+    const back = await run<{ nodes: Array<{ id: string; path: string }> }>("list_tree", ctx, {});
+    expect(back.nodes.find((n) => n.id === child)?.path).toBe("Acme / Archived soon / Below it");
   });
 });
 
