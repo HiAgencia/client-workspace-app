@@ -20,10 +20,13 @@
     "dev-vars": "node scripts/sync-dev-vars.mjs"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.102",
+    "@ai-sdk/react": "^4.0.157",
     "@base-ui/react": "^1.9.0",
     "@opennextjs/cloudflare": "^1.20.13",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
+    "ai": "^7.0.153",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
     "lucide-react": "^1.61.0",

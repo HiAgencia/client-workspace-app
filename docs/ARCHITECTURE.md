@@ -85,10 +85,21 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   becomes tasks.
 - **Voice**: the browser records and encodes mono 16-bit PCM WAV at 24 kHz, the format the endpoint accepts;
   `/api/transcribe` sends it to `muse-voice-transcribe-1.0`; the transcript lands in the input box to be reviewed
-  before sending, and an empty one is dropped.
-- Every write the chat makes shows as a card saying what it did, with an undo button.
-- **The cap**: `usage_counters` limits messages and transcriptions per user and day, on the server, and the reply
-  says so when the cap is reached. Meta Model API has no hard spend cap of its own.
+  before sending, and an empty one is dropped. The microphone shows only when `GET /api/transcribe` says a
+  transcription can run.
+- Every write the chat makes shows as a card saying what it did, with an undo button: a creation is deleted, a
+  change gets back the values `update_item` returned as replaced, a deletion is restored.
+- The conversation is stored per node in `chat_messages` (the person's message and the answer, with their parts,
+  encrypted reasoning included) when the answer ends; the panel reads it back on opening the node. The model reads
+  the most recent messages, not the whole history.
+- **The cap**: `usage_counters` limits messages and transcriptions per user and day (cut in UTC), on the server,
+  taken before the model is called by `public.take_usage`, one statement that refuses past the cap, so two requests
+  at once never both pass the last unit; the answer is 429 with `Retry-After` and a sentence the panel shows. The
+  caps default to 60 messages and 20 notes a day, overridable with `CHAT_DAILY_CAP` and `TRANSCRIPTION_DAILY_CAP`.
+  Meta Model API has no hard spend cap of its own.
+- **The simulator**: with `MODEL_PROVIDER=simulated` a scripted model (`src/lib/chat/simulated.ts`) calls the tool
+  a real model would for a request (create a task, record a decision, read what is pending) and transcription
+  returns a fixed sentence, so the whole chat runs and is tested without spend.
 
 ## The MCP server (`/api/mcp`)
 
