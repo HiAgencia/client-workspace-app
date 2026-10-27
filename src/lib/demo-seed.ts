@@ -9,7 +9,8 @@ import { createNode } from "@/lib/tools/tree-writes";
 type Seed = { name: string; children?: Seed[]; items?: Array<[tool: string, input: Record<string, unknown>]> };
 
 // Days are counted from the visitor's own calendar day, the one the Today screen uses, not from the server's.
-function seedFor(today: string): Seed[] {
+// The first screen points at DEMO_FIRST_STEP; a test keeps the seed holding that path.
+export function demoSeedTree(today: string): Seed[] {
   const day = (offset: number): string => {
     const date = new Date(`${today}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() + offset);
@@ -81,7 +82,7 @@ export async function seedDemo(ctx: ToolContext, today: string): Promise<{ plant
   if (error) throw new Error(`demo seed: ${error.message}`);
   if ((count ?? 0) > 0) return { planted: false };
   try {
-    await plant(ctx, seedFor(today));
+    await plant(ctx, demoSeedTree(today));
   } catch (error) {
     // A seed cut halfway is removed whole (items go with their nodes), so trying again plants it from the start.
     const removed = await ctx.db.from("nodes").delete().eq("owner_id", ctx.ownerId).is("parent_id", null);

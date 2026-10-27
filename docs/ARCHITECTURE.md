@@ -149,6 +149,8 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 
 - "Try the demo" starts an anonymous Supabase session and copies the seed into a tree of that session's own, so
   each visitor works on their own copy.
+- The demo's first screen carries a **Start here** card that opens the seeded project (Northwind Bakery / Website),
+  names the field under Tasks and the chat panel; the landing names the same first step before it starts.
 - The demo's Google accounts (`is_demo`) are shown read-only; their tokens never leave the server.
 - The chat runs on Meta's models under the daily cap.
 
@@ -159,11 +161,14 @@ The screens read and write in the browser through the app's routes, which check 
 deletion, accounts and calendars, and agent tokens have their own routes, because they are not offered to models.
 Every writing route demands this site's `Origin` and a bounded JSON body.
 
-1. **Landing**: what it is, "Try the demo", and "Sign in with Google".
-2. **Today**: today across every project — overdue and due tasks, and events from every account.
+1. **Landing**: what it is, the first step it names —try the demo, open Northwind Bakery / Website, add a task or
+   ask the chat—, "Try the demo", and "Sign in with Google".
+2. **Today**: today across every project — overdue and due tasks, and events from every account; in the demo, the
+   Start here card above them.
 3. **Sidebar**: the client → project → subproject tree with open counts, and inline creation.
 4. **Node**: path, own and inherited accounts; tasks by priority with quick add; decisions; links; to review; the
-   agenda of its calendars.
+   agenda of its calendars. An item's detail opens in a side panel with its notes, saved when typing stops; Escape
+   closes it and returns the focus to the row.
 5. **Chat**: side panel scoped to the open node, with microphone, image attachment, and cards for what it did.
 6. **Accounts**: connected accounts, which node each hangs from, and which calendars are shown.
 7. **Connect your agent**: the node's tokens and the `.mcp.json` block to copy.
@@ -177,7 +182,8 @@ Every writing route demands this site's `Origin` and a bounded JSON body.
 - **No "Save" button**: edits save when typing stops, pending edits save on leaving, and a short accessible notice
   says "Saving… / Saved".
 - **Edit in place**: title, priority, due date, and status change in the row, Enter confirms, Esc cancels; secondary
-  detail opens in a side panel, not a new page.
+  detail opens in a side panel, not a new page, where its notes save when typing stops and Escape closes it with the
+  focus back on the row.
 - **Delete does not ask, it offers undo**: the row folds away and "Deleted · Undo" shows for a few seconds; only
   what cannot be undone asks for confirmation. What the chat or an agent did undoes the same way.
 - **Command palette (Ctrl/Cmd+K)**: finds nodes, items, and actions, tolerates typos, is navigated with arrows and

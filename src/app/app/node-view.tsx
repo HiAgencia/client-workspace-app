@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
+import { DEMO_FIRST_STEP } from "@/lib/demo";
 import { LOCALE } from "@/lib/dates";
 import { get, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { ConnectBlockedNote, type ConnectBlocked } from "./connect-blocked";
@@ -45,7 +46,7 @@ function ancestorsOf(tree: TreeNode[] | null, nodeId: string): TreeNode[] {
 // review, and the agenda of its calendars. Everything is read and written through the tool layer; a re-read repaints
 // in place and keeps what the person had open.
 export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; googleOutcome: string | null; onReveal?: () => void }) {
-  const { version, tree, notify } = useWorkspace();
+  const { version, tree, notify, isDemo } = useWorkspace();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -177,6 +178,12 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
             <span className="btn-label">Connect your agent</span>
           </Link>
         </div>
+        {isDemo && overview.node.path === DEMO_FIRST_STEP && (
+          <p className="inline-note" data-tone="accent" data-first-step-note>
+            Add a task with the field under Tasks, or ask the chat panel to add one. This is the project the demo starts
+            on.
+          </p>
+        )}
         {googleOutcome && <GoogleOutcome outcome={googleOutcome} />}
         {error && (
           <p role="alert" className="inline-note" data-tone="alert">

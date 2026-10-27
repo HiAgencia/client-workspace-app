@@ -6,30 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
-import { Select, type SelectOption } from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { post, tool, type Item } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
+import { Origin, PRIORITIES } from "./item-parts";
 import { useWorkspace } from "./workspace";
-
-// The priorities' names, from one source: the rows, the quick add, and the palette read them here.
-export const PRIORITIES: SelectOption[] = [
-  { value: "1", label: "Urgent", tone: "alert" },
-  { value: "2", label: "High", tone: "warn" },
-  { value: "3", label: "Normal", tone: "neutral" },
-  { value: "4", label: "Low", tone: "muted" },
-];
-
-export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", decision: "Decision", link: "Link", review: "To review" };
-
-// Who wrote it, in words: what the chat or an agent did reads apart from what the person typed.
-export function Origin({ item }: { item: Item }) {
-  if (item.source === "manual") return null;
-  return (
-    <span className="pill" data-tone={item.source === "chat" ? "accent" : "info"}>
-      {item.source === "chat" ? "By the chat" : `By agent ${item.agentLabel}`}
-    </span>
-  );
-}
 
 // A redrawn list travels: what moved goes from its old place to the new one, and what arrives enters; nothing jumps.
 export function ItemList({ items, children }: { items: Item[]; children: (item: Item) => ReactNode }) {
@@ -70,7 +51,7 @@ export function ItemList({ items, children }: { items: Item[]; children: (item: 
 // One row: title, priority, due date, and status change in place; Enter confirms, Esc cancels; delete folds the row
 // away and offers undo.
 export function ItemRow({ item, showPath = false }: { item: Item; showPath?: boolean }) {
-  const { saving, notify, touch } = useWorkspace();
+  const { saving, notify, touch, openItem } = useWorkspace();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
   const [leaving, setLeaving] = useState(false);
@@ -211,6 +192,9 @@ export function ItemRow({ item, showPath = false }: { item: Item; showPath?: boo
             <span className="btn-label">Open link</span>
           </a>
         )}
+        <Button variant="quiet" size="sm" data-detail onClick={() => openItem(item)} aria-label={`Details of “${item.title}”`}>
+          Details
+        </Button>
         <Button variant="quiet" size="sm" onClick={() => void remove()} aria-label={`Delete “${item.title}”`}>
           Delete
         </Button>

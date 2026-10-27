@@ -9,8 +9,9 @@ import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { usePiece } from "@/components/ui/use-piece";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
-import { get, tool, type TreeNode } from "./client-api";
+import { get, tool, type Item, type TreeNode } from "./client-api";
 import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
+import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
 import { Tree } from "./tree";
 
@@ -27,6 +28,9 @@ type Workspace = {
   notify: (notice: Omit<Notice, "id">) => void;
   saving: (promise: Promise<{ ok: boolean; message?: string }>) => Promise<boolean>;
   openPalette: () => void;
+  // The item's detail opens in a side panel from any row, on any screen.
+  openItem: (item: Item) => void;
+  isDemo: boolean;
 };
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -49,6 +53,8 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   // The last status keeps its text while it fades out.
   const [lastStatus, setLastStatus] = useState("");
   const [who, setWho] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
+  const [detail, setDetail] = useState<Item | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -136,7 +142,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   useEffect(() => {
     void refreshTree();
     void get<{ user: { email: string | null; isAnonymous: boolean } }>("/api/me").then((answer) => {
-      if (answer.ok) setWho(answer.user.isAnonymous ? "Demo workspace" : answer.user.email);
+      if (!answer.ok) return;
+      setWho(answer.user.isAnonymous ? "Demo workspace" : answer.user.email);
+      setIsDemo(answer.user.isAnonymous);
     });
   }, [refreshTree]);
 
@@ -182,7 +190,17 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   }
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
-  const value: Workspace = { config, tree, treeError, refreshTree, version, touch, notify, saving, openPalette };
+  const openItem = useCallback((item: Item) => setDetail(item), []);
+  // Closing the panel gives the focus back to the row it came from, also when the list was re-read meanwhile.
+  const closeItem = useCallback((id: string) => {
+    setDetail(null);
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(`[data-item="${id}"]`);
+      const target = row?.querySelector<HTMLElement>("[data-detail]") ?? row?.querySelector<HTMLElement>("[data-item-title]");
+      target?.focus({ preventScroll: true });
+    });
+  }, []);
+  const value: Workspace = { config, tree, treeError, refreshTree, version, touch, notify, saving, openPalette, openItem, isDemo };
 
   return (
     <WorkspaceContext.Provider value={value}>
@@ -221,6 +239,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       </div>
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} who={who} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ItemPanel item={detail} saving={saving} onClose={closeItem} />
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>

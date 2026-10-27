@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, ViewTransition } from "react";
+import { buttonClass } from "@/components/ui/button";
+import { DEMO_FIRST_STEP } from "@/lib/demo";
 import { longDay } from "@/lib/dates";
 import { get, type CalendarEvent, type EventsFailure, type Item } from "./client-api";
 import { ItemList, ItemRow } from "./items";
@@ -22,9 +25,10 @@ function localDay() {
 
 // Today across every project: overdue and due tasks, and today's events from every account.
 export default function TodayPage() {
-  const { version, tree, openPalette } = useWorkspace();
+  const { version, tree, openPalette, isDemo } = useWorkspace();
   const [today, setToday] = useState<Today | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const demoProject = tree?.find((node) => node.path === DEMO_FIRST_STEP);
 
   useEffect(() => {
     const { day, from, to } = localDay();
@@ -65,6 +69,31 @@ export default function TodayPage() {
               <p role="alert" className="inline-note" data-tone="alert">
                 Today could not be refreshed: {error}. What you see is the last version read.
               </p>
+            )}
+            {isDemo && (
+              <section className="card start-here" data-start-here aria-labelledby="start-here">
+                <div className="card-head">
+                  <h2 id="start-here" className="t-title">
+                    Start here
+                  </h2>
+                  <span className="pill" data-tone="accent">
+                    Demo
+                  </span>
+                </div>
+                <p className="t-help">
+                  This is your own copy of a small agency&apos;s workspace. Open the project, add a task with the field
+                  under Tasks, and ask the chat panel to add one for you.
+                </p>
+                {demoProject ? (
+                  <div>
+                    <Link className={buttonClass({ variant: "primary" })} href={`/app/node/${demoProject.id}`} data-first-step-link>
+                      <span className="btn-label">Open Northwind Bakery / Website</span>
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="t-help">Open a project from the list of projects to start.</p>
+                )}
+              </section>
             )}
             <section className="card" aria-labelledby="due">
               <div className="card-head">

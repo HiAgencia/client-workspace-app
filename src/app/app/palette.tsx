@@ -6,7 +6,7 @@ import { prepare, rank } from "@/lib/fuzzy";
 import { currentTheme, setTheme } from "@/lib/theme";
 import { tool, type Item, type TreeNode } from "./client-api";
 import { requestFocus, type FocusTarget } from "./focus-request";
-import { TYPE_NAMES } from "./items";
+import { TYPE_NAMES } from "./item-parts";
 import { useWorkspace } from "./workspace";
 
 type Entry =
