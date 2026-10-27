@@ -82,7 +82,9 @@ export default function AgentPage() {
               <li key={token.id} className="flex flex-wrap items-center gap-3" data-token={token.label}>
                 <span>{token.label}</span>
                 <span>issued {new Date(token.createdAt).toLocaleString()}</span>
-                <span>{token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : "never used"}</span>
+                <span>
+                  {token.lastUsedAt ? `last read what's new ${new Date(token.lastUsedAt).toLocaleString()}` : "has not read what's new yet"}
+                </span>
                 {token.revokedAt ? (
                   <span>revoked</span>
                 ) : (

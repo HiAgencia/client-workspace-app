@@ -91,6 +91,7 @@ export type Database = {
           node_id: string
           parts: Json
           role: string
+          seq: number
         }
         Insert: {
           created_at?: string
@@ -98,6 +99,7 @@ export type Database = {
           node_id: string
           parts: Json
           role: string
+          seq?: never
         }
         Update: {
           created_at?: string
@@ -105,6 +107,7 @@ export type Database = {
           node_id?: string
           parts?: Json
           role?: string
+          seq?: never
         }
         Relationships: [
           {
@@ -323,6 +326,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      anonymous_usage: {
+        Args: { p_day: string; p_kind: string }
+        Returns: number
+      }
       node_subtree: {
         Args: { root: string }
         Returns: {

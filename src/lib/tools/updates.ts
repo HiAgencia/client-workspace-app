@@ -41,7 +41,9 @@ export const getUpdatesSince = defineTool({
   async run(ctx, input) {
     const sinceValue = input.since ?? ctx.updatesSince;
     if (!sinceValue) return fail("since_required", "say since when: an ISO date-time such as 2026-05-01T09:00:00Z");
-    const since = new Date(sinceValue).toISOString();
+    
+    
+    const since = input.since ? new Date(input.since).toISOString() : sinceValue;
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
     const { scope } = loaded;
@@ -66,9 +68,14 @@ export const getUpdatesSince = defineTool({
       .map((id) => scope.all.get(id)!)
       .filter((node) => after(node.createdAt, sinceMs))
       .map((node) => ({ id: node.id, path: node.path, kind: node.kind }));
-    const latest = [...items.map((item) => item.updatedAt), ...newNodes.map((n) => scope.all.get(n.id)!.createdAt)]
-      .map((value) => Date.parse(value))
-      .reduce((max, value) => Math.max(max, value), sinceMs);
-    return ok({ since, until: new Date(latest).toISOString(), newNodes, ...lists });
+    
+    
+    const stamps = [...items.map((item) => item.updatedAt), ...newNodes.map((n) => scope.all.get(n.id)!.createdAt)];
+    const until = stamps.reduce((latest, value) => {
+      const a = Date.parse(value);
+      const b = Date.parse(latest);
+      return a > b || (a === b && value > latest) ? value : latest;
+    }, since);
+    return ok({ since, until, newNodes, ...lists });
   },
 });

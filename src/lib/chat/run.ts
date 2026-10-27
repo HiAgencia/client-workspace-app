@@ -69,7 +69,8 @@ export async function runChat(options: {
   const result = streamText({
     model: options.model,
     system: await systemPrompt(options.ctx, options.timeZone),
-    messages: await convertToModelMessages(options.messages),
+    
+    messages: await convertToModelMessages(options.messages, { ignoreIncompleteToolCalls: true }),
     tools: chatTools(options.ctx),
     stopWhen: isStepCount(MAX_STEPS),
     providerOptions: options.providerOptions,

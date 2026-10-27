@@ -3,7 +3,8 @@ import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runChat } from "@/lib/chat/run";
 import { simulatedModel } from "@/lib/chat/simulated";
-import { takeUsage } from "@/lib/chat/usage";
+import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
+import { dailyCap, takeUsage, takeUsageFor } from "@/lib/chat/usage";
 import type { ToolContext } from "@/lib/tools/context";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
@@ -102,7 +103,52 @@ describe("the chat with the simulated model", () => {
   });
 });
 
+describe("the conversation the model reads", () => {
+  it("is the node's latest messages in the order they were written, built on the server", async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => ({
+      node_id: nodeId,
+      role: i % 2 === 0 ? "user" : "assistant",
+      parts: [{ type: "text", text: `turn ${i}` }],
+    }));
+    const { error } = await user!.client.from("chat_messages").insert(rows);
+    expect(error).toBeNull();
+    const history = await loadHistory(user!.client, nodeId, 4);
+    expect(history.map((m) => (m.parts[0] as { text: string }).text)).toEqual(["turn 2", "turn 3", "turn 4", "turn 5"]);
+  });
+
+  it("carries an image only in the turn it arrives", () => {
+    const image = { type: "file" as const, mediaType: "image/png", filename: "shot.png", url: "data:image/png;base64,AAAA" };
+    const messages = withoutEarlierFiles([
+      { id: "1", role: "user", parts: [image, { type: "text", text: "earlier" }] },
+      { id: "2", role: "user", parts: [image, { type: "text", text: "now" }] },
+    ]);
+    expect(messages[0].parts[0]).toEqual({ type: "text", text: "[an attachment was sent here: shot.png]" });
+    expect(messages[1].parts[0]).toEqual(image);
+  });
+});
+
 describe("the daily cap", () => {
+  it("a demo session has its own small cap, and all demo sessions share the day's total", async () => {
+    const service = serviceClient();
+    const day = new Date("2026-02-20T12:00:00Z");
+    const demo = await serviceClient().auth.signInAnonymously();
+    const demoUser = demo.data.user!;
+    try {
+      const results = [];
+      for (let i = 0; i < dailyCap("demoSession", "transcription") + 1; i++) {
+        results.push(await takeUsageFor(service, { id: demoUser.id, isAnonymous: true }, "transcription", day));
+      }
+      expect(results.at(-2)).toMatchObject({ allowed: true });
+      expect(results.at(-1)).toEqual({ allowed: false, reason: "cap" });
+      const total = await service.rpc("anonymous_usage", { p_kind: "transcription", p_day: "2026-02-20" });
+      expect(Number(total.data)).toBeGreaterThanOrEqual(dailyCap("demoSession", "transcription"));
+      const { error } = await user!.client.rpc("anonymous_usage", { p_kind: "transcription", p_day: "2026-02-20" });
+      expect(error?.code).toBe("42501");
+    } finally {
+      await service.auth.admin.deleteUser(demoUser.id);
+    }
+  });
+
   it("takes units up to the cap and then refuses, per person, kind, and day", async () => {
     const service = serviceClient();
     const day = new Date("2026-01-15T12:00:00Z");

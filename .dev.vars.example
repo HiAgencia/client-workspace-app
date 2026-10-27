@@ -12,3 +12,10 @@ TOKEN_ENCRYPTION_KEY=
 # The chat: `simulated` runs without spend; `meta` calls Meta Model API with MODEL_API_KEY.
 MODEL_PROVIDER=simulated
 MODEL_API_KEY=
+# Optional daily caps (defaults in src/lib/chat/usage.ts): per person, per demo session, and for all demo sessions.
+CHAT_DAILY_CAP=
+TRANSCRIPTION_DAILY_CAP=
+DEMO_CHAT_DAILY_CAP=
+DEMO_TRANSCRIPTION_DAILY_CAP=
+DEMO_TOTAL_CHAT_DAILY_CAP=
+DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP=
