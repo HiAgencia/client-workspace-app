@@ -121,9 +121,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     ].filter((group) => group.entries.length > 0);
   }, [query, tree, nodeIndex, itemIndex, actionIndex, actions]);
 
-  // The marked entry is kept by its identity, so results that arrive later do not move the mark to another one.
+  // The marked entry is kept by its identity, so results that arrive later do not move the mark to another one; once it
+  // is gone, nothing is marked instead of opening an entry the person did not choose.
   const flat = groups.flatMap((group) => group.entries);
-  const current = flat.find((entry) => entry.id === activeId) ?? flat[0];
+  const current = activeId === null ? flat[0] : (flat.find((entry) => entry.id === activeId) ?? null);
 
   useEffect(() => {
     if (!current) return;
@@ -140,9 +141,9 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (!current) return;
       const delta = event.key === "ArrowDown" ? 1 : -1;
-      setActiveId(flat[(flat.indexOf(current) + delta + flat.length) % flat.length].id);
+      const desde = current ? flat.indexOf(current) : delta > 0 ? -1 : 0;
+      if (flat.length > 0) setActiveId(flat[(desde + delta + flat.length) % flat.length].id);
     }
     if (event.key === "Enter" && current) {
       event.preventDefault();

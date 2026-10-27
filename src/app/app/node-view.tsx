@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { LOCALE } from "@/lib/dates";
 import { get, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { ConnectBlockedNote, type ConnectBlocked } from "./connect-blocked";
-import { land, onFocusRequest, takeFocusRequest, type FocusTarget } from "./focus-request";
+import { land, onFocusRequest, takeFocusRequest, type FocusRequest, type FocusTarget, type Landing } from "./focus-request";
 import { ItemList, ItemRow, QuickAdd } from "./items";
 import { useWorkspace } from "./workspace";
 
@@ -53,6 +53,9 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
   const [showDone, setShowDone] = useState(false);
   // Once the done tasks' fold finished opening, what overflows it (a focus ring) shows; while it travels it clips.
   const [doneSettled, setDoneSettled] = useState(false);
+  // A landing on a done task waits for that fold: the first scroll is measured against a list still clipped, so it is
+  // repeated once the fold finished opening.
+  const pendingDone = useRef<FocusRequest | null>(null);
   const [accounts, setAccounts] = useState<{ list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked } | null>(null);
 
   useEffect(() => {
@@ -70,12 +73,13 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
       } else if (answer.code === "not_found") setNotFound(true);
       else setError(answer.message);
       if (finished.ok) setDone(finished.items);
+      else notify({ text: "The done tasks could not be read.", tone: "error" });
       if (accountsAnswer.ok) setAccounts({ list: accountsAnswer.accounts, canConnect: accountsAnswer.canConnect, connectBlocked: accountsAnswer.connectBlocked });
     });
     return () => {
       live = false;
     };
-  }, [nodeId, version]);
+  }, [nodeId, version, notify]);
 
   // The palette, the tree, or a row's path may have asked to land somewhere in this node: once its data is on screen,
   // what hides the place opens —the project's tab where the window holds one pane, the done tasks' fold— and after it
@@ -88,17 +92,23 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
       if (!request) return;
       const { target } = request;
       onReveal?.();
-      if (target.kind === "item" && done.some((item) => item.id === target.itemId)) setShowDone(true);
+      if (target.kind === "item" && done.some((item) => item.id === target.itemId)) {
+        setShowDone(true);
+        // With motion the fold travels: the landing is repeated from its transition end, or the focused row can end
+        // below the viewport. The reduced-motion rule shortens that transition to an instant, and the event still
+        // fires, so the second landing also runs there.
+        if (!doneSettled) pendingDone.current = request;
+      }
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           const landing = land(target, { acted: request.acted });
-          if (landing === "missing" || landing === "hidden") notify({ text: notLanded(target), tone: "status" });
+          if (landing === "missing" || landing === "hidden") notify({ text: notLanded(target, landing), tone: "status" });
         }),
       );
     };
     apply();
     return onFocusRequest(apply);
-  }, [ready, nodeId, done, onReveal, notify]);
+  }, [ready, nodeId, done, onReveal, notify, doneSettled]);
 
   if (notFound) {
     return (
@@ -208,7 +218,15 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
               data-open={showDone}
               data-settled={(showDone && doneSettled) || undefined}
               onTransitionEnd={(event) => {
-                if (event.target === event.currentTarget && event.propertyName === "grid-template-rows") setDoneSettled(showDone);
+                if (event.target !== event.currentTarget || event.propertyName !== "grid-template-rows") return;
+                setDoneSettled(showDone);
+                // The fold reached its open height: the landing on a done task is repeated now that the row's place is
+                // final.
+                if (showDone && pendingDone.current) {
+                  const request = pendingDone.current;
+                  pendingDone.current = null;
+                  land(request.target, { acted: request.acted });
+                }
               }}
             >
               <div>
@@ -349,7 +367,8 @@ function focusQuickAdd(nodeId: string, type: Item["type"]) {
   land({ kind: "quick-add", nodeId, type });
 }
 
-function notLanded(target: FocusTarget): string {
+function notLanded(target: FocusTarget, landing: Landing): string {
+  if (landing === "hidden") return "That place is there, but something on top of it holds the focus: close it and try again.";
   if (target.kind !== "item") return "That place is not on this page.";
   if (target.type === "decision" || target.type === "link") return `“${target.title}” is not on this page: it lists the latest ${target.type}s.`;
   return `“${target.title}” is not on this page anymore.`;

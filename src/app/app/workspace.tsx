@@ -10,7 +10,7 @@ import { usePiece } from "@/components/ui/use-piece";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
 import { get, tool, type TreeNode } from "./client-api";
-import { dropFocusRequestOutside } from "./focus-request";
+import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
 import { Palette } from "./palette";
 import { Tree } from "./tree";
 
@@ -148,6 +148,13 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   // A landing asked for another place is dropped once the person is somewhere else.
   useEffect(() => dropFocusRequestOutside(pathname), [pathname]);
+
+  // A landing asked for from inside the drawer closes it first: a modal holds the focus, and the place behind it could
+  // not take it. The request waits for the node's data, so closing here does not lose it.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    return onFocusRequest(() => setDrawerOpen(false));
+  }, [drawerOpen]);
 
   // The drawer closes when the place changes.
   const [placeSeen, setPlaceSeen] = useState(pathname);

@@ -15,6 +15,8 @@ export const metadata: Metadata = {
 
 // The browser bar's color is not declared here: it follows the chosen theme, which only the script below knows.
 export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
   colorScheme: "light dark",
 };
 

@@ -13,6 +13,16 @@ export function problem(status: number, message: string): Response {
 export function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin || origin === "null") return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return false;
+  }
+  // The host the client used is the one its origin must match: behind a proxy the request's own URL may carry an
+  // internal host (wrangler dev serves `localhost` while the browser is on `127.0.0.1`).
+  const host = request.headers.get("host");
+  if (host && parsed.host === host) return true;
   return origin === new URL(request.url).origin;
 }
 
