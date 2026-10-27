@@ -42,9 +42,12 @@ and the screens. When the code changes a decision described here, this document 
 
 ## The tool layer (`src/lib/tools/`)
 
-Each tool is a pure function over a context `{ ownerId, scopeNodeId?, source }`, with zod input and output schemas,
-a description, and a read-only flag. One registry exports them; two adapters publish them, one for the AI SDK (the
-chat) and one for the MCP server. The screens call the same functions through their routes.
+Each tool is a function over a context `{ db, ownerId, scopeNodeId?, source, agentLabel? }`, with zod input and
+output schemas, a description, and a read-only flag. `db` is the signed-in user's Supabase client (row-level security)
+for the screens and the chat, and the service client for the MCP server; either way the tools filter by owner and by
+the scope's subtree in code. One registry exports them and `callTool` validates the input; two adapters publish them,
+one for the AI SDK (the chat) and one for the MCP server. The screens call the same functions through their routes.
+A failure comes back as data (`{ ok: false, code, message }`), never as an exception, so a model can correct itself.
 
 | Tool | Read-only | What it does |
 |---|---|---|
@@ -61,8 +64,12 @@ chat) and one for the MCP server. The screens call the same functions through th
 | `add_review` | no | Records something to review, with an optional link |
 | `delete_item` | no | Soft delete (undo) |
 
-- A node is addressed by id or by its readable path ("Acme / Web / Landing"); an ambiguous path returns the
-  candidates instead of picking one.
+- A node is addressed by id or by its readable path ("Acme / Web / Landing", or its last segments, "Web / Landing"),
+  ignoring case and accents; a whole path wins, an ambiguous one returns the candidates instead of picking one, and
+  one outside the scope is not found. Without a node, a tool works on the scope's node (the open node in the chat,
+  the token's node in the MCP server).
+- Undoing a deletion (`restoreItem`) is not offered to models: the screens and the chat's undo button call it.
+  `update_item` returns the values it replaced, so undoing a change writes them back.
 - Every write stores its `source`, and the MCP also the token's `label`, so the screen says who made it.
 
 ## The chat (`/api/chat`)
