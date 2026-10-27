@@ -2,10 +2,10 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { rank } from "@/lib/fuzzy";
+import { prepare, rank } from "@/lib/fuzzy";
 import { currentTheme, setTheme } from "@/lib/theme";
 import { tool, type Item, type TreeNode } from "./client-api";
-import { land, requestFocus, type FocusTarget } from "./focus-request";
+import { requestFocus, type FocusTarget } from "./focus-request";
 import { TYPE_NAMES } from "./items";
 import { useWorkspace } from "./workspace";
 
@@ -55,21 +55,30 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Item[] | null>(null);
   const [itemsFailed, setItemsFailed] = useState(false);
-  const [active, setActive] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const currentNode = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1] ?? null;
   const here = tree?.find((node) => node.id === currentNode);
 
-  // Every item of every project, read when the palette opens: the roots with everything below them.
+  // Every item of every project, read when the palette opens: the roots with everything below them. It reads again only
+  // when the roots change, and an answer that arrives after a newer read started does not paint.
+  const rootIds = (tree ?? [])
+    .filter((node) => node.parentId === null)
+    .map((node) => node.id)
+    .join(",");
   useEffect(() => {
-    const roots = (tree ?? []).filter((node) => node.parentId === null);
-    void Promise.all(roots.map((root) => tool<{ items: Item[] }>("list_items", { node: root.id, status: "all", includeSubprojects: true }))).then(
-      (answers) => {
-        if (answers.some((answer) => !answer.ok)) setItemsFailed(true);
-        setItems(answers.flatMap((answer) => (answer.ok ? answer.items : [])));
-      },
-    );
-  }, [tree]);
+    let live = true;
+    const roots = rootIds ? rootIds.split(",") : [];
+    void Promise.all(roots.map((id) => tool<{ items: Item[] }>("list_items", { node: id, status: "all", includeSubprojects: true }))).then((answers) => {
+      if (!live) return;
+      setItemsFailed(answers.some((answer) => !answer.ok));
+      // A review already reviewed has no place on its node's page, so it is not offered: there would be nowhere to land.
+      setItems(answers.flatMap((answer) => (answer.ok ? answer.items : [])).filter((item) => !(item.type === "review" && item.status === "done")));
+    });
+    return () => {
+      live = false;
+    };
+  }, [rootIds]);
 
   const actions = useMemo<Entry[]>(() => {
     const list: Entry[] = [
@@ -88,33 +97,33 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [here, router]);
 
+  // The landing is asked for in every case: on another node it waits for that page, on this one the page takes it once
+  // the dialog has closed.
   function go(target: FocusTarget) {
-    if (pathname === `/app/node/${target.nodeId}`) {
-      // Already there: land once the dialog has closed and given the focus back.
-      requestAnimationFrame(() => requestAnimationFrame(() => land(target)));
-      return;
-    }
     requestFocus(target);
-    router.push(`/app/node/${target.nodeId}`);
+    if (pathname !== `/app/node/${target.nodeId}`) router.push(`/app/node/${target.nodeId}`);
   }
+
+  // Each text is prepared for the search once, when it arrives, not on every key press.
+  const nodeIndex = useMemo(() => (tree ?? []).map((node) => ({ node, prepared: prepare(`${node.name} ${node.path}`) })), [tree]);
+  const itemIndex = useMemo(() => (items ?? []).map((item) => ({ item, prepared: prepare(`${item.title} ${item.body ?? ""}`) })), [items]);
+  const actionIndex = useMemo(() => actions.map((action) => ({ action, prepared: prepare(action.kind === "action" ? action.label : "") })), [actions]);
 
   const groups = useMemo(() => {
     const q = query.trim();
-    const nodes = tree ?? [];
-    const nodeHits = q
-      ? rank(q, nodes, (node) => `${node.name} ${node.path}`).slice(0, LIMIT.node).map((hit) => hit.entry)
-      : nodes.slice(0, LIMIT.node);
-    const itemHits = q && items ? rank(q, items, (item) => `${item.title} ${item.body ?? ""}`).slice(0, LIMIT.item).map((hit) => hit.entry) : [];
-    const actionHits = q ? rank(q, actions, (action) => (action.kind === "action" ? action.label : "")).map((hit) => hit.entry) : actions;
+    const nodeHits = q ? rank(q, nodeIndex, (hit) => hit.prepared).slice(0, LIMIT.node).map((hit) => hit.entry.node) : (tree ?? []).slice(0, LIMIT.node);
+    const itemHits = q ? rank(q, itemIndex, (hit) => hit.prepared).slice(0, LIMIT.item).map((hit) => hit.entry.item) : [];
+    const actionHits = q ? rank(q, actionIndex, (hit) => hit.prepared).map((hit) => hit.entry.action) : actions;
     return [
-      { name: "Projects", entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
-      { name: "Tasks and notes", entries: itemHits.map((item): Entry => ({ kind: "item", id: `item-${item.id}`, item })) },
-      { name: "Actions", entries: actionHits },
+      { key: "projects", name: "Projects", entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
+      { key: "items", name: "Tasks and notes", entries: itemHits.map((item): Entry => ({ kind: "item", id: `item-${item.id}`, item })) },
+      { key: "actions", name: "Actions", entries: actionHits },
     ].filter((group) => group.entries.length > 0);
-  }, [query, tree, items, actions]);
+  }, [query, tree, nodeIndex, itemIndex, actionIndex, actions]);
 
+  // The marked entry is kept by its identity, so results that arrive later do not move the mark to another one.
   const flat = groups.flatMap((group) => group.entries);
-  const current = flat[Math.min(active, flat.length - 1)];
+  const current = flat.find((entry) => entry.id === activeId) ?? flat[0];
 
   useEffect(() => {
     if (!current) return;
@@ -124,16 +133,16 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   function open(entry: Entry) {
     onClose();
     if (entry.kind === "node") go({ kind: "node", nodeId: entry.node.id });
-    else if (entry.kind === "item") go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id });
+    else if (entry.kind === "item") go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type });
     else entry.run();
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      if (flat.length === 0) return;
+      if (!current) return;
       const delta = event.key === "ArrowDown" ? 1 : -1;
-      setActive((index) => (Math.min(index, flat.length - 1) + delta + flat.length) % flat.length);
+      setActiveId(flat[(flat.indexOf(current) + delta + flat.length) % flat.length].id);
     }
     if (event.key === "Enter" && current) {
       event.preventDefault();
@@ -142,6 +151,15 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   }
 
   const searching = query.trim().length > 0;
+  // One sentence, outside the list, for what the list cannot say by itself.
+  const note =
+    flat.length === 0
+      ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
+      : searching && items === null
+        ? "Reading tasks and notes…"
+        : itemsFailed
+          ? "Some tasks and notes could not be read; projects and actions still work."
+          : "";
   return (
     <div className="palette-inner">
       <div className="palette-search">
@@ -149,8 +167,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           autoFocus
           className="field"
           role="combobox"
-          aria-expanded="true"
-          aria-controls="palette-list"
+          aria-expanded={flat.length > 0}
+          aria-controls={flat.length > 0 ? "palette-list" : undefined}
           aria-autocomplete="list"
           aria-activedescendant={current ? `palette-${current.id}` : undefined}
           aria-label="Search projects, tasks, and actions"
@@ -158,49 +176,39 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
-            setActive(0);
+            setActiveId(null);
           }}
           onKeyDown={onKey}
         />
       </div>
-      <div className="palette-list" id="palette-list" role="listbox" aria-label="Results" ref={list}>
-        {groups.map((group) => (
-          <div key={group.name} role="group" aria-labelledby={`palette-group-${group.name}`}>
-            <div id={`palette-group-${group.name}`} role="presentation" className="palette-group-label t-label">
-              {group.name}
-            </div>
-            {group.entries.map((entry) => (
-              <div
-                key={entry.id}
-                id={`palette-${entry.id}`}
-                role="option"
-                aria-selected={entry === current}
-                data-highlighted={entry === current ? "" : undefined}
-                className="option palette-option"
-                onPointerMove={() => setActive(flat.indexOf(entry))}
-                onClick={() => open(entry)}
-              >
-                <EntryView entry={entry} />
+      {flat.length > 0 && (
+        <div className="palette-list" id="palette-list" role="listbox" aria-label="Results" ref={list}>
+          {groups.map((group) => (
+            <div key={group.key} role="group" aria-labelledby={`palette-group-${group.key}`}>
+              <div id={`palette-group-${group.key}`} role="presentation" className="palette-group-label t-label">
+                {group.name}
               </div>
-            ))}
-          </div>
-        ))}
-        {searching && items === null && (
-          <p className="palette-group-label t-help" role="status">
-            Reading tasks and notes…
-          </p>
-        )}
-        {itemsFailed && (
-          <p className="palette-group-label t-help" role="status">
-            Some tasks and notes could not be read; projects and actions still work.
-          </p>
-        )}
-        {flat.length === 0 && (
-          <p className="palette-group-label t-help" role="status">
-            Nothing matches “{query.trim()}”. Try fewer letters or another word.
-          </p>
-        )}
-      </div>
+              {group.entries.map((entry) => (
+                <div
+                  key={entry.id}
+                  id={`palette-${entry.id}`}
+                  role="option"
+                  aria-selected={entry.id === current?.id}
+                  data-highlighted={entry.id === current?.id ? "" : undefined}
+                  className="option palette-option"
+                  onPointerMove={() => setActiveId(entry.id)}
+                  onClick={() => open(entry)}
+                >
+                  <EntryView entry={entry} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="palette-note t-help" role="status">
+        {note}
+      </p>
       <p className="palette-foot t-meta">Arrows move, Enter opens, Escape closes.</p>
     </div>
   );

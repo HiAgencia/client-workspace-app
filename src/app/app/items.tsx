@@ -8,7 +8,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { post, tool, type Item } from "./client-api";
-import { requestFocus } from "./focus-request";
+import { plainClick, requestFocus } from "./focus-request";
 import { useWorkspace } from "./workspace";
 
 // The priorities' names, from one source: the rows, the quick add, and the palette read them here.
@@ -25,7 +25,7 @@ export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", decision
 export function Origin({ item }: { item: Item }) {
   if (item.source === "manual") return null;
   return (
-    <span className="pill" data-tone={item.source === "chat" ? "accent" : "info"} data-origin={item.source}>
+    <span className="pill" data-tone={item.source === "chat" ? "accent" : "info"}>
       {item.source === "chat" ? "By the chat" : `By agent ${item.agentLabel}`}
     </span>
   );
@@ -229,7 +229,7 @@ function RowMeta({ item, showPath }: { item: Item; showPath: boolean }) {
           className="link link-meta"
           href={`/app/node/${item.nodeId}`}
           data-path
-          onClick={() => requestFocus({ kind: "item", nodeId: item.nodeId, itemId: item.id })}
+          onClick={(event) => plainClick(event) && requestFocus({ kind: "item", nodeId: item.nodeId, itemId: item.id, title: item.title, type: item.type })}
         >
           {item.nodePath}
         </Link>

@@ -12,7 +12,7 @@ export function dayOf(date: Date): Day {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-export function toDate(day: Day): Date {
+function toDate(day: Day): Date {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
@@ -36,7 +36,7 @@ export function addMonths(day: Day, offset: number): Day {
 }
 
 // "Oct 28", with the year only when it is not this year's.
-export function shortDay(day: Day, now: Day = today()): string {
+function shortDay(day: Day, now: Day = today()): string {
   const date = toDate(day);
   const sameYear = day.slice(0, 4) === now.slice(0, 4);
   return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);

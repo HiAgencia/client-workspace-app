@@ -869,6 +869,21 @@
 .compose-line .field {
   flex: 1;
 }
+/* Between answers the working row stays as a quiet space: it fades out in place and its dots stop. */
+.msg-working {
+  transition: opacity var(--dur) var(--ease-std), visibility 0s linear var(--dur);
+
+  &:not([data-working]) {
+    opacity: 0;
+    visibility: hidden;
+  }
+  &[data-working] {
+    transition: opacity var(--dur) var(--ease-std), visibility 0s;
+  }
+  &:not([data-working]) .typing span {
+    animation-play-state: paused;
+  }
+}
 .typing {
   display: inline-flex;
   gap: 0.3rem;
@@ -925,6 +940,14 @@
 }
 .palette-group-label {
   padding: 0.65rem 0.75rem 0.3rem;
+}
+/* What the list cannot say by itself, under it and aligned with the groups' labels; empty, it takes no room. */
+.palette-note {
+  padding: 0.65rem 1.15rem;
+
+  &:empty {
+    padding: 0;
+  }
 }
 .palette-option {
   display: grid;

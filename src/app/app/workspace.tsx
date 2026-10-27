@@ -10,6 +10,7 @@ import { usePiece } from "@/components/ui/use-piece";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
 import { get, tool, type TreeNode } from "./client-api";
+import { dropFocusRequestOutside } from "./focus-request";
 import { Palette } from "./palette";
 import { Tree } from "./tree";
 
@@ -144,6 +145,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     const match = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/);
     if (match) localStorage.setItem(LAST_NODE_KEY, match[1]);
   }, [pathname]);
+
+  // A landing asked for another place is dropped once the person is somewhere else.
+  useEffect(() => dropFocusRequestOutside(pathname), [pathname]);
 
   // The drawer closes when the place changes.
   const [placeSeen, setPlaceSeen] = useState(pathname);

@@ -1,19 +1,27 @@
-// Draws the site's icons from the brand mark's geometry (src/components/brand-mark.tsx): `src/app/icon.svg`,
-// `src/app/favicon.ico` (16, 32 and 48 px), and `src/app/apple-icon.png` (180 px, square: the system rounds it).
-// Each pixel is the average of an 8 × 8 grid of samples, so the rounded ends read smooth at 16 px.
+// Draws the site's icons from the brand mark's geometry (src/components/brand-geometry.json) and the accent's colors in
+// the light theme (src/app/styles/tokens.css): `src/app/icon.svg`, `src/app/favicon.ico` (16, 32 and 48 px), and
+// `src/app/apple-icon.png` (180 px, square: the system rounds it). Each pixel is the average of an 8 × 8 grid of
+// samples, so the rounded ends read smooth at 16 px. `brand-mark.test.ts` fails when the written icons no longer match
+// what this draws.
 // Usage: node scripts/icons.mjs
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 
-const ACCENT = [0x1d, 0x6a, 0x54];
-const ON_ACCENT = [0xff, 0xff, 0xff];
-// In a 32-unit square: the tile, then three bars stepping in.
-const TILE_RADIUS = 8;
-const BARS = [
-  { x: 6, y: 8, w: 12, h: 4 },
-  { x: 10, y: 14, w: 12, h: 4 },
-  { x: 14, y: 20, w: 12, h: 4 },
-];
+const geometry = JSON.parse(readFileSync(new URL("../src/components/brand-geometry.json", import.meta.url), "utf8"));
+const lightTokens = readFileSync(new URL("../src/app/styles/tokens.css", import.meta.url), "utf8").split(':root[data-theme="dark"]')[0];
+function token(name) {
+  const value = lightTokens.match(new RegExp(`${name}:\\s*#([0-9a-fA-F]{6})`))?.[1];
+  if (!value) throw new Error(`${name} has no six-digit color in the light theme of tokens.css`);
+  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
+}
+
+const ACCENT = token("--accent-fill");
+const ON_ACCENT = token("--on-accent");
+// In a square of `size` units: the tile, then three bars stepping in.
+const UNITS = geometry.size;
+const TILE_RADIUS = geometry.tileRadius;
+const BARS = geometry.bars;
 
 function insideRounded(px, py, x, y, w, h, r) {
   if (px < x || px > x + w || py < y || py > y + h) return false;
@@ -25,7 +33,7 @@ function insideRounded(px, py, x, y, w, h, r) {
 function draw(size, { rounded }) {
   const samples = 8;
   const pixels = Buffer.alloc(size * size * 4);
-  const unit = 32 / size;
+  const unit = UNITS / size;
   for (let row = 0; row < size; row++) {
     for (let col = 0; col < size; col++) {
       let r = 0;
@@ -36,7 +44,7 @@ function draw(size, { rounded }) {
         for (let sx = 0; sx < samples; sx++) {
           const px = (col + (sx + 0.5) / samples) * unit;
           const py = (row + (sy + 0.5) / samples) * unit;
-          if (!insideRounded(px, py, 0, 0, 32, 32, rounded ? TILE_RADIUS : 0)) continue;
+          if (!insideRounded(px, py, 0, 0, UNITS, UNITS, rounded ? TILE_RADIUS : 0)) continue;
           const onBar = BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2));
           const color = onBar ? ON_ACCENT : ACCENT;
           r += color[0];
@@ -116,12 +124,20 @@ function ico(images) {
 }
 
 const hex = (rgb) => `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="${TILE_RADIUS}" fill="${hex(ACCENT)}"/><g fill="${hex(ON_ACCENT)}">${BARS.map(
-  (bar) => `<rect x="${bar.x}" y="${bar.y}" width="${bar.w}" height="${bar.h}" rx="${bar.h / 2}"/>`,
-).join("")}</g></svg>\n`;
+// The three files as they should be on disk.
+export function iconFiles() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNITS} ${UNITS}"><rect width="${UNITS}" height="${UNITS}" rx="${TILE_RADIUS}" fill="${hex(ACCENT)}"/><g fill="${hex(ON_ACCENT)}">${BARS.map(
+    (bar) => `<rect x="${bar.x}" y="${bar.y}" width="${bar.w}" height="${bar.h}" rx="${bar.h / 2}"/>`,
+  ).join("")}</g></svg>\n`;
+  return {
+    "icon.svg": Buffer.from(svg),
+    "favicon.ico": ico([16, 32, 48].map((size) => ({ size, data: png(size, draw(size, { rounded: true })) }))),
+    "apple-icon.png": png(180, draw(180, { rounded: false })),
+  };
+}
 
-const root = new URL("../src/app/", import.meta.url);
-writeFileSync(new URL("icon.svg", root), svg);
-writeFileSync(new URL("favicon.ico", root), ico([16, 32, 48].map((size) => ({ size, data: png(size, draw(size, { rounded: true })) }))));
-writeFileSync(new URL("apple-icon.png", root), png(180, draw(180, { rounded: false })));
-console.log("icon.svg, favicon.ico (16, 32, 48) and apple-icon.png (180) written in src/app/");
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const root = new URL("../src/app/", import.meta.url);
+  for (const [name, data] of Object.entries(iconFiles())) writeFileSync(new URL(name, root), data);
+  console.log("icon.svg, favicon.ico (16, 32, 48) and apple-icon.png (180) written in src/app/");
+}

@@ -13,19 +13,17 @@ export const metadata: Metadata = {
   description: "Work organized by project: tasks, decisions, links, and calendars in one tree, with a chat and your coding agent on the same place.",
 };
 
+// The browser bar's color is not declared here: it follows the chosen theme, which only the script below knows.
 export const viewport: Viewport = {
   colorScheme: "light dark",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: BROWSER_BAR.light },
-    { media: "(prefers-color-scheme: dark)", color: BROWSER_BAR.dark },
-  ],
 };
 
 // The chosen theme is set before the first paint, so no frame shows the other one: the stored choice, or the system's.
-// The tab's visibility is marked on the root too, so what loops in CSS pauses while nobody sees it.
-const BEFORE_PAINT = `(function(){var d=document.documentElement;try{var s=localStorage.getItem(${JSON.stringify(
-  THEME_KEY,
-)});var t=s==="dark"||s==="light"?s:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");d.dataset.theme=t;}catch(e){d.dataset.theme="light";}var v=function(){d.classList.toggle("page-hidden",document.hidden)};v();document.addEventListener("visibilitychange",v);})();`;
+// Without a choice it keeps following the system; a choice made in another tab reaches this one. The browser bar takes
+// the same theme. The tab's visibility is marked on the root too, so what loops in CSS pauses while nobody sees it.
+const BEFORE_PAINT = `(function(){var d=document.documentElement,k=${JSON.stringify(THEME_KEY)},b=${JSON.stringify(
+  BROWSER_BAR,
+)},m=matchMedia("(prefers-color-scheme: dark)");function s(){try{var v=localStorage.getItem(k);return v==="dark"||v==="light"?v:null}catch(e){return null}}function a(t){d.dataset.theme=t;var e=document.querySelector('meta[name="theme-color"]');if(!e){e=document.createElement("meta");e.name="theme-color";document.head.appendChild(e)}e.content=b[t]}function w(){return s()||(m.matches?"dark":"light")}a(w());m.addEventListener("change",function(){if(!s())a(w())});addEventListener("storage",function(e){if(e.key===k)a(w())});var v=function(){d.classList.toggle("page-hidden",document.hidden)};v();document.addEventListener("visibilitychange",v);})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

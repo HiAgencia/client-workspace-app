@@ -6,7 +6,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { post, type TreeNode } from "./client-api";
-import { requestFocus } from "./focus-request";
+import { plainClick, requestFocus } from "./focus-request";
 import { useWorkspace } from "./workspace";
 
 // The client → project → subproject tree with open counts, and creation in place: a new node is typed where it
@@ -102,7 +102,7 @@ function Row({ node, onAdd }: { node: TreeNode; onAdd: () => void }) {
         href={`/app/node/${node.id}`}
         className="side-link"
         aria-current={current ? "page" : undefined}
-        onClick={() => requestFocus({ kind: "node", nodeId: node.id })}
+        onClick={(event) => plainClick(event) && requestFocus({ kind: "node", nodeId: node.id })}
       >
         <span className="side-link-name">{node.name}</span>
         {open > 0 && (

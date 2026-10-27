@@ -302,10 +302,6 @@
   min-height: 2.15em;
   padding: 0.3em 0.75em;
 }
-.btn-wide {
-  width: 100%;
-}
-
 /* A text action without a surface of its own: it answers with ink and its underline, and does not move. */
 .link {
   color: var(--accent);
@@ -395,10 +391,6 @@ textarea.field {
   field-sizing: content;
   min-height: 2.5em;
   max-height: 12em;
-}
-.field-label {
-  display: block;
-  margin-bottom: 0.4rem;
 }
 
 /* A dropdown or date trigger is a field that opens a list: its value, and a chevron drawn as part of the control that
@@ -941,7 +933,7 @@ textarea.field {
 @keyframes rise-in {
   from {
     opacity: 0.001;
-    translate: 0 var(--rise, 0.5rem);
+    translate: 0 0.5rem;
   }
 }
 @keyframes fade-in {
@@ -950,7 +942,7 @@ textarea.field {
   }
 }
 .enter {
-  animation: rise-in var(--enter-dur, var(--dur-slow)) var(--ease-out) var(--enter-delay, 0s) backwards;
+  animation: rise-in var(--dur-slow) var(--ease-out) var(--enter-delay, 0s) backwards;
 }
 .fade-enter {
   animation: fade-in var(--dur) var(--ease-out) backwards;

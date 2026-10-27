@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editDistance, matchScore, normalize, rank } from "./fuzzy";
+import { editDistance, matchScore, normalize, prepare, rank } from "./fuzzy";
 
 describe("search that forgives typing", () => {
   it("finds a name with a missing letter, a swapped pair, or a wrong one", () => {
@@ -30,9 +30,9 @@ describe("search that forgives typing", () => {
   });
 
   it("ranks the exact start above a typo", () => {
-    const hits = rank("web", ["The web team", "Website"], (t) => t);
+    const hits = rank("web", ["The web team", "Website"], prepare);
     expect(hits.map((h) => h.entry)).toEqual(["Website", "The web team"]);
-    const typo = rank("websit", ["Website", "Wbsite draft"], (t) => t);
+    const typo = rank("websit", ["Website", "Wbsite draft"], prepare);
     expect(typo[0].entry).toBe("Website");
   });
 

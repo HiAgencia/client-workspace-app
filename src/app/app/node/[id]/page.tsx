@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { useState, ViewTransition } from "react";
+import { useCallback, useState, ViewTransition } from "react";
 import { Tabs } from "@/components/ui/tabs";
 import { ChatPanel } from "../../chat-panel";
 import { NodeView } from "../../node-view";
@@ -12,6 +12,8 @@ export default function NodePage() {
   const { id } = useParams<{ id: string }>();
   const google = useSearchParams().get("google");
   const [pane, setPane] = useState<"project" | "chat">("project");
+  // A landing on a place of the project brings its tab to the front first.
+  const showProject = useCallback(() => setPane("project"), []);
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="node-page">
@@ -26,7 +28,7 @@ export default function NodePage() {
           ]}
         />
         <div id="pane-project" role="tabpanel" aria-labelledby="tab-pane-project" data-pane="project" data-active={pane === "project"}>
-          <NodeView key={id} nodeId={id} googleOutcome={google} />
+          <NodeView key={id} nodeId={id} googleOutcome={google} onReveal={showProject} />
         </div>
         <div id="pane-chat" role="tabpanel" aria-labelledby="tab-pane-chat" className="node-chat" data-pane="chat" data-active={pane === "chat"}>
           <ChatPanel key={`chat-${id}`} nodeId={id} />

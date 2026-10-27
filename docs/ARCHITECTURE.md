@@ -185,7 +185,7 @@ Every writing route demands this site's `Origin` and a bounded JSON body.
 - **Back returns to where you were**, and a session resumes on the last open node.
 - **Every empty state carries its own button** and says what is missing; "no results" is not "nothing yet".
 - **Advanced fields appear on demand.**
-- **On a phone** the tree becomes a compact control at the top and the node view takes the full width.
+- **On a phone** the tree opens from the header in a drawer and the node view takes the full width.
 
 ## Visual principles
 
@@ -224,9 +224,11 @@ The principles above, as code. Components ask for a role, never for a value, so 
   for what is read and the values a person types.
 - **No native picker and no stock icon**: the dropdown, the calendar, and the checkbox are the product's own, with the
   native semantics (combobox and listbox, grid, checkbox); the mark is drawn for the product from its tree
-  (`src/components/brand-mark.tsx`), and `pnpm icons` draws the site's icons from the same geometry.
+  (`src/components/brand-geometry.json`), and `pnpm icons` draws the site's icons from the same geometry and the
+  accent's color; a test fails when the written icons no longer match them.
 - **The theme** is the person's choice, stored in the browser and set on the root before the first paint; without a
-  choice it follows the system. Switching cross-fades the page.
+  choice it follows the system, also when the system changes; a choice made in another tab reaches every open one, and
+  the browser's own bar takes the chosen theme. Switching cross-fades the page.
 - **Motion**: page changes cross out and in (React's `ViewTransition`), lists travel when they reorder, a deleted row
   folds away, skeletons are replaced by a fade, and everything honors reduced motion.
 - **Where the window is narrow**, the tree lives in a drawer opened from the header, and the node and its chat are two

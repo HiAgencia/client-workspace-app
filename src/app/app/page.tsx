@@ -82,20 +82,20 @@ export default function TodayPage() {
               ) : (
                 <div className="stack">
                   {today.overdue.length > 0 && (
-                    <div className="stack" aria-labelledby="overdue">
+                    <section className="stack" aria-labelledby="overdue">
                       <h3 id="overdue" className="t-label">
                         Late
                       </h3>
                       <ItemList items={today.overdue}>{(item) => <ItemRow item={item} showPath />}</ItemList>
-                    </div>
+                    </section>
                   )}
                   {today.dueToday.length > 0 && (
-                    <div className="stack" aria-labelledby="due-today">
+                    <section className="stack" aria-labelledby="due-today">
                       <h3 id="due-today" className="t-label">
                         Due today
                       </h3>
                       <ItemList items={today.dueToday}>{(item) => <ItemRow item={item} showPath />}</ItemList>
-                    </div>
+                    </section>
                   )}
                 </div>
               )}
