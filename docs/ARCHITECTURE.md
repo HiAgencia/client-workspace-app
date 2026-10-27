@@ -14,7 +14,8 @@ and the screens. When the code changes a decision described here, this document 
 
 ## Stack
 
-- Next.js (App Router), React, TypeScript, Tailwind, and shadcn/ui, deployed to Cloudflare Workers with OpenNext.
+- Next.js (App Router), React, TypeScript, and Tailwind, deployed to Cloudflare Workers with OpenNext. The interface is
+  the product's own design system (§The design system); Base UI gives the dropdown and the date popover their behavior.
 - Supabase: Postgres for all data, row-level security per owner, and Auth with Google for identity only.
 - Meta models through the Vercel AI SDK with `@ai-sdk/openai` pointed at `https://api.meta.ai/v1` (Responses API);
   voice through `POST /v1/asr/transcribe`. `MODEL_API_KEY` lives only on the server.
@@ -205,3 +206,31 @@ Every writing route demands this site's `Origin` and a bounded JSON body.
 - **Nothing jumps**: the view goes to each action's result, boxes keep their size when they change role, and no
   inner scroll where the page can scroll.
 - **What cannot be undone is never one click away**: the dialog opens on "Back", and a bulk change shows its size.
+
+## The design system
+
+The principles above, as code. Components ask for a role, never for a value, so a theme or a size changes in one place.
+
+- **Roles** (`src/app/styles/tokens.css`): surfaces (canvas, card, interior and its sunk hover, field, control, read,
+  rail and piece), ink (ink, soft ink, muted), the accent and its tint, the states (alert, warn, info), what the
+  browser draws (focus, selection, scrollbar), shadows composed from one ink, four type sizes, space, shape, motion, and
+  layers. The light and the dark theme are two sets of values for the same roles.
+- **Primitives** (`src/app/styles/system.css`, `src/components/ui/`): type by role (`.t-h1`, `.t-title`, `.t-label`,
+  `.t-value`, `.t-name`, `.t-body`, `.t-help`, `.t-meta`), the card, the button (control, primary, quiet, danger), the
+  field, the dropdown, the date picker with its calendar, the checkbox, pills, the segmented control and tabs whose
+  chosen piece travels, the theme switch, skeletons, folds, notices, and native dialogs that enter and leave animated.
+  The screens (`src/app/styles/screens.css`) compose them.
+- **Two families of one design**: Wix Madefor Display for titles, labels, controls, and proper names; Wix Madefor Text
+  for what is read and the values a person types.
+- **No native picker and no stock icon**: the dropdown, the calendar, and the checkbox are the product's own, with the
+  native semantics (combobox and listbox, grid, checkbox); the mark is drawn for the product from its tree
+  (`src/components/brand-mark.tsx`), and `pnpm icons` draws the site's icons from the same geometry.
+- **The theme** is the person's choice, stored in the browser and set on the root before the first paint; without a
+  choice it follows the system. Switching cross-fades the page.
+- **Motion**: page changes cross out and in (React's `ViewTransition`), lists travel when they reorder, a deleted row
+  folds away, skeletons are replaced by a fade, and everything honors reduced motion.
+- **Where the window is narrow**, the tree lives in a drawer opened from the header, and the node and its chat are two
+  tabs, so the chat's card keeps its place while the node is read again.
+- **The guard**: `pnpm check` runs `scripts/check-system.mjs`, which counts what escapes the system —stock icons,
+  native pickers in the screens, color literals outside the roles, Tailwind sizes and colors instead of roles, and a
+  `:hover` outside `@media (hover: hover)`— against caps that only go down.

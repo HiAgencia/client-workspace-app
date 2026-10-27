@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ViewTransition } from "react";
+import { longDay } from "@/lib/dates";
 import { get, type CalendarEvent, type EventsFailure, type Item } from "./client-api";
-import { ItemRow } from "./items";
+import { ItemList, ItemRow } from "./items";
+import { Agenda, Empty } from "./node-view";
 import { useWorkspace } from "./workspace";
 
 type Today = { day: string; overdue: Item[]; dueToday: Item[]; events: CalendarEvent[]; failures: EventsFailure[] };
@@ -20,7 +22,7 @@ function localDay() {
 
 // Today across every project: overdue and due tasks, and today's events from every account.
 export default function TodayPage() {
-  const { version, tree } = useWorkspace();
+  const { version, tree, openPalette } = useWorkspace();
   const [today, setToday] = useState<Today | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,61 +36,90 @@ export default function TodayPage() {
     });
   }, [version]);
 
-  if (!today) return <p aria-busy="true">{error ? `Today could not be read: ${error}` : "Loading today…"}</p>;
-  const nothing = today.overdue.length === 0 && today.dueToday.length === 0;
-
   return (
-    <article className="flex flex-col gap-8" data-today={today.day}>
-      <h1 className="text-xl font-semibold">Today</h1>
-      {error && <p role="alert">Today could not be refreshed: {error}</p>}
-      {tree?.length === 0 ? (
-        <p>Nothing here yet: add your first client in the list of projects.</p>
-      ) : nothing ? (
-        <p>No tasks due today or overdue.</p>
-      ) : (
-        <>
-          {today.overdue.length > 0 && (
-            <section className="flex flex-col gap-2" aria-labelledby="overdue">
-              <h2 id="overdue" className="font-semibold">Overdue</h2>
-              <ul className="flex flex-col gap-2">
-                {today.overdue.map((item) => (
-                  <ItemRow key={item.id} item={item} showPath />
-                ))}
-              </ul>
-            </section>
-          )}
-          {today.dueToday.length > 0 && (
-            <section className="flex flex-col gap-2" aria-labelledby="due">
-              <h2 id="due" className="font-semibold">Due today</h2>
-              <ul className="flex flex-col gap-2">
-                {today.dueToday.map((item) => (
-                  <ItemRow key={item.id} item={item} showPath />
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
-      )}
-      <section className="flex flex-col gap-2" aria-labelledby="events">
-        <h2 id="events" className="font-semibold">Events today</h2>
-        {today.failures.map((failure) => (
-          <p key={failure.accountId} role="alert">
-            {failure.accountEmail} could not be read: {failure.reason}
-          </p>
-        ))}
-        {today.events.length === 0 ? (
-          <p>No events today from your connected accounts.</p>
+    <ViewTransition enter="page-in" exit="page-out" default="none">
+      <div className="page">
+        <header className="card page-head">
+          <p className="t-meta">{today ? longDay(today.day) : " "}</p>
+          <h1 className="t-h1" tabIndex={-1}>
+            Today
+          </h1>
+          <p className="t-help">What is late or due today in every project, and today&apos;s events from every account.</p>
+        </header>
+        {!today ? (
+          error ? (
+            <p role="alert" className="card inline-note" data-tone="alert">
+              Today could not be read: {error}. Reload the page to try again.
+            </p>
+          ) : (
+            <div className="card stack" role="status" aria-label="Loading today" aria-busy="true">
+              <span className="skeleton skeleton-title" style={{ width: "20%" }} />
+              {["70%", "55%", "62%"].map((width) => (
+                <span key={width} className="skeleton" style={{ width }} />
+              ))}
+            </div>
+          )
         ) : (
-          <ul className="flex flex-col gap-1">
-            {today.events.map((event) => (
-              <li key={`${event.accountId}:${event.id}`} data-event>
-                {event.allDay ? "All day" : new Date(event.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} —{" "}
-                {event.title} ({event.accountEmail})
-              </li>
-            ))}
-          </ul>
+          <div className="page fade-enter" data-today={today.day}>
+            {error && (
+              <p role="alert" className="inline-note" data-tone="alert">
+                Today could not be refreshed: {error}. What you see is the last version read.
+              </p>
+            )}
+            <section className="card" aria-labelledby="due">
+              <div className="card-head">
+                <h2 id="due" className="t-title">
+                  Tasks
+                </h2>
+                <span className="t-meta">
+                  {today.overdue.length} late · {today.dueToday.length} due today
+                </span>
+              </div>
+              {tree?.length === 0 ? (
+                <Empty text="Nothing here yet: add your first client in the list of projects." />
+              ) : today.overdue.length === 0 && today.dueToday.length === 0 ? (
+                <Empty text="No tasks are late or due today." action="Find a task or a project" onAction={openPalette} />
+              ) : (
+                <div className="stack">
+                  {today.overdue.length > 0 && (
+                    <div className="stack" aria-labelledby="overdue">
+                      <h3 id="overdue" className="t-label">
+                        Late
+                      </h3>
+                      <ItemList items={today.overdue}>{(item) => <ItemRow item={item} showPath />}</ItemList>
+                    </div>
+                  )}
+                  {today.dueToday.length > 0 && (
+                    <div className="stack" aria-labelledby="due-today">
+                      <h3 id="due-today" className="t-label">
+                        Due today
+                      </h3>
+                      <ItemList items={today.dueToday}>{(item) => <ItemRow item={item} showPath />}</ItemList>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+            <section className="card" aria-labelledby="events">
+              <div className="card-head">
+                <h2 id="events" className="t-title">
+                  Events today
+                </h2>
+              </div>
+              {today.failures.map((failure) => (
+                <p key={failure.accountId} role="alert" className="inline-note" data-tone="alert">
+                  {failure.accountEmail} could not be read: {failure.reason}
+                </p>
+              ))}
+              {today.events.length === 0 ? (
+                <p className="t-help">No events today from your connected accounts.</p>
+              ) : (
+                <Agenda events={today.events} withDay={false} />
+              )}
+            </section>
+          </div>
         )}
-      </section>
-    </article>
+      </div>
+    </ViewTransition>
   );
 }

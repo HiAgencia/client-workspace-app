@@ -1,0 +1,1103 @@
+/* The system's primitives: type by role, surfaces, controls and their states, and motion. Every value comes from a role
+   in tokens.css. A hover lives inside `(hover: hover)`, and every property a state changes is listed in the rest
+   state's transition, which is the one that runs when the state ends. */
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    scrollbar-color: var(--scroll-thumb) var(--canvas);
+    caret-color: var(--accent);
+  }
+  body {
+    min-height: 100svh;
+    background: var(--canvas);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--selection-bg);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  /* What code focuses to take the view or a screen reader somewhere is not a control: it draws no ring. */
+  [tabindex="-1"]:focus {
+    outline: none;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  :where(a, button, [role="button"], [role="option"], [role="tab"], summary, label[for]):not(:disabled, [aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  :where(button, input, textarea) {
+    font: inherit;
+    color: inherit;
+  }
+  /* Code blocks and identifiers read in their own role; the reading font stays the product's. */
+  :where(code, pre, kbd) {
+    font-family: var(--font-mono);
+  }
+  /* What the view is taken to —a title from code, a control the keyboard or a click reaches— lands under the sticky
+     header with air, never behind it. */
+  :where(h1, h2, h3)[tabindex="-1"],
+  :where(main) :where(a, button, input, textarea, [tabindex]) {
+    scroll-margin-top: calc(var(--header-h) + var(--gutter));
+    scroll-margin-bottom: var(--gutter);
+  }
+}
+
+/* ---- Type by role ------------------------------------------------------------------------------------------------
+   Title, card title, fixed label, variable value, proper name, help and metadata each have one style. */
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.t-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lead);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.006em;
+  color: var(--ink);
+}
+.t-label {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+.t-value {
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.t-name {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.t-body {
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+.t-help {
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.t-meta {
+  font-family: var(--font-text);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.t-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  color: var(--ink);
+}
+.nowrap {
+  white-space: nowrap;
+}
+/* Titles are trimmed to their capitals and baseline: the air around them is the air declared, and a pill or a count
+   beside a title centers on its letters, not on its line box. */
+@supports (text-box: trim-both cap alphabetic) {
+  .t-h1,
+  .t-title,
+  .card-head > .t-meta {
+    text-box: trim-both cap alphabetic;
+  }
+  /* Every piece that shares a row with another —a button's label, a dropdown's value, a name, a count, a datum— is
+     trimmed the same way, so pieces of two families and sizes center by their letters, not by their line boxes. The
+     controls keep their height from their minimum; a text control gets its air back as even padding. */
+  .btn-label,
+  .picker-value,
+  .side-link-name,
+  .count,
+  .account-line > :is(.t-name, .t-value),
+  .action-card > .t-value,
+  .page-head-row > .t-name {
+    text-box: trim-both cap alphabetic;
+  }
+  .count {
+    line-height: 1;
+    padding-block: 0.35em;
+  }
+  /* A trimmed value that also clips its overflow (its ellipsis) would cut its descenders and accents at the trimmed
+     box: block padding returned by an equal negative margin keeps them inside without moving anything. */
+  .picker-value {
+    padding-block: 0.3em;
+    margin-block: -0.3em;
+  }
+}
+
+/* ---- Surfaces ---------------------------------------------------------------------------------------------------- */
+.card {
+  position: relative;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--pad-card);
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.25rem;
+  margin-bottom: 0.875rem;
+}
+.read-block {
+  display: block;
+  overflow-x: auto;
+  padding: 0.85em 1em;
+  border-radius: var(--radius-control);
+  background: var(--read);
+  box-shadow: inset 0 0 0 1px transparent;
+  white-space: pre;
+  user-select: all;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  /* It takes the keyboard to scroll sideways, so it answers the pointer as what can be reached. */
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+
+/* ---- Buttons ------------------------------------------------------------------------------------------------------
+   A button rises: its fill, a soft rim and an outer shadow. Its hover changes fill, rim and shadow at once; nothing
+   moves, so its text never steps. */
+.btn {
+  --btn-fill: var(--control);
+  --btn-rim: var(--control-rim);
+  --btn-ink: var(--ink);
+  --btn-shadow: var(--shadow-control);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  min-height: 2.5em;
+  padding: 0.5em 1em;
+  border: 1px solid var(--btn-rim);
+  border-radius: var(--radius-control);
+  background: var(--btn-fill);
+  color: var(--btn-ink);
+  box-shadow: var(--btn-shadow);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-disabled="true"]) {
+      --btn-fill: var(--control-hover);
+      --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
+      --btn-shadow: var(--shadow-control-hover);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+  &:active:not(:disabled, [aria-disabled="true"]) {
+    --btn-shadow: var(--shadow-field);
+  }
+  &:disabled,
+  &[aria-disabled="true"] {
+    --btn-fill: var(--rail);
+    --btn-rim: var(--rail);
+    --btn-ink: var(--muted);
+    --btn-shadow: none;
+    cursor: not-allowed;
+  }
+}
+.btn-primary {
+  --btn-fill: var(--accent-fill);
+  --btn-rim: var(--accent-fill);
+  --btn-ink: var(--on-accent);
+
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-disabled="true"]) {
+      --btn-fill: var(--accent-fill-hover);
+      --btn-rim: var(--accent-fill-hover);
+    }
+  }
+}
+/* A quiet action inside a card takes the interior tone, never the card's own white, and sinks on hover. */
+.btn-quiet {
+  --btn-fill: var(--interior);
+  --btn-rim: transparent;
+  --btn-ink: var(--ink-soft);
+  --btn-shadow: none;
+
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-disabled="true"]) {
+      --btn-fill: var(--interior-hover);
+      --btn-rim: var(--division);
+      --btn-ink: var(--ink);
+      --btn-shadow: var(--shadow-control);
+    }
+  }
+  &:active:not(:disabled, [aria-disabled="true"]) {
+    --btn-shadow: none;
+  }
+}
+.btn-danger {
+  --btn-fill: var(--alert-tint);
+  --btn-rim: var(--alert-rim);
+  --btn-ink: var(--alert-ink);
+  --btn-shadow: none;
+
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-disabled="true"]) {
+      --btn-fill: var(--alert-tint-hover);
+      --btn-rim: var(--alert);
+      --btn-shadow: var(--shadow-control);
+    }
+  }
+}
+.btn-sm {
+  min-height: 2.15em;
+  padding: 0.3em 0.75em;
+}
+.btn-wide {
+  width: 100%;
+}
+
+/* A text action without a surface of its own: it answers with ink and its underline, and does not move. */
+.link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  transition-property: color, text-decoration-color;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+  border-radius: 0.2em;
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--accent-ink);
+      text-decoration-color: currentColor;
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+}
+
+/* A link that sits among metadata takes the metadata's size and keeps its own ink and weight: it is a link, not meta. */
+.link-meta {
+  font-size: var(--text-meta);
+}
+
+/* ---- Fields and dropdown triggers ---------------------------------------------------------------------------------
+   A field sinks: its fill, its 3:1 rim and an inner shadow. Both shadow layers are always declared, so the focus halo
+   enters and leaves transitioned. */
+.field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5em;
+  padding: 0.5em 0.8em;
+  border: 1px solid var(--field-rim);
+  border-radius: var(--radius-control);
+  background: var(--field);
+  box-shadow: var(--shadow-field), 0 0 0 3px transparent;
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.4;
+  outline: none;
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  &::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+  @media (hover: hover) {
+    &:hover:not(:focus, :disabled, [data-popup-open]) {
+      background: var(--field-hover);
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--field-rim));
+      box-shadow: var(--shadow-field-hover), 0 0 0 3px transparent;
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+  &:focus,
+  &:focus-visible,
+  &[data-popup-open] {
+    border-color: var(--focus);
+    box-shadow: var(--shadow-field), 0 0 0 3px var(--focus-halo);
+    outline: none;
+  }
+  /* A field already in use still answers the pointer: its well deepens and its halo widens. */
+  @media (hover: hover) {
+    &:is(:focus, [data-popup-open]):hover {
+      background: var(--field-hover);
+      box-shadow: var(--shadow-field-hover), 0 0 0 4px var(--focus-halo);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &:-webkit-autofill {
+    -webkit-text-fill-color: var(--ink);
+    box-shadow: inset 0 0 0 100px var(--field), 0 0 0 3px transparent;
+  }
+}
+textarea.field {
+  resize: none;
+  field-sizing: content;
+  min-height: 2.5em;
+  max-height: 12em;
+}
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+/* A dropdown or date trigger is a field that opens a list: its value, and a chevron drawn as part of the control that
+   answers with it. */
+.picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+  width: auto;
+  white-space: nowrap;
+  text-align: left;
+  user-select: none;
+
+  &::after {
+    content: "";
+    flex: none;
+    width: 0.42em;
+    height: 0.42em;
+    margin-top: -0.2em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    color: var(--muted);
+    rotate: 45deg;
+    transition: color var(--dur-hover-out) var(--ease-hover-out), translate var(--dur-hover-out) var(--ease-hover-out);
+  }
+  @media (hover: hover) {
+    &:hover::after {
+      color: var(--accent);
+      translate: 0 0.12em;
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[data-popup-open]::after {
+    color: var(--accent);
+    translate: 0 0.12em;
+  }
+  &[data-placeholder] .picker-value,
+  & .picker-placeholder {
+    color: var(--muted);
+  }
+}
+.picker-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+
+  &[data-placeholder] {
+    color: var(--muted);
+  }
+}
+
+/* ---- The calendar ------------------------------------------------------------------------------------------------ */
+.calendar {
+  min-width: 0;
+  padding: 0.75rem;
+}
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.cal-head,
+.cal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.cal-foot {
+  justify-content: flex-start;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--division);
+}
+.cal-grid {
+  border-collapse: separate;
+  border-spacing: 2px;
+}
+.cal-grid th {
+  padding-bottom: 0.25rem;
+  text-align: center;
+}
+.cal-day {
+  display: grid;
+  place-items: center;
+  width: 2.4em;
+  height: 2.4em;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-control) * 0.8);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
+    border-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  &[data-outside] {
+    color: var(--muted);
+  }
+  &[aria-current="date"] {
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  box-shadow: 0 0 0 0 transparent;
+  @media (hover: hover) {
+    &:hover:not([aria-pressed="true"]) {
+      background: var(--interior-hover);
+      border-color: var(--division);
+      color: var(--ink);
+      box-shadow: var(--shadow-control);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[aria-pressed="true"] {
+    background: var(--accent-fill);
+    border-color: var(--accent-fill);
+    color: var(--on-accent);
+    font-weight: 700;
+    box-shadow: 0 0 0 0 var(--focus-halo);
+  }
+  @media (hover: hover) {
+    &[aria-pressed="true"]:hover {
+      background: var(--accent-fill-hover);
+      box-shadow: 0 0 0 3px var(--focus-halo);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+
+/* ---- Popups: the dropdown list and the calendar ------------------------------------------------------------------ */
+.popup {
+  min-width: max(var(--anchor-width, 0px), 11rem);
+  max-height: min(var(--available-height, 22rem), 22rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.3rem;
+  border: 1px solid var(--card-rim);
+  border-radius: calc(var(--radius-card) * 0.75);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+  outline: none;
+  transform-origin: var(--transform-origin);
+  transition-property: opacity, translate;
+  transition-duration: var(--dur);
+  transition-timing-function: var(--ease-out);
+
+  &[data-starting-style] {
+    opacity: 0;
+    translate: 0 -0.35rem;
+  }
+  &[data-ending-style] {
+    opacity: 0;
+    translate: 0 -0.35rem;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-in);
+  }
+  &[data-side="top"][data-starting-style],
+  &[data-side="top"][data-ending-style] {
+    translate: 0 0.35rem;
+  }
+}
+.positioner {
+  z-index: var(--layer-notice);
+  outline: none;
+}
+/* An option: the one under the pointer or the keyboard sinks; the chosen one is written in its ink and weight and
+   carries its mark. Both states show at once. */
+.option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 2.35em;
+  padding: 0.35em 0.75em 0.35em 1.9em;
+  border-radius: calc(var(--radius-control) * 0.8);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+  outline: none;
+  user-select: none;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  /* The option the keyboard marks sinks; the one under the pointer sinks and takes its rim, so the pointer's place reads
+     apart even on the marked option. */
+  box-shadow: inset 0 0 0 1px transparent;
+  &[data-highlighted] {
+    background: var(--interior-hover);
+    transition-duration: var(--dur-hover);
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--control-rim);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[data-selected] {
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  &[data-selected]::before {
+    content: "";
+    position: absolute;
+    left: 0.85em;
+    top: 50%;
+    width: 0.32em;
+    height: 0.6em;
+    margin-top: -0.38em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    rotate: 45deg;
+  }
+}
+
+/* ---- Checkbox ------------------------------------------------------------------------------------------------------
+   Its own control: a box in the interior tone with a 3:1 rim; checked, it fills with the accent and draws its mark. On
+   hover it gains a halo and its rim takes the accent. */
+.check {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0.1em;
+  padding: 0;
+  border: 1px solid var(--field-rim);
+  border-radius: 0.35em;
+  background: var(--field);
+  box-shadow: 0 0 0 0 var(--focus-halo);
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  &::after {
+    content: "";
+    width: 0.3em;
+    height: 0.58em;
+    margin-top: -0.14em;
+    border-right: 2px solid var(--on-accent);
+    border-bottom: 2px solid var(--on-accent);
+    rotate: 45deg;
+    scale: 0.4;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-in), scale var(--dur-fast) var(--ease-in);
+  }
+  &[aria-checked="true"] {
+    background: var(--accent-fill);
+    border-color: var(--accent-fill);
+  }
+  &[aria-checked="true"]::after {
+    opacity: 1;
+    scale: 1;
+    transition: opacity var(--dur) var(--ease-out), scale var(--dur) var(--ease-out);
+  }
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--focus-halo);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+  &:disabled {
+    opacity: 1;
+    border-color: var(--division);
+    cursor: not-allowed;
+  }
+  @media (forced-colors: active) {
+    &[aria-checked="true"] {
+      background: Highlight;
+    }
+  }
+}
+/* A whole label can take the click; the box still shows the hover when the label does. */
+.check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 2.25em;
+}
+
+/* ---- Pills: one box for every variant, only the tone changes; the rim is a shadow so no variant measures more. --- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 0.35em;
+  padding: 0.28em 0.7em;
+  border-radius: var(--radius-pill);
+  background: var(--interior);
+  box-shadow: inset 0 0 0 1px var(--division);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+
+  &[data-tone="accent"] {
+    background: var(--accent-tint);
+    box-shadow: none;
+    color: var(--accent-ink);
+  }
+  &[data-tone="alert"] {
+    background: var(--alert-tint);
+    box-shadow: none;
+    color: var(--alert-ink);
+  }
+  &[data-tone="warn"] {
+    background: var(--warn-tint);
+    box-shadow: none;
+    color: var(--warn-ink);
+  }
+  &[data-tone="info"] {
+    background: var(--info-tint);
+    box-shadow: none;
+    color: var(--info-ink);
+  }
+}
+@supports (text-box: trim-both cap alphabetic) {
+  .pill {
+    text-box: trim-both cap alphabetic;
+    line-height: 1;
+    padding-block: 0.55em;
+  }
+}
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15em 0.45em;
+  border-radius: 0.35em;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--control-rim), 0 1px 0 var(--control-rim);
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* ---- Segmented control: a sunken rail and ONE raised piece that travels to the chosen option. ------------------- */
+.seg {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--division);
+  border-radius: calc(var(--radius-control) + 3px);
+  background: var(--rail);
+
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    width: var(--piece-w, 0);
+    height: var(--piece-h, 0);
+    translate: var(--piece-x, 0) var(--piece-y, 0);
+    opacity: var(--piece-on, 0);
+    border-radius: var(--radius-control);
+    background: var(--piece);
+    box-shadow: var(--shadow-piece), inset 0 0 0 1px var(--piece-rim);
+    pointer-events: none;
+  }
+  &[data-piece-ready]::before {
+    transition: translate var(--dur) var(--ease-std), width var(--dur) var(--ease-std), height var(--dur) var(--ease-std),
+      opacity var(--dur) var(--ease-std), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+  }
+}
+.seg-option {
+  min-height: 2.25em;
+  padding: 0.35em 0.9em;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color var(--dur-hover-out) var(--ease-hover-out), background-color var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: color-mix(in srgb, var(--piece) 55%, transparent);
+      color: var(--ink);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[aria-selected="true"],
+  &[aria-pressed="true"],
+  &[aria-current="page"] {
+    color: var(--ink);
+    font-weight: 700;
+  }
+}
+/* The chosen option has its hover too: its ink takes the accent and the piece under it lifts. */
+@media (hover: hover) {
+  .seg[data-piece-ready] > .seg-option:is([aria-selected="true"], [aria-pressed="true"]):hover {
+    background: transparent;
+    color: var(--accent);
+  }
+  .seg:has(> .seg-option:is([aria-selected="true"], [aria-pressed="true"]):hover)::before {
+    box-shadow: var(--shadow-control-hover), inset 0 0 0 1px var(--piece-rim);
+  }
+}
+.seg::before {
+  transition: box-shadow var(--dur-hover-out) var(--ease-hover-out);
+}
+/* Before the piece is placed the chosen option carries its own piece. */
+.seg:not([data-piece-ready]) > .seg-option:is([aria-selected="true"], [aria-pressed="true"]) {
+  background: var(--piece);
+  box-shadow: var(--shadow-piece);
+}
+
+/* ---- Theme switch: a rail and a thumb that travels; the state's mark sits inside the thumb, where it stops. -------- */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 2.5em;
+  padding: 0 0.7em 0 0.35em;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      color: var(--ink);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.switch-rail {
+  position: relative;
+  flex: none;
+  width: 2.75em;
+  height: 1.5em;
+  border: 1px solid var(--control-rim);
+  border-radius: var(--radius-pill);
+  background: var(--rail);
+  box-shadow: var(--shadow-field);
+  transition: border-color var(--dur-hover-out) var(--ease-hover-out), background-color var(--dur) var(--ease-std);
+}
+.switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  display: grid;
+  place-items: center;
+  width: calc(1.5em - 6px);
+  height: calc(1.5em - 6px);
+  border-radius: 50%;
+  background: var(--piece);
+  box-shadow: var(--shadow-piece), inset 0 0 0 1px var(--piece-rim);
+  translate: 0 -50%;
+  transition: translate var(--dur) var(--ease-std), box-shadow var(--dur-hover-out) var(--ease-hover-out),
+    background-color var(--dur) var(--ease-std);
+
+  /* The state's mark: a lit disc in light, a ring in dark. */
+  &::after {
+    content: "";
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: inset 0 0 0 0 var(--accent);
+    transition: background-color var(--dur) var(--ease-std), box-shadow var(--dur) var(--ease-std);
+  }
+}
+:root[data-theme="dark"] .switch-thumb {
+  translate: calc(2.75em - 1.5em) -50%;
+}
+:root[data-theme="dark"] .switch-thumb::after {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+@media (hover: hover) {
+  .switch:hover .switch-rail {
+    border-color: var(--accent);
+    transition-duration: var(--dur-hover);
+  }
+  .switch:hover .switch-thumb {
+    box-shadow: var(--shadow-control-hover), inset 0 0 0 1px var(--piece-rim);
+    transition-duration: var(--dur), var(--dur-hover), var(--dur);
+  }
+}
+@media (forced-colors: active) {
+  .switch-thumb {
+    border: 1px solid CanvasText;
+  }
+}
+
+/* ---- Skeletons: shaped like what comes; still under reduced motion and paused while hidden. ---------------------- */
+.skeleton {
+  display: block;
+  height: 0.8rem;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--rail) 0%, var(--interior-hover) 40%, var(--rail) 80%) 0 0 / 300% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+.skeleton-title {
+  height: 1.15rem;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+:root.page-hidden .skeleton,
+[hidden] .skeleton {
+  animation-play-state: paused;
+}
+
+/* ---- Entrances: what shows enters from an opacity too small to see, in CSS, and leaves the cascade when done. ---- */
+@keyframes rise-in {
+  from {
+    opacity: 0.001;
+    translate: 0 var(--rise, 0.5rem);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0.001;
+  }
+}
+.enter {
+  animation: rise-in var(--enter-dur, var(--dur-slow)) var(--ease-out) var(--enter-delay, 0s) backwards;
+}
+.fade-enter {
+  animation: fade-in var(--dur) var(--ease-out) backwards;
+}
+/* What just changed with the view in sight tints for an instant and returns. */
+[data-changed] {
+  animation: changed 1.4s var(--ease-out) 1;
+}
+@keyframes changed {
+  from {
+    background-color: var(--accent-tint);
+  }
+}
+
+/* ---- Fold: a block that opens and closes travels its height; its direct child carries no box of its own. -------- */
+.fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition: grid-template-rows var(--dur) var(--ease-std), opacity var(--dur) var(--ease-std),
+    visibility 0s linear var(--dur);
+
+  &[data-open="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    transition: grid-template-rows var(--dur) var(--ease-std), opacity var(--dur) var(--ease-std), visibility 0s;
+  }
+  & > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+  &[data-open="true"][data-settled] > * {
+    overflow: visible;
+  }
+}
+
+/* ---- Notices: one at a time, weighed by level; a failure carries more presence than a status. -------------------- */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(32rem, calc(100vw - 2 * var(--gutter)));
+  padding: 0.65rem 0.65rem 0.65rem 1rem;
+  border: 1px solid var(--card-rim);
+  border-radius: calc(var(--radius-card) * 0.8);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink);
+  transition-property: opacity, translate;
+  transition-duration: var(--dur);
+  transition-timing-function: var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+    translate: 0 0.75rem;
+  }
+  &[data-leaving] {
+    opacity: 0;
+    translate: 0 0.5rem;
+    transition-timing-function: var(--ease-in);
+    transition-duration: var(--dur-fast);
+  }
+  &[data-tone="error"] {
+    border-color: var(--alert-rim);
+    background: var(--alert-tint);
+    color: var(--alert-ink);
+    border-left: 4px solid var(--alert);
+  }
+}
+/* A notice in place, inside the card it belongs to: its own role, with the ink of its tone. */
+.inline-note {
+  padding: 0.6em 0.85em;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+  color: var(--ink-soft);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.5;
+  text-wrap: pretty;
+
+  &[data-tone="alert"] {
+    background: var(--alert-tint);
+    color: var(--alert-ink);
+  }
+  &[data-tone="accent"] {
+    background: var(--accent-tint);
+    color: var(--accent-ink);
+  }
+}
+
+/* ---- Dialogs: the native one, entering and leaving with the top layer. ------------------------------------------- */
+.dialog {
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  translate: 0 0.75rem;
+  transition: opacity var(--dur-fast) var(--ease-in), translate var(--dur-fast) var(--ease-in),
+    overlay var(--dur-fast) var(--ease-in) allow-discrete, display var(--dur-fast) var(--ease-in) allow-discrete;
+
+  &[open] {
+    opacity: 1;
+    translate: 0 0;
+    transition: opacity var(--dur) var(--ease-out), translate var(--dur) var(--ease-out),
+      overlay var(--dur) var(--ease-out) allow-discrete, display var(--dur) var(--ease-out) allow-discrete;
+  }
+  &::backdrop {
+    background: var(--scrim);
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-in), overlay var(--dur-fast) allow-discrete,
+      display var(--dur-fast) allow-discrete;
+  }
+  &[open]::backdrop {
+    opacity: 1;
+    transition: opacity var(--dur) var(--ease-out), overlay var(--dur) allow-discrete, display var(--dur) allow-discrete;
+  }
+}
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    translate: 0 0.75rem;
+  }
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* ---- Reduced motion: what moves goes still or instant, and every content stays visible. -------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  *::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .skeleton {
+    animation: none;
+  }
+}

@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { get, tool, type CalendarEvent, type EventsFailure, type Item } from "./client-api";
+import { Button, buttonClass } from "@/components/ui/button";
+import { LOCALE } from "@/lib/dates";
+import { get, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { ConnectBlockedNote, type ConnectBlocked } from "./connect-blocked";
-import { ItemRow, QuickAdd } from "./items";
+import { land, onFocusRequest, takeFocusRequest, type FocusTarget } from "./focus-request";
+import { ItemList, ItemRow, QuickAdd } from "./items";
 import { useWorkspace } from "./workspace";
 
 type Overview = {
@@ -20,20 +23,34 @@ type Overview = {
 
 type Account = { id: string; email: string; status: string; nodeIds: string[] };
 
-function when(event: CalendarEvent): string {
-  if (event.allDay) return `${new Date(`${event.start}T00:00`).toLocaleDateString()} · all day`;
+const KIND: Record<string, string> = { client: "Client", project: "Project", subproject: "Subproject" };
+
+export function when(event: CalendarEvent, withDay = true): string {
+  if (event.allDay) {
+    const day = new Date(`${event.start}T00:00`).toLocaleDateString(LOCALE, { weekday: "short", month: "short", day: "numeric" });
+    return withDay ? `${day} · All day` : "All day";
+  }
   const start = new Date(event.start);
-  return `${start.toLocaleDateString()} ${start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  const time = start.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+  return withDay ? `${start.toLocaleDateString(LOCALE, { weekday: "short", month: "short", day: "numeric" })} · ${time}` : time;
+}
+
+function ancestorsOf(tree: TreeNode[] | null, nodeId: string): TreeNode[] {
+  const chain: TreeNode[] = [];
+  for (let cursor = tree?.find((n) => n.id === nodeId); cursor; cursor = tree?.find((n) => n.id === cursor!.parentId)) chain.unshift(cursor);
+  return chain;
 }
 
 // A node: its path, its own and inherited accounts, tasks by priority with quick add, decisions, links, things to
-// review, and the agenda of its calendars. Everything is read and written through the tool layer.
+// review, and the agenda of its calendars. Everything is read and written through the tool layer; a re-read repaints
+// in place and keeps what the person had open.
 export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutcome: string | null }) {
   const { version, tree } = useWorkspace();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [done, setDone] = useState<Item[]>([]);
+  const [showDone, setShowDone] = useState(false);
   const [accounts, setAccounts] = useState<{ list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked } | null>(null);
 
   useEffect(() => {
@@ -58,122 +75,279 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
     };
   }, [nodeId, version]);
 
-  if (notFound) return <p>This project does not exist or is not yours. Pick one from the list.</p>;
-  if (!overview) return <p aria-busy="true">{error ? `The project could not be read: ${error}` : "Loading the project…"}</p>;
+  // The palette, the tree, or a card may have asked to land somewhere in this node: once its data is on screen, the
+  // view goes there with the focus set.
+  const ready = overview !== null;
+  useEffect(() => {
+    if (!ready) return;
+    const apply = () => {
+      const target: FocusTarget | null = takeFocusRequest(nodeId);
+      if (target) requestAnimationFrame(() => land(target));
+    };
+    apply();
+    return onFocusRequest(apply);
+  }, [ready, nodeId]);
 
-  // Inheritance: an account hanging from this node or any ancestor is visible here, and says where it comes from.
-  const ancestors: string[] = [];
-  for (let cursor = tree?.find((n) => n.id === nodeId); cursor; cursor = tree?.find((n) => n.id === cursor!.parentId)) {
-    ancestors.push(cursor.id);
+  if (notFound) {
+    return (
+      <section className="card stack" aria-labelledby="missing">
+        <h1 id="missing" className="t-h1">
+          This project is not here
+        </h1>
+        <p className="t-help">It was deleted, or it belongs to another account. Pick one from the list of projects, or start from today.</p>
+        <div>
+          <Link className={buttonClass({ variant: "primary" })} href="/app">
+            <span className="btn-label">Go to Today</span>
+          </Link>
+        </div>
+      </section>
+    );
   }
+  if (!overview) return <NodeSkeleton failed={error} />;
+
+  const chain = ancestorsOf(tree, nodeId);
+  const name = chain.at(-1)?.name ?? overview.node.path.split(" / ").at(-1) ?? overview.node.path;
+  const ancestors = chain.slice(0, -1);
   const visible = (accounts?.list ?? [])
-    .map((account) => ({ account, from: ancestors.find((id) => account.nodeIds.includes(id)) }))
+    .map((account) => ({ account, from: chain.map((n) => n.id).reverse().find((id) => account.nodeIds.includes(id)) }))
     .filter((entry) => entry.from);
+  const openReviews = overview.toReview.length;
 
   return (
-    <article className="flex flex-col gap-8" data-node-view={nodeId}>
-      <header className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold">{overview.node.path}</h1>
-        <div className="flex flex-wrap gap-3">
-          <Link href={`/app/node/${nodeId}/agent`}>Connect your agent</Link>
+    <article className="page fade-enter" data-node-view={nodeId}>
+      <header className="card page-head">
+        {ancestors.length > 0 && (
+          <nav aria-label="Path">
+            <ol className="crumbs t-meta">
+              {ancestors.map((node) => (
+                <li key={node.id}>
+                  <Link className="link" href={`/app/node/${node.id}`}>
+                    {node.name}
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
+        <h1 className="t-h1" tabIndex={-1} data-node-title>
+          {name}
+        </h1>
+        <div className="facts t-meta">
+          <span className="nowrap">{KIND[overview.node.kind] ?? overview.node.kind}</span>
+          <span className="nowrap">{plural(overview.openTasks.length, "open task", "open tasks")}</span>
+          <span className="nowrap">{plural(openReviews, "thing to review", "things to review")}</span>
+          {overview.children.length > 0 && (
+            <span>
+              {overview.children.length === 1 ? "Subproject" : "Subprojects"}:{" "}
+              {overview.children.map((child, index) => (
+                <span key={child.id}>
+                  {index > 0 && ", "}
+                  <Link className="link" href={`/app/node/${child.id}`}>
+                    {child.name}
+                  </Link>
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+        <div className="inline">
+          <Link className={buttonClass({ size: "sm" })} href={`/app/node/${nodeId}/agent`}>
+            <span className="btn-label">Connect your agent</span>
+          </Link>
         </div>
         {googleOutcome && <GoogleOutcome outcome={googleOutcome} />}
-        {error && <p role="alert">The project could not be refreshed: {error}</p>}
+        {error && (
+          <p role="alert" className="inline-note" data-tone="alert">
+            The project could not be refreshed: {error}. What you see is the last version read.
+          </p>
+        )}
       </header>
 
-      <section className="flex flex-col gap-3" aria-labelledby="tasks">
-        <h2 id="tasks" className="font-semibold">Tasks</h2>
+      <section className="card" aria-labelledby="tasks">
+        <div className="card-head">
+          <h2 id="tasks" className="t-title">
+            Tasks
+          </h2>
+          <span className="t-meta">{plural(overview.openTasks.length, "open", "open")}</span>
+        </div>
         <QuickAdd nodeId={nodeId} type="task" />
         {overview.openTasks.length === 0 ? (
-          <p>No open tasks here. Add one above.</p>
+          <Empty text="No open tasks here." action="Add a task" onAction={() => focusQuickAdd(nodeId, "task")} />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {overview.openTasks.map((item) => (
-              <ItemRow key={item.id} item={item} />
-            ))}
-          </ul>
+          <ItemList items={overview.openTasks}>{(item) => <ItemRow item={item} />}</ItemList>
         )}
         {done.length > 0 && (
-          <details>
-            <summary>Done ({done.length})</summary>
-            <ul className="flex flex-col gap-2">
-              {done.map((item) => (
-                <ItemRow key={item.id} item={item} />
-              ))}
-            </ul>
-          </details>
+          <div className="done-toggle">
+            <Button variant="quiet" size="sm" aria-expanded={showDone} aria-controls="done-tasks" onClick={() => setShowDone((v) => !v)}>
+              Done ({done.length})
+            </Button>
+            <div className="fold" id="done-tasks" data-open={showDone}>
+              <div>
+                <ItemList items={done}>{(item) => <ItemRow item={item} />}</ItemList>
+              </div>
+            </div>
+          </div>
         )}
       </section>
 
-      <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty="No decisions recorded here yet." />
-      <Section title="Links" type="link" nodeId={nodeId} items={overview.links} empty="No links saved here yet." />
-      <Section title="To review" type="review" nodeId={nodeId} items={overview.toReview} empty="Nothing to review here." />
+      <div className="cards-2">
+        <div className="cards-2-inner">
+          <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty="No decisions recorded here yet." action="Record a decision" />
+          <Section title="To review" type="review" nodeId={nodeId} items={overview.toReview} empty="Nothing to review here." action="Add something to review" />
+          <Section title="Links" type="link" nodeId={nodeId} items={overview.links} empty="No links saved here yet." action="Save a link" />
+          <section className="card" aria-labelledby="accounts">
+            <div className="card-head">
+              <h2 id="accounts" className="t-title">
+                Google accounts
+              </h2>
+            </div>
+            {accounts === null ? (
+              <div className="stack" role="status" aria-label="Loading accounts" aria-busy="true">
+                <span className="skeleton" style={{ width: "70%" }} />
+                <span className="skeleton" style={{ width: "45%" }} />
+              </div>
+            ) : (
+              <div className="stack">
+                {visible.length === 0 ? (
+                  <p className="t-help">No Google account is visible here: one connected here or above shows its calendars in this project.</p>
+                ) : (
+                  <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                    {visible.map(({ account, from }) => (
+                      <li key={account.id} className="account-line" data-account={account.email} data-inherited={from !== nodeId}>
+                        <span className="t-name">{account.email}</span>
+                        <span className="pill" data-tone={from === nodeId ? "accent" : undefined}>
+                          {from === nodeId ? "Own" : `Inherited from ${tree?.find((n) => n.id === from)?.name ?? "a parent"}`}
+                        </span>
+                        {account.status !== "active" && (
+                          <span className="pill" data-tone="alert">
+                            {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {accounts.canConnect ? (
+                  <div>
+                    <a className={buttonClass({ size: "sm" })} href={`/api/google/connect?node=${nodeId}`}>
+                      <span className="btn-label">Connect a Google account here</span>
+                    </a>
+                  </div>
+                ) : (
+                  <ConnectBlockedNote reason={accounts.connectBlocked} />
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
 
-      <section className="flex flex-col gap-3" aria-labelledby="accounts">
-        <h2 id="accounts" className="font-semibold">Google accounts</h2>
-        {accounts === null ? (
-          <p aria-busy="true">Loading accounts…</p>
-        ) : visible.length === 0 ? (
-          <p>No Google account is visible here.</p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {visible.map(({ account, from }) => (
-              <li key={account.id} data-account={account.email} data-inherited={from !== nodeId}>
-                {account.email} —{" "}
-                {from === nodeId ? "own" : `inherited from ${tree?.find((n) => n.id === from)?.path ?? "a parent"}`}
-                {account.status !== "active" && ` (${account.status}: connect it again)`}
-              </li>
-            ))}
-          </ul>
-        )}
-        {accounts?.canConnect ? (
-          <a href={`/api/google/connect?node=${nodeId}`}>Connect a Google account here</a>
-        ) : (
-          <ConnectBlockedNote reason={accounts?.connectBlocked ?? null} />
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3" aria-labelledby="agenda">
-        <h2 id="agenda" className="font-semibold">Agenda, next seven days</h2>
+      <section className="card" aria-labelledby="agenda">
+        <div className="card-head">
+          <h2 id="agenda" className="t-title">
+            Agenda
+          </h2>
+          <span className="t-meta">Next seven days</span>
+        </div>
         {overview.eventFailures.map((failure) => (
-          <p key={failure.accountId} role="alert">
+          <p key={failure.accountId} role="alert" className="inline-note" data-tone="alert">
             {failure.accountEmail} could not be read: {failure.reason}
           </p>
         ))}
         {overview.events.length === 0 ? (
-          <p>No events in the next seven days from the accounts visible here.</p>
+          <p className="t-help">No events in the next seven days from the accounts visible here.</p>
         ) : (
-          <ul className="flex flex-col gap-1">
-            {overview.events.map((event) => (
-              <li key={`${event.accountId}:${event.id}`} data-event>
-                {when(event)} — {event.title} ({event.accountEmail})
-              </li>
-            ))}
-          </ul>
+          <Agenda events={overview.events} />
         )}
       </section>
     </article>
   );
 }
 
-function Section({ title, type, nodeId, items, empty }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string }) {
+export function Agenda({ events, withDay = true }: { events: CalendarEvent[]; withDay?: boolean }) {
+  return (
+    <ul className="agenda">
+      {events.map((event) => (
+        <li key={`${event.accountId}:${event.id}`} className="agenda-row" data-event>
+          <span className="t-meta">{when(event, withDay)}</span>
+          <span className="stack" style={{ gap: "0.1rem" }}>
+            <span className="t-value">{event.title}</span>
+            <span className="t-meta">
+              {event.calendarName} · {event.accountEmail}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Section({ title, type, nodeId, items, empty, action }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string; action: string }) {
   const id = `section-${type}`;
   return (
-    <section className="flex flex-col gap-3" aria-labelledby={id}>
-      <h2 id={id} className="font-semibold">
-        {title}
-      </h2>
+    <section className="card" aria-labelledby={id}>
+      <div className="card-head">
+        <h2 id={id} className="t-title">
+          {title}
+        </h2>
+        {items.length > 0 && <span className="t-meta">{items.length}</span>}
+      </div>
       <QuickAdd nodeId={nodeId} type={type} />
       {items.length === 0 ? (
-        <p>{empty}</p>
+        <Empty text={empty} action={action} onAction={() => focusQuickAdd(nodeId, type)} />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <ItemRow key={item.id} item={item} />
-          ))}
-        </ul>
+        <ItemList items={items}>{(item) => <ItemRow item={item} />}</ItemList>
       )}
     </section>
+  );
+}
+
+// An empty state says what is missing and carries its own button, which takes the focus to where it is filled.
+export function Empty({ text, action, onAction }: { text: string; action?: string; onAction?: () => void }) {
+  return (
+    <div className="empty">
+      <p className="t-help">{text}</p>
+      {action && onAction && (
+        <Button size="sm" onClick={onAction}>
+          {action}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function focusQuickAdd(nodeId: string, type: Item["type"]) {
+  land({ kind: "quick-add", nodeId, type });
+}
+
+function plural(count: number, one: string, many: string): string {
+  return new Intl.PluralRules("en").select(count) === "one" ? `${count} ${one}` : `${count} ${many}`;
+}
+
+function NodeSkeleton({ failed }: { failed: string | null }) {
+  if (failed) {
+    return (
+      <section className="card stack" role="alert">
+        <h1 className="t-title">The project could not be read</h1>
+        <p className="t-help">{failed}. Reload the page to try again.</p>
+      </section>
+    );
+  }
+  return (
+    <div className="page" role="status" aria-label="Loading the project" aria-busy="true">
+      <div className="card stack">
+        <span className="skeleton" style={{ width: "18%" }} />
+        <span className="skeleton skeleton-title" style={{ width: "42%", height: "1.9rem" }} />
+        <span className="skeleton" style={{ width: "30%" }} />
+      </div>
+      <div className="card stack">
+        <span className="skeleton skeleton-title" style={{ width: "16%" }} />
+        <span className="skeleton" style={{ width: "100%", height: "2.5rem" }} />
+        {["72%", "58%", "64%"].map((width) => (
+          <span key={width} className="skeleton" style={{ width }} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -188,5 +362,9 @@ const outcomes: Record<string, string> = {
 function GoogleOutcome({ outcome }: { outcome: string }) {
   const text = outcomes[outcome];
   if (!text) return null;
-  return <p role={outcome === "connected" ? "status" : "alert"}>{text}</p>;
+  return (
+    <p role={outcome === "connected" ? "status" : "alert"} className="inline-note" data-tone={outcome === "connected" ? "accent" : "alert"}>
+      {text}
+    </p>
+  );
 }

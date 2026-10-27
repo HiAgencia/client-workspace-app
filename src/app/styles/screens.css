@@ -1,0 +1,1090 @@
+/* The screens: the shell, the tree, the rows, the node, the chat, the palette, and the landing page. They compose the
+   primitives of system.css; a value they need that the system lacks enters tokens.css as a role. */
+
+/* ---- Navigation between pages: the old content leaves, then the new one enters. Only the named content takes part:
+   the root is not captured, so the header and the sidebar stay live and their own motion runs. ---------------------- */
+:root {
+  view-transition-name: none;
+}
+:root.theme-shift {
+  view-transition-name: root;
+}
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-std);
+}
+::view-transition-old(.page-out) {
+  animation: page-leave var(--dur-fast) var(--ease-in) both;
+}
+::view-transition-new(.page-in) {
+  animation: page-enter var(--dur) var(--ease-out) var(--dur-fast) both;
+}
+@keyframes page-leave {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    translate: 0 0.4rem;
+  }
+}
+
+/* ---- The shell ---------------------------------------------------------------------------------------------------- */
+.skip-link {
+  position: fixed;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: calc(var(--layer-notice) + 1);
+  translate: 0 -200%;
+  /* Its own entrance joins the button's transitions instead of replacing them. */
+  transition: translate var(--dur) var(--ease-out), background-color var(--dur-hover-out) var(--ease-hover-out),
+    border-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out),
+    color var(--dur-hover-out) var(--ease-hover-out);
+
+  &:focus {
+    translate: 0 0;
+  }
+}
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--header-h) auto;
+  min-height: 100svh;
+}
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--layer-header);
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: var(--header-h);
+  padding-inline: var(--gutter);
+  background: var(--card);
+  box-shadow: var(--shadow-header);
+  animation: fade-in var(--dur-slow) var(--ease-out) backwards;
+}
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: none;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--accent);
+      transition-duration: var(--dur-hover);
+    }
+    /* The mark answers with its link: its tile deepens. */
+    &:hover .brand-mark > rect {
+      fill: var(--accent-fill-hover);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.brand-mark {
+  flex: none;
+  width: 1.9rem;
+  height: 1.9rem;
+}
+.brand-mark > rect {
+  transition: fill var(--dur-hover-out) var(--ease-hover-out);
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lead);
+  font-weight: 750;
+  letter-spacing: -0.012em;
+}
+.palette-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(26rem, 100%);
+  margin-left: clamp(0.5rem, 2vw, 2.5rem);
+  color: var(--muted);
+  text-align: left;
+}
+.palette-trigger {
+  white-space: nowrap;
+}
+.trigger-short {
+  display: none;
+}
+.save-status {
+  min-width: 4.5em;
+  text-align: right;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-std);
+
+  &[data-shown] {
+    opacity: 1;
+  }
+}
+.who {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projects-trigger {
+  display: inline-flex;
+}
+.only-wide {
+  display: none;
+}
+
+.sidebar {
+  display: none;
+}
+.main {
+  min-width: 0;
+  padding: var(--gutter);
+  padding-bottom: calc(var(--gutter) + 5rem);
+}
+
+@media (width >= 64rem) {
+  .shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .sidebar {
+    display: block;
+    position: sticky;
+    top: calc(var(--header-h) + var(--gutter));
+    align-self: start;
+    height: calc(100svh - var(--header-h) - 2 * var(--gutter));
+    margin: var(--gutter) 0 var(--gutter) var(--gutter);
+    padding: 0;
+    overflow: hidden;
+    animation: rise-in var(--dur-slow) var(--ease-out) 60ms backwards;
+  }
+  .main {
+    padding-left: var(--gap-cards);
+  }
+  .projects-trigger {
+    display: none;
+  }
+  .only-wide {
+    display: inline-flex;
+  }
+}
+@media (width < 40rem) {
+  .topbar .brand-name,
+  .palette-trigger .kbd,
+  .topbar .who {
+    display: none;
+  }
+  .palette-trigger {
+    width: auto;
+    margin-left: auto;
+  }
+  .trigger-long {
+    display: none;
+  }
+  .trigger-short {
+    display: inline;
+  }
+  .topbar-end {
+    margin-left: 0;
+  }
+  /* The switch keeps its name for a screen reader; only the eye loses the words where there is no room. */
+  .switch-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The sidebar: its list scrolls inside it when it outgrows the window, and the current place is ONE piece that
+   travels between rows. */
+.side-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--pad-card) calc(var(--pad-card) * 0.7);
+  scrollbar-width: thin;
+}
+.side-nav {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    width: var(--piece-w, 0);
+    height: var(--piece-h, 0);
+    translate: var(--piece-x, 0) var(--piece-y, 0);
+    opacity: var(--piece-on, 0);
+    border-radius: var(--radius-control);
+    background: var(--accent-tint);
+    pointer-events: none;
+  }
+  &[data-piece-ready]::before {
+    transition: translate var(--dur) var(--ease-std), width var(--dur) var(--ease-std), height var(--dur) var(--ease-std),
+      opacity var(--dur) var(--ease-std), background-color var(--dur-hover-out) var(--ease-hover-out),
+      box-shadow var(--dur-hover-out) var(--ease-hover-out);
+  }
+}
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  padding-left: 0.6rem;
+}
+.side-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-control);
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover:not([aria-current="page"]) {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      color: var(--ink);
+      transition-duration: var(--dur-hover);
+    }
+    &[aria-current="page"]:hover {
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[aria-current="page"] {
+    color: var(--accent-ink);
+    font-weight: 750;
+  }
+}
+/* The current place has its hover too: its ink takes the accent and the piece under it deepens. */
+@media (hover: hover) {
+  .side-nav:has(.side-link[aria-current="page"]:hover)::before {
+    background: var(--accent-tint-hover);
+  }
+}
+.side-nav::before {
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out);
+}
+/* A name wraps between its words rather than losing its end, and a word is split only when it alone is wider than the
+   sidebar: the tree is where a project is recognized. */
+.side-link-name {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.count {
+  flex: none;
+  min-width: 1.6em;
+  padding: 0.1em 0.45em;
+  border-radius: var(--radius-pill);
+  background: var(--interior);
+  box-shadow: inset 0 0 0 1px var(--division);
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+[aria-current="page"] .count {
+  background: var(--card);
+  box-shadow: none;
+  color: var(--accent-ink);
+}
+
+/* The tree: each level indents and carries a guide line, so a project reads under its client. */
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree .tree {
+  margin-left: 0.95rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--division);
+}
+.tree-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+.tree-add-child {
+  align-self: flex-start;
+  margin-left: 0.6rem;
+}
+.tree-add {
+  flex: none;
+  min-height: 2rem;
+  padding: 0.2em 0.6em;
+  font-size: var(--text-meta);
+}
+.tree-new {
+  padding: 0.3rem 0 0.3rem 0.4rem;
+}
+
+/* The phone's compact control: the sidebar's content in a drawer from the left. */
+.drawer {
+  margin: 0 auto 0 0;
+  width: min(22rem, calc(100vw - 2.5rem));
+  height: 100svh;
+  max-height: none;
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  translate: -1.5rem 0;
+
+  &[open] {
+    translate: 0 0;
+  }
+}
+@starting-style {
+  .drawer[open] {
+    translate: -1.5rem 0;
+  }
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: var(--pad-card) var(--pad-card) 0;
+}
+
+/* ---- Page headers and the node's layout ---------------------------------------------------------------------------- */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+  min-width: 0;
+}
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.page-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+}
+.page-head > .t-h1 {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crumbs li + li::before {
+  content: "/";
+  margin-right: 0.4rem;
+  color: var(--muted);
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+}
+/* The separator belongs to the fact before it, so a wrapped line never starts with one. */
+.facts > :not(:last-child)::after {
+  content: "·";
+  margin-left: 0.5rem;
+}
+.cards-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-cards);
+  align-items: stretch;
+  container-type: inline-size;
+}
+@container (width >= 44rem) {
+  .cards-2-inner {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--gap-cards);
+  }
+}
+.cards-2-inner {
+  display: grid;
+  gap: var(--gap-cards);
+}
+.cards-2-inner > .card {
+  display: flex;
+  flex-direction: column;
+}
+
+.node-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap-cards);
+  align-items: start;
+}
+.node-tabs {
+  justify-self: start;
+  width: min(100%, 20rem);
+}
+@media (width < 80rem) {
+  .node-page [data-pane][data-active="false"] {
+    display: none;
+  }
+}
+@media (width >= 80rem) {
+  .node-page {
+    grid-template-columns: minmax(0, 1fr) var(--chat-w);
+  }
+  .node-tabs {
+    display: none;
+  }
+  .node-chat {
+    position: sticky;
+    top: calc(var(--header-h) + var(--gutter));
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+/* ---- Rows of items ------------------------------------------------------------------------------------------------
+   Every row of a list carries the same columns, so states compare without reading; each cell sits on the row's axis. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-rows);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  --col-check: 1.75em;
+  --col-prio: 7.25em;
+  --col-due: 7.75em;
+  display: grid;
+  grid-template-columns: var(--col-check) minmax(0, 1fr) auto;
+  grid-template-areas: "check main act";
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  min-height: 3rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius-control);
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out);
+
+  &[data-type="task"] {
+    grid-template-columns: var(--col-check) minmax(0, 1fr) var(--col-prio) var(--col-due) auto;
+    grid-template-areas: "check main prio due act";
+  }
+  &[data-type="decision"],
+  &[data-type="link"] {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "main act";
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[data-done="true"] .row-title {
+    color: var(--muted);
+    text-decoration-line: line-through;
+    text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+}
+.row-check {
+  grid-area: check;
+  display: grid;
+  place-items: center;
+}
+.row-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.row-chips {
+  display: contents;
+}
+.row-prio {
+  grid-area: prio;
+}
+.row-due {
+  grid-area: due;
+}
+.row-act {
+  grid-area: act;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.row-prio .picker,
+.row-due .picker {
+  width: 100%;
+}
+/* The title is the row's datum and a text control: it edits in place, answering with its ink and underline. */
+.row-title {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: transparent;
+  border-radius: 0.25em;
+  /* A long title is a large target: besides its ink and underline it takes a soft wash that reaches past its box
+     without moving anything. */
+  background-color: transparent;
+  box-shadow: 0 0 0 0.3em transparent;
+  transition: color var(--dur-hover-out) var(--ease-hover-out), text-decoration-color var(--dur-hover-out) var(--ease-hover-out),
+    background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--accent);
+      text-decoration-color: currentColor;
+      background-color: var(--accent-tint);
+      box-shadow: 0 0 0 0.3em var(--accent-tint);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+}
+.row-body {
+  overflow-wrap: anywhere;
+}
+/* The title is trimmed to its letters like the chips and buttons beside it, and takes its air back as padding, so its
+   target stays whole. */
+@supports (text-box: trim-both cap alphabetic) {
+  .row-title {
+    text-box: trim-both cap alphabetic;
+    padding-block: 0.45em;
+  }
+}
+/* A small link in a row still takes a whole target: its line grows to the touch size without changing its text. */
+.row-meta .link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+}
+/* A chip that opens a list: the pill's look, with its chevron; identified by its text, it gains its rim on hover. */
+.chip-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  min-height: 2.15em;
+  padding: 0.3em 0.7em;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--interior);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition-property: background-color, border-color, box-shadow, color;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  &[data-tone="alert"] {
+    background: var(--alert-tint);
+    color: var(--alert-ink);
+  }
+  &[data-tone="warn"] {
+    background: var(--warn-tint);
+    color: var(--warn-ink);
+  }
+  &[data-tone="accent"] {
+    background: var(--accent-tint);
+    color: var(--accent-ink);
+  }
+  &[data-tone="muted"] {
+    color: var(--muted);
+  }
+  &::after {
+    color: currentColor;
+  }
+  @media (hover: hover) {
+    &:hover {
+      border-color: currentColor;
+      box-shadow: var(--shadow-control);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+  &[data-popup-open] {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px var(--focus-halo);
+  }
+  @media (hover: hover) {
+    &[data-popup-open]:hover {
+      box-shadow: 0 0 0 4px var(--focus-halo), var(--shadow-control);
+    }
+  }
+}
+/* A row that leaves folds away before it is gone. */
+.row-fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--dur) var(--ease-in), opacity var(--dur) var(--ease-in);
+
+  & > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+  &[data-leaving] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+/* The quick add on one line: the title takes the room, the rest keeps its size. */
+.quick-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.quick-add .grow {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.quick-add .field.second {
+  flex: 1 1 10rem;
+}
+.quick-add .picker {
+  flex: none;
+}
+
+/* Empty states say what is missing and carry their own button. */
+.empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+}
+
+.done-toggle {
+  margin-top: 0.5rem;
+}
+
+/* ---- Agenda and accounts --------------------------------------------------------------------------------------------- */
+.agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-rows);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agenda-row {
+  display: grid;
+  grid-template-columns: 9.5em minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-control);
+}
+.calendar-swatch {
+  display: inline-block;
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 0.2em;
+  background: var(--swatch, var(--muted));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 15%, transparent);
+}
+.account-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-height: 2.5rem;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ---- Chat ---------------------------------------------------------------------------------------------------------
+   One card the height of the window: the conversation scrolls inside it and the message box stays at its foot, so
+   nothing the node does around it moves the card. */
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: calc(100svh - var(--header-h) - 2 * var(--gutter));
+  min-height: 24rem;
+  padding: 0;
+  overflow: hidden;
+}
+@media (width < 80rem) {
+  .chat {
+    height: calc(100svh - var(--header-h) - 2 * var(--gutter) - 3.25rem - var(--gap-cards));
+  }
+}
+.chat-head {
+  padding: var(--pad-card) var(--pad-card) 0.75rem;
+  border-bottom: 1px solid var(--division);
+}
+.chat-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+  padding: var(--pad-card);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-width: thin;
+}
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+.msg[data-role="user"] {
+  align-self: flex-end;
+  align-items: flex-end;
+  max-width: 88%;
+}
+.msg-bubble {
+  padding: 0.6em 0.85em;
+  border-radius: calc(var(--radius-card) * 0.75) calc(var(--radius-card) * 0.75) 0.3em calc(var(--radius-card) * 0.75);
+  background: var(--interior);
+  overflow-wrap: anywhere;
+}
+.msg-text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.action-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 3rem;
+  padding: 0.5em 0.5em 0.5em 0.85em;
+  border-radius: var(--radius-control);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+
+  &[data-card="failed"] {
+    background: var(--alert-tint);
+    color: var(--alert-ink);
+  }
+}
+.chat-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem var(--pad-card) var(--pad-card);
+  border-top: 1px solid var(--division);
+}
+.compose-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.compose-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.compose-line .field {
+  flex: 1;
+}
+.typing {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.6em 0;
+}
+.typing span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: typing 1.2s var(--ease-std) infinite;
+}
+.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* ---- Command palette ------------------------------------------------------------------------------------------------ */
+.palette {
+  width: min(40rem, calc(100vw - 2 * var(--gutter)));
+  margin-top: 12svh;
+  max-height: min(34rem, 76svh);
+  overflow: hidden;
+}
+.palette-inner {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+}
+.palette-search {
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--division);
+}
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0.4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.palette-group-label {
+  padding: 0.65rem 0.75rem 0.3rem;
+}
+.palette-option {
+  display: grid;
+  grid-template-columns: 5.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding-left: 0.75rem;
+
+  &::before {
+    display: none;
+  }
+}
+.palette-foot {
+  padding: 0.65rem 0.85rem;
+  border-top: 1px solid var(--division);
+  background: var(--read);
+}
+
+/* ---- Small shared pieces --------------------------------------------------------------------------------------------- */
+.notices {
+  position: fixed;
+  right: var(--gutter);
+  bottom: var(--gutter);
+  z-index: var(--layer-notice);
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.notices > .notice {
+  pointer-events: auto;
+}
+.notice-text {
+  color: inherit;
+}
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nowrap-ellipsis {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-button:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.copy-state {
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-std);
+
+  &[data-shown] {
+    opacity: 1;
+  }
+}
+.token-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "main act";
+}
+.confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+}
+.confirm-text {
+  color: inherit;
+}
+.action-text {
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.palette-text {
+  gap: 0.05rem;
+  min-width: 0;
+}
+fieldset.stack {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* On a narrow screen a row keeps its title on the first line and its chips on the second, under the title. */
+@media (width < 40rem) {
+  .row[data-type="task"] {
+    grid-template-columns: var(--col-check) minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check main act"
+      ". chips chips";
+  }
+  .row-chips {
+    grid-area: chips;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .row-chips .row-prio,
+  .row-chips .row-due {
+    width: var(--col-prio);
+  }
+  .agenda-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
+}
+
+/* ---- Landing page ---------------------------------------------------------------------------------------------------- */
+.landing-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+.landing-lead {
+  font-size: var(--text-lead);
+  max-width: 34rem;
+}
+.landing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(2rem, 4vw, 4rem);
+  min-height: 100svh;
+  padding: clamp(1.5rem, 5vw, 5rem) var(--gutter);
+  max-width: 82rem;
+  margin-inline: auto;
+}
+@media (width >= 60rem) {
+  .landing {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  }
+}
+.landing-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+  max-width: 36rem;
+}
+.landing-copy .t-h1 {
+  font-size: calc(var(--text-h1) * 1.35);
+}
+.landing-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.landing .enter:nth-child(2) {
+  --enter-delay: 80ms;
+}
+.landing .enter:nth-child(3) {
+  --enter-delay: 160ms;
+}
+.landing .enter:nth-child(4) {
+  --enter-delay: 240ms;
+}
+.session-slot {
+  min-height: 5.75rem;
+}

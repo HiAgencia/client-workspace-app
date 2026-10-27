@@ -2,9 +2,9 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Button, buttonClass } from "@/components/ui/button";
+import { TextArea } from "@/components/ui/field";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { get, post, tool } from "./client-api";
 import { useWorkspace } from "./workspace";
@@ -27,10 +27,13 @@ const DONE: Record<string, string> = {
   delete_item: "Deleted",
 };
 
-// The chat of the open node. It loads the stored conversation first, then hands it to the live chat.
+// The chat of the open node: one card the height of the window. It loads the stored conversation first, then hands it
+// to the live chat; the conversation scrolls inside the card and the message box stays at its foot.
 export function ChatPanel({ nodeId }: { nodeId: string }) {
   const [initial, setInitial] = useState<UIMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { tree } = useWorkspace();
+  const name = tree?.find((node) => node.id === nodeId)?.name;
 
   useEffect(() => {
     void get<{ messages: UIMessage[] }>(`/api/chat?node=${nodeId}`).then((answer) => {
@@ -40,14 +43,31 @@ export function ChatPanel({ nodeId }: { nodeId: string }) {
   }, [nodeId]);
 
   return (
-    <aside className="flex flex-col gap-3 border-t pt-4 lg:w-96 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-4" aria-label="Chat" data-chat>
-      <h2 className="font-semibold">Chat</h2>
+    <section className="card chat" aria-labelledby="chat-title" data-chat>
+      <div className="chat-head">
+        <h2 id="chat-title" className="t-title">
+          Chat
+        </h2>
+        <p className="t-meta">{name ? `It works on ${name} and what is below it.` : "It works on this project and what is below it."}</p>
+      </div>
       {initial === null ? (
-        <p aria-busy="true">{error ? `The conversation could not be read: ${error}` : "Loading the conversation…"}</p>
+        <div className="chat-log" role="status" aria-busy="true" aria-label="Loading the conversation">
+          {error ? (
+            <p className="inline-note" data-tone="alert">
+              The conversation could not be read: {error}. Reload the page to try again.
+            </p>
+          ) : (
+            <>
+              <span className="skeleton" style={{ width: "62%", height: "2.4rem", alignSelf: "flex-end" }} />
+              <span className="skeleton" style={{ width: "80%" }} />
+              <span className="skeleton" style={{ width: "54%" }} />
+            </>
+          )}
+        </div>
       ) : (
         <Conversation nodeId={nodeId} initial={initial} />
       )}
-    </aside>
+    </section>
   );
 }
 
@@ -56,6 +76,7 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
   const [input, setInput] = useState("");
   const [image, setImage] = useState<FileUIPart | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const log = useRef<HTMLOListElement>(null);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { messages, sendMessage, status, error, clearError } = useChat({
     id: nodeId,
@@ -70,13 +91,29 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
   });
   const busy = status === "submitted" || status === "streaming";
 
-  function send(event: FormEvent) {
-    event.preventDefault();
+  // The view goes to the newest message, inside the conversation only: the page around it does not move.
+  useLayoutEffect(() => {
+    const el = log.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+  }, [messages, busy]);
+
+  function send(event?: FormEvent) {
+    event?.preventDefault();
     if (busy || (!input.trim() && !image)) return;
     clearError();
+    setNotice(null);
     void sendMessage({ role: "user", parts: [...(image ? [image] : []), { type: "text", text: input.trim() || "Turn this into tasks." }] });
     setInput("");
     setImage(null);
+  }
+
+  function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends; Shift+Enter starts a new line.
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      send();
+    }
   }
 
   function attach(file: File | undefined) {
@@ -89,15 +126,35 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <ol className="flex flex-col gap-3" aria-live="polite">
-        {messages.length === 0 && <li>Ask for a task, a decision, or what is pending here.</li>}
+    <>
+      <ol className="chat-log" ref={log} aria-live="polite">
+        {messages.length === 0 && (
+          <li className="inline-note">
+            Ask it to create a task, record a decision, or tell you what is pending here. A screenshot of a message becomes tasks.
+          </li>
+        )}
         {messages.map((message) => (
-          <li key={message.id} data-role={message.role} className="flex flex-col gap-1">
-            <span className="font-semibold">{message.role === "user" ? "You" : "Assistant"}</span>
+          <li key={message.id} data-role={message.role} className="msg">
+            <span className="t-meta">{message.role === "user" ? "You" : "Assistant"}</span>
             {message.parts.map((part, index) => {
-              if (part.type === "text") return <p key={index}>{part.text}</p>;
-              if (part.type === "file" && part.mediaType.startsWith("image/")) return <p key={index}>Image: {part.filename ?? "attached"}</p>;
+              if (part.type === "text") {
+                return message.role === "user" ? (
+                  <p key={index} className="msg-bubble msg-text t-value">
+                    {part.text}
+                  </p>
+                ) : (
+                  <p key={index} className="msg-text t-body">
+                    {part.text}
+                  </p>
+                );
+              }
+              if (part.type === "file" && part.mediaType.startsWith("image/")) {
+                return (
+                  <p key={index} className="pill">
+                    Image: {part.filename ?? "attached"}
+                  </p>
+                );
+              }
               if (part.type.startsWith("tool-") && "state" in part && part.state === "output-available") {
                 return <ActionCard key={index} toolName={part.type.slice(5)} output={part.output as WriteOutput} />;
               }
@@ -105,38 +162,60 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
             })}
           </li>
         ))}
-        {busy && <li aria-busy="true">Working…</li>}
+        {busy && (
+          <li className="msg" aria-busy="true">
+            <span className="t-meta">Assistant</span>
+            <span className="typing" role="status" aria-label="Working…">
+              <span />
+              <span />
+              <span />
+            </span>
+          </li>
+        )}
       </ol>
-      {error && (
-        <p role="alert" data-chat-error>
-          {error.message.includes("limit") ? error.message : `The assistant could not answer: ${readable(error.message)}`}
-        </p>
-      )}
-      {notice && <p role="status">{notice}</p>}
-      <form onSubmit={send} className="flex flex-col gap-2">
+      <form onSubmit={send} className="chat-compose">
+        {error && (
+          <p role="alert" className="inline-note" data-tone="alert" data-chat-error>
+            {error.message.includes("limit") ? error.message : `The assistant could not answer: ${readable(error.message)}`}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="inline-note">
+            {notice}
+          </p>
+        )}
         {image && (
-          <p data-attached>
-            Attached: {image.filename}{" "}
-            <Button type="button" variant="ghost" size="sm" onClick={() => setImage(null)}>
+          <p className="inline" data-attached>
+            <span className="pill">Attached: {image.filename}</span>
+            <Button variant="quiet" size="sm" onClick={() => setImage(null)}>
               Remove
             </Button>
           </p>
         )}
-        <Input aria-label="Message to the assistant" placeholder="Create a task to…" value={input} onChange={(e) => setInput(e.target.value)} />
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={busy}>
+        <div className="compose-line">
+          <TextArea
+            aria-label="Message to the assistant"
+            placeholder="Create a task to…"
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKey}
+          />
+          <Button type="submit" variant="primary" disabled={busy}>
             Send
           </Button>
+        </div>
+        <div className="compose-actions">
           {/* The file input stays the real, focusable control; its label is the visible button, in the product's
               words rather than the browser's own "choose file" text. */}
-          <label className={`${buttonVariants({ variant: "outline" })} cursor-pointer focus-within:ring-3 focus-within:ring-ring/50`}>
-            Attach an image
+          <label className={`${buttonClass({ size: "sm" })} file-button`}>
+            <span className="btn-label">Attach an image</span>
             <input type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
           </label>
           <VoiceNote onText={(text) => setInput((current) => (current ? `${current} ${text}` : text))} onNotice={setNotice} />
         </div>
       </form>
-    </div>
+    </>
   );
 }
 
@@ -151,12 +230,19 @@ function readable(message: string): string {
 }
 
 // What the chat did, with its undo: a creation is deleted, a change gets its previous values back, a deletion is
-// restored. Undoing goes through the same tools as everything else.
+// restored. Undoing goes through the same tools as everything else. The card keeps its box when it turns into
+// "Undone", so nothing beside it moves.
 function ActionCard({ toolName, output }: { toolName: string; output: WriteOutput }) {
   const { saving } = useWorkspace();
   const [undone, setUndone] = useState(false);
   if (!(toolName in DONE)) return null;
-  if (!output?.ok || !output.item) return <p data-card="failed">Could not {toolName.replace(/_/g, " ")}: {output?.message}</p>;
+  if (!output?.ok || !output.item) {
+    return (
+      <p className="action-card t-help" data-card="failed">
+        Could not {toolName.replace(/_/g, " ")}: {output?.message}
+      </p>
+    );
+  }
   const item = output.item;
 
   async function undo() {
@@ -179,14 +265,14 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
   }
 
   return (
-    <div className="flex items-center gap-2 rounded border p-2" data-card={toolName}>
-      <span>
-        {DONE[toolName]} &ldquo;{item.title}&rdquo;
+    <div className="action-card" data-card={toolName}>
+      <span className="t-value action-text">
+        {DONE[toolName]} “{item.title}”
       </span>
       {undone ? (
-        <span>Undone</span>
+        <span className="pill">Undone</span>
       ) : (
-        <Button size="sm" variant="outline" onClick={() => void undo()}>
+        <Button size="sm" onClick={() => void undo()}>
           Undo
         </Button>
       )}
@@ -250,7 +336,8 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
 
   if (!available) return null;
   return (
-    <Button type="button" variant="outline" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())} aria-pressed={recording}>
+    // Its name says what the next press does, so it carries no pressed state.
+    <Button size="sm" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())}>
       {working ? "Transcribing…" : recording ? "Stop and transcribe" : "Voice note"}
     </Button>
   );

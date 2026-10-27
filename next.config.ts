@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
+// Cache Components stays off: on the Workers runtime two concurrent renders hang the Worker and keep the isolate wedged
+// for every later request (vercel/next.js#94880, opennextjs/opennextjs-cloudflare#1225; the adapter's fix is #1318).
+// Turn it back on once a released @opennextjs/cloudflare carries that fix and concurrent loads of `/` all complete.
 const nextConfig: NextConfig = {
-  cacheComponents: true,
-  partialPrefetching: true,
   turbopack: {
     rules: {
       "*.css": {

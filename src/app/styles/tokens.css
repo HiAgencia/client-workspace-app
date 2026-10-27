@@ -1,0 +1,185 @@
+/* The system's roles. Components ask for a role, never for a value: changing a theme or a size is touching this file.
+   Surfaces go in three levels: the CANVAS is the page, a CARD lifts off it with its rim and shadow, and what is touched
+   inside a card goes back to the canvas tone (INTERIOR) and sinks one step deeper on hover instead of brightening. A
+   FIELD sinks (its fill, a rim at 3:1 and an inner shadow), a CONTROL rises (its fill, a soft rim and an outer shadow),
+   and READ-only text carries neither. */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --canvas: #eff1ec;
+  --card: #ffffff;
+  --card-rim: #dfe3dc;
+  --interior: #eff1ec;
+  --interior-hover: #e4e7e0;
+  --division: #e2e5df;
+  --read: #f6f7f4;
+  --field: #f2f4ef;
+  --field-hover: #e9ece6;
+  /* The rim is what identifies a field: 3:1 against the card around it and against its own fill. */
+  --field-rim: #7f857b;
+  --control: #e6e9e2;
+  --control-hover: #dce0d7;
+  --control-rim: #cbd0c6;
+  /* The segmented rail sinks and its chosen piece rises. */
+  --rail: #e4e7e0;
+  --piece: #ffffff;
+  --piece-rim: #d9ddd5;
+  --scrim: color-mix(in srgb, var(--shadow-ink) 36%, transparent);
+
+  /* Ink */
+  --ink: #161a15;
+  --ink-soft: #343a31;
+  /* Secondary text: 5.2:1 or more on every surface it sits on, the sunk hover included. */
+  --muted: #586054;
+
+  /* Accent: a deep pine for links and the main action; its tint carries full ink. */
+  --accent: #1d6a54;
+  --accent-fill: #1d6a54;
+  --accent-fill-hover: #14503f;
+  --on-accent: #ffffff;
+  --accent-tint: #ddefe7;
+  --accent-tint-hover: #cce6da;
+  --accent-ink: #12503e;
+
+  /* States, each one written as well as colored */
+  --alert: #b42318;
+  --alert-fill: #b42318;
+  --alert-tint: #fbe8e6;
+  --alert-tint-hover: #f7d7d3;
+  --alert-ink: #8a1a12;
+  --alert-rim: #eeb4ad;
+  --warn-tint: #fbefd2;
+  --warn-ink: #674300;
+  --info-tint: #e3eaf7;
+  --info-ink: #23407a;
+
+  /* What the browser draws */
+  --focus: #1d6a54;
+  --focus-halo: color-mix(in srgb, var(--accent) 24%, transparent);
+  --selection-bg: #c6e4d6;
+  --scroll-thumb: #b9bfb4;
+  --scroll-thumb-hover: #8e968a;
+
+  /* Shadows, composed from one ink so a theme changes them all */
+  --shadow-ink: #161a15;
+  --shadow-card: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 6%, transparent),
+    0 10px 26px -12px color-mix(in srgb, var(--shadow-ink) 14%, transparent);
+  --shadow-control: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 9%, transparent),
+    0 1px 1px color-mix(in srgb, var(--shadow-ink) 4%, transparent);
+  --shadow-control-hover: 0 3px 8px -1px color-mix(in srgb, var(--shadow-ink) 16%, transparent),
+    0 1px 2px color-mix(in srgb, var(--shadow-ink) 8%, transparent);
+  --shadow-field: inset 0 1px 2px color-mix(in srgb, var(--shadow-ink) 7%, transparent);
+  --shadow-field-hover: inset 0 1px 3px color-mix(in srgb, var(--shadow-ink) 15%, transparent);
+  --shadow-piece: 0 1px 3px color-mix(in srgb, var(--shadow-ink) 12%, transparent),
+    0 1px 1px color-mix(in srgb, var(--shadow-ink) 6%, transparent);
+  --shadow-pop: 0 2px 6px color-mix(in srgb, var(--shadow-ink) 8%, transparent),
+    0 22px 44px -14px color-mix(in srgb, var(--shadow-ink) 26%, transparent);
+  --shadow-header: 0 1px 0 var(--division), 0 8px 18px -14px color-mix(in srgb, var(--shadow-ink) 22%, transparent);
+
+  /* Type: four sizes; hierarchy goes by weight and role. Each grows with the screen and holds past the design width. */
+  --text-meta: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem);
+  --text-body: clamp(0.875rem, 0.85rem + 0.1vw, 0.9375rem);
+  --text-lead: clamp(1rem, 0.95rem + 0.2vw, 1.1875rem);
+  --text-h1: clamp(1.5rem, 1.25rem + 0.85vw, 2.125rem);
+
+  /* Space */
+  --gutter: clamp(0.875rem, 0.55rem + 1.1vw, 1.75rem);
+  --pad-card: clamp(1rem, 0.82rem + 0.55vw, 1.5rem);
+  --gap-cards: clamp(0.875rem, 0.68rem + 0.55vw, 1.375rem);
+  --gap-rows: 0.25rem;
+  --header-h: 3.75rem;
+  --sidebar-w: clamp(15rem, 12rem + 4vw, 18rem);
+  --chat-w: clamp(21rem, 15rem + 8vw, 27rem);
+
+  /* Shape */
+  --radius-card: 1rem;
+  --radius-control: 0.65em;
+  --radius-pill: 999px;
+
+  /* Motion: what enters decelerates, what leaves accelerates; the hover enters quick and leaves longer. */
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 380ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-hover: 150ms;
+  --ease-hover: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-hover-out: 300ms;
+  --ease-hover-out: cubic-bezier(0.4, 0, 0.25, 1);
+
+  /* Layers */
+  --layer-sticky: 20;
+  --layer-header: 30;
+  --layer-notice: 50;
+}
+
+/* Dark is designed, not inverted: the canvas is the deepest plane, the card lifts, what is inside sinks again, the rail
+   sinks below the card and the chosen piece rises well above it. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #111311;
+  --card: #1b1e1a;
+  --card-rim: #2c302b;
+  --interior: #141613;
+  --interior-hover: #0d0f0d;
+  --division: #2b2f2a;
+  --read: #171a16;
+  --field: #0f110f;
+  --field-hover: #0a0b0a;
+  --field-rim: #6c7369;
+  --control: #2b2f2a;
+  --control-hover: #353a34;
+  --control-rim: #454b43;
+  --rail: #0d0f0d;
+  --piece: #363b35;
+  --piece-rim: #4a5048;
+  --scrim: color-mix(in srgb, var(--shadow-ink) 60%, transparent);
+
+  --ink: #eef0eb;
+  --ink-soft: #d3d8cf;
+  --muted: #a5ac9f;
+
+  --accent: #74d3b0;
+  --accent-fill: #5cc29e;
+  --accent-fill-hover: #7ed8b7;
+  --on-accent: #06140f;
+  --accent-tint: #183428;
+  --accent-tint-hover: #204536;
+  --accent-ink: #a1e5ca;
+
+  --alert: #ff8a7e;
+  --alert-fill: #ff8a7e;
+  --alert-tint: #3b1b18;
+  --alert-tint-hover: #4a221e;
+  --alert-ink: #ffb4aa;
+  --alert-rim: #6e2e28;
+  --warn-tint: #392e15;
+  --warn-ink: #f1cd7a;
+  --info-tint: #1a2539;
+  --info-ink: #a9c3f0;
+
+  --focus: #74d3b0;
+  --focus-halo: color-mix(in srgb, var(--accent) 30%, transparent);
+  --selection-bg: #24574a;
+  --scroll-thumb: #464c44;
+  --scroll-thumb-hover: #6d7569;
+
+  /* In dark the ink is light: shadows go black and tighter, and the rim gives the edge. */
+  --shadow-ink: #000000;
+  --shadow-card: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 55%, transparent),
+    0 14px 28px -14px color-mix(in srgb, var(--shadow-ink) 75%, transparent);
+  --shadow-control: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 55%, transparent),
+    0 1px 1px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
+  --shadow-control-hover: 0 3px 8px -1px color-mix(in srgb, var(--shadow-ink) 70%, transparent),
+    0 1px 2px color-mix(in srgb, var(--shadow-ink) 45%, transparent);
+  --shadow-field: inset 0 1px 2px color-mix(in srgb, var(--shadow-ink) 55%, transparent);
+  --shadow-field-hover: inset 0 1px 4px color-mix(in srgb, var(--shadow-ink) 85%, transparent);
+  --shadow-piece: 0 1px 3px color-mix(in srgb, var(--shadow-ink) 60%, transparent),
+    0 1px 1px color-mix(in srgb, var(--shadow-ink) 35%, transparent);
+  --shadow-pop: 0 2px 6px color-mix(in srgb, var(--shadow-ink) 45%, transparent),
+    0 24px 48px -14px color-mix(in srgb, var(--shadow-ink) 80%, transparent);
+  --shadow-header: 0 1px 0 var(--division), 0 10px 20px -14px color-mix(in srgb, var(--shadow-ink) 80%, transparent);
+}

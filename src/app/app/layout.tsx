@@ -11,7 +11,13 @@ async function Shell({ children }: { children: React.ReactNode }) {
 
 export default function WorkspaceLayout({ children }: LayoutProps<"/app">) {
   return (
-    <Suspense fallback={<p className="p-6">Opening your workspace…</p>}>
+    <Suspense
+      fallback={
+        <div className="shell" role="status" aria-busy="true" aria-label="Opening your workspace">
+          <div className="topbar" />
+        </div>
+      }
+    >
       <Shell>{children}</Shell>
     </Suspense>
   );

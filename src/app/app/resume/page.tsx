@@ -11,5 +11,10 @@ export default function Resume() {
     const last = localStorage.getItem(LAST_NODE_KEY);
     router.replace(last ? `/app/node/${last}` : "/app");
   }, [router]);
-  return <p>Opening where you left off…</p>;
+  return (
+    <div className="card stack" role="status" aria-busy="true">
+      <p className="t-help">Opening where you left off…</p>
+      <span className="skeleton" style={{ width: "40%" }} />
+    </div>
+  );
 }

@@ -44,9 +44,13 @@ The app runs as a Cloudflare Worker built with OpenNext, against a Supabase proj
 5. To connect a coding agent, open a project, choose "Connect your agent", issue a token, and copy the `.mcp.json`
    block into the repository; the token goes in the `CLIENT_WORKSPACE_TOKEN` environment variable.
 
-`pnpm check` runs route typegen, TypeScript, ESLint, and the tests (the integration tests use the Supabase project
-with throwaway users).
+`pnpm check` runs route typegen, TypeScript, ESLint, the design system's guard (`scripts/check-system.mjs`), and the
+tests (the integration tests use the Supabase project with throwaway users). `pnpm icons` draws the site's icons from
+the brand mark.
+
+Press Ctrl+K (Cmd+K on a Mac) anywhere in the workspace to find a project, a task, or an action.
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md): data, tool layer, chat, MCP, Google accounts, demo, and screens.
+- [Architecture](docs/ARCHITECTURE.md): data, tool layer, chat, MCP, Google accounts, demo, screens, and the design
+  system.
