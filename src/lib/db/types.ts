@@ -119,6 +119,71 @@ export type Database = {
           },
         ]
       }
+      events: {
+        Row: {
+          agent_label: string | null
+          all_day: boolean
+          body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
+          created_at: string
+          deleted_at: string | null
+          ends_at: string | null
+          ends_on: string | null
+          id: string
+          node_id: string
+          source: Database["public"]["Enums"]["item_source"]
+          starts_at: string | null
+          starts_on: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_label?: string | null
+          all_day?: boolean
+          body?: string | null
+          changed_agent_label?: string | null
+          changed_source?: Database["public"]["Enums"]["item_source"]
+          created_at?: string
+          deleted_at?: string | null
+          ends_at?: string | null
+          ends_on?: string | null
+          id?: string
+          node_id: string
+          source?: Database["public"]["Enums"]["item_source"]
+          starts_at?: string | null
+          starts_on?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_label?: string | null
+          all_day?: boolean
+          body?: string | null
+          changed_agent_label?: string | null
+          changed_source?: Database["public"]["Enums"]["item_source"]
+          created_at?: string
+          deleted_at?: string | null
+          ends_at?: string | null
+          ends_on?: string | null
+          id?: string
+          node_id?: string
+          source?: Database["public"]["Enums"]["item_source"]
+          starts_at?: string | null
+          starts_on?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_accounts: {
         Row: {
           access_token: string | null
@@ -161,16 +226,68 @@ export type Database = {
         }
         Relationships: []
       }
+      item_events: {
+        Row: {
+          account_id: string | null
+          calendar_id: string | null
+          created_at: string
+          event_id: string | null
+          google_event_id: string | null
+          item_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          calendar_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          google_event_id?: string | null
+          item_id: string
+        }
+        Update: {
+          account_id?: string | null
+          calendar_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          google_event_id?: string | null
+          item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_events_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       items: {
         Row: {
           agent_label: string | null
           body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
           completed_at: string | null
           created_at: string
           deleted_at: string | null
           due_on: string | null
           id: string
           node_id: string
+          parent_item_id: string | null
           priority: number | null
           source: Database["public"]["Enums"]["item_source"]
           status: Database["public"]["Enums"]["item_status"]
@@ -182,12 +299,15 @@ export type Database = {
         Insert: {
           agent_label?: string | null
           body?: string | null
+          changed_agent_label?: string | null
+          changed_source?: Database["public"]["Enums"]["item_source"]
           completed_at?: string | null
           created_at?: string
           deleted_at?: string | null
           due_on?: string | null
           id?: string
           node_id: string
+          parent_item_id?: string | null
           priority?: number | null
           source?: Database["public"]["Enums"]["item_source"]
           status?: Database["public"]["Enums"]["item_status"]
@@ -199,12 +319,15 @@ export type Database = {
         Update: {
           agent_label?: string | null
           body?: string | null
+          changed_agent_label?: string | null
+          changed_source?: Database["public"]["Enums"]["item_source"]
           completed_at?: string | null
           created_at?: string
           deleted_at?: string | null
           due_on?: string | null
           id?: string
           node_id?: string
+          parent_item_id?: string | null
           priority?: number | null
           source?: Database["public"]["Enums"]["item_source"]
           status?: Database["public"]["Enums"]["item_status"]
@@ -219,6 +342,13 @@ export type Database = {
             columns: ["node_id"]
             isOneToOne: false
             referencedRelation: "nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "items_parent_item_id_fkey"
+            columns: ["parent_item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
             referencedColumns: ["id"]
           },
         ]
@@ -300,6 +430,78 @@ export type Database = {
           },
         ]
       }
+      revisions: {
+        Row: {
+          agent_label: string | null
+          created_at: string
+          event_id: string | null
+          id: string
+          item_id: string | null
+          snapshot: Json
+          source: Database["public"]["Enums"]["item_source"]
+        }
+        Insert: {
+          agent_label?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          item_id?: string | null
+          snapshot: Json
+          source: Database["public"]["Enums"]["item_source"]
+        }
+        Update: {
+          agent_label?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          item_id?: string | null
+          snapshot?: Json
+          source?: Database["public"]["Enums"]["item_source"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revisions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revisions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_views: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          position: number
+          query: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          position?: number
+          query: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          position?: number
+          query?: string
+        }
+        Relationships: []
+      }
       usage_counters: {
         Row: {
           count: number
@@ -330,11 +532,77 @@ export type Database = {
         Args: { p_day: string; p_kind: string }
         Returns: number
       }
+      delete_item_branch: {
+        Args: {
+          p_agent_label: string
+          p_item: string
+          p_source: Database["public"]["Enums"]["item_source"]
+        }
+        Returns: {
+          agent_label: string | null
+          body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          due_on: string | null
+          id: string
+          node_id: string
+          parent_item_id: string | null
+          priority: number | null
+          source: Database["public"]["Enums"]["item_source"]
+          status: Database["public"]["Enums"]["item_status"]
+          title: string
+          type: Database["public"]["Enums"]["item_type"]
+          updated_at: string
+          url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       node_subtree: {
         Args: { root: string }
         Returns: {
           id: string
         }[]
+      }
+      restore_item_branch: {
+        Args: {
+          p_agent_label: string
+          p_item: string
+          p_source: Database["public"]["Enums"]["item_source"]
+        }
+        Returns: {
+          agent_label: string | null
+          body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          due_on: string | null
+          id: string
+          node_id: string
+          parent_item_id: string | null
+          priority: number | null
+          source: Database["public"]["Enums"]["item_source"]
+          status: Database["public"]["Enums"]["item_status"]
+          title: string
+          type: Database["public"]["Enums"]["item_type"]
+          updated_at: string
+          url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       seed_demo: { Args: { p_today: string }; Returns: boolean }
       take_usage: {
@@ -353,7 +621,7 @@ export type Database = {
       account_status: "active" | "error" | "revoked"
       item_source: "manual" | "chat" | "agent"
       item_status: "open" | "done"
-      item_type: "task" | "decision" | "link" | "review"
+      item_type: "task" | "decision" | "link" | "review" | "note"
       node_kind: "client" | "project" | "subproject"
     }
     CompositeTypes: {
@@ -485,7 +753,7 @@ export const Constants = {
       account_status: ["active", "error", "revoked"],
       item_source: ["manual", "chat", "agent"],
       item_status: ["open", "done"],
-      item_type: ["task", "decision", "link", "review"],
+      item_type: ["task", "decision", "link", "review", "note"],
       node_kind: ["client", "project", "subproject"],
     },
   },

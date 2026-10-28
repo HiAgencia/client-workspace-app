@@ -1,8 +1,11 @@
 import { z } from "zod";
 import type { ToolContext } from "./context";
 import type { Tool } from "./define";
+import { browseEvents, browseItems } from "./browse";
 import { listEvents } from "./events";
-import { addDecision, addLink, addReview, createTask, deleteItem, listItems, searchItems, updateItem } from "./items";
+import { addDecision, addLink, addNote, addReview, createTask, deleteItem, listItems, searchItems, updateItem } from "./items";
+import { createEvent, deleteEvent, linkTaskEvent, unlinkTaskEvent, updateEvent } from "./local-events";
+import { createGoogleEvent, deleteGoogleEvent, updateGoogleEvent } from "./google-events";
 import { getOverview, listTree } from "./nodes";
 import { fail, type ToolError, type ToolResult } from "./result";
 import { getUpdatesSince } from "./updates";
@@ -11,16 +14,27 @@ import { getUpdatesSince } from "./updates";
 export const tools: Tool[] = [
   listTree,
   getOverview,
+  browseItems,
   listItems,
   searchItems,
   getUpdatesSince,
   listEvents,
+  browseEvents,
   createTask,
+  addNote,
   updateItem,
   addDecision,
   addLink,
   addReview,
   deleteItem,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  createGoogleEvent,
+  updateGoogleEvent,
+  deleteGoogleEvent,
+  linkTaskEvent,
+  unlinkTaskEvent,
 ];
 
 export function findTool(name: string): Tool | undefined {

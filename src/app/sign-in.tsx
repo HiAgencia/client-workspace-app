@@ -58,10 +58,15 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
   async function tryDemo() {
     setBusy("demo");
     setError(null);
-    const { error } = await browserClient(config).auth.signInAnonymously();
-    if (error) {
-      setBusy(null);
-      return setError(`The demo could not start: ${error.message}`);
+    
+    
+    const { data: existing } = await browserClient(config).auth.getSession();
+    if (!existing.session?.user.is_anonymous) {
+      const { error } = await browserClient(config).auth.signInAnonymously();
+      if (error) {
+        setBusy(null);
+        return setError(`The demo could not start: ${error.message}`);
+      }
     }
     
     const seeded = await fetch("/api/demo", {

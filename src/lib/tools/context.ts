@@ -1,4 +1,5 @@
 import type { Db } from "@/lib/db/client";
+import type { GoogleEvent, GoogleEventInput } from "@/lib/google/api";
 import type { CalendarEvent, EventsFailure } from "./events-source";
 
 export type ToolSource = "manual" | "chat" | "agent";
@@ -13,6 +14,13 @@ export type EventsSource = (args: {
 }) => Promise<{ events: CalendarEvent[]; failures: EventsFailure[] }>;
 
 
+export type CalendarWriter = {
+  create(args: { ownerId: string; accountId: string; calendarId: string; event: GoogleEventInput }): Promise<GoogleEvent>;
+  update(args: { ownerId: string; accountId: string; calendarId: string; eventId: string; event: GoogleEventInput }): Promise<GoogleEvent>;
+  remove(args: { ownerId: string; accountId: string; calendarId: string; eventId: string }): Promise<void>;
+};
+
+
 
 
 export type ToolContext = {
@@ -24,4 +32,5 @@ export type ToolContext = {
   
   updatesSince?: string;
   events?: EventsSource;
+  calendar?: CalendarWriter;
 };

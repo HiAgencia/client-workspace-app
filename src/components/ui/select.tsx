@@ -16,12 +16,14 @@ type SelectProps = {
   
   look?: "field" | "chip";
   className?: string;
+  
+  id?: string;
 };
 
 
 
 
-export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", className }: SelectProps) {
+export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", className, id }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
   return (
     <Base.Root
@@ -33,6 +35,7 @@ export function Select({ value, onChange, options, label, placeholder = "Choose�
       modal={false}
     >
       <Base.Trigger
+        id={id}
         
         aria-label={`${label}: ${chosen?.label ?? placeholder}`}
         className={cx("picker", look === "field" ? "field" : "chip-picker", className)}

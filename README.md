@@ -16,7 +16,8 @@ This puts everything current in one place:
 - **A chat on Meta's models that acts on the project**: it creates tasks, records decisions, looks up what is
   pending, and advises — from text, voice, or a screenshot.
 - **An MCP server per project** for the developer's coding agent: "what's new from the client since my last
-  session?", read and written back.
+  session?", read and written back. Its token opens one node of the tree —a client, a project, or a subproject— and
+  everything under it.
 - **One tool layer** behind the screens, the chat, and the MCP server, so everything lands in the same place.
 
 ## Meta models
@@ -41,7 +42,7 @@ The app runs as a Cloudflare Worker built with OpenNext, against a Supabase proj
    spend; `meta` calls Meta Model API with `MODEL_API_KEY`).
 3. Apply the schema: `pnpm db:push` (Supabase CLI linked to the project).
 4. `pnpm preview` builds the Worker and serves it at `http://localhost:8787`, exactly as it is deployed.
-5. To connect a coding agent, open a project, choose "Connect your agent", issue a token, and copy the `.mcp.json`
+5. To connect a coding agent, open a client, project, or subproject, choose "Connect your agent", issue a token, and copy the `.mcp.json`
    block into the repository; the token goes in the `CLIENT_WORKSPACE_TOKEN` environment variable.
 
 `pnpm check` runs route typegen, TypeScript, ESLint, the design system's guard (`scripts/check-system.mjs`), and the

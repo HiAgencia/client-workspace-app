@@ -11,9 +11,14 @@ import { useWorkspace } from "./workspace";
 
 
 
+
 export function Tree() {
   const { tree, treeError } = useWorkspace();
+  const pathname = usePathname();
   const [adding, setAdding] = useState<string | "root" | null>(null);
+  const openId = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1] ?? null;
+  const open = openId ? (tree ?? []).find((node) => node.id === openId) ?? null : null;
+  const parent = adding && adding !== "root" ? (tree ?? []).find((node) => node.id === adding) : undefined;
 
   const children = (parentId: string | null) => (tree ?? []).filter((node) => node.parentId === parentId);
 
@@ -23,12 +28,7 @@ export function Tree() {
       <ul className="tree">
         {nodes.map((node) => (
           <li key={node.id}>
-            <Row node={node} onAdd={() => setAdding(node.id)} />
-            {adding === node.id && (
-              <div className="tree-new">
-                <NewNode parent={node} onDone={() => setAdding(null)} />
-              </div>
-            )}
+            <Row node={node} current={node.id === openId} />
             {children(node.id).length > 0 && branch(node.id)}
           </li>
         ))}
@@ -42,13 +42,32 @@ export function Tree() {
         <h2 id="projects-title" className="t-label">
           Projects
         </h2>
-        <Button variant="quiet" size="sm" className="tree-add" onClick={() => setAdding("root")}>
-          New client
-        </Button>
+        <div className="side-head-actions">
+          {open && (
+            <Button
+              variant="quiet"
+              size="sm"
+              className="tree-add"
+              data-tree-add-child
+              onClick={() => setAdding(open.id)}
+              aria-label={`New ${childKind(open)} in ${open.name}`}
+            >
+              {`New ${childKind(open)}`}
+            </Button>
+          )}
+          <Button variant="quiet" size="sm" className="tree-add" onClick={() => setAdding("root")}>
+            New client
+          </Button>
+        </div>
       </div>
-      {adding === "root" && (
+      {adding && (
         <div className="tree-new">
-          <NewNode onDone={() => setAdding(null)} />
+          {parent && (
+            <p className="t-meta tree-new-where">
+              In <span className="t-name">{parent.path}</span>
+            </p>
+          )}
+          <NewNode key={adding} parent={parent} onDone={() => setAdding(null)} />
         </div>
       )}
       {tree === null ? (
@@ -74,6 +93,10 @@ export function Tree() {
   );
 }
 
+function childKind(node: TreeNode): "project" | "subproject" {
+  return node.kind === "client" ? "project" : "subproject";
+}
+
 function TreeSkeleton({ failed }: { failed: string | null }) {
   if (failed) {
     return (
@@ -91,16 +114,14 @@ function TreeSkeleton({ failed }: { failed: string | null }) {
   );
 }
 
-function Row({ node, onAdd }: { node: TreeNode; onAdd: () => void }) {
-  const pathname = usePathname();
-  const current = pathname === `/app/node/${node.id}` || pathname.startsWith(`/app/node/${node.id}/`);
+function Row({ node, current }: { node: TreeNode; current: boolean }) {
   const open = node.openTasks + node.openReviews;
-  const child = node.kind === "client" ? "project" : "subproject";
   return (
     <div className="tree-row" data-node={node.id}>
       <Link
         href={`/app/node/${node.id}`}
         className="side-link"
+        data-kind={node.kind}
         aria-current={current ? "page" : undefined}
         onClick={(event) => plainClick(event) && requestFocus({ kind: "node", nodeId: node.id })}
       >
@@ -111,12 +132,6 @@ function Row({ node, onAdd }: { node: TreeNode; onAdd: () => void }) {
           </span>
         )}
       </Link>
-      {}
-      {current && (
-        <Button variant="quiet" size="sm" className="tree-add tree-add-child" onClick={onAdd} aria-label={`Add a ${child} under ${node.name}`}>
-          Add a {child}
-        </Button>
-      )}
     </div>
   );
 }
@@ -125,7 +140,7 @@ function NewNode({ parent, onDone }: { parent?: TreeNode; onDone: () => void }) 
   const { saving } = useWorkspace();
   const router = useRouter();
   const [name, setName] = useState("");
-  const what = !parent ? "client" : parent.kind === "client" ? "project" : "subproject";
+  const what = !parent ? "client" : childKind(parent);
   
   const settled = useRef(false);
 
@@ -157,6 +172,8 @@ function NewNode({ parent, onDone }: { parent?: TreeNode; onDone: () => void }) 
   return (
     <Field
       autoFocus
+      id={`new-node-${parent?.id ?? "root"}`}
+      name="node-name"
       aria-label={`New ${what} name`}
       placeholder={`New ${what} name`}
       value={name}

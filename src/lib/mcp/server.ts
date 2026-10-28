@@ -1,10 +1,10 @@
 import { createMcpHandler, McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import type { Db } from "@/lib/db/client";
-import type { EventsSource, ToolContext } from "@/lib/tools/context";
+import type { CalendarWriter, EventsSource, ToolContext } from "@/lib/tools/context";
 import { callTool, tools } from "@/lib/tools/registry";
 import { authenticateAgent, type AgentAccess } from "./auth";
 
-type Dependencies = { service: Db; events?: EventsSource };
+type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter };
 
 function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
   return {
@@ -16,6 +16,7 @@ function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
     
     updatesSince: access.lastReadAt ?? "1970-01-01T00:00:00Z",
     events: deps.events,
+    calendar: deps.calendar,
   };
 }
 
@@ -40,8 +41,10 @@ function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
         annotations: {
           readOnlyHint: definition.readOnly,
           
-          destructiveHint: false,
-          openWorldHint: definition.name === "list_events",
+          
+          destructiveHint: definition.name === "delete_google_event",
+          
+          openWorldHint: ["list_events", "browse_events", "create_google_event", "update_google_event", "delete_google_event"].includes(definition.name),
         },
       },
       async (input: unknown) => {

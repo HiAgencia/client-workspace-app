@@ -6,6 +6,7 @@
   --interior: #eff1ec;
   --interior-hover: #e4e7e0;
   --division: #e2e5df;
+  --guide: #8d9389;
   --read: #f6f7f4;
   --field: #f2f4ef;
   --field-hover: #e9ece6;
@@ -36,6 +37,11 @@
   --warn-ink: #674300;
   --info-tint: #e3eaf7;
   --info-ink: #23407a;
+  --tone-red: #b42318;
+  --tone-amber: #8a5300;
+  --tone-green: #22703a;
+  --tone-blue: #2453a3;
+  --tone-violet: #6a3d9a;
   --focus: #1d6a54;
   --focus-halo: color-mix(in srgb, var(--accent) 24%, transparent);
   --selection-bg: #c6e4d6;
@@ -90,6 +96,7 @@
   --interior: #141613;
   --interior-hover: #0d0f0d;
   --division: #2b2f2a;
+  --guide: #686e66;
   --read: #171a16;
   --field: #0f110f;
   --field-hover: #0a0b0a;
@@ -123,6 +130,12 @@
   --warn-ink: #f1cd7a;
   --info-tint: #1a2539;
   --info-ink: #a9c3f0;
+
+  --tone-red: #ff8f84;
+  --tone-amber: #f1c46a;
+  --tone-green: #86d69a;
+  --tone-blue: #a3c1f5;
+  --tone-violet: #cdb2f3;
 
   --focus: #74d3b0;
   --focus-halo: color-mix(in srgb, var(--accent) 30%, transparent);

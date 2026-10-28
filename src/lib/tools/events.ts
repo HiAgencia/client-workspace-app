@@ -46,7 +46,7 @@ export const listEvents = defineTool({
     "above it), between two moments. Defaults: from now to seven days ahead. Each event says which account and " +
     "calendar it comes from; an account that could not be read is listed under failures.",
   readOnly: true,
-  input: z.object({
+  input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
     from: instant.optional(),
     to: instant.optional(),

@@ -10,10 +10,9 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 
-# Secrets: names live in .env.example
+# Secrets: names live in .dev.vars.example
 .env
 .env.*
-!.env.example
 .dev.vars
 .dev.vars.*
 !.dev.vars.example

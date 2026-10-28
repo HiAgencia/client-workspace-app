@@ -11,7 +11,7 @@ export const PRIORITIES: SelectOption[] = [
   { value: "4", label: "Low", tone: "muted" },
 ];
 
-export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", decision: "Decision", link: "Link", review: "To review" };
+export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "Note", decision: "Decision", link: "Link", review: "To review" };
 
 
 export function Origin({ item }: { item: Item }) {

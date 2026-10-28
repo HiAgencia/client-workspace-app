@@ -24,7 +24,7 @@ export const getUpdatesSince = defineTool({
     "completed, or deleted. Without a moment, an agent's access reads since its previous read (the first time, " +
     "everything in reach). Call it first when starting work to learn what is new in the project.",
   readOnly: true,
-  input: z.object({
+  input: z.strictObject({
     since: z.iso.datetime({ offset: true }).optional().describe("An ISO date-time with its offset."),
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
   }),

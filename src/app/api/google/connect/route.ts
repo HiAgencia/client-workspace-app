@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const db = await userClient();
   const user = await currentUser(db);
   if (!user) return problem(401, "sign in first");
-  if (user.isAnonymous) return problem(403, "the demo shows its own accounts: sign in with Google to connect yours");
+  if (user.isAnonymous) return problem(403, "the demo does not connect Google accounts: sign in with Google to connect yours");
   const deps = await googleDeps();
   if (!deps) return problem(503, `connecting accounts is not configured: ${missingGoogleConfig().join(", ")}`);
   const { data: node, error } = await db.from("nodes").select("id").eq("id", nodeId).maybeSingle();
