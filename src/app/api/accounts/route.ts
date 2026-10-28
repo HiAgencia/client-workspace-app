@@ -4,8 +4,9 @@ import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { currentUser, userClient } from "@/lib/supabase/server";
 
-// The Accounts screen: every connected Google account, the nodes it hangs from, and its calendars. Everything here
-// runs as the signed-in person under row-level security, which never exposes the token columns.
+// The Google accounts of Settings and of each client's and project's page: every connected account, the nodes it is
+// connected to, and its calendars. Everything here runs as the signed-in person under row-level security, which never
+// exposes the token columns.
 export async function GET() {
   const db = await userClient();
   const user = await currentUser(db);

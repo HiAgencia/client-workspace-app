@@ -24,7 +24,7 @@ type Revision = {
 
 const SAY: Record<Exclude<Status, "">, string> = { saving: "Saving…", saved: "Saved", failed: "Not saved" };
 
-const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const by = (source: Revision["source"], label: string | null) => (source === "chat" ? "the chat" : source === "agent" ? `agent ${label}` : "you");
 
 // The item's record in a side panel, not another page: its text (rich, saved when typing stops and on leaving), what
@@ -37,12 +37,15 @@ export function ItemPanel({
   version,
   onClose,
   onOpenItem,
+  onDelete,
 }: {
   item: Item | null;
   saving: Saving;
   version: number;
   onClose: (id: string) => void;
   onOpenItem: (item: Item) => void;
+  // Deleting closes the panel first: the row it came from folds away, and the notice offers to bring it back.
+  onDelete: (item: Item) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [shown, setShown] = useState<Item | null>(null);
@@ -238,6 +241,23 @@ export function ItemPanel({
             />
           )}
           <Versions revisions={revisions} onRestore={restore} />
+          <div className="panel-foot">
+            <Button
+              variant="quiet"
+              size="sm"
+              data-panel-delete
+              onClick={() => {
+                const doomed = current;
+                void flush().then(() => {
+                  dialog.current?.close();
+                  onDelete(doomed);
+                });
+              }}
+            >
+              {`Delete this ${current.parentId && current.type === "task" ? "subtask" : current.type === "review" ? "item" : TYPE_NAMES[current.type].toLowerCase()}`}
+            </Button>
+            {current.type === "task" && <p className="t-meta">What hangs from it goes with it, and Undo brings it all back.</p>}
+          </div>
         </div>
       )}
     </dialog>

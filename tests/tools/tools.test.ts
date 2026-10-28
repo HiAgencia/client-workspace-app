@@ -94,6 +94,7 @@ describe("the registry", () => {
         "delete_event",
         "delete_google_event",
         "delete_item",
+        "get_board",
         "get_overview",
         "get_updates_since",
         "link_task_event",
@@ -109,7 +110,7 @@ describe("the registry", () => {
     );
     for (const tool of tools) expect(tool.description.length).toBeGreaterThan(40);
     expect(tools.filter((tool) => tool.readOnly).map((tool) => tool.name).sort()).toEqual(
-      ["browse_events", "browse_items", "get_overview", "get_updates_since", "list_events", "list_items", "list_tree", "search_items"].sort(),
+      ["browse_events", "browse_items", "get_board", "get_overview", "get_updates_since", "list_events", "list_items", "list_tree", "search_items"].sort(),
     );
   });
 
@@ -395,6 +396,10 @@ describe("a scoped agent", () => {
     expect((await refuse("create_task", ctx, { node: treeA.mobile, title: "Escape" })).code).toBe("not_found");
     expect((await refuse("create_task", ctx, { node: "Acme / Mobile", title: "Escape" })).code).toBe("not_found");
     expect((await refuse("get_overview", ctx, { node: treeA.acme })).code).toBe("not_found");
+    // The board counts its own subtree, and a node outside it is not found either.
+    expect((await refuse("get_board", ctx, { node: treeA.mobile, today: "2026-10-28" })).code).toBe("not_found");
+    const own = await run<{ scope: { id: string | null } }>("get_board", ctx, { today: "2026-10-28" });
+    expect(own.scope.id).toBe(treeA.web);
     const sibling = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Sibling's" });
     expect((await refuse("update_item", ctx, { id: sibling.item.id, title: "Escape" })).code).toBe("not_found");
     expect((await refuse("delete_item", ctx, { id: sibling.item.id })).code).toBe("not_found");
@@ -465,6 +470,69 @@ describe("one read of the tree per context", () => {
     expect(made.ok).toBe(true);
     const { item } = await run<{ item: ItemOut }>("create_task", ctx, { node: "Acme / Fresh project", title: "In the new node" });
     expect(item.nodePath).toBe("Acme / Fresh project");
+  });
+});
+
+describe("the root holds clients and projects of one's own", () => {
+  it("a project is created at the root, its child is a subproject, and a scoped access creates nothing at the root", async () => {
+    const ctx = userCtx(a);
+    const own = await createNode(ctx, { kind: "project", name: "Own side project" });
+    expect(own).toMatchObject({ ok: true, node: { kind: "project", parentId: null } });
+    if (!own.ok) return;
+    const child = await createNode(ctx, { parent: own.node.id, name: "Its first part" });
+    expect(child).toMatchObject({ ok: true, node: { kind: "subproject", parentId: own.node.id } });
+    const client = await createNode(ctx, { name: "Plain client" });
+    expect(client).toMatchObject({ ok: true, node: { kind: "client", parentId: null } });
+    const { nodes } = await run<{ nodes: Array<{ path: string; kind: string }> }>("list_tree", ctx, {});
+    expect(nodes.find((n) => n.path === "Own side project / Its first part")?.kind).toBe("subproject");
+    expect((await createNode(agentCtx(treeA.web), { kind: "project", name: "Escaped" })).ok).toBe(false);
+  });
+});
+
+describe("the board", () => {
+  it("counts what is open, late, due today and in a stretch of days, undated and to review, in total and per node with its subtree", async () => {
+    const c: DisposableUser = await createDisposableUser("board");
+    try {
+      const ctx: ToolContext = { db: c.client, ownerId: c.id, source: "manual" };
+      const client = await node(c, "client", "Board Co");
+      const site = await node(c, "project", "Site", client);
+      const own = await node(c, "project", "Own");
+      await run("create_task", ctx, { node: site, title: "Late", dueOn: "2026-10-26" });
+      await run("create_task", ctx, { node: site, title: "Today", dueOn: "2026-10-28" });
+      await run("create_task", ctx, { node: own, title: "This week", dueOn: "2026-11-01" });
+      await run("create_task", ctx, { node: own, title: "Later", dueOn: "2026-11-20" });
+      await run("create_task", ctx, { node: own, title: "Whenever" });
+      await run("add_review", ctx, { node: client, title: "Look at this" });
+      const { item: finished } = await run<{ item: ItemOut }>("create_task", ctx, { node: site, title: "Finished", dueOn: "2026-10-27" });
+      await run("update_item", ctx, { id: finished.id, status: "done" });
+
+      type Board = { figures: Record<string, number>; nodes: Array<{ id: string } & Record<string, number>> };
+      const board = await run<Board>("get_board", ctx, { today: "2026-10-28", through: "2026-11-01" });
+      expect(board.figures).toEqual({ open: 5, late: 1, dueToday: 1, dueInRange: 2, undated: 1, toReview: 1 });
+      const byId = new Map(board.nodes.map((entry) => [entry.id, entry]));
+      expect(byId.get(client)).toMatchObject({ open: 2, late: 1, dueToday: 1, toReview: 1 });
+      expect(byId.get(site)).toMatchObject({ open: 2, late: 1, toReview: 0 });
+      expect(byId.get(own)).toMatchObject({ open: 3, late: 0, dueInRange: 1, undated: 1 });
+      // The whole week, its first days included, is the stretch the Tasks section of the same week lists.
+      const week = await run<Board>("get_board", ctx, { today: "2026-10-28", from: "2026-10-26", through: "2026-11-01" });
+      expect(week.figures.dueInRange).toBe(3);
+      expect((await refuse("get_board", ctx, { today: "2026-10-28", from: "2026-11-01", through: "2026-10-26" })).code).toBe("invalid_input");
+      // One node and what is below it.
+      const scoped = await run<Board>("get_board", ctx, { node: own, today: "2026-10-28" });
+      expect(scoped.figures).toMatchObject({ open: 3, dueInRange: 0, undated: 1 });
+      expect(scoped.nodes.map((entry) => entry.id)).toEqual([own]);
+
+      // A task with subtasks says how many are open and done, whichever of them the filters let through.
+      const { item: parent } = await run<{ item: ItemOut }>("create_task", ctx, { node: site, title: "With steps" });
+      await run("create_task", ctx, { parent: parent.id, title: "First step" });
+      const { item: second } = await run<{ item: ItemOut }>("create_task", ctx, { parent: parent.id, title: "Second step" });
+      await run("update_item", ctx, { id: second.id, status: "done" });
+      const browsed = await run<{ items: Array<ItemOut & { subtasks?: { open: number; done: number } }> }>("browse_items", ctx, { node: site, type: ["task"], status: "open" });
+      expect(browsed.items.find((item) => item.id === parent.id)?.subtasks).toEqual({ open: 1, done: 1 });
+      expect(browsed.items.find((item) => item.title === "Late")?.subtasks).toBeUndefined();
+    } finally {
+      await deleteDisposableUsers([c]);
+    }
   });
 });
 
@@ -582,6 +650,17 @@ describe("notes, subtasks, links, and branches", () => {
     const { item: link } = await run<{ item: ItemOut }>("add_link", userCtx(a), { parent: task.id, url: "https://example.com/deep", title: "Deep link" });
     const overview = await run<{ links: ItemOut[] }>("get_overview", userCtx(a), { node: treeA.acme });
     expect(overview.links.some((l) => l.id === link.id && l.nodePath === "Acme / Web / Landing")).toBe(true);
+  });
+
+  it("a client finds the notes and decisions of its projects, and a task's note stays with its task", async () => {
+    const { item: note } = await run<{ item: ItemOut }>("add_note", userCtx(a), { node: treeA.webLanding, text: "<p>Deep note</p>" });
+    const { item: decision } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.mobile, decision: "Deep decision" });
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Task with a note" });
+    const { item: onTask } = await run<{ item: ItemOut }>("add_note", userCtx(a), { parent: task.id, text: "<p>On the task</p>" });
+    const overview = await run<{ notes: ItemOut[]; decisions: ItemOut[] }>("get_overview", userCtx(a), { node: treeA.acme });
+    expect(overview.notes.some((n) => n.id === note.id && n.nodePath === "Acme / Web / Landing")).toBe(true);
+    expect(overview.decisions.some((d) => d.id === decision.id && d.nodePath === "Acme / Mobile")).toBe(true);
+    expect(overview.notes.some((n) => n.id === onTask.id)).toBe(false);
   });
 });
 

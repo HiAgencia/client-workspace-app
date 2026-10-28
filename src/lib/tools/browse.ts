@@ -8,7 +8,7 @@ import { fail, isError, ok } from "./result";
 import { byPriorityThenDue, itemSchema, itemTypes, newestFirst, selectAllItems, toItem, type Item } from "./rows";
 import { loadScope, resolveNode, subtree, type Scope, type TreeNode } from "./tree";
 
-// The reading the central panel, Today, the calendar, the chat, and the MCP share: items by node and subtree with every
+// The reading the board's sections, the calendar, the chat, and the MCP share: items by node and subtree with every
 // filter and its count, and the events of a range from the Google accounts and the workspace's own, deduplicated.
 
 const sources = ["manual", "chat", "agent"] as const;
@@ -114,7 +114,8 @@ export const browseItems = defineTool({
   }),
   output: z.object({
     scope: z.object({ id: z.string().nullable(), path: z.string() }),
-    items: z.array(itemSchema),
+    // A task with subtasks says how many are open and done, whatever the filters let through.
+    items: z.array(itemSchema.extend({ subtasks: z.object({ open: z.number(), done: z.number() }).optional() })),
     total: z.number(),
     counts: facetCounts,
   }),
@@ -142,9 +143,17 @@ export const browseItems = defineTool({
         : input.sort === "due"
           ? matched.sort((a, b) => (a.dueOn ?? "9999") < (b.dueOn ?? "9999") ? -1 : (a.dueOn ?? "9999") > (b.dueOn ?? "9999") ? 1 : byPriorityThenDue(a, b))
           : [...matched.filter((i) => i.type === "task").sort(byPriorityThenDue), ...matched.filter((i) => i.type !== "task").sort(newestFirst)];
+    // A subtask lives in its parent's node, so the rows read already hold every subtask of every task they hold.
+    const subtasks = new Map<string, { open: number; done: number }>();
+    for (const row of read.rows) {
+      if (row.type !== "task" || !row.parent_item_id) continue;
+      const count = subtasks.get(row.parent_item_id) ?? { open: 0, done: 0 };
+      count[row.status]++;
+      subtasks.set(row.parent_item_id, count);
+    }
     return ok({
       scope: { id: node?.id ?? null, path: node?.path ?? "Everything" },
-      items: ordered.slice(0, input.limit),
+      items: ordered.slice(0, input.limit).map((item) => (subtasks.has(item.id) ? { ...item, subtasks: subtasks.get(item.id) } : item)),
       total: ordered.length,
       counts,
     });

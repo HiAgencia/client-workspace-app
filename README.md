@@ -9,8 +9,9 @@ in its own browser profile, each with its own calendar. Keeping up means checkin
 
 This puts everything current in one place:
 
-- **A client → project → subproject tree** with tasks, priorities, decisions, links, and things to review. Useful
-  without AI: open it, write it down, keep going.
+- **Clients and projects of your own**, each project with its subprojects, tasks, priorities, decisions, links, and
+  items to review, and an Overview that shows what is late, due, and waiting across all of them. Useful without AI:
+  open it, write it down, keep going.
 - **Google accounts and calendars attached to each node**, with inheritance: an agency account shows in every
   project, an account shared with a client shows in that client's projects, a project's own account only there.
 - **A chat on Meta's models that acts on the project**: it creates tasks, records decisions, looks up what is
@@ -25,7 +26,7 @@ This puts everything current in one place:
 | Model | Used for |
 |---|---|
 | `muse-spark-1.3` | The chat: tool calling over the project, image understanding |
-| `muse-voice-transcribe-1.0` | Voice notes into the chat |
+| `muse-voice-transcribe-1.0` | Dictation into the chat |
 
 ## Built during the event
 
@@ -42,14 +43,15 @@ The app runs as a Cloudflare Worker built with OpenNext, against a Supabase proj
    spend; `meta` calls Meta Model API with `MODEL_API_KEY`).
 3. Apply the schema: `pnpm db:push` (Supabase CLI linked to the project).
 4. `pnpm preview` builds the Worker and serves it at `http://localhost:8787`, exactly as it is deployed.
-5. To connect a coding agent, open a client, project, or subproject, choose "Connect your agent", issue a token, and copy the `.mcp.json`
-   block into the repository; the token goes in the `CLIENT_WORKSPACE_TOKEN` environment variable.
+5. To connect a coding agent, open a client, project, or subproject, choose "Issue an agent token" (it opens Settings
+   with that place chosen), issue a token, and copy the `.mcp.json` block into the repository; the token goes in the
+   `CLIENT_WORKSPACE_TOKEN` environment variable.
 
 `pnpm check` runs route typegen, TypeScript, ESLint, the design system's guard (`scripts/check-system.mjs`), and the
 tests (the integration tests use the Supabase project with throwaway users). `pnpm icons` draws the site's icons from
 the brand mark.
 
-Press Ctrl+K (Cmd+K on a Mac) anywhere in the workspace to find a project, a task, or an action.
+Press Ctrl+K (Cmd+K on a Mac) anywhere in the workspace to find a client, a project, a task, or an action.
 
 ## Documentation
 

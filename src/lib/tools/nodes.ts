@@ -5,7 +5,7 @@ import { eventsForNode } from "./events";
 import { localEventsIn } from "./local-events";
 import { eventsFailureSchema } from "./events-source";
 import { isError, ok } from "./result";
-import { byPriorityThenDue, itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
+import { byPriorityThenDue, countInSubtrees, itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
 import { loadScope, resolveNode, subtree } from "./tree";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -23,9 +23,9 @@ const treeNodeSchema = z.object({
 export const listTree = defineTool({
   name: "list_tree",
   description:
-    "List the client → project → subproject tree reachable here (or below one node), each node with its path and " +
-    "what is pending in it and everything below it: open tasks (subtasks included) and things to review. Use it to " +
-    "find where something belongs before writing.",
+    "List the tree reachable here (or below one node): clients and the person's own projects at the root, a client's " +
+    "projects, and subprojects below a project; each node with its path and what is pending in it and everything below " +
+    "it: open tasks (subtasks included) and items to review. Use it to find where something belongs before writing.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("List only this node and what is below it: its id or path."),
@@ -48,17 +48,9 @@ export const listTree = defineTool({
       "counting open items",
     );
     if (isError(read)) return read;
-    // A node's number is what is pending in its whole subtree —open tasks, subtasks included, and open things to
-    // review—: each open item counts in its node and in every ancestor up to the root.
-    const counts = new Map<string, { tasks: number; reviews: number }>();
-    for (const row of read.rows) {
-      for (let id: string | null = row.node_id; id; id = scope.all.get(id)?.parentId ?? null) {
-        const count = counts.get(id) ?? { tasks: 0, reviews: 0 };
-        if (row.type === "task") count.tasks++;
-        else count.reviews++;
-        counts.set(id, count);
-      }
-    }
+    // A node's numbers are what is pending in its whole subtree —open tasks, subtasks included, and open things to
+    // review—, counted by the same walk as the board's figures.
+    const { perNode: counts } = countInSubtrees(read.rows, scope, new Set(ids), ["tasks", "reviews"], (row) => [row.type === "task" ? "tasks" : "reviews"]);
     const nodes = ids
       .map((id) => scope.all.get(id)!)
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
@@ -78,13 +70,14 @@ export const listTree = defineTool({
 export const getOverview = defineTool({
   name: "get_overview",
   description:
-    "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), its notes, " +
-    "recent decisions, the links of the node and of everything below it, what the nodes below hold (below), open things to " +
-    "review, its subprojects, and the events of the next seven days from its accounts. Start here to answer what " +
-    "is pending or to advise on what to do next.",
+    "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), the notes, recent " +
+    "decisions, and links of the node and of everything below it (each with its nodePath), what the nodes below hold " +
+    "(below), open things to review, its subprojects, and the events of the next seven days from its accounts. Start " +
+    "here to answer what is pending or to advise on what to do next.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
+    withEvents: z.boolean().default(true).describe("Read the next seven days of events too (the default)."),
   }),
   output: z.object({
     node: z.object({ id: z.string(), path: z.string(), kind: z.string() }),
@@ -108,16 +101,18 @@ export const getOverview = defineTool({
     if (isError(resolved)) return resolved;
     const node = resolved.node;
     const below = [...subtree(scope.all, node.id)].filter((id) => scope.reachable.has(id));
-    const [read, linksRead] = await Promise.all([
+    const [read, subtreeRead] = await Promise.all([
       selectAllItems(ctx, [node.id], (query) => query.is("deleted_at", null), "reading the node"),
-      // What is below: links are found from every node above them, and the rest is summed so an empty node says where
-      // the work is.
+      // The node and what is below it: notes, decisions, and links are found from every node above them, and the rest is
+      // summed so the node says where its work is.
       selectAllItems(ctx, below, (query) => query.is("deleted_at", null), "reading what is below"),
     ]);
     if (isError(read)) return read;
-    if (isError(linksRead)) return linksRead;
+    if (isError(subtreeRead)) return subtreeRead;
     const items = read.rows.map((row) => toItem(row, scope));
-    const deeper = linksRead.rows.filter((row) => row.node_id !== node.id);
+    const kept = (type: "note" | "decision" | "link") =>
+      subtreeRead.rows.filter((row) => row.type === type && (type !== "note" || row.parent_item_id === null)).map((row) => toItem(row, scope)).sort(newestFirst);
+    const deeper = subtreeRead.rows.filter((row) => row.node_id !== node.id);
     const summary = (type: "task" | "decision" | "review" | "note", open: boolean) => {
       const rows = deeper.filter((row) => row.type === type && (!open || row.status === "open"));
       const where = new Map<string, number>();
@@ -127,15 +122,18 @@ export const getOverview = defineTool({
     };
     const now = new Date();
     const until = new Date(now.getTime() + 7 * DAY_MS);
-    // The agenda: the accounts the node sees and the workspace's own events of its subtree, for the next seven days.
-    const [google, local] = await Promise.all([
-      eventsForNode(ctx, node, now.toISOString(), until.toISOString()),
-      // The Worker's day is UTC: half a day back reaches today's whole-day events for someone west of it.
-      localEventsIn(ctx, scope, below, new Date(now.getTime() - 14 * 3_600_000).toISOString().slice(0, 10), until.toISOString().slice(0, 10), {
-        from: now.toISOString(),
-        to: until.toISOString(),
-      }),
-    ]);
+    // The agenda: the accounts the node sees and the workspace's own events of its subtree, for the next seven days. A
+    // screen that reads its agenda on its own asks without it.
+    const [google, local] = input.withEvents
+      ? await Promise.all([
+          eventsForNode(ctx, node, now.toISOString(), until.toISOString()),
+          // The Worker's day is UTC: half a day back reaches today's whole-day events for someone west of it.
+          localEventsIn(ctx, scope, below, new Date(now.getTime() - 14 * 3_600_000).toISOString().slice(0, 10), until.toISOString().slice(0, 10), {
+            from: now.toISOString(),
+            to: until.toISOString(),
+          }),
+        ])
+      : [{ events: [], failures: [] }, ok({ events: [] })];
     if (isError(local)) return local;
     const failures = google.failures;
     const events = [
@@ -148,9 +146,10 @@ export const getOverview = defineTool({
         .filter((child) => child.parentId === node.id && scope.reachable.has(child.id))
         .map((child) => ({ id: child.id, name: child.name })),
       openTasks: items.filter((item) => item.type === "task" && item.status === "open").sort(byPriorityThenDue),
-      notes: items.filter((item) => item.type === "note" && item.parentId === null).sort(newestFirst).slice(0, 20),
-      decisions: items.filter((item) => item.type === "decision").sort(newestFirst).slice(0, 10),
-      links: linksRead.rows.filter((row) => row.type === "link").map((row) => toItem(row, scope)).sort(newestFirst).slice(0, 30),
+      // A note hanging from a task is the task's: it reads in the task's details, not here.
+      notes: kept("note").slice(0, 20),
+      decisions: kept("decision").slice(0, 10),
+      links: kept("link").slice(0, 30),
       below: {
         openTasks: summary("task", true),
         notes: summary("note", false),

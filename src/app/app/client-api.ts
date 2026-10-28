@@ -55,9 +55,15 @@ export type Item = {
   dueOn: string | null;
   source: "manual" | "chat" | "agent";
   agentLabel: string | null;
+  // Who made the last change, and when it was completed.
+  changedSource?: "manual" | "chat" | "agent";
+  changedAgentLabel?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
   deletedAt?: string | null;
+  // A task with subtasks, as a browse reads it: how many of them are open and done.
+  subtasks?: { open: number; done: number };
 };
 
 export type TreeNode = {
@@ -88,3 +94,7 @@ export type CalendarEvent = {
 };
 
 export type EventsFailure = { accountId: string; accountEmail: string; reason: string };
+
+// The board's figures, in total and per node (each node counting its subtree), from `get_board`.
+export type BoardFigures = { open: number; late: number; dueToday: number; dueInRange: number; undated: number; toReview: number };
+export type Board = { scope: { id: string | null; path: string }; figures: BoardFigures; nodes: Array<BoardFigures & { id: string }> };

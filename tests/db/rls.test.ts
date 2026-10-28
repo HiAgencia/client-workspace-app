@@ -119,18 +119,44 @@ describe("nodes", () => {
     expect(still.name).toBe("B Client");
   });
 
-  it("the tree rules hold: a root is a client, a client's child is a project, no move under its own subtree", async () => {
-    const rootProject = await userA().from("nodes").insert({ owner_id: a!.id, kind: "project", name: "Loose" });
-    expect(rootProject.error?.code).toBe("23514");
+  it("the tree rules hold: a root is a client or a project, a client's child is a project, no move under its own subtree", async () => {
+    // A project of one's own stands at the root, and takes subprojects below it.
+    const rootProject = await userA().from("nodes").insert({ owner_id: a!.id, kind: "project", name: "Own project" }).select("id").single();
+    expect(rootProject.error).toBeNull();
+    const below = await userA()
+      .from("nodes")
+      .insert({ owner_id: a!.id, kind: "subproject", name: "Below own", parent_id: rootProject.data!.id })
+      .select("id")
+      .single();
+    expect(below.error).toBeNull();
+    const rootSubproject = await userA().from("nodes").insert({ owner_id: a!.id, kind: "subproject", name: "Loose" });
+    expect(rootSubproject.error?.code).toBe("23514");
+    const nestedClient = await userA()
+      .from("nodes")
+      .insert({ owner_id: a!.id, kind: "client", name: "Nested", parent_id: rootProject.data!.id });
+    expect(nestedClient.error?.code).toBe("23514");
     const wrongChild = await userA()
       .from("nodes")
       .insert({ owner_id: a!.id, kind: "subproject", name: "Wrong", parent_id: treeA.root });
     expect(wrongChild.error?.code).toBe("23514");
-    const cycle = await userA()
-      .from("nodes")
-      .update({ parent_id: treeA.subproject, kind: "subproject" })
-      .eq("id", treeA.project);
+    // A node keeps its kind: flipping a root project that holds a subproject to a client would leave a subproject under
+    // a client.
+    const flipped = await userA().from("nodes").update({ kind: "client" }).eq("id", rootProject.data!.id);
+    expect(flipped.error?.code).toBe("23514");
+    expect(flipped.error?.message).toContain("keeps its kind");
+    const demoted = await userA().from("nodes").update({ parent_id: treeA.subproject, kind: "subproject" }).eq("id", treeA.project);
+    expect(demoted.error?.code).toBe("23514");
+    const renamed = await userA().from("nodes").update({ name: "Own project, renamed" }).eq("id", rootProject.data!.id).select("name, kind").single();
+    expect(renamed.error).toBeNull();
+    expect(renamed.data).toEqual({ name: "Own project, renamed", kind: "project" });
+    // No move under its own subtree, with the kind unchanged.
+    const deeper = must(
+      await userA().from("nodes").insert({ owner_id: a!.id, kind: "subproject", name: "Deeper", parent_id: below.data!.id }).select("id").single(),
+      "insert deeper",
+    );
+    const cycle = await userA().from("nodes").update({ parent_id: deeper.id }).eq("id", below.data!.id);
     expect(cycle.error?.code).toBe("23514");
+    expect(cycle.error?.message).toContain("own subtree");
   });
 });
 
@@ -215,6 +241,25 @@ describe("accounts and tokens", () => {
     expect(foreign.error?.code).toBe("42501");
     const hash = await userA().from("agent_tokens").select("token_hash").eq("node_id", treeA.project);
     expect(hash.error?.code).toBe("42501");
+  });
+
+  it("the workspace's conversation and each node's belong to their owner", async () => {
+    // Without a node a message is the workspace's own conversation; its owner is the signed-in person by default.
+    const own = await userA().from("chat_messages").insert({ node_id: null, role: "user", parts: [{ type: "text", text: "A asks" }] }).select("id, owner_id").single();
+    expect(own.error).toBeNull();
+    expect(own.data!.owner_id).toBe(a!.id);
+    const theirs = must(
+      await b!.client.from("chat_messages").insert({ node_id: null, role: "user", parts: [{ type: "text", text: "B asks" }] }).select("id").single(),
+      "B's message",
+    );
+    const read = await userA().from("chat_messages").select("id").in("id", [own.data!.id, theirs.id]);
+    expect(read.data?.map((row) => row.id)).toEqual([own.data!.id]);
+    const forged = await userA().from("chat_messages").insert({ owner_id: b!.id, node_id: null, role: "user", parts: [] });
+    expect(forged.error?.code).toBe("42501");
+    const intoForeignNode = await userA().from("chat_messages").insert({ node_id: treeB.project, role: "user", parts: [] });
+    expect(intoForeignNode.error?.code).toBe("42501");
+    const deleted = await userA().from("chat_messages").delete().eq("id", theirs.id).select("id");
+    expect(deleted.data).toEqual([]);
   });
 
   it("A cannot write its own usage counters", async () => {

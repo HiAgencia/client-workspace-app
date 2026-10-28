@@ -3,14 +3,14 @@ import { editDistance, matchScore, normalize, prepare, rank } from "./fuzzy";
 
 describe("search that forgives typing", () => {
   it("finds a name with a missing letter, a swapped pair, or a wrong one", () => {
-    expect(matchScore("nortwind", "Northwind Bakery")).toBeGreaterThan(0);
+    expect(matchScore("larkspr", "Larkspur Bakery")).toBeGreaterThan(0);
     expect(matchScore("webiste", "Website")).toBeGreaterThan(0);
     expect(matchScore("brnd refresh", "Brand refresh")).toBeGreaterThan(0);
     expect(matchScore("logo directons", "Present two logo directions")).toBeGreaterThan(0);
   });
 
   it("finds a word still being typed, with a typo in it", () => {
-    expect(matchScore("nortw", "Northwind Bakery")).toBeGreaterThan(0);
+    expect(matchScore("larksp", "Larkspur Bakery")).toBeGreaterThan(0);
   });
 
   it("ignores accents and case, and keeps ñ as its own letter", () => {
@@ -20,8 +20,8 @@ describe("search that forgives typing", () => {
   });
 
   it("needs every typed word to match, in any order", () => {
-    expect(matchScore("bakery northwind", "Northwind Bakery")).toBeGreaterThan(0);
-    expect(matchScore("northwind atlas", "Northwind Bakery")).toBe(0);
+    expect(matchScore("bakery larkspur", "Larkspur Bakery")).toBeGreaterThan(0);
+    expect(matchScore("larkspur atlas", "Larkspur Bakery")).toBe(0);
   });
 
   it("does not match what is merely near in a short word", () => {

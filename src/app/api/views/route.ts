@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { boardQuery } from "@/lib/board-params";
 import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
 
-// A person's saved views of the central panel: a name and the panel's URL parameters, listed in the sidebar.
+// A person's saved views of the Overview: a name and the board's URL parameters, offered in the Overview's own bar.
 export async function GET() {
   const session = await sessionContext("manual");
   if (!session) return problem(401, "not signed in");
@@ -36,15 +37,11 @@ export async function POST(request: Request) {
     if (error) return problem(500, "the view could not be deleted");
     return json({ ok: true });
   }
-  // Only the panel's own parameters are kept, so a saved view reproduces exactly its filters.
-  const kept = new URLSearchParams();
-  for (const [key, value] of new URLSearchParams(body.value.query)) {
-    if (["view", "date", "scope", "type", "status", "priority", "source"].includes(key) && value) kept.set(key, value);
-  }
+  // Only the board's own parameters are kept, so a saved view reproduces exactly its filters.
   // Saving under a name that exists replaces what it shows.
   const { data, error } = await db
     .from("saved_views")
-    .upsert({ owner_id: session.user.id, name: body.value.name, query: kept.toString() }, { onConflict: "owner_id,name" })
+    .upsert({ owner_id: session.user.id, name: body.value.name, query: boardQuery(body.value.query) }, { onConflict: "owner_id,name" })
     .select("id, name, query, position")
     .single();
   if (error) {

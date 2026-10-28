@@ -8,7 +8,8 @@ import type { Item } from "./client-api";
 // lands on it.
 export type FocusTarget =
   | { kind: "node"; nodeId: string }
-  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"] }
+  // A done task or a reviewed item lives behind its section's other tab: `done` says so.
+  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"]; done?: boolean }
   | { kind: "quick-add"; nodeId: string; type: Item["type"] };
 
 export type FocusRequest = { target: FocusTarget; acted: boolean };

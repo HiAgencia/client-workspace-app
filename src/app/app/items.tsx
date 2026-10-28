@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
-import { Select } from "@/components/ui/select";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { richTextToPlain } from "@/lib/rich-text";
-import { post, tool, type Item } from "./client-api";
+import { tool, type Item } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
-import { Origin, PRIORITIES } from "./item-parts";
+import { Origin, PathText, PRIORITIES } from "./item-parts";
 import { useWorkspace } from "./workspace";
 
 // A redrawn list travels: what moved goes from its old place to the new one, and what arrives enters; nothing jumps.
@@ -49,13 +49,12 @@ export function ItemList({ items, children, nested }: { items: Item[]; children:
   );
 }
 
-// One row: title, priority, due date, and status change in place; Enter confirms, Esc cancels; delete folds the row
-// away and offers undo.
+// One row: title, priority, due date, and status change in place; Enter confirms, Esc cancels. The rest of the item
+// —its notes, what hangs from it, its versions, and deleting it— is in its details.
 export function ItemRow({ item, showPath = false, below }: { item: Item; showPath?: boolean; below?: ReactNode }) {
-  const { saving, notify, touch, openItem } = useWorkspace();
+  const { saving, openItem } = useWorkspace();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
-  const [leaving, setLeaving] = useState(false);
   const row = useRef<HTMLDivElement>(null);
   const titleButton = useRef<HTMLButtonElement>(null);
   const previous = useRef(item);
@@ -73,29 +72,7 @@ export function ItemRow({ item, showPath = false, below }: { item: Item; showPat
     setTitle(item.title);
   }, [item]);
 
-  // The fold lives on the list item around the row, which travels with the list.
-  useEffect(() => {
-    row.current?.parentElement?.toggleAttribute("data-leaving", leaving);
-  }, [leaving]);
-
   const update = (change: Record<string, unknown>) => saving(tool("update_item", { id: item.id, ...change }));
-
-  async function remove() {
-    setLeaving(true);
-    // The row folds away first; then it is deleted, and the notice offers to bring it back.
-    await new Promise((resolve) => setTimeout(resolve, 220));
-    const answer = await tool("delete_item", { id: item.id });
-    if (!answer.ok) {
-      setLeaving(false);
-      return notify({ text: answer.message, tone: "error" });
-    }
-    touch();
-    notify({
-      text: `Deleted “${item.title}”`,
-      tone: "status",
-      undo: () => void saving(post(`/api/items/${item.id}/restore`, {})),
-    });
-  }
 
   // Enter commits and the field's blur on unmounting would commit again: the first one wins.
   const committing = useRef(false);
@@ -136,7 +113,6 @@ export function ItemRow({ item, showPath = false, below }: { item: Item; showPat
       data-item={item.id}
       data-type={item.type}
       data-done={done}
-      inert={leaving}
     >
       {checkable && (
         <span className="row-check">
@@ -193,14 +169,11 @@ export function ItemRow({ item, showPath = false, below }: { item: Item; showPat
       <div className="row-act">
         {item.url && (item.type === "link" || item.type === "review") && (
           <a className="btn btn-quiet btn-sm" href={item.url} target="_blank" rel="noopener noreferrer">
-            <span className="btn-label">Open link</span>
+            <span className="btn-label">Open the link</span>
           </a>
         )}
         <Button variant="quiet" size="sm" data-detail onClick={() => openItem(item)} aria-label={`Details of “${item.title}”`}>
           Details
-        </Button>
-        <Button variant="quiet" size="sm" onClick={() => void remove()} aria-label={`Delete “${item.title}”`}>
-          Delete
         </Button>
       </div>
     </div>
@@ -217,9 +190,9 @@ function RowMeta({ item, showPath }: { item: Item; showPath: boolean }) {
           className="link link-meta"
           href={`/app/node/${item.nodeId}`}
           data-path
-          onClick={(event) => plainClick(event) && requestFocus({ kind: "item", nodeId: item.nodeId, itemId: item.id, title: item.title, type: item.type })}
+          onClick={(event) => plainClick(event) && requestFocus({ kind: "item", nodeId: item.nodeId, itemId: item.id, title: item.title, type: item.type, done: item.status === "done" })}
         >
-          {item.nodePath}
+          <PathText path={item.nodePath} />
         </Link>
       )}
       {item.type === "link" && item.url && <span className="t-meta nowrap-ellipsis">{hostOf(item.url)}</span>}
@@ -236,20 +209,32 @@ function hostOf(url: string): string {
   }
 }
 
-// Quick add on one line: a task takes priority and due date right there; Enter adds and keeps the line ready.
-export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] }) {
+// Quick add on one line: a task takes priority and due date right there; Enter adds and keeps the line ready. Where a
+// section covers several places —the Overview, a client— the line also says where the task goes, starting on the
+// section's own node when it has one.
+export function QuickAdd({ nodeId, type, places }: { nodeId?: string; type: Item["type"]; places?: SelectOption[] }) {
   const { saving } = useWorkspace();
   const [title, setTitle] = useState("");
   const [extra, setExtra] = useState("");
   const [priority, setPriority] = useState("4");
   const [dueOn, setDueOn] = useState<string | null>(null);
+  const [where, setWhere] = useState<string | null>(nodeId ?? null);
+  const [whereMissing, setWhereMissing] = useState(false);
+  // A section that changes its node starts the line on the new one.
+  const [nodeSeen, setNodeSeen] = useState(nodeId);
+  if (nodeSeen !== nodeId) {
+    setNodeSeen(nodeId);
+    setWhere(nodeId ?? null);
+  }
   // While a send travels a second press does nothing: one intent makes one item.
   const sending = useRef(false);
   const [busy, setBusy] = useState(false);
+  const target = places ? where : (nodeId ?? null);
 
   async function add() {
     if (sending.current) return;
     if (type === "link" ? !extra.trim() : !title.trim()) return;
+    if (!target) return setWhereMissing(true);
     sending.current = true;
     setBusy(true);
     try {
@@ -261,16 +246,17 @@ export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] 
   }
 
   async function send() {
+    const node = target!;
     const request =
       type === "task"
-        ? tool("create_task", { node: nodeId, title, priority: Number(priority), ...(dueOn ? { dueOn } : {}) })
+        ? tool("create_task", { node, title, priority: Number(priority), ...(dueOn ? { dueOn } : {}) })
         : type === "note"
-          ? tool("add_note", { node: nodeId, text: title })
+          ? tool("add_note", { node, text: title })
           : type === "decision"
-          ? tool("add_decision", { node: nodeId, decision: title, ...(extra.trim() ? { rationale: extra } : {}) })
+          ? tool("add_decision", { node, decision: title, ...(extra.trim() ? { rationale: extra } : {}) })
           : type === "link"
-            ? tool("add_link", { node: nodeId, url: extra, ...(title.trim() ? { title } : {}) })
-            : tool("add_review", { node: nodeId, title, ...(extra.trim() ? { url: extra } : {}) });
+            ? tool("add_link", { node, url: extra, ...(title.trim() ? { title } : {}) })
+            : tool("add_review", { node, title, ...(extra.trim() ? { url: extra } : {}) });
     if (await saving(request)) {
       setTitle("");
       setExtra("");
@@ -285,23 +271,44 @@ export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] 
   const extraLabel = { task: "", note: "", decision: "Why (optional)", link: "Address (https://…)", review: "Link (optional)" }[type];
 
   return (
-    <div className="quick-add" data-quick-add={type}>
-      {type === "link" && (
-        <Field aria-label={extraLabel} placeholder={extraLabel} className="grow" value={extra} onChange={(e) => setExtra(e.target.value)} onKeyDown={onKey} />
+    <div className="quick-add-block">
+      <div className="quick-add" data-quick-add={type}>
+        {type === "link" && (
+          <Field aria-label={extraLabel} placeholder={extraLabel} className="grow" value={extra} onChange={(e) => setExtra(e.target.value)} onKeyDown={onKey} />
+        )}
+        <Field aria-label={label} placeholder={label} className={type === "link" ? "second" : "grow"} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={onKey} />
+        {places && (
+          <div className="quick-add-where">
+            <Select
+              label={`Where the new ${type === "task" ? "task" : "item"} goes`}
+              placeholder="Client or project…"
+              value={where}
+              options={places}
+              onChange={(value) => {
+                setWhere(value);
+                setWhereMissing(false);
+              }}
+            />
+          </div>
+        )}
+        {type === "task" && (
+          <>
+            <Select label="Priority of the new task" value={priority} options={PRIORITIES} onChange={setPriority} />
+            <DatePicker label="Due date of the new task" value={dueOn} onChange={setDueOn} />
+          </>
+        )}
+        {(type === "decision" || type === "review") && (
+          <Field aria-label={extraLabel} placeholder={extraLabel} className="second" value={extra} onChange={(e) => setExtra(e.target.value)} onKeyDown={onKey} />
+        )}
+        <Button variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy}>
+          {busy ? "Adding…" : "Add"}
+        </Button>
+      </div>
+      {whereMissing && (
+        <p className="inline-note" data-tone="alert" role="alert">
+          Pick where the new task goes: a client, a project, or a subproject.
+        </p>
       )}
-      <Field aria-label={label} placeholder={label} className={type === "link" ? "second" : "grow"} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={onKey} />
-      {type === "task" && (
-        <>
-          <Select label="Priority of the new task" value={priority} options={PRIORITIES} onChange={setPriority} />
-          <DatePicker label="Due date of the new task" value={dueOn} onChange={setDueOn} />
-        </>
-      )}
-      {(type === "decision" || type === "review") && (
-        <Field aria-label={extraLabel} placeholder={extraLabel} className="second" value={extra} onChange={(e) => setExtra(e.target.value)} onKeyDown={onKey} />
-      )}
-      <Button variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy}>
-        {busy ? "Adding…" : "Add"}
-      </Button>
     </div>
   );
 }

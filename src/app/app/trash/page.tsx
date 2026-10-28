@@ -10,7 +10,7 @@ import { useWorkspace } from "../workspace";
 
 type Entry = Item & { branch: number; deletedAt: string };
 
-const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // The trash: what was deleted, each branch once by the item it was deleted with, and its restore, which brings the
 // whole branch back.
@@ -54,7 +54,7 @@ export default function TrashPage() {
             <div className="empty">
               <p className="t-help">Nothing deleted. What you delete waits here until you restore it.</p>
               <Link className={buttonClass({ size: "sm" })} href="/app">
-                <span className="btn-label">Go to Today</span>
+                <span className="btn-label">Go to the Overview</span>
               </Link>
             </div>
           </section>

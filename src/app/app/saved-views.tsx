@@ -1,21 +1,34 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Select } from "@/components/ui/select";
+import { boardQuery } from "@/lib/board-params";
 import { get, post } from "./client-api";
-import { PANEL_LAST_KEY } from "./panel-state";
 import { useWorkspace } from "./workspace";
 
 type SavedView = { id: string; name: string; query: string };
 
-// "Save view": the panel's filters under a name, listed in the sidebar for the next time.
-export function SaveView({ query }: { query: string }) {
-  const { saving } = useWorkspace();
+// The Overview's saved views, in its general bar: open one, or save the board's filters under a name for the next time.
+export function SavedViews({ query }: { query: string }) {
+  const { saving, version } = useWorkspace();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [views, setViews] = useState<SavedView[] | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+
+  useEffect(() => {
+    void get<{ views: SavedView[] }>("/api/views").then((answer) => {
+      if (answer.ok) {
+        setViews(answer.views);
+        setFailed(null);
+      } else setFailed(answer.message);
+    });
+  }, [version]);
 
   async function save() {
     if (!name.trim()) return;
@@ -33,71 +46,43 @@ export function SaveView({ query }: { query: string }) {
     }
   };
 
-  if (!naming) {
-    return (
-      <div>
-        <Button size="sm" onClick={() => setNaming(true)} data-save-view>
-          Save view
-        </Button>
-      </div>
-    );
-  }
+  // The view on screen is the one whose filters are the board's now, whatever else the address carries.
+  const shown = boardQuery(query);
+  const current = (views ?? []).find((view) => boardQuery(view.query) === shown);
   return (
-    <div className="quick-add">
-      <Field autoFocus id="view-name" name="view-name" aria-label="View name" placeholder="Name this view, such as Urgent this week" className="grow" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKey} />
-      <Button size="sm" variant="primary" onClick={() => void save()}>
-        Save
-      </Button>
-      <Button size="sm" onClick={() => setNaming(false)}>
-        Cancel
-      </Button>
-    </div>
-  );
-}
-
-function subscribeStorage(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-}
-
-const readLast = () => localStorage.getItem(PANEL_LAST_KEY);
-
-// The saved views in the sidebar: each opens the panel with its filters; the current one is marked.
-export function SavedViewsNav() {
-  const { version } = useWorkspace();
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const [views, setViews] = useState<SavedView[] | null>(null);
-
-  useEffect(() => {
-    void get<{ views: SavedView[] }>("/api/views").then((answer) => {
-      if (answer.ok) setViews(answer.views);
-    });
-  }, [version]);
-
-  const current = pathname === "/app" ? params.toString() : null;
-  // The last view of the panel, when it is not the one open nor a saved one: one click takes the person back to it.
-  // Read once mounted: the server has no browser storage, and a value painted only on one side would not hydrate.
-  const last = useSyncExternalStore(subscribeStorage, readLast, () => null);
-  const offerLast = Boolean(last) && last !== current && !(views ?? []).some((view) => view.query === last);
-  if ((!views || views.length === 0) && !offerLast) return null;
-  return (
-    <section className="side-group" aria-labelledby="views-title" data-saved-views>
-      <div className="side-head">
-        <h2 id="views-title" className="t-label">
-          Views
-        </h2>
-      </div>
-      {offerLast && (
-        <Link href={`/app?${last}`} className="side-link" data-last-view>
-          <span className="side-link-name">Last view</span>
-        </Link>
+    <div className="saved-views" data-saved-views>
+      {failed && (
+        <p role="alert" className="inline-note" data-tone="alert">
+          The saved views could not be read: {failed}.
+        </p>
       )}
-      {(views ?? []).map((view) => (
-        <Link key={view.id} href={`/app${view.query ? `?${view.query}` : ""}`} className="side-link" aria-current={current === view.query ? "page" : undefined} data-saved-view={view.name}>
-          <span className="side-link-name">{view.name}</span>
-        </Link>
-      ))}
-    </section>
+      {views && views.length > 0 && (
+        <Select
+          label="Saved view"
+          placeholder="Open a saved view…"
+          value={current?.id ?? null}
+          options={views.map((view) => ({ value: view.id, label: view.name }))}
+          onChange={(id) => {
+            const view = views.find((entry) => entry.id === id);
+            if (view) router.replace(`${pathname}${view.query ? `?${view.query}` : ""}`, { scroll: false });
+          }}
+        />
+      )}
+      {naming ? (
+        <div className="inline">
+          <Field autoFocus id="view-name" name="view-name" aria-label="View name" placeholder="Name this view, such as Urgent this week" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={onKey} />
+          <Button size="sm" variant="primary" onClick={() => void save()}>
+            Save
+          </Button>
+          <Button size="sm" onClick={() => setNaming(false)}>
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" onClick={() => setNaming(true)} data-save-view>
+          Save this view
+        </Button>
+      )}
+    </div>
   );
 }

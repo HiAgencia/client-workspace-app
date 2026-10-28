@@ -23,6 +23,11 @@ function lastUserText(prompt: LanguageModelV4Prompt): string {
   return "";
 }
 
+// The system prompt says when no node is open: the conversation covers the whole workspace.
+function workspaceWide(prompt: LanguageModelV4Prompt): boolean {
+  return prompt.some((message) => message.role === "system" && message.content.includes("No node is open"));
+}
+
 function hasImage(prompt: LanguageModelV4Prompt): boolean {
   const last = [...prompt].reverse().find((message) => message.role === "user");
   return Boolean(last && last.role === "user" && last.content.some((part) => part.type === "file"));
@@ -60,10 +65,14 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
   if (results.length > 0) {
     const summary = results
       .map(({ toolName, output }) => {
-        const value = (output as { value?: { ok?: boolean; item?: { title?: string }; openTasks?: Array<{ title: string }>; message?: string } }).value;
+        const value = (
+          output as {
+            value?: { ok?: boolean; item?: { title?: string }; openTasks?: Array<{ title: string }>; items?: Array<{ title: string }>; message?: string };
+          }
+        ).value;
         if (value?.ok === false) return `I could not do that: ${value.message}`;
-        if (toolName === "get_overview") {
-          const open = value?.openTasks ?? [];
+        if (toolName === "get_overview" || toolName === "browse_items") {
+          const open = (toolName === "get_overview" ? value?.openTasks : value?.items) ?? [];
           return open.length === 0
             ? "Nothing is pending here."
             : `Pending here: ${open.map((task) => task.title).join("; ")}. Start with "${open[0].title}".`;
@@ -75,12 +84,17 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
   }
 
   const request = lastUserText(prompt);
-  const task = request.match(/(?:create|add|new) (?:a )?task(?: to)?[:\s]+(.+)/i);
-  if (task) return call("create_task", { title: task[1].replace(/[.\s]+$/, "") });
+  // "Create a task in Larkspur Bakery / Website to call the printer" names where it goes; without it, the open node takes
+  // it.
+  const task = request.match(/(?:create|add|new) (?:a )?task(?: (?:in|for) (.+?) to[:\s]+| to[:\s]+|[:\s]+)(.+)/i);
+  if (task) return call("create_task", { ...(task[1] ? { node: task[1].trim() } : {}), title: task[2].replace(/[.\s]+$/, "") });
   const decision = request.match(/(?:decided|decision)[:\s]+(.+)/i);
   if (decision) return call("add_decision", { decision: decision[1].replace(/[.\s]+$/, "") });
   if (hasImage(prompt)) return call("create_task", { title: "Follow up on the attached screenshot" });
-  if (/pending|what('s| is) (left|next)|advise|what should/i.test(request)) return call("get_overview", {});
+  // With a node open it reads that node; over the whole workspace, the most urgent open tasks of everything.
+  if (/pending|what('s| is) (left|next)|advise|what should/i.test(request)) {
+    return workspaceWide(prompt) ? call("browse_items", { type: ["task"], status: "open", sort: "priority", limit: 5 }) : call("get_overview", {});
+  }
   return text(`(simulated model) You said: ${request}`);
 }
 

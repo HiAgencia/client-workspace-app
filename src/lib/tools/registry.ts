@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolContext } from "./context";
 import type { Tool } from "./define";
+import { getBoard } from "./board";
 import { browseEvents, browseItems } from "./browse";
 import { listEvents } from "./events";
 import { addDecision, addLink, addNote, addReview, createTask, deleteItem, listItems, searchItems, updateItem } from "./items";
@@ -13,6 +14,7 @@ import { getUpdatesSince } from "./updates";
 // The single list the chat and the MCP server publish, in the order a model reads them.
 export const tools: Tool[] = [
   listTree,
+  getBoard,
   getOverview,
   browseItems,
   listItems,

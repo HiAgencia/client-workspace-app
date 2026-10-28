@@ -17,8 +17,8 @@ type Entry =
 const KIND_NAMES: Record<TreeNode["kind"], string> = { client: "Client", project: "Project", subproject: "Subproject" };
 const LIMIT = { node: 6, item: 8 };
 
-// The command palette (Ctrl/Cmd+K): finds projects, items, and actions though the words carry typos, moves with the
-// arrows, and Enter lands on the exact place with the focus set. A native modal dialog: the page behind is inert, Tab
+// The command palette (Ctrl/Cmd+K): finds clients, projects, items, and actions though the words carry typos, moves with
+// the arrows, and Enter lands on the exact place with the focus set. A native modal dialog: the page behind is inert, Tab
 // stays inside, and Escape closes it.
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -32,7 +32,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     <dialog
       ref={dialog}
       className="dialog palette"
-      aria-label="Search projects, tasks, and actions"
+      aria-label="Search clients, projects, tasks, and actions"
       onClose={onClose}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
@@ -72,8 +72,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     void Promise.all(roots.map((id) => tool<{ items: Item[] }>("list_items", { node: id, status: "all", includeSubprojects: true }))).then((answers) => {
       if (!live) return;
       setItemsFailed(answers.some((answer) => !answer.ok));
-      // A review already reviewed has no place on its node's page, so it is not offered: there would be nowhere to land.
-      setItems(answers.flatMap((answer) => (answer.ok ? answer.items : [])).filter((item) => !(item.type === "review" && item.status === "done")));
+      setItems(answers.flatMap((answer) => (answer.ok ? answer.items : [])));
     });
     return () => {
       live = false;
@@ -82,13 +81,14 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   const actions = useMemo<Entry[]>(() => {
     const list: Entry[] = [
-      { kind: "action", id: "go-today", label: "Go to Today", run: () => router.push("/app") },
-      { kind: "action", id: "go-accounts", label: "Go to Accounts", run: () => router.push("/app/accounts") },
+      { kind: "action", id: "go-overview", label: "Go to the Overview", run: () => router.push("/app") },
+      { kind: "action", id: "go-calendar", label: "Go to the Calendar", run: () => router.push("/app/calendar") },
+      { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
     ];
     if (here) {
       list.push({ kind: "action", id: "new-task", label: `New task in ${here.name}`, run: () => go({ kind: "quick-add", nodeId: here.id, type: "task" }) });
       list.push({ kind: "action", id: "new-decision", label: `Record a decision in ${here.name}`, run: () => go({ kind: "quick-add", nodeId: here.id, type: "decision" }) });
-      list.push({ kind: "action", id: "agent", label: `Connect your agent to ${here.name}`, run: () => router.push(`/app/node/${here.id}/agent`) });
+      list.push({ kind: "action", id: "agent", label: `Issue an agent token for ${here.name}`, run: () => router.push(`/app/settings?node=${here.id}#agent-tokens`) });
     }
     const dark = currentTheme() === "dark";
     list.push({ kind: "action", id: "theme", label: dark ? "Switch to the light theme" : "Switch to the dark theme", run: () => setTheme(dark ? "light" : "dark") });
@@ -115,7 +115,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     const itemHits = q ? rank(q, itemIndex, (hit) => hit.prepared).slice(0, LIMIT.item).map((hit) => hit.entry.item) : [];
     const actionHits = q ? rank(q, actionIndex, (hit) => hit.prepared).map((hit) => hit.entry.action) : actions;
     return [
-      { key: "projects", name: "Projects", entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
+      { key: "projects", name: "Clients and projects", entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
       { key: "items", name: "Tasks and notes", entries: itemHits.map((item): Entry => ({ kind: "item", id: `item-${item.id}`, item })) },
       { key: "actions", name: "Actions", entries: actionHits },
     ].filter((group) => group.entries.length > 0);
@@ -134,7 +134,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   function open(entry: Entry) {
     onClose();
     if (entry.kind === "node") go({ kind: "node", nodeId: entry.node.id });
-    else if (entry.kind === "item") go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type });
+    else if (entry.kind === "item") go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type, done: entry.item.status === "done" });
     else entry.run();
   }
 
@@ -174,8 +174,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           aria-controls={flat.length > 0 ? "palette-list" : undefined}
           aria-autocomplete="list"
           aria-activedescendant={current ? `palette-${current.id}` : undefined}
-          aria-label="Search projects, tasks, and actions"
-          placeholder="Search projects, tasks, and actions"
+          aria-label="Search clients, projects, tasks, and actions"
+          placeholder="Search clients, projects, tasks, and actions"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);

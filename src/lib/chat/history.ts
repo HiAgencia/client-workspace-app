@@ -1,17 +1,16 @@
 import type { UIMessage } from "ai";
 import type { Db } from "@/lib/db/client";
 
-// The model reads the most recent turns of the node's conversation, built on the server from what was stored, never
-// from what the browser sends: the browser sends only the new message.
+// The model reads the most recent turns of the conversation, built on the server from what was stored, never from what
+// the browser sends: the browser sends only the new message. A node keeps its conversation, and the whole workspace keeps
+// one of its own (no node); row-level security reads only the signed-in person's.
 export const HISTORY_MESSAGES = 30;
 
 type Row = { id: string; role: string; parts: unknown; seq: number };
 
-export async function loadHistory(db: Db, nodeId: string, limit = HISTORY_MESSAGES): Promise<UIMessage[]> {
-  const { data, error } = await db
-    .from("chat_messages")
-    .select("id, role, parts, seq")
-    .eq("node_id", nodeId)
+export async function loadHistory(db: Db, nodeId: string | null, limit = HISTORY_MESSAGES): Promise<UIMessage[]> {
+  const base = db.from("chat_messages").select("id, role, parts, seq");
+  const { data, error } = await (nodeId ? base.eq("node_id", nodeId) : base.is("node_id", null))
     .order("seq", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`reading the conversation: ${error.message}`);

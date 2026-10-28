@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, Suspense, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
-import { ThemeSwitch } from "@/components/ui/theme-switch";
-import { usePiece } from "@/components/ui/use-piece";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
-import { tool, type Item, type TreeNode } from "./client-api";
+import { ChatDock, useDocked } from "./chat-panel";
+import { post, tool, type Item, type TreeNode } from "./client-api";
 import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
-import { SavedViewsNav } from "./saved-views";
-import { Tree } from "./tree";
+import { SideNav } from "./side-nav";
 
 type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
+
+// The chat a page offers: a node's conversation, the workspace's own (null), or none on this page (undefined). It opens
+// on demand beside the page; docked as a column it stays open from page to page until it is closed, while the sheet of a
+// narrow window opens only when asked, so a page never loads covered.
+type Chat = { scope: string | null | undefined; open: boolean; setOpen: (open: boolean) => void };
 
 type Workspace = {
   config: PublicConfig;
@@ -31,7 +34,8 @@ type Workspace = {
   openPalette: () => void;
   // The item's detail opens in a side panel from any row, on any screen.
   openItem: (item: Item) => void;
-  isDemo: boolean;
+  chat: Chat;
+  setChatScope: (scope: string | null | undefined) => void;
 };
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -42,7 +46,26 @@ export function useWorkspace(): Workspace {
   return value;
 }
 
+// A page that offers the chat says which conversation it is; leaving the page takes it away.
+export function useChatScope(scope: string | null): void {
+  const { setChatScope } = useWorkspace();
+  useEffect(() => {
+    setChatScope(scope);
+    return () => setChatScope(undefined);
+  }, [scope, setChatScope]);
+}
+
 export const LAST_NODE_KEY = "client-workspace:last-node";
+const CHAT_OPEN_KEY = "client-workspace:chat-open";
+
+function subscribeStorage(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(CHAT_OPEN_KEY, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(CHAT_OPEN_KEY, onChange);
+  };
+}
 
 export function WorkspaceShell({ config, children }: { config: PublicConfig; children: ReactNode }) {
   const [tree, setTree] = useState<TreeNode[] | null>(null);
@@ -54,10 +77,23 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   // The last status keeps its text while it fades out.
   const [lastStatus, setLastStatus] = useState("");
   const [who, setWho] = useState<string | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
   const [detail, setDetail] = useState<Item | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [chatScope, setChatScope] = useState<string | null | undefined>(undefined);
+  // Read once mounted: the server has no browser storage, and the chat is never in the first HTML.
+  const docked = useDocked();
+  const storedOpen = useSyncExternalStore(subscribeStorage, () => localStorage.getItem(CHAT_OPEN_KEY) === "1", () => false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const chatOpen = docked ? storedOpen : sheetOpen;
+  const setChatOpen = useCallback(
+    (open: boolean) => {
+      if (!docked) return setSheetOpen(open);
+      localStorage.setItem(CHAT_OPEN_KEY, open ? "1" : "0");
+      window.dispatchEvent(new Event(CHAT_OPEN_KEY));
+    },
+    [docked],
+  );
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queued = useRef<Notice | null>(null);
@@ -143,14 +179,13 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   useEffect(() => {
     void refreshTree();
     // Who is shown comes from the session the browser already holds: every data request checks it on the server once,
-    // so the header does not ask the auth server again.
+    // so the header does not ask the auth server again. A session without an email shows no name.
     void browserClient(config)
       .auth.getSession()
       .then(({ data }) => {
         const user = data.session?.user;
         if (!user) return;
-        setWho(user.is_anonymous ? "Demo workspace" : (user.email ?? null));
-        setIsDemo(user.is_anonymous ?? false);
+        setWho(user.is_anonymous ? null : (user.email ?? null));
       });
   }, [refreshTree, config]);
 
@@ -206,19 +241,37 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       target?.focus({ preventScroll: true });
     });
   }, []);
-  const value: Workspace = { config, tree, treeError, refreshTree, version, touch, notify, saving, openPalette, openItem, isDemo };
+  // Deleting is in the item's details: its row folds away first, then the notice offers to bring it back.
+  const deleteItem = useCallback(
+    async (item: Item) => {
+      const fold = document.querySelector(`[data-item="${item.id}"]`)?.closest(".row-fold");
+      fold?.toggleAttribute("data-leaving", true);
+      if (fold) await new Promise((resolve) => setTimeout(resolve, 220));
+      const answer = await tool("delete_item", { id: item.id });
+      if (!answer.ok) {
+        fold?.toggleAttribute("data-leaving", false);
+        return notify({ text: answer.message, tone: "error" });
+      }
+      touch();
+      notify({ text: `Deleted “${item.title}”`, tone: "status", undo: () => void saving(post(`/api/items/${item.id}/restore`, {})) });
+    },
+    [notify, touch, saving],
+  );
+  const chat: Chat = { scope: chatScope, open: chatOpen, setOpen: setChatOpen };
+  const value: Workspace = { config, tree, treeError, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
+  const chatColumn = docked && chatOpen && chatScope !== undefined;
 
   return (
     <WorkspaceContext.Provider value={value}>
       <a href="#content" className="skip-link btn btn-primary">
         <span className="btn-label">Skip to content</span>
       </a>
-      <div className="shell">
+      <div className="shell" data-chat={chatColumn ? "open" : undefined}>
         <header className="topbar">
-          <Button className="projects-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
-            Projects
+          <Button className="menu-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
+            Menu
           </Button>
-          <Link href="/app" className="brand" aria-label="client-workspace, Today">
+          <Link href="/app" className="brand" aria-label="client-workspace, Overview">
             <BrandMark className="brand-mark" />
             <span className="brand-name">client-workspace</span>
           </Link>
@@ -227,7 +280,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
             <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
               {lastStatus}
             </span>
-            <ThemeSwitch />
             {who && <span className="who t-meta only-wide">{who}</span>}
             <Button size="sm" className="only-wide" onClick={() => void signOut()}>
               Sign out
@@ -235,17 +287,16 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
           </div>
         </header>
         <aside className="sidebar card" aria-label="Workspace">
-          <div className="side-scroll">
-            <SideNav />
-          </div>
+          <SideNav />
         </aside>
         <main id="content" className="main" tabIndex={-1}>
           {children}
         </main>
+        <ChatDock />
       </div>
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} who={who} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onOpenItem={openItem} />
+      <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onOpenItem={openItem} onDelete={(item) => void deleteItem(item)} />
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
@@ -287,36 +338,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   );
 }
 
-// The sidebar's content, the same in the wide sidebar and in the phone's drawer: its links, the views, and the tree, with
-// ONE piece marking where the person is.
-function SideNav() {
-  const pathname = usePathname();
-  const host = useRef<HTMLDivElement>(null);
-  usePiece(host, '[aria-current="page"]');
-  return (
-    <nav ref={host} className="side-nav" aria-label="Workspace">
-      <div className="side-group">
-        <Link href="/app" className="side-link" aria-current={pathname === "/app" ? "page" : undefined}>
-          <span className="side-link-name">Today</span>
-        </Link>
-        <Link href="/app/calendar" className="side-link" aria-current={pathname === "/app/calendar" ? "page" : undefined}>
-          <span className="side-link-name">Calendar</span>
-        </Link>
-        <Link href="/app/accounts" className="side-link" aria-current={pathname === "/app/accounts" ? "page" : undefined}>
-          <span className="side-link-name">Accounts</span>
-        </Link>
-        <Link href="/app/trash" className="side-link" aria-current={pathname === "/app/trash" ? "page" : undefined}>
-          <span className="side-link-name">Trash</span>
-        </Link>
-      </div>
-      <Suspense fallback={null}>
-        <SavedViewsNav />
-      </Suspense>
-      <Tree />
-    </nav>
-  );
-}
-
 const noSubscription = () => () => {};
 
 function PaletteTrigger({ onOpen }: { onOpen: () => void }) {
@@ -338,6 +359,7 @@ function PaletteTrigger({ onOpen }: { onOpen: () => void }) {
   );
 }
 
+// The phone's menu: the same sidebar in a drawer from the left, with who is signed in and the way out.
 function Drawer({ open, onClose, onSignOut, who }: { open: boolean; onClose: () => void; onSignOut: () => void; who: string | null }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -362,19 +384,17 @@ function Drawer({ open, onClose, onSignOut, who }: { open: boolean; onClose: () 
       }}
     >
       {open && (
-        <div className="stack">
+        <div className="drawer-in">
           <div className="drawer-head">
             <h2 id="drawer-title" className="t-title">
-              Projects
+              Menu
             </h2>
             <Button size="sm" onClick={onClose}>
               Close
             </Button>
           </div>
-          <div className="side-scroll">
-            <SideNav />
-          </div>
-          <div className="drawer-head">
+          <SideNav />
+          <div className="drawer-head drawer-foot">
             {who && <span className="who t-meta">{who}</span>}
             <Button size="sm" onClick={onSignOut}>
               Sign out

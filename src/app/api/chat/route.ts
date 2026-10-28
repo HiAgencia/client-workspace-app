@@ -15,8 +15,9 @@ const MAX_BODY = 6 * 1024 * 1024;
 // What the panel shows of a node's conversation.
 const SHOWN_MESSAGES = 100;
 
+// Without a node the turn belongs to the workspace's own conversation, over every client and project.
 const body = z.object({
-  nodeId: z.uuid(),
+  nodeId: z.uuid().nullable().default(null),
   timeZone: z.string().min(1).max(64).default("UTC"),
   message: z.unknown(),
 });
@@ -30,11 +31,12 @@ function validTimeZone(value: string): string {
   }
 }
 
-// The conversation of a node, its latest messages in the order they were written.
+// The conversation of a node, or the workspace's own without one, its latest messages in the order they were written.
 export async function GET(request: NextRequest) {
-  const nodeId = request.nextUrl.searchParams.get("node") ?? "";
-  if (!isUuid(nodeId)) return problem(400, "say which node");
-  const session = await sessionContext("chat", nodeId);
+  const asked = request.nextUrl.searchParams.get("node");
+  if (asked !== null && !isUuid(asked)) return problem(400, "no such node");
+  const nodeId = asked;
+  const session = await sessionContext("chat", nodeId ?? undefined);
   if (!session) return problem(401, "not signed in");
   try {
     return json({ ok: true, messages: await loadHistory(session.ctx.db, nodeId, SHOWN_MESSAGES) });
@@ -45,7 +47,8 @@ export async function GET(request: NextRequest) {
 }
 
 // One chat turn: the browser sends only the new message; the server takes the cap, rebuilds the recent conversation
-// from what it stored, runs the model with the tools scoped to the open node, and stores the turn when it ends whole.
+// from what it stored, runs the model with the tools scoped to the open node (or to everything, without one), and stores
+// the turn when it ends whole.
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
   const text = await request.text();
@@ -58,11 +61,14 @@ export async function POST(request: Request) {
   }
   if (!parsed.success) return problem(422, "the message is not in the expected shape");
 
-  const session = await sessionContext("chat", parsed.data.nodeId);
+  const { nodeId } = parsed.data;
+  const session = await sessionContext("chat", nodeId ?? undefined);
   if (!session) return problem(401, "not signed in");
   const { ctx, user } = session;
-  const reachable = await ctx.db.from("nodes").select("id").eq("id", parsed.data.nodeId).maybeSingle();
-  if (reachable.error || !reachable.data) return problem(404, "no such node");
+  if (nodeId) {
+    const reachable = await ctx.db.from("nodes").select("id").eq("id", nodeId).maybeSingle();
+    if (reachable.error || !reachable.data) return problem(404, "no such node");
+  }
 
   let message: UIMessage;
   try {
@@ -83,7 +89,7 @@ export async function POST(request: Request) {
 
   let history: UIMessage[];
   try {
-    history = await loadHistory(ctx.db, parsed.data.nodeId);
+    history = await loadHistory(ctx.db, nodeId);
   } catch (error) {
     console.error("chat:", error instanceof Error ? error.message : error);
     return problem(500, "the conversation could not be read");
@@ -102,7 +108,7 @@ export async function POST(request: Request) {
       // A turn cut short is not stored: its half-made tool calls would be replayed to the model.
       if (isAborted) return;
       const rows = [message, responseMessage].map((entry) => ({
-        node_id: parsed.data.nodeId,
+        node_id: nodeId,
         role: entry.role,
         parts: JSON.parse(JSON.stringify(entry.parts)),
       }));

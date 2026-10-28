@@ -4,7 +4,8 @@ import { sessionContext } from "@/lib/session-context";
 import { toolResponse } from "@/lib/tool-response";
 import { createNode, createNodeInput } from "@/lib/tools/tree-writes";
 
-// Creating a node in place in the tree: a client at the root, a project under a client, a subproject below.
+// Creating a node in place in the tree: a client or a project of one's own at the root, a project under a client, a
+// subproject below a project.
 export async function POST(request: Request) {
   const input = await readInput(request, createNodeInput);
   if (!input.ok) return input.response;

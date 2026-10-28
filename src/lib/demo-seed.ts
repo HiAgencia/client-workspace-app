@@ -1,10 +1,20 @@
 import type { Db } from "@/lib/db/client";
+import { workingMinutesBefore } from "@/lib/working-time";
 
-// The demo workspace each visitor gets as their own copy: two clients, their projects, and the kind of work a small
-// agency or a freelancer carries —a task with its subtasks, a note, and a link; notes and links of a project; events of
-// the workspace's own; an undated task; and an item that already left a version—, with tasks due around today so Today
-// has something to show. The shape lives here for the tests and the first step; the database plants it through
-// `public.seed_demo`, one statement and one round trip, and a test keeps both sides equal.
+// The demo workspace each visitor gets as their own copy: a small agency with three clients and their projects, and
+// projects of its own beside them —its website, its operations, a component library it reuses—. It carries the work such
+// a team has in a normal week: tasks due around today and some late, a task with its subtasks, notes, decisions, links,
+// items to review, events of the workspace's own, and an item that already left a version, written over the past working
+// days by hand, by the chat, and by a coding agent whose tokens Settings lists. Each item the chat wrote has the
+// conversation that wrote it. It also carries the gaps a real workspace has: a client with one project, a project with no
+// notes or links, tasks without a date. The shape lives here for the tests and the landing; the database plants it
+// through `public.seed_demo`, one statement and one round trip, and a test keeps both sides equal.
+
+export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
+
+// The chat turn that wrote an item: the person's request a minute before, and the answer with the tool call at its moment.
+// `workspace` puts it in the workspace's own conversation instead of the node's.
+export type SeedChat = { ask: string; answer: string; workspace?: true };
 
 export type SeedItem = {
   tool: "create_task" | "add_note" | "add_decision" | "add_link" | "add_review";
@@ -13,14 +23,41 @@ export type SeedItem = {
   children?: SeedItem[];
   // A title the item had before: its first version.
   was?: string;
+  // How many working minutes (weekdays 09:00–18:00 in the visitor's zone) before the visitor's now it was written, and,
+  // for a finished task, completed (`src/lib/working-time.ts`).
+  ago: number;
+  doneAgo?: number;
+  // Who wrote it, when it was not the person by hand.
+  by?: SeedSource;
+  chat?: SeedChat;
 };
 
-export type Seed = { name: string; children?: Seed[]; items?: SeedItem[]; events?: Array<{ title: string; day: string }> };
+export type Seed = {
+  name: string;
+  // A root is a client or a project of the agency's own; below a client every node is a project, below a project a
+  // subproject.
+  kind?: "client" | "project";
+  children?: Seed[];
+  items?: SeedItem[];
+  events?: Array<{ title: string; day: string }>;
+  // The coding agent's tokens issued on this node: their label, and how many working minutes ago each was issued and last
+  // used. Their hash is of bytes nobody holds, so none can be used.
+  tokens?: SeedToken[];
+};
 
-const task = (input: Record<string, unknown>, extra: Partial<SeedItem> = {}): SeedItem => ({ tool: "create_task", input, ...extra });
+export type SeedToken = { label: string; issued: number; lastUsed: number };
 
-// Days are counted from the visitor's own calendar day, the one Today uses, not from the server's.
-// The first screen points at DEMO_FIRST_STEP; a test keeps the seed holding that path.
+const AGENT_LABEL = "laptop";
+const AGENT = { source: "agent", agentLabel: AGENT_LABEL } as const;
+const CHAT = { source: "chat" } as const;
+
+const task = (input: Record<string, unknown>, extra: Omit<SeedItem, "tool" | "input">): SeedItem => ({ tool: "create_task", input, ...extra });
+const note = (text: string, ago: number): SeedItem => ({ tool: "add_note", input: { text }, ago });
+const decision = (title: string, rationale: string, ago: number): SeedItem => ({ tool: "add_decision", input: { decision: title, rationale }, ago });
+const link = (url: string, title: string, ago: number): SeedItem => ({ tool: "add_link", input: { url, title }, ago });
+const review = (input: Record<string, unknown>, extra: Omit<SeedItem, "tool" | "input">): SeedItem => ({ tool: "add_review", input, ...extra });
+
+// Days are counted from the visitor's own calendar day, the one the Overview uses, not from the server's.
 export function demoSeedTree(today: string): Seed[] {
   const day = (offset: number): string => {
     const date = new Date(`${today}T12:00:00Z`);
@@ -29,72 +66,219 @@ export function demoSeedTree(today: string): Seed[] {
   };
   return [
     {
-      name: "Northwind Bakery",
+      name: "Larkspur Bakery",
+      kind: "client",
       children: [
         {
           name: "Website",
+          tokens: [{ label: AGENT_LABEL, issued: 1400, lastUsed: 326 }],
           items: [
             task(
               { title: "Send the homepage draft for review", notes: "<p>Use the <strong>approved</strong> photos only.</p>", priority: 1, dueOn: day(0) },
               {
+                ago: 2294,
                 children: [
-                  task({ title: "Write the hero copy", priority: 2, dueOn: day(0) }),
-                  task({ title: "Pick the three featured products", priority: 3 }),
-                  { tool: "add_note", input: { text: "<p>The client prefers a warm, plain tone.</p>" } },
-                  { tool: "add_link", input: { url: "https://example.com/northwind/homepage-draft", title: "Homepage draft" } },
+                  task({ title: "Write the hero copy", priority: 2, dueOn: day(0) }, { ago: 2292 }),
+                  task({ title: "Pick the three featured products", priority: 3 }, { ago: 2291 }),
+                  task({ title: "Compress the hero photos", priority: 3 }, { ago: 2289, doneAgo: 431 }),
+                  note("<p>The client prefers a warm, plain tone.</p>", 1907),
+                  link("https://www.figma.com/design/q7RkLm2XvT9bWc4NsYp1Ha/Larkspur-homepage", "Homepage draft", 791),
                 ],
               },
             ),
-            task({ title: "Collect product photos from the client", priority: 2, dueOn: day(-1) }),
-            { tool: "add_decision", input: { decision: "Online orders go through the existing POS", rationale: "<p>Avoids a <strong>second inventory</strong>.</p>" } },
-            { tool: "add_link", input: { url: "https://example.com/northwind/brief", title: "Project brief" } },
-            {
-              tool: "add_note",
-              input: {
-                text: '<p><strong>Kickoff notes</strong></p><ul><li>Launch before the holidays</li><li><span class="tc-red">Orders through the POS</span></li></ul>',
+            task({ title: "Collect product photos from the client", priority: 2, dueOn: day(-1) }, { ago: 3046 }),
+            task(
+              { title: "Confirm the delivery date with the client", priority: 3, dueOn: day(1) },
+              {
+                ago: 41,
+                by: CHAT,
+                chat: {
+                  ask: "Add a task to confirm the delivery date with the client, for tomorrow.",
+                  answer: "Added it to Larkspur Bakery / Website, due tomorrow.",
+                },
               },
-            },
+            ),
+            task({ title: "Set up the staging site", priority: 3 }, { ago: 3427, doneAgo: 1113 }),
+            decision("Online orders go through the existing POS", "<p>Avoids a <strong>second inventory</strong>.</p>", 2671),
+            link("https://docs.google.com/document/d/1Kx9vRt-Qm3LpZ7wYc2NbH8sJf5Ud0GaEo4TiWq6Vr_M/edit", "Project brief", 3812),
+            note('<p><strong>Kickoff notes</strong></p><ul><li>Launch before the holidays</li><li><span class="tc-red">Orders through the POS</span></li></ul>', 3818),
           ],
           events: [{ title: "Homepage review with the client", day: day(1) }],
           children: [
             {
               name: "Ordering flow",
               items: [
-                task({ title: "Map the pickup time slots", priority: 3, dueOn: day(2) }),
-                { tool: "add_review", input: { title: "Client feedback on the checkout mockup", url: "https://example.com/northwind/checkout" } },
+                task({ title: "Map the pickup time slots", priority: 3, dueOn: day(2) }, { ago: 1534 }),
+                review({ title: "Review the checkout pull request", url: "https://github.com/larkspur-bakery/website/pull/48" }, { ago: 326, by: AGENT }),
               ],
             },
           ],
         },
         {
           name: "Social media",
-          items: [task({ title: "Plan the November posts", priority: 3, dueOn: day(5) }), task({ title: "Draft a posting guide", priority: 4 })],
+          items: [
+            task({ title: "Plan the November posts", priority: 3, dueOn: day(5) }, { ago: 1147 }),
+            task({ title: "Draft a posting guide", priority: 4 }, { ago: 4574 }),
+          ],
         },
       ],
     },
     {
       name: "Studio Atlas",
+      kind: "client",
       children: [
         {
           name: "Brand refresh",
           items: [
-            task({ title: "Send the moodboard", priority: 2, dueOn: day(0) }),
-            task({ title: "Book the photo session", priority: 3, dueOn: day(3) }),
-            { tool: "add_decision", input: { decision: "Keep the current color palette", rationale: "<p>Printed stock is already ordered.</p>" } },
-            { tool: "add_review", input: { title: "Read the stakeholder survey results" } },
-            task({ title: "Present two logo directions", priority: 2, dueOn: day(0) }, { was: "Present logo directions" }),
+            task({ title: "Send the moodboard", priority: 2, dueOn: day(0) }, { ago: 1913 }),
+            task({ title: "Book the photo session", priority: 3, dueOn: day(3) }, { ago: 1529 }),
+            decision("Keep the current color palette", "<p>Printed stock is already ordered.</p>", 2283),
+            review({ title: "Read the stakeholder survey results" }, { ago: 742 }),
+            task({ title: "Present two logo directions", priority: 2, dueOn: day(0) }, { ago: 2301, was: "Present logo directions" }),
           ],
           events: [{ title: "Photo session", day: day(3) }],
         },
       ],
     },
+    {
+      name: "Lumen Dental",
+      kind: "client",
+      children: [
+        {
+          name: "Booking page",
+          items: [
+            task(
+              { title: "Ask for the clinic's opening hours", priority: 3, dueOn: day(1) },
+              {
+                ago: 118,
+                by: CHAT,
+                chat: {
+                  ask: "We need the clinic's opening hours for the booking form. Add a task for tomorrow.",
+                  answer: "Added it to Lumen Dental / Booking page, due tomorrow.",
+                },
+              },
+            ),
+            review({ title: "Approve the booking form copy" }, { ago: 509 }),
+          ],
+        },
+      ],
+    },
+    {
+      name: "Agency website",
+      kind: "project",
+      items: [
+        task(
+          { title: "Write the Larkspur case study", priority: 3, dueOn: day(4) },
+          {
+            ago: 1601,
+            children: [
+              task({ title: "Ask Larkspur for a short quote", priority: 3 }, { ago: 1598 }),
+              task({ title: "Choose the before-and-after shots", priority: 4 }, { ago: 1596 }),
+            ],
+          },
+        ),
+        task({ title: "Update the portfolio page", priority: 4 }, { ago: 4763 }),
+        decision("Show three case studies, not ten", "<p>Fewer projects, told in depth.</p>", 4127),
+        link("https://analytics.google.com/analytics/web/", "Site analytics", 6351),
+        note("<p><strong>Ideas for the about page</strong></p><ul><li>How we work, in four steps</li><li>The team, with real photos</li></ul>", 1262),
+      ],
+      children: [{ name: "Blog", items: [task({ title: "Draft the post on pricing small sites", priority: 3, dueOn: day(6) }, { ago: 958 })] }],
+    },
+    {
+      name: "Operations",
+      kind: "project",
+      items: [
+        task({ title: "Send the October invoices", priority: 1, dueOn: day(-1) }, { ago: 3171 }),
+        task(
+          { title: "Chase the Studio Atlas payment", priority: 2, dueOn: day(0) },
+          {
+            ago: 67,
+            by: CHAT,
+            chat: {
+              ask: "Remind me to chase the Studio Atlas payment today.",
+              answer: "Added it to Operations, due today, with high priority.",
+              workspace: true,
+            },
+          },
+        ),
+        task({ title: "Renew the agency's domain", priority: 2, dueOn: day(2) }, { ago: 2378 }),
+        task({ title: "File the quarterly taxes", priority: 2, dueOn: day(9) }, { ago: 4769 }),
+        review(
+          { title: "Review the new contract template", url: "https://docs.google.com/document/d/1Zp4HwQe8TnB2xLv-Ka7RcM5yGs3Df9Uj0Nb6Wt_EoXi/edit" },
+          { ago: 437 },
+        ),
+        note("<p><strong>Payment terms</strong></p><p>Half up front, half on delivery; invoices due in 15 days.</p>", 7942),
+      ],
+      events: [
+        { title: "Weekly planning", day: day(0) },
+        { title: "Accountant call", day: day(2) },
+      ],
+    },
+    {
+      name: "Component library",
+      kind: "project",
+      tokens: [{ label: AGENT_LABEL, issued: 5300, lastUsed: 352 }],
+      items: [
+        task({ title: "Add the contact form block", priority: 3, dueOn: day(3) }, { ago: 352, by: AGENT }),
+        task({ title: "Update the library's dependencies", priority: 3 }, { ago: 503, doneAgo: 466, by: AGENT }),
+        task({ title: "Write the setup guide", priority: 4 }, { ago: 5402 }),
+        decision("Keep the library on the same stack as client sites", "<p>One stack to maintain and to debug.</p>", 5081),
+        link("https://github.com/harborline-studio/component-library", "Component library repository", 5243),
+      ],
+    },
   ];
 }
 
+// What the landing says the demo holds, read from the same tree.
+export function demoShape(): { clients: number; ownProjects: number } {
+  const roots = demoSeedTree("2026-01-01");
+  return { clients: roots.filter((node) => node.kind === "client").length, ownProjects: roots.filter((node) => node.kind === "project").length };
+}
+
 // Plants the demo only into an empty workspace, so reloading never duplicates it. One statement: it plants everything or
-// nothing, so a cut in the middle leaves no partial tree to clean up.
-export async function seedDemo(db: Db, today: string): Promise<{ planted: boolean }> {
-  const { data, error } = await db.rpc("seed_demo", { p_today: today });
+// nothing, so a cut in the middle leaves no partial tree to clean up. The zone places what it planted in the visitor's
+// working hours; without it the database uses UTC.
+export async function seedDemo(db: Db, today: string, zone?: string): Promise<{ planted: boolean }> {
+  const { data, error } = await db.rpc("seed_demo", zone ? { p_today: today, p_zone: zone } : { p_today: today });
   if (error) throw new Error(`demo seed: ${error.message}`);
   return { planted: data === true };
+}
+
+// When the demo's tokens were issued and last used. The person's role may write only a token's node, hash and label, so
+// the server's client dates them once the seed planted them, filtering by the owner itself; a token it could not date
+// is counted, and keeps the moment it was planted.
+export async function settleDemoTokens(service: Db, ownerId: string, zone: string, now = new Date()): Promise<{ settled: number; failed: number }> {
+  const { data: nodes, error } = await service.from("nodes").select("id, parent_id, name").eq("owner_id", ownerId);
+  if (error) throw new Error(`demo tokens: reading the nodes: ${error.message}`);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const pathOf = (id: string): string => {
+    const names: string[] = [];
+    for (let cursor = byId.get(id); cursor; cursor = cursor.parent_id ? byId.get(cursor.parent_id) : undefined) names.unshift(cursor.name);
+    return names.join(" / ");
+  };
+  const byPath = new Map(nodes.map((node) => [pathOf(node.id), node.id]));
+  const declared: Array<{ path: string; token: SeedToken }> = [];
+  const walk = (list: Seed[], parent: string) => {
+    for (const node of list) {
+      const path = parent ? `${parent} / ${node.name}` : node.name;
+      for (const token of node.tokens ?? []) declared.push({ path, token });
+      walk(node.children ?? [], path);
+    }
+  };
+  walk(demoSeedTree(now.toISOString().slice(0, 10)), "");
+  // Each token is its own row: they are dated at once.
+  const written = await Promise.all(
+    declared.map(async ({ path, token }) => {
+      const nodeId = byPath.get(path);
+      if (!nodeId) return 0;
+      const { data, error: refused } = await service
+        .from("agent_tokens")
+        .update({ created_at: workingMinutesBefore(now, token.issued, zone).toISOString(), last_used_at: workingMinutesBefore(now, token.lastUsed, zone).toISOString() })
+        .eq("node_id", nodeId)
+        .eq("label", token.label)
+        .select("id");
+      return refused ? 0 : (data?.length ?? 0);
+    }),
+  );
+  return { settled: written.reduce((sum, count) => sum + count, 0), failed: written.filter((count) => count === 0).length };
 }

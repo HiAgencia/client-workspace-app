@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { LAST_NODE_KEY } from "../workspace";
 
-// Opening the workspace resumes on the last open node, or on Today the first time.
+// Opening the workspace resumes on the last open client or project, or on the Overview the first time.
 export default function Resume() {
   const router = useRouter();
   useEffect(() => {

@@ -25,19 +25,23 @@ and the screens. When the code changes a decision described here, this document 
 
 | Table | Holds | Key columns |
 |---|---|---|
-| `nodes` | The tree: client or organization, project, subproject | `id`, `owner_id`, `parent_id` (null at the root), `kind` (`client` · `project` · `subproject`), `name`, `position`, `archived_at` |
-| `items` | What lives in a node or under a task: tasks and subtasks, notes, decisions, links, and things to review | `id`, `node_id`, `parent_item_id` (null when it hangs from the node), `type` (`task` · `note` · `decision` · `link` · `review`), `title`, `body` (rich text), `url`, `status` (`open` · `done`), `priority` (1–4, tasks only), `due_on` (tasks only), `source` and `agent_label` (who created it), `changed_source` and `changed_agent_label` (who made the last change), `created_at`, `updated_at`, `completed_at`, `deleted_at` |
+| `nodes` | The tree: clients and the person's own projects at the root, a client's projects, subprojects below a project | `id`, `owner_id`, `parent_id` (null at the root), `kind` (`client` · `project` · `subproject`), `name`, `position`, `archived_at` |
+| `items` | What lives in a node or under a task: tasks and subtasks, notes, decisions, links, and items to review | `id`, `node_id`, `parent_item_id` (null when it hangs from the node), `type` (`task` · `note` · `decision` · `link` · `review`), `title`, `body` (rich text), `url`, `status` (`open` · `done`), `priority` (1–4, tasks only), `due_on` (tasks only), `source` and `agent_label` (who created it), `changed_source` and `changed_agent_label` (who made the last change), `created_at`, `updated_at`, `completed_at`, `deleted_at` |
 | `events` | The workspace's own events, apart from Google's | `id`, `node_id`, `title`, `body`, `all_day`, `starts_on`/`ends_on` (a whole day, the last included) or `starts_at`/`ends_at`, `source`, `agent_label`, `changed_source`, `changed_agent_label`, `created_at`, `updated_at`, `deleted_at` |
 | `item_events` | The event a task lives in | `item_id` (the key: one event per task), and either `event_id` (the workspace's own) or `account_id` + `calendar_id` + `google_event_id` |
 | `revisions` | Every version an item or an event left | `id`, `item_id` or `event_id` (exactly one), `snapshot` (the versioned columns before the change), `source` and `agent_label` (who changed it), `created_at` |
-| `saved_views` | A person's saved views of the central panel | `id`, `owner_id`, `name`, `query` (the panel's URL parameters), `position` |
+| `saved_views` | A person's saved views of the Overview | `id`, `owner_id`, `name`, `query` (the board's URL parameters), `position` |
 | `google_accounts` | Each connected Google account | `id`, `owner_id`, `email`, encrypted `refresh_token`, encrypted `access_token` and its expiry, `scopes`, `status`, `is_demo` |
 | `node_accounts` | Which node an account hangs from | `node_id`, `account_id` |
 | `account_calendars` | Which calendars of each account are shown | `account_id`, `calendar_id`, `summary`, `color`, `selected` |
-| `agent_tokens` | A coding agent's access to a node | `id`, `node_id`, `token_hash`, `label`, `last_used_at`, `revoked_at` |
-| `chat_messages` | The chat conversation, per node | `id`, `seq` (insertion order), `node_id`, `role`, `parts` (jsonb), `created_at` |
+| `agent_tokens` | A coding agent's access to a node | `id`, `node_id`, `token_hash`, `label`, `created_at`, `last_used_at`, `revoked_at` |
+| `chat_messages` | The chat conversations: one per node, and the whole workspace's own | `id`, `seq` (insertion order), `owner_id` (the signed-in person by default), `node_id` (null for the workspace's conversation), `role`, `parts` (jsonb), `created_at` |
 | `usage_counters` | The daily cap on chat messages and transcriptions | `owner_id`, `day`, `kind`, `count` |
 
+- **The tree's shape**: a root is a client or a project of the person's own, so someone without clients keeps their
+  projects at the root and an agency keeps its own projects beside its clients; a client is always a root, a client's
+  child is a project, and a project's or a subproject's child is a subproject. A check constraint and a trigger hold it
+  for every writer, and a node keeps the kind it was created with: the trigger refuses a change of kind (`23514`).
 - **Account inheritance**: an account attached to a node is visible in that node and all its descendants, computed
   with a recursive query over `parent_id`. The screen tells an own account from an inherited one, and says which
   node it comes from.
@@ -60,13 +64,24 @@ and the screens. When the code changes a decision described here, this document 
   is deleted and restored only whole), and a restored subtask brings back its deleted parent's branch first, so a live
   item never hangs from a deleted one. The screens read the items' versions; the events' are recorded for the same
   restore.
-- **A node's number** is what is pending in its subtree: open tasks (subtasks included) and open things to review, the
-  same in the tree, in the node's header, and in `list_tree`.
+- **A node's number** is its open tasks, subtasks and those of everything below it included: the same in the sidebar, on
+  its card, in its page's header, and in `list_tree`. `list_tree` and `get_board` count it with one walk
+  (`countInSubtrees`, `src/lib/tools/rows.ts`), so no two places can disagree.
 - UUIDs generated by the database; timestamps in UTC, shown in the browser's time zone.
-- Migrations live in `supabase/migrations/`; `public.seed_demo` plants the demo's whole workspace —notes, a task with
-  its subtasks, note, and link, events of its own, an undated task, and an item with a version— in one security-invoker
-  function called through `POST /api/demo` with the visitor's calendar day (required), so a new session gets its copy in
-  one transaction. The TypeScript tree it mirrors is `demoSeedTree`, and a test compares both.
+- Migrations live in `supabase/migrations/`; `public.seed_demo(p_today, p_zone)` plants the demo's whole workspace —a small
+  agency with three clients (Larkspur Bakery, Studio Atlas, Lumen Dental) and projects of its own (Agency website,
+  Operations, Component library); tasks due around today and some late, a task with its subtasks, note, and link, notes,
+  decisions, links, items to review, events of its own, an item with a version, and items written by hand, by the chat
+  (each with the conversation that wrote it), and by a coding agent whose two tokens, labeled `laptop`, Settings lists;
+  with a real workspace's gaps (a client with one project, a project with no notes)— in one security-invoker function
+  called through `POST /api/demo` with the visitor's calendar day (required) and zone, so a new session gets its copy in
+  one transaction. Every moment it writes is a number of working minutes (Monday to Friday, 09:00–18:00 in the visitor's
+  zone) before now, through `public.working_minutes_before`, so the activity reads as working days at any hour of the
+  visit; `src/lib/working-time.ts` holds the same rule. The tokens' hash is of bytes nobody holds, so none can be used;
+  the person's role may write only a token's node, hash, and label, so the route dates the tokens afterwards with the
+  server's client, filtering by the owner (`settleDemoTokens`). The renamed item's version keeps the moment of the seed,
+  which the revisions trigger stamps. The TypeScript tree it mirrors is `demoSeedTree`, and a test compares both, the
+  working minutes of each moment included.
 
 ## The tool layer (`src/lib/tools/`)
 
@@ -83,9 +98,10 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 
 | Tool | Read-only | What it does |
 |---|---|---|
-| `list_tree` | yes | The tree visible from the scope, with each node's number: what is pending in its subtree |
-| `get_overview` | yes | A node: open tasks by priority, notes, recent decisions, the links of its subtree, things to review, what the nodes below hold, and the next seven days of events from its accounts and the workspace's own |
-| `browse_items` | yes | Items of a node and its subtree (or everything) by type, status, priority, origin, text, due range, undated, or parent, with each filter's counts; an undated item is outside every range |
+| `list_tree` | yes | The tree visible from the scope, with each node's open tasks and open items to review, each counting its subtree |
+| `get_board` | yes | For the person's day, what is open, late, due today and in a stretch of days (`from`–`through`, such as the whole week), undated, and to review, in everything in reach or below one node, and the same figures per node, each counting its subtree |
+| `get_overview` | yes | A node: open tasks by priority, notes, recent decisions, the links of its subtree, items to review, what the nodes below hold, and (unless asked without them) the next seven days of events from its accounts and the workspace's own |
+| `browse_items` | yes | Items of a node and its subtree (or everything) by type, status, priority, origin, text, due range, undated, or parent, with each filter's counts and, for a task with subtasks, how many are open and done; an undated item is outside every range |
 | `list_items` | yes | A node's items filtered by type and status, or what hangs from a task |
 | `search_items` | yes | Text search over titles and bodies |
 | `get_updates_since` | yes | What was created, changed, completed, or deleted since a moment; with no moment, since the token's previous read (the first time, everything in reach), and the read moves the token's mark |
@@ -109,16 +125,20 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 - Undoing a deletion (`restoreItem`, `restoreEvent`), the versions (`listRevisions`, `restoreRevision`), and the trash
   (`listTrash`) are not offered to models: the screens and the chat's undo button call them.
   `update_item` returns the values it replaced, so undoing a change writes them back.
-- Every write stores its `source`, and the MCP also the token's `label`, so the screen says who made it.
+- Every write stores its `source`, and the MCP also the token's `label`, so the screen says who made it; an item also
+  carries who made its last change (`changedSource`, `changedAgentLabel`), which the activity reads for what was
+  completed, changed, or deleted.
 
 ## The chat (`/api/chat`)
 
 - AI SDK `streamText` with `@ai-sdk/openai` against `https://api.meta.ai/v1` and `muse-spark-1.3` (standard mode:
   the data is the user's), over the Responses API, with `store: false` and the encrypted reasoning replayed across
   turns (`include: ["reasoning.encrypted_content"]`).
-- Its tools are the registry's, scoped to the open node; the loop stops after a bounded number of steps.
-- The system prompt carries the user's date and time zone, the open node's path, and a summary of the tree. The
-  chat **acts** (creates, records, completes), **looks up**, and **advises** from what it reads in the project.
+- Its tools are the registry's, scoped to the open node —or to everything, on the Overview, where the conversation is
+  the workspace's own—; the loop stops after a bounded number of steps.
+- The system prompt carries the user's date and time zone, the open node's path (or that none is open, so a write goes
+  where the request says), and a summary of the tree. The chat **acts** (creates, records, completes), **looks up**, and
+  **advises** from what it reads.
 - **Images** travel as file parts of the message, and Muse Spark reads them: a screenshot of a client's message
   becomes tasks.
 - **Voice**: the browser records and encodes mono 16-bit PCM WAV at 24 kHz, the format the endpoint accepts;
@@ -127,8 +147,9 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   transcription can run.
 - Every write the chat makes shows as a card saying what it did, with an undo button: a creation is deleted, a
   change gets back the values `update_item` returned as replaced, a deletion is restored.
-- The conversation is stored per node in `chat_messages` (the person's message and the answer, with their parts,
-  encrypted reasoning included, ordered by `seq`) when the answer ends whole; a turn cut short is not stored. The
+- The conversation is stored per node, and the workspace's own without a node, in `chat_messages` (the person's message
+  and the answer, with their parts, encrypted reasoning included, ordered by `seq`) when the answer ends whole; a turn
+  cut short is not stored. The
   browser sends only the new message, with at most one image; the server rebuilds the recent turns from what it
   stored, and an image travels to the model only in the turn it arrives (later turns carry a note), so one large
   image never makes the next messages too large.
@@ -141,8 +162,9 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   `DEMO_TRANSCRIPTION_DAILY_CAP`), 400 and 60 for all demo sessions (`DEMO_TOTAL_CHAT_DAILY_CAP`,
   `DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP`). Meta Model API has no hard spend cap of its own.
 - **The simulator**: with `MODEL_PROVIDER=simulated` a scripted model (`src/lib/chat/simulated.ts`) calls the tool
-  a real model would for a request (create a task, record a decision, read what is pending) and transcription
-  returns a fixed sentence, so the whole chat runs and is tested without spend.
+  a real model would for a request (create a task —in the node a request names, "in Operations to…"—, record a decision,
+  read what is pending in the open node or across everything) and transcription returns a fixed sentence, so the whole
+  chat runs and is tested without spend.
 
 ## The MCP server (`/api/mcp`)
 
@@ -151,7 +173,8 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   reachable node (that node and its descendants). Missing or revoked token: 401. The `Origin` header is validated.
 - Read tools carry `readOnlyHint`, so the agent does not ask for approval to read.
 - **Each code repository declares it in its `.mcp.json`** with the token in an environment variable (Claude Code
-  and Muse Code expand `${VAR}`); the node's screen issues the token once and shows the block to copy.
+  and Muse Code expand `${VAR}`); Settings issues the token once, for the client or project chosen, and shows the block
+  to copy.
 
 ## Google accounts
 
@@ -189,10 +212,12 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 
 - "Try the demo" starts an anonymous Supabase session and copies the seed into a tree of that session's own, so
   each visitor works on their own copy.
-- The demo's first screen carries a **Start here** card that opens the seeded project (Northwind Bakery / Website),
-  names the field under Tasks and the chat panel; the landing names the same first step before it starts.
-- The demo does not connect Google accounts; it shows only its sample work. A real account is connected when the
-  product is validated with real data, never in the demo.
+- The demo is the emulation of a real case —a small agency's week— and opens on its Overview like any workspace, with no
+  banner or guide of its own; the landing says what it holds (its clients and its own projects, read from the seed's
+  tree) and where to write first.
+- The demo does not connect Google accounts; it shows only its sample work, and where connecting is offered it says
+  that connecting needs a Google sign-in. A real account is connected when the product is validated with real data,
+  never in the demo.
 - The chat runs on Meta's models under the daily cap.
 
 ## Screens
@@ -202,26 +227,50 @@ The screens read and write in the browser through the app's routes, which check 
 deletion, accounts and calendars, and agent tokens have their own routes, because they are not offered to models.
 Every writing route demands this site's `Origin` and a bounded JSON body.
 
-1. **Landing**: what it is, the first step it names —try the demo, open Northwind Bakery / Website, add a task or
-   ask the chat—, "Try the demo", and "Sign in with Google". A demo whose seed failed is tried again on the same session.
-2. **The central panel** (`/app`): it opens on Today; Today, Week, Month, and All with previous and next, a scope
-   (everything, or one node and what is below it), and filters by type, status, priority, and origin, each with its
-   count; its state lives in the URL (`view`, `date`, `scope`, `type`, `status`, `priority`, `source`), and the browser
-   keeps the last view, which the sidebar offers as "Last view"; an empty view says what emptied it; "Save view" names it for the sidebar. In the demo, the Start
-   here card above Today.
-3. **Sidebar**: Today, Calendar, Accounts, Trash, the saved views, and the client → project → subproject tree with each
-   node's number; each level has its own style, and creating a node lives in the tree's head.
-4. **Node**: path, own and inherited accounts; tasks by priority with their subtasks (two levels, the rest folded) and
-   quick add; notes; decisions; the links of its subtree; to review; the agenda of its calendars and the workspace's own.
-   An empty section of a node with work below says how much and where. An item's detail opens in a side panel: its
-   record (status, priority, date, link, origin), its rich text saved when typing stops, a task's subtasks, notes,
-   links, and event, and its versions; Escape closes it and returns the focus to the row.
-5. **Calendar**: a month or a week of days with the tasks due each day and the events of the accounts and the
-   workspace's own; a day's detail creates, renames, and deletes events and puts a task inside one.
-6. **Trash**: what was deleted, each branch once, restored whole.
-7. **Chat**: side panel scoped to the open node, with microphone, image attachment, and cards for what it did.
-8. **Accounts**: connected accounts, which node each hangs from, and which calendars are shown.
-9. **Connect your agent**: the node's tokens and the `.mcp.json` block to copy.
+1. **Landing**: what it is, what the demo holds and where to write first, "Try the demo", and "Sign in with Google". A
+   demo whose seed failed is tried again on the same session.
+2. **Sidebar**, fixed: its options never change from one screen to another. Overview on top; **Clients** and
+   **Projects** (the person's own, at the root), each a group that folds, with its "New client" or "New project" always
+   in view; each client and each project folds its children, with each node's open tasks and a "New project" or "New
+   subproject" at the end of what it holds; a root reads the same in both groups, and each level below reads quieter; at
+   its foot **Calendar**, **Trash**, and **Settings**. What is folded open is kept in the browser, and visiting a node
+   opens the way to it once per visit. On a phone it lives in a drawer opened from the header's "Menu".
+3. **Overview** (`/app`), the board where everything is managed at a glance: a header with "Open the chat" and "Issue an
+   agent token", and a general bar —which client or project every section shows, and the saved views— reaching every
+   section; the figures (late tasks, due today, due this week, items to review, events today), counted over the whole
+   universe by `get_board` (events today, over what the Agenda read, saying so when a calendar could not be read), each
+   taking the view to the section it filters and counting the same days that section lists —this week is the whole week,
+   its first days included—; **Tasks** (today's and late ones, this week, this month, or any date; by priority; open or
+   done; with a quick add that says where the task goes) beside the **Agenda** (today, this week, or this month);
+   **Clients and projects**, one card each with its open tasks, late, due today, and to review; **To review**; and
+   **Activity**, what was added, changed, completed, or deleted in the last days, by hand, by the chat, or by an agent
+   and its token's name. Each section carries its own filters in its head, and every filter lives in the URL (`scope`,
+   `tasks`, `status`, `priority`, `agenda`, `review`, `who`, `what`, `kind`), so reloading, going back, and a saved view
+   return the same board. A section shows what it read with the request that read it: while another scope or filter is
+   read, what is on screen dims instead of passing for the new answer. Where the board is narrow the figures are compact
+   tiles two to a row.
+4. **Client** and **project** pages are composed like the Overview over one node and what is below it, in its order: the
+   same Tasks section and its filters (opening on any date) with the Agenda beside it, the node's projects or subprojects
+   as cards where the Overview has its clients and projects, To review and Activity, then what the node and those below
+   it keep —notes, decisions, and links, each row saying where it lives— and the Google accounts it sees. In Tasks each
+   subtask is a row of its own under its task, sharing its columns, and the task says how many of its subtasks are done;
+   two levels, deeper ones folded behind a button. The header says what the page is and where it lives ("Project of
+   Larkspur Bakery") and its figures, a project naming how many of its open tasks are in its subprojects.
+5. **Item detail**, a side panel from any row: its record (status, priority, date, link, origin), its rich text saved
+   when typing stops, a task's subtasks, notes, links, and event, its versions, and deleting it; Escape closes it and
+   returns the focus to the row. A landing on an item —from the palette or a row's path— opens the tab it lives behind
+   (a done task, a reviewed item) and waits for the section that paints it.
+6. **Chat**, on demand on the Overview and on every client's and project's page: "Open the chat" docks it beside the
+   page where the window holds both, and there it stays open from page to page until it is closed; where the window is
+   narrow it opens as a sheet when asked, never by itself on load. It keeps the place's conversation —the workspace's
+   own on the Overview—, with microphone, image attachment, and cards for what it did.
+7. **Calendar**: a month or a week of days with the tasks due each day and the events of the accounts and the
+   workspace's own calendar; a day's detail creates, renames, and deletes events and puts a task inside one.
+8. **Trash**: what was deleted, each branch once, restored whole.
+9. **Settings**: the theme; the Google accounts, the clients and projects each is connected to, and which calendars are
+   shown; and the agent tokens of every client, project, and subproject, issued for the one chosen (a page's "Issue an
+   agent token" arrives with it chosen), with the `.mcp.json` block to copy. A session opened without an account says
+   that connecting a calendar needs a Google sign-in, and offers it.
 
 ## Interaction principles
 
@@ -234,14 +283,25 @@ Every writing route demands this site's `Origin` and a bounded JSON body.
 - **Edit in place**: title, priority, due date, and status change in the row, Enter confirms, Esc cancels; secondary
   detail opens in a side panel, not a new page, where its notes save when typing stops and Escape closes it with the
   focus back on the row.
-- **Delete does not ask, it offers undo**: the row folds away and "Deleted · Undo" shows for a few seconds; only
-  what cannot be undone asks for confirmation. What the chat or an agent did undoes the same way.
+- **Delete does not ask, it offers undo**: deleting lives in the item's detail, so a row carries no destructive button;
+  the row folds away and "Deleted · Undo" shows for a few seconds; only what cannot be undone asks for confirmation.
+  What the chat or an agent did undoes the same way.
 - **Command palette (Ctrl/Cmd+K)**: finds nodes, items, and actions, tolerates typos, is navigated with arrows and
   Enter, and opening an action lands on the exact place with focus set.
 - **Back returns to where you were**, and a session resumes on the last open node.
-- **Every empty state carries its own button** and says what is missing; "no results" is not "nothing yet".
+- **Every empty state says what is missing**, and carries its own button when what fills it is not already in view; "no
+  results" is not "nothing yet". One action has one control on screen.
 - **Advanced fields appear on demand.**
-- **On a phone** the tree opens from the header in a drawer and the node view takes the full width.
+- **One name per concept**, the same in the sidebar, the page, and the palette: Overview, Clients, Projects, Tasks,
+  Agenda (a section's events) and Calendar (the page), To review and its items to review, Activity, Settings, Agent
+  tokens; who wrote something is "By hand", "By the chat", or "By an agent · its token's name"; one verb per action
+  ("Added task" in the activity and in the chat's cards); nothing in the navigation repeats a name the page uses for
+  something else.
+- **A control keeps its words at every width**: a segmented control whose options do not fit on one line takes tighter
+  air, and only then puts its options two to a row; a label never breaks and never changes its name.
+- **Filters live where they act**: the general one in the Overview's bar, a section's own in its head; there is no
+  separate filters card.
+- **On a phone** the sidebar opens from the header's "Menu" in a drawer and every page takes the full width.
 
 ## Visual principles
 
@@ -288,8 +348,9 @@ The principles above, as code. Components ask for a role, never for a value, so 
   the browser's own bar takes the chosen theme. Switching cross-fades the page.
 - **Motion**: page changes cross out and in (React's `ViewTransition`), lists travel when they reorder, a deleted row
   folds away, skeletons are replaced by a fade, and everything honors reduced motion.
-- **Where the window is narrow**, the tree lives in a drawer opened from the header, and the node and its chat are two
-  tabs, so the chat's card keeps its place while the node is read again.
+- **Where the window is narrow**, the sidebar lives in a drawer opened from the header, the chat is a sheet over the
+  page, and a list's rows stack their controls under the title by the width of the list itself (a container query), so a
+  list in a column of the board and a list on a phone arrange the same way.
 - **The guard**: `pnpm check` runs `scripts/check-system.mjs`, which counts what escapes the system —stock icons,
   native pickers in the screens, color literals outside the roles, Tailwind sizes and colors instead of roles, and a
   `:hover` outside `@media (hover: hover)`— against caps that only go down.

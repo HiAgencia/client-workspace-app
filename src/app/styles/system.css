@@ -182,16 +182,18 @@
 }
 .read-block {
   display: block;
-  overflow-x: auto;
   padding: 0.85em 1em;
   border-radius: var(--radius-control);
   background: var(--read);
   box-shadow: inset 0 0 0 1px transparent;
-  white-space: pre;
+  /* Every line reads whole at any width: a long one wraps instead of running past the block's edge with nothing that
+     says there is more. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   user-select: all;
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
 
-  /* It takes the keyboard to scroll sideways, so it answers the pointer as what can be reached. */
+  /* A click takes it whole, so it answers the pointer as what can be taken. */
   @media (hover: hover) {
     &:hover {
       background: var(--interior);
@@ -743,6 +745,9 @@ textarea.field {
 
 /* ---- Segmented control: a sunken rail and ONE raised piece that travels to the chosen option. ------------------- */
 .seg {
+  /* The air beside each label, and the tighter one the control takes where its options do not fit on one line. */
+  --seg-air-wide: 0.9em;
+  --seg-air-tight: 0.5em;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -776,7 +781,7 @@ textarea.field {
 }
 .seg-option {
   min-height: 2.25em;
-  padding: 0.35em 0.9em;
+  padding: 0.35em var(--seg-air-wide);
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
@@ -818,6 +823,18 @@ textarea.field {
 .seg:not([data-piece-ready]) > .seg-option:is([aria-selected="true"], [aria-pressed="true"]) {
   background: var(--piece);
   box-shadow: var(--shadow-piece);
+}
+/* Where the options do not fit on one line (the control measures it): the tighter air, then two to a row, the last one
+   alone spanning both. The words stay the same at every width. */
+.seg[data-fit="tight"] > .seg-option {
+  padding-inline: var(--seg-air-tight);
+}
+.seg[data-fit="grid"] {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.seg[data-fit="grid"] > .seg-option:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 /* ---- Theme switch: a rail and a thumb that travels; the state's mark sits inside the thumb, where it stops. -------- */

@@ -145,7 +145,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.projects-trigger {
+.menu-trigger {
   display: inline-flex;
 }
 .only-wide {
@@ -166,7 +166,8 @@
     grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   }
   .sidebar {
-    display: block;
+    display: flex;
+    flex-direction: column;
     position: sticky;
     top: calc(var(--header-h) + var(--gutter));
     align-self: start;
@@ -179,11 +180,31 @@
   .main {
     padding-left: var(--gap-cards);
   }
-  .projects-trigger {
+  .menu-trigger {
     display: none;
   }
   .only-wide {
     display: inline-flex;
+  }
+}
+/* The chat opened beside the page docks as a third column where the window holds the three; narrower, it is a sheet. */
+.chat-dock {
+  display: none;
+}
+@media (width >= 80rem) {
+  .shell[data-chat="open"] {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--chat-w);
+  }
+  .shell[data-chat="open"] .main {
+    padding-right: var(--gap-cards);
+  }
+  .chat-dock {
+    display: block;
+    position: sticky;
+    top: calc(var(--header-h) + var(--gutter));
+    align-self: start;
+    margin: var(--gutter) var(--gutter) var(--gutter) 0;
+    animation: rise-in var(--dur) var(--ease-out) backwards;
   }
 }
 @media (width < 40rem) {
@@ -219,32 +240,40 @@
   .topbar-end {
     margin-left: 0;
   }
-  /* The switch keeps its name for a screen reader; only the eye loses the words where there is no room. */
-  .switch-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }
 
-/* The sidebar: its list scrolls inside it when it outgrows the window, and the current place is ONE piece that
-   travels between rows. */
+/* The sidebar: Overview and the two groups scroll inside it when they outgrow the window, while Calendar, Trash and
+   Settings stay at its foot; in each part the current place is ONE piece that travels between rows. */
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
 .side-scroll {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--pad-card) calc(var(--pad-card) * 0.7);
   scrollbar-width: thin;
 }
-.side-nav {
-  position: relative;
-  isolation: isolate;
+.side-main {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.1rem;
+}
+.side-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.6rem calc(var(--pad-card) * 0.7) calc(var(--pad-card) * 0.8);
+  border-top: 1px solid var(--division);
+}
+.side-pieces {
+  position: relative;
+  isolation: isolate;
 
   &::before {
     content: "";
@@ -316,11 +345,11 @@
 }
 /* The current place has its hover too: its ink takes the accent and the piece under it deepens. */
 @media (hover: hover) {
-  .side-nav:has(.side-link[aria-current="page"]:hover)::before {
+  .side-pieces:has(.side-link[aria-current="page"]:hover)::before {
     background: var(--accent-tint-hover);
   }
 }
-.side-nav::before {
+.side-pieces::before {
   transition: background-color var(--dur-hover-out) var(--ease-hover-out);
 }
 /* A name wraps between its words rather than losing its end, and a word is split only when it alone is wider than the
@@ -349,8 +378,64 @@
   color: var(--accent-ink);
 }
 
-/* The tree: each level indents and carries a guide line that reads against the card (3:1), so a project reads under
-   its client; each level has its own role —the client leads, the project follows, the subproject steps back—. */
+/* A group's head: its name folds the group, its "New" adds to it, both always in view. */
+.side-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-height: 2rem;
+  padding: 0.2em 0.55em 0.2em 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 650;
+  box-shadow: 0 0 0 0.3em transparent;
+  transition: color var(--dur-hover-out) var(--ease-hover-out), background-color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  /* The chevron is drawn as part of the control, the same one the dropdowns carry; it turns down when open. */
+  &::after {
+    content: "";
+    flex: none;
+    width: 0.42em;
+    height: 0.42em;
+    margin-top: -0.15em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    color: var(--muted);
+    rotate: -45deg;
+    transition: rotate var(--dur) var(--ease-std), color var(--dur-hover-out) var(--ease-hover-out);
+  }
+  &[aria-expanded="true"]::after {
+    rotate: 45deg;
+  }
+  @media (hover: hover) {
+    &:hover {
+      color: var(--ink);
+      background: var(--interior-hover);
+      box-shadow: 0 0 0 0.3em var(--interior-hover);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover::after {
+      color: var(--accent);
+      transition-duration: var(--dur), var(--dur-hover);
+    }
+  }
+}
+.side-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem 0.5rem;
+}
+
+/* The tree: each client and project folds its children, which hang on a guide line that reads against the card (3:1),
+   so a project reads under its client; each level has its own role —the client leads, the project follows, the
+   subproject steps back—. */
 .tree {
   display: flex;
   flex-direction: column;
@@ -359,36 +444,85 @@
   padding: 0;
   list-style: none;
 }
-.tree .tree {
-  margin-left: 0.95rem;
-  padding-left: 0.45rem;
-  border-left: 1px solid var(--guide);
-}
 .tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+
+  & > .side-link {
+    flex: 1;
+    min-width: 0;
+  }
+}
+/* A row's fold: a square of the touch size, its chevron turning down when open. */
+.tree-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 2.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+  box-shadow: inset 0 0 0 1px transparent;
+
+  &::before {
+    content: "";
+    width: 0.4em;
+    height: 0.4em;
+    margin-left: -0.15em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    rotate: -45deg;
+    transition: rotate var(--dur) var(--ease-std);
+  }
+  &[aria-expanded="true"]::before {
+    margin-left: 0;
+    margin-top: -0.2em;
+    rotate: 45deg;
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      color: var(--accent);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+/* Each level steps in by the half of a fold's width, so three levels keep their names on one line. */
+.tree-below {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  gap: 2px;
+  margin-left: 0.75rem;
+  padding: 2px 0 0.35rem 0.2rem;
+  border-left: 1px solid var(--guide);
 }
-.side-link[data-kind="client"] {
+.tree-add-child {
+  align-self: flex-start;
+  margin-left: 1.6rem;
+}
+/* A root reads the same in both groups, a client or a project of one's own; each level below reads quieter. */
+.side-link[data-depth="1"] {
   color: var(--ink);
   font-weight: 750;
 }
-.side-link[data-kind="project"] {
+.side-link[data-depth="2"] {
   color: var(--ink-soft);
   font-weight: 600;
 }
-.side-link[data-kind="subproject"] {
+.side-link[data-depth="3"] {
   color: var(--muted);
   font-weight: 500;
 }
 .side-link[data-kind]:where([aria-current="page"]) {
   color: var(--accent-ink);
-}
-.side-head-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.35rem;
 }
 .tree-add {
   flex: none;
@@ -406,7 +540,7 @@
   color: var(--muted);
 }
 
-/* The phone's compact control: the sidebar's content in a drawer from the left. */
+/* The phone's menu: the sidebar's content in a drawer from the left. */
 .drawer {
   margin: 0 auto 0 0;
   width: min(22rem, calc(100vw - 2.5rem));
@@ -414,6 +548,7 @@
   max-height: none;
   border-radius: 0 var(--radius-card) var(--radius-card) 0;
   translate: -1.5rem 0;
+  overflow: hidden;
 
   &[open] {
     translate: 0 0;
@@ -424,12 +559,21 @@
     translate: -1.5rem 0;
   }
 }
+.drawer-in {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 .drawer-head {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   padding: var(--pad-card) var(--pad-card) 0;
+}
+.drawer-foot {
+  padding-bottom: var(--pad-card);
 }
 
 /* ---- Page headers and the node's layout ---------------------------------------------------------------------------- */
@@ -468,6 +612,13 @@
   margin-right: 0.4rem;
   color: var(--muted);
 }
+/* What the page is and where it lives: "Project of Larkspur Bakery", each place a link. */
+.node-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.4rem;
+}
 .facts {
   display: flex;
   flex-wrap: wrap;
@@ -479,62 +630,125 @@
   content: "·";
   margin-left: 0.5rem;
 }
-.cards-2 {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--gap-cards);
-  align-items: stretch;
-  container-type: inline-size;
+/* A page's head: what it is on the left, its own actions on the right; on a narrow page the actions go under it. */
+.page-head-split {
+  justify-content: space-between;
+  align-items: flex-start;
 }
-@container (width >= 44rem) {
-  .cards-2-inner {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--gap-cards);
-  }
+.page-head-text {
+  gap: 0.45rem;
+  min-width: 0;
 }
-.cards-2-inner {
-  display: grid;
-  gap: var(--gap-cards);
-}
-.cards-2-inner > .card {
+.page-actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.node-page {
+/* ---- The board: the Overview's and a client's or a project's sections, in rows that split the width evenly ---------- */
+.board {
+  container: board / inline-size;
+}
+/* Each section of a row takes its own height: a short list beside a long one ends where its content ends, instead of
+   stretching into an empty card. */
+.board-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--gap-cards);
   align-items: start;
 }
-.node-tabs {
-  justify-self: start;
-  width: min(100%, 20rem);
-}
-@media (width < 80rem) {
-  .node-page [data-pane][data-active="false"] {
-    display: none;
+@container board (width >= 60rem) {
+  .board-row-wide {
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
   }
 }
-@media (width >= 80rem) {
-  .node-page {
-    grid-template-columns: minmax(0, 1fr) var(--chat-w);
+/* A section's list, and its way onward (the calendar, for the agenda) right after it. */
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.section-foot {
+  padding-top: 0.25rem;
+}
+/* What a section shows while it reads another scope or filter belongs to the previous one: it dims until the answer
+   arrives, and nothing moves. */
+[data-stale] {
+  opacity: 0.55;
+  transition: opacity var(--dur) var(--ease-std);
+}
+@container board (width >= 46rem) {
+  .board-row-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .node-tabs {
-    display: none;
-  }
-  .node-chat {
-    position: sticky;
-    top: calc(var(--header-h) + var(--gutter));
-    grid-column: 2;
-    grid-row: 1;
+}
+.board-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* A section's head: its title and count on one line, its own filters on the next, so every section reads the same. */
+.section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 0.875rem;
+}
+.section-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem 0.75rem;
+  min-height: 2.25rem;
+  align-content: center;
+}
+.section-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.section-new {
+  max-width: 26rem;
+  margin-bottom: 0.75rem;
+}
+
+/* The general bar: the client or project every section shows, and the saved views. */
+.board-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+}
+.board-scope {
+  flex: 1 1 16rem;
+  max-width: 26rem;
+}
+.board-scope .picker {
+  width: 100%;
+}
+.saved-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+
+  & .picker {
+    min-width: 13rem;
   }
 }
 
 /* ---- Rows of items ------------------------------------------------------------------------------------------------
    Every row of a list carries the same columns, so states compare without reading; each cell sits on the row's axis. */
 .rows {
+  container: rows / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--gap-rows);
@@ -652,47 +866,66 @@
 .row-body {
   overflow-wrap: break-word;
 }
-/* Where the window is narrow the title takes the whole row: the chips and the actions go to their own line under it,
-   so neither squeezes the title nor leaves a link's title without a column. */
-@media (width < 40rem) {
-  .row,
+/* Where the list is narrow —a phone, or a column of the board— the title takes the whole row: the chips and the actions
+   go to their own line under it, so neither squeezes the title nor leaves a link's title without a column. A task row
+   carries its priority and date besides its actions, so it reaches that point at a wider list than the others. */
+@container rows (width < 38rem) {
+  .row[data-type="task"] {
+    grid-template-columns: var(--col-check) minmax(0, 1fr);
+    grid-template-areas: "check main" ". chips" ". act";
+  }
+  .row[data-type="task"] .row-chips {
+    grid-area: chips;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .row[data-type="task"] :is(.row-prio, .row-due) {
+    grid-area: auto;
+    width: var(--col-prio);
+  }
+  .row[data-type="task"] .row-act {
+    justify-content: flex-start;
+  }
+}
+@container rows (width < 30rem) {
   .row[data-type="decision"],
   .row[data-type="note"],
   .row[data-type="link"] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "main" "act";
   }
-  .row[data-type="task"] {
-    grid-template-columns: var(--col-check) minmax(0, 1fr);
-    grid-template-areas: "check main" ". chips" ". act";
-  }
   .row[data-type="review"] {
     grid-template-columns: var(--col-check) minmax(0, 1fr);
     grid-template-areas: "check main" ". act";
   }
-  .row-chips {
-    grid-area: chips;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-  .row-prio,
-  .row-due {
-    grid-area: auto;
-  }
-  .row-act {
+  .row:not([data-type="task"]) .row-act {
     justify-content: flex-start;
   }
 }
-/* A task's subtasks sit under its title, indented on a guide, two levels at most; deeper ones fold behind a button. */
+/* A task's subtasks are rows of their own under it, indented on a guide and sharing its columns, so their priority and
+   date read under the task's; two levels at most, deeper ones fold behind a button. */
+.task-branch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-rows);
+}
 .subtasks {
-  margin-top: 0.25rem;
-  padding-left: 0.6rem;
+  margin-left: calc(var(--col-check, 1.75em) / 2 + 0.5rem);
+  padding-left: 0.65rem;
   border-left: 1px solid var(--guide);
+}
+/* A subtask's list is not a container of its own: its rows read the width of the task's list, so a task and its
+   subtasks keep one arrangement and their columns stay aligned. */
+.rows-nested {
+  container-type: normal;
 }
 .rows-nested .row {
   min-height: 2.5rem;
   padding-block: 0.25rem;
+}
+.subtasks-more-row {
+  padding: 0 0 0.25rem calc(1.75em + 1.25rem);
 }
 .subtasks-more {
   align-self: flex-start;
@@ -706,7 +939,8 @@
   }
 }
 /* A small link in a row still takes a whole target: its line grows to the touch size without changing its text. */
-.row-meta .link {
+.row-meta .link,
+.activity-what .link {
   display: inline-flex;
   align-items: center;
   min-height: 1.75rem;
@@ -784,13 +1018,28 @@
   }
 }
 
-/* The quick add on one line: the title takes the room, the rest keeps its size. */
+/* The quick add on one line: the title takes the room, the rest keeps its size; where the section covers several places,
+   where the new item goes sits beside the title. */
+.quick-add-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
 .quick-add {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+}
+.quick-add-where {
+  flex: 1 1 12rem;
+  max-width: 20rem;
+  min-width: 0;
+
+  & .picker {
+    width: 100%;
+  }
 }
 .quick-add .grow {
   flex: 1 1 14rem;
@@ -867,7 +1116,7 @@
 
 /* ---- Chat ---------------------------------------------------------------------------------------------------------
    One card the height of the window: the conversation scrolls inside it and the message box stays at its foot, so
-   nothing the node does around it moves the card. */
+   nothing the page does around it moves the card. Docked beside the page, or as a sheet where the window is narrow. */
 .chat {
   display: flex;
   flex-direction: column;
@@ -876,14 +1125,27 @@
   padding: 0;
   overflow: hidden;
 }
-@media (width < 80rem) {
-  .chat {
-    height: calc(100svh - var(--header-h) - 2 * var(--gutter) - 3.25rem - var(--gap-cards));
-  }
-}
 .chat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: var(--pad-card) var(--pad-card) 0.75rem;
   border-bottom: 1px solid var(--division);
+}
+.chat-title {
+  gap: 0.4rem;
+  min-width: 0;
+}
+.chat-sheet {
+  width: min(30rem, 100vw);
+}
+.chat-sheet .chat {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .chat-log {
   flex: 1;
@@ -1119,12 +1381,11 @@ fieldset.stack {
   min-width: 0;
 }
 
-/* On a narrow screen an agenda row stacks its time over its title (the rows of items: §Rows of items). */
-@media (width < 40rem) {
-  .row-chips .row-prio,
-  .row-chips .row-due {
-    width: var(--col-prio);
-  }
+/* In a narrow list an agenda row stacks its time over its title (the rows of items: §Rows of items). */
+.agenda {
+  container: agenda / inline-size;
+}
+@container agenda (width < 26rem) {
   .agenda-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.15rem;
@@ -1132,11 +1393,13 @@ fieldset.stack {
 }
 
 /* ---- Landing page ---------------------------------------------------------------------------------------------------- */
+/* The brand and the theme switch share a line; where the switch with its words does not fit, it takes the next one. */
 .landing-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.6rem 1rem;
   width: 100%;
 }
 .landing-lead {
@@ -1150,10 +1413,6 @@ fieldset.stack {
   flex-direction: column;
   gap: 0.35rem;
   max-width: 34rem;
-}
-/* The guide the demo opens with: its own card above the day, so the first action is in view. */
-.start-here .t-help {
-  max-width: 46rem;
 }
 /* The item's detail: a side panel anchored to the right edge, drawn with the site's surfaces and shadow. It enters and
    leaves from the same side, and on a phone it takes the whole screen. */
@@ -1304,39 +1563,269 @@ fieldset.stack {
   min-height: 5.75rem;
 }
 
-/* ---- The central panel: its bar (view, range, scope), the filters with their counts ------------------------------- */
+/* ---- A page's bar (the calendar's view, range and scope) ------------------------------------------------------------ */
 .panel-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem 0.9rem;
 }
-.panel-bar .seg {
-  min-width: min(20rem, 100%);
-}
-.panel-scope {
-  flex: 1 1 14rem;
-  max-width: 24rem;
-}
-.panel-scope .picker {
-  width: 100%;
-}
-.filter-group {
+
+/* ---- The figures: each a tile that rises, counts the whole universe of what the board shows, and takes the view to the
+   section it filters. Five read in one row where the board is wide, two to a row where it is narrow. ---------------- */
+.figures {
   display: grid;
-  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
-  align-items: center;
-  gap: 0.5rem 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-cards);
 }
-.filter-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-@media (width < 40rem) {
-  .filter-group {
-    grid-template-columns: minmax(0, 1fr);
+@container board (width >= 46rem) {
+  .figures {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+.figures-note {
+  grid-column: 1 / -1;
+}
+.figure-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.figure .t-meta[data-tone="alert"] {
+  color: var(--alert-ink);
+}
+.figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: var(--pad-card);
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+  text-align: left;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), border-color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      background: var(--read);
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--card-rim));
+      box-shadow: var(--shadow-card), var(--shadow-control-hover);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover:not(:disabled) .figure-value {
+      color: var(--accent);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &:disabled {
+    cursor: default;
+  }
+}
+.figure-value {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+  user-select: none;
+}
+.figure[data-tone="alert"] .figure-value {
+  color: var(--alert);
+}
+.figure-wait {
+  width: 2.5rem;
+  height: var(--text-h1);
+}
+.figure-label {
+  color: var(--ink);
+}
+/* Where the board is narrow the figures are compact tiles two to a row —each its number beside its words—, so the first
+   tasks are near the top of a phone; the last one of an odd count takes the whole row. It follows the tile's own rules,
+   which it narrows: written before them, they win with the same weight. */
+@container board (width < 46rem) {
+  .figures {
+    gap: 0.5rem;
+  }
+  .figure {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.9rem;
+  }
+  .figure:nth-child(odd of .figure):nth-last-child(1 of .figure) {
+    grid-column: 1 / -1;
+  }
+  .figure-value,
+  .figure-wait {
+    flex: none;
+    min-width: 2ch;
+  }
+}
+
+/* ---- Clients and projects: one card each, the whole card one link, with what is pending in it ------------------------ */
+/* The cards share the whole width: a client with two projects spreads them over it instead of leaving a third empty. */
+.node-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.node-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:has(.node-card-link:hover) {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division), var(--shadow-control);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &:has(.node-card-link:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+.node-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: inherit;
+  text-decoration: none;
+  outline: none;
+
+  /* The whole card takes the click, through its one link. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  @media (hover: hover) {
+    &:hover .node-card-name {
+      color: var(--accent);
+      text-decoration-color: currentColor;
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.node-card-name {
+  overflow-wrap: break-word;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: transparent;
+  transition: color var(--dur-hover-out) var(--ease-hover-out), text-decoration-color var(--dur-hover-out) var(--ease-hover-out);
+}
+.node-card-children {
+  overflow-wrap: break-word;
+}
+/* Four figures in four equal columns, each its number over its words, the same on every card. */
+.node-card-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0.15rem 0 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid var(--division);
+}
+.node-card-figure {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 0.15rem;
+  min-width: 0;
+  margin: 0;
+
+  & dd {
+    margin: 0;
+  }
+}
+.node-card-value {
+  font-family: var(--font-display);
+  font-size: var(--text-lead);
+  font-weight: 750;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.node-card-figure[data-tone="alert"] .node-card-value {
+  color: var(--alert);
+}
+
+/* ---- Activity: what changed, when, and by whom ---------------------------------------------------------------------- */
+.activity {
+  container: activity / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-rows);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activity-row {
+  display: grid;
+  grid-template-columns: 8.75em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  min-height: 3rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius-control);
+}
+.activity-what {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
+}
+/* Under the title, one line: what happened and where. */
+.activity-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.35rem;
+}
+@container activity (width < 30rem) {
+  .activity-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+  .activity-who {
+    justify-self: start;
+  }
+}
+
+/* ---- Settings ---------------------------------------------------------------------------------------------------- */
+.settings-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+.settings-entry {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--division);
+}
+
 /* A filter is a toggle: a pill that rises when chosen, with how many items it would show beside its name. */
 .chip {
   display: inline-flex;
@@ -1389,6 +1878,22 @@ fieldset.stack {
 }
 .panel-path {
   align-self: flex-start;
+}
+/* Deleting closes the record: its own line, last, apart from what edits the item. */
+.panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--division);
+}
+/* Why connecting is not available here, and the way out: its words, then its button. */
+.connect-blocked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
 }
 
 /* ---- The calendar: a month or a week of days, each a button that opens its detail ------------------------------- */

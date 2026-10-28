@@ -8,6 +8,8 @@ import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { Tabs } from "@/components/ui/tabs";
 import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, longDay, monthGrid, monthTitle, rangeLabel, today, weekdayNames, weekOf, type Day } from "@/lib/dates";
+import { WORKSPACE_CALENDAR } from "../blocks";
+import { plural } from "../sections";
 import { get, post, tool, type CalendarEvent, type EventsFailure, type Item } from "../client-api";
 import { ItemList, ItemRow } from "../items";
 import { useWorkspace } from "../workspace";
@@ -36,7 +38,7 @@ function daysOf(event: Event): Day[] {
   return days.length ? days : [first];
 }
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+const time = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" });
 
 // The calendar: a month or a week of days, each with the tasks due that day and the events of the Google accounts and
 // of the workspace itself; a day opens its detail, where events are created, changed, and deleted. A task without a due
@@ -108,7 +110,7 @@ function Calendar() {
   const month = anchor.slice(0, 7);
   const step = (direction: 1 | -1) => set({ date: view === "month" ? addMonths(anchor, direction) : addDays(anchor, 7 * direction) });
   const writable = accounts.filter((account) => !account.isDemo && account.status === "active");
-  const scopeOptions = [{ value: "all", label: "Everything" }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
+  const scopeOptions = [{ value: "all", label: "All clients and projects" }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
   const detail = byDay.get(selected) ?? { tasks: [], events: [] };
 
   async function removeEvent(event: Event) {
@@ -141,14 +143,14 @@ function Calendar() {
                   set({ date: null });
                   setSelected(today());
                 }} disabled={anchor === today()}>
-                Today
+                {view === "week" ? "This week" : "This month"}
               </Button>
               <Button size="sm" onClick={() => step(1)}>
                 Next
               </Button>
             </div>
-            <div className="panel-scope">
-              <Select label="Scope" value={scope ?? "all"} options={scopeOptions} onChange={(value) => set({ scope: value === "all" ? null : value })} />
+            <div className="board-scope">
+              <Select label="Client or project" value={scope ?? "all"} options={scopeOptions} onChange={(value) => set({ scope: value === "all" ? null : value })} />
             </div>
           </div>
         </header>
@@ -184,7 +186,7 @@ function Calendar() {
                           data-day={day}
                           aria-pressed={day === selected}
                           aria-current={day === today() ? "date" : undefined}
-                          aria-label={`${longDay(day)}: ${count === 0 ? "nothing" : `${entry?.tasks.length ?? 0} tasks, ${entry?.events.length ?? 0} events`}`}
+                          aria-label={`${longDay(day)}: ${count === 0 ? "nothing" : `${plural(entry?.tasks.length ?? 0, "task", "tasks")}, ${plural(entry?.events.length ?? 0, "event", "events")}`}`}
                           onClick={() => setSelected(day)}
                         >
                           <span className="cal-cell-day">{Number(day.slice(8))}</span>
@@ -286,7 +288,7 @@ function EventRow({ event, onRemove, tasks }: { event: Event; onRemove: () => vo
         )}
         <span className="t-meta">
           {event.allDay ? "All day" : `${time(event.start)}–${time(event.end)}`} ·{" "}
-          {event.origin === "local" ? <span className="pill">Workspace event · {event.calendarName}</span> : <span className="pill" data-tone="info">Google · {event.accountEmail}</span>}
+          {event.origin === "local" ? <span className="pill">{WORKSPACE_CALENDAR} · {event.calendarName}</span> : <span className="pill" data-tone="info">Google · {event.accountEmail}</span>}
         </span>
         {inside && inside.length > 0 && (
           <span className="t-meta" data-event-tasks>
@@ -358,7 +360,7 @@ function NewEvent({ day, scope, accounts }: { day: Day; scope: string | null; ac
       <div className="quick-add">
         <Select label="Calendar of the new event" value={where} options={places} onChange={setWhere} />
         {where === "workspace" && (
-          <Select label="Project of the new event" placeholder="Pick its project…" value={node} options={(tree ?? []).map((n) => ({ value: n.id, label: n.path }))} onChange={setNode} />
+          <Select label="Where the new event goes" placeholder="Pick a client or a project…" value={node} options={(tree ?? []).map((n) => ({ value: n.id, label: n.path }))} onChange={setNode} />
         )}
         <Button variant="primary" onClick={() => void add()} disabled={!title.trim() || (where === "workspace" && !node) || (start !== "" && !/^\d{1,2}:\d{2}$/.test(start))}>
           Add event

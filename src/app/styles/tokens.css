@@ -96,7 +96,7 @@
   --gap-cards: clamp(0.875rem, 0.68rem + 0.55vw, 1.375rem);
   --gap-rows: 0.25rem;
   --header-h: 3.75rem;
-  --sidebar-w: clamp(15rem, 12rem + 4vw, 18rem);
+  --sidebar-w: clamp(15.5rem, 12rem + 5vw, 19rem);
   --chat-w: clamp(21rem, 15rem + 8vw, 27rem);
 
   /* Shape */

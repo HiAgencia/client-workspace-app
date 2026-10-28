@@ -88,7 +88,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          node_id: string
+          node_id: string | null
+          owner_id: string
           parts: Json
           role: string
           seq: number
@@ -96,7 +97,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          node_id: string
+          node_id?: string | null
+          owner_id?: string
           parts: Json
           role: string
           seq?: never
@@ -104,7 +106,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          node_id?: string
+          node_id?: string | null
+          owner_id?: string
           parts?: Json
           role?: string
           seq?: never
@@ -604,7 +607,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      seed_demo: { Args: { p_today: string }; Returns: boolean }
+      seed_demo: {
+        Args: { p_today: string; p_zone?: string }
+        Returns: boolean
+      }
       take_usage: {
         Args: { p_cap: number; p_day: string; p_kind: string; p_owner: string }
         Returns: number
@@ -615,6 +621,10 @@ export type Database = {
           account_id: string
           from_node_id: string
         }[]
+      }
+      working_minutes_before: {
+        Args: { p_minutes: number; p_to: string; p_zone?: string }
+        Returns: string
       }
     }
     Enums: {

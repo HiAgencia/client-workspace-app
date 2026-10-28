@@ -2,12 +2,86 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { get, post, tool } from "./client-api";
+import { onFocusRequest } from "./focus-request";
 import { useWorkspace } from "./workspace";
+
+// Where the window holds the page and the chat side by side, the chat docks as a column of the page; narrower, it opens
+// as a sheet over the page, a modal with its own close.
+const DOCK_QUERY = "(width >= 80rem)";
+
+function subscribeDock(onChange: () => void) {
+  const query = window.matchMedia(DOCK_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+// Whether the window holds the chat as a column beside the page.
+export function useDocked(): boolean {
+  return useSyncExternalStore(subscribeDock, () => window.matchMedia(DOCK_QUERY).matches, () => true);
+}
+
+// The page's "Chat": it opens and closes the chat beside the page, which keeps the conversation of the place. Its words
+// say what the next press does.
+export function ChatToggle() {
+  const { chat } = useWorkspace();
+  return (
+    <Button size="sm" aria-controls={chat.open ? "chat-panel" : undefined} onClick={() => chat.setOpen(!chat.open)} data-chat-toggle={chat.open ? "open" : "closed"}>
+      {chat.open ? "Close the chat" : "Open the chat"}
+    </Button>
+  );
+}
+
+// The chat the page offers, when it is open: docked as a column, or as a sheet where the window is narrow.
+export function ChatDock() {
+  const { chat } = useWorkspace();
+  const docked = useDocked();
+  const { setOpen } = chat;
+  const close = useCallback(() => setOpen(false), [setOpen]);
+  if (chat.scope === undefined || !chat.open) return null;
+  const panel = <ChatPanel key={`chat-${chat.scope ?? "workspace"}`} nodeId={chat.scope} onClose={close} />;
+  return docked ? (
+    <aside className="chat-dock" id="chat-panel" aria-label="Chat">
+      {panel}
+    </aside>
+  ) : (
+    <ChatSheet onClose={close}>{panel}</ChatSheet>
+  );
+}
+
+function ChatSheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const el = dialog.current;
+    if (el && !el.open) el.showModal();
+  }, []);
+  // A landing asked for a place of the page (the palette, a link) closes the sheet first: a modal holds the focus, and the
+  // place behind it could not take it.
+  useEffect(() => onFocusRequest(onClose), [onClose]);
+  return (
+    <dialog
+      ref={dialog}
+      id="chat-panel"
+      className="dialog panel chat-sheet"
+      aria-label="Chat"
+      onClose={onClose}
+      onPointerDown={(event) => {
+        if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
+      }}
+      onClick={(event) => {
+        // A click on the backdrop closes it only when the whole gesture happened outside the panel.
+        if (event.target === dialog.current && dialog.current.dataset.downOutside !== undefined) onClose();
+        if (dialog.current) delete dialog.current.dataset.downOutside;
+      }}
+    >
+      {children}
+    </dialog>
+  );
+}
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 
@@ -18,38 +92,47 @@ type WriteOutput = {
   previous?: { title: string; body: string | null; url: string | null; priority: number | null; dueOn: string | null; status: string };
 };
 
+// What the chat did, in the verbs the activity uses for the same things.
 const DONE: Record<string, string> = {
-  create_task: "Created task",
-  add_note: "Wrote note",
-  add_decision: "Recorded decision",
-  add_link: "Saved link",
-  add_review: "Added to review",
+  create_task: "Added task",
+  add_note: "Added note",
+  add_decision: "Added decision",
+  add_link: "Added link",
+  add_review: "Added item to review",
   update_item: "Changed",
   delete_item: "Deleted",
 };
 
-// The chat of the open node: one card the height of the window. It loads the stored conversation first, then hands it
-// to the live chat; the conversation scrolls inside the card and the message box stays at its foot.
-export function ChatPanel({ nodeId }: { nodeId: string }) {
+// The chat of the open place —a node, or the whole workspace on the Overview—: one card the height of the window. It loads
+// the stored conversation first, then hands it to the live chat; the conversation scrolls inside the card and the message
+// box stays at its foot.
+export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
   const [initial, setInitial] = useState<UIMessage[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { tree } = useWorkspace();
-  const name = tree?.find((node) => node.id === nodeId)?.name;
+  const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
+  const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
+  const reach = nodeId === null ? "It works on every client and project." : node ? `It works on ${node.path}${below}.` : "It works on this page's client or project.";
 
   useEffect(() => {
-    void get<{ messages: UIMessage[] }>(`/api/chat?node=${nodeId}`).then((answer) => {
+    void get<{ messages: UIMessage[] }>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat").then((answer) => {
       if (answer.ok) setInitial(answer.messages);
       else setError(answer.message);
     });
   }, [nodeId]);
 
   return (
-    <section className="card chat" aria-labelledby="chat-title" data-chat>
+    <section className="card chat" aria-labelledby="chat-title" data-chat={nodeId ?? "workspace"}>
       <div className="chat-head">
-        <h2 id="chat-title" className="t-title">
-          Chat
-        </h2>
-        <p className="t-meta">{name ? `It works on ${name} and what is below it.` : "It works on this project and what is below it."}</p>
+        <div className="stack chat-title">
+          <h2 id="chat-title" className="t-title">
+            Chat
+          </h2>
+          <p className="t-meta">{reach}</p>
+        </div>
+        <Button size="sm" onClick={onClose} data-chat-close>
+          Close
+        </Button>
       </div>
       {initial === null ? (
         <div className="chat-log" role="status" aria-busy="true" aria-label="Loading the conversation">
@@ -72,7 +155,7 @@ export function ChatPanel({ nodeId }: { nodeId: string }) {
   );
 }
 
-function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[] }) {
+function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIMessage[] }) {
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
   const [image, setImage] = useState<FileUIPart | null>(null);
@@ -80,7 +163,7 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
   const log = useRef<HTMLOListElement>(null);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { messages, sendMessage, status, error, clearError } = useChat({
-    id: nodeId,
+    id: nodeId ?? "workspace",
     messages: initial,
     // Only the new message travels; the server rebuilds the conversation from what it stored.
     transport: new DefaultChatTransport({
@@ -131,7 +214,9 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
       <ol className="chat-log" ref={log} aria-live="polite">
         {messages.length === 0 && (
           <li className="inline-note">
-            Ask it to create a task, record a decision, or tell you what is pending here. A screenshot of a message becomes tasks.
+            {nodeId === null
+              ? "Ask what is pending across every client and project, or to add a task to one of them by its name. Attach an image of a message and it turns it into tasks."
+              : "Ask it to add a task, record a decision, or tell you what is pending here. Attach an image of a message and it turns it into tasks."}
           </li>
         )}
         {messages.map((message) => (
@@ -341,7 +426,7 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   return (
     // Its name says what the next press does, so it carries no pressed state.
     <Button size="sm" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())}>
-      {working ? "Transcribing…" : recording ? "Stop and transcribe" : "Voice note"}
+      {working ? "Transcribing…" : recording ? "Stop and transcribe" : "Dictate"}
     </Button>
   );
 }
