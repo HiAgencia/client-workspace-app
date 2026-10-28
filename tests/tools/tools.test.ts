@@ -657,10 +657,21 @@ describe("notes, subtasks, links, and branches", () => {
     const { item: decision } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.mobile, decision: "Deep decision" });
     const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Task with a note" });
     const { item: onTask } = await run<{ item: ItemOut }>("add_note", userCtx(a), { parent: task.id, text: "<p>On the task</p>" });
-    const overview = await run<{ notes: ItemOut[]; decisions: ItemOut[] }>("get_overview", userCtx(a), { node: treeA.acme });
+    const overview = await run<{ notes: ItemOut[]; decisions: ItemOut[]; totals: { notes: number; decisions: number }; below: { notes: { count: number } } }>(
+      "get_overview",
+      userCtx(a),
+      { node: treeA.acme },
+    );
     expect(overview.notes.some((n) => n.id === note.id && n.nodePath === "Acme / Web / Landing")).toBe(true);
     expect(overview.decisions.some((d) => d.id === decision.id && d.nodePath === "Acme / Mobile")).toBe(true);
     expect(overview.notes.some((n) => n.id === onTask.id)).toBe(false);
+    // The totals count what the lists draw from, and the summary of what is below counts the same notes: none of a task's.
+    expect(overview.totals.notes).toBeGreaterThanOrEqual(overview.notes.length);
+    expect(overview.totals.decisions).toBeGreaterThanOrEqual(overview.decisions.length);
+    const listed = await run<{ items: Array<ItemOut & { parentId: string | null }> }>("list_items", userCtx(a), { node: treeA.acme, type: "note", includeSubprojects: true });
+    const ownOrBelow = listed.items.filter((n) => n.parentId === null);
+    expect(overview.totals.notes).toBe(ownOrBelow.length);
+    expect(overview.below.notes.count).toBe(ownOrBelow.filter((n) => n.nodeId !== treeA.acme).length);
   });
 });
 

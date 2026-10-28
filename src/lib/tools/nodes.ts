@@ -70,10 +70,10 @@ export const listTree = defineTool({
 export const getOverview = defineTool({
   name: "get_overview",
   description:
-    "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), the notes, recent " +
-    "decisions, and links of the node and of everything below it (each with its nodePath), what the nodes below hold " +
-    "(below), open things to review, its subprojects, and the events of the next seven days from its accounts. Start " +
-    "here to answer what is pending or to advise on what to do next.",
+    "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), the latest notes, " +
+    "decisions, and links of the node and of everything below it (each with its nodePath; totals says how many there are " +
+    "in all), what the nodes below hold (below), open things to review, its subprojects, and the events of the next seven " +
+    "days from its accounts. Start here to answer what is pending or to advise on what to do next.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
@@ -86,6 +86,8 @@ export const getOverview = defineTool({
     notes: z.array(itemSchema),
     decisions: z.array(itemSchema),
     links: z.array(itemSchema),
+    // How many notes, decisions, and links there are: the lists carry the latest ones.
+    totals: z.object({ notes: z.number(), decisions: z.number(), links: z.number() }),
     toReview: z.array(itemSchema),
     events: z.array(browsedEventSchema),
     eventFailures: z.array(eventsFailureSchema),
@@ -100,21 +102,19 @@ export const getOverview = defineTool({
     const resolved = resolveNode(scope, input.node);
     if (isError(resolved)) return resolved;
     const node = resolved.node;
+    // The subtree holds the node itself: one read gives the node's own work, the notes, decisions, and links found from
+    // every node above them, and the sums that say where the rest of its work is.
     const below = [...subtree(scope.all, node.id)].filter((id) => scope.reachable.has(id));
-    const [read, subtreeRead] = await Promise.all([
-      selectAllItems(ctx, [node.id], (query) => query.is("deleted_at", null), "reading the node"),
-      // The node and what is below it: notes, decisions, and links are found from every node above them, and the rest is
-      // summed so the node says where its work is.
-      selectAllItems(ctx, below, (query) => query.is("deleted_at", null), "reading what is below"),
-    ]);
-    if (isError(read)) return read;
+    const subtreeRead = await selectAllItems(ctx, below, (query) => query.is("deleted_at", null), "reading the node and what is below");
     if (isError(subtreeRead)) return subtreeRead;
-    const items = read.rows.map((row) => toItem(row, scope));
-    const kept = (type: "note" | "decision" | "link") =>
-      subtreeRead.rows.filter((row) => row.type === type && (type !== "note" || row.parent_item_id === null)).map((row) => toItem(row, scope)).sort(newestFirst);
+    // A note hanging from a task is the task's: it reads in the task's details, and neither lists nor counts here.
+    const kept = (row: { type: string; parent_item_id: string | null }, type: "task" | "note" | "decision" | "link" | "review") =>
+      row.type === type && (type !== "note" || row.parent_item_id === null);
+    const items = subtreeRead.rows.filter((row) => row.node_id === node.id).map((row) => toItem(row, scope));
+    const latest = (type: "note" | "decision" | "link") => subtreeRead.rows.filter((row) => kept(row, type)).map((row) => toItem(row, scope)).sort(newestFirst);
     const deeper = subtreeRead.rows.filter((row) => row.node_id !== node.id);
     const summary = (type: "task" | "decision" | "review" | "note", open: boolean) => {
-      const rows = deeper.filter((row) => row.type === type && (!open || row.status === "open"));
+      const rows = deeper.filter((row) => kept(row, type) && (!open || row.status === "open"));
       const where = new Map<string, number>();
       for (const row of rows) where.set(row.node_id, (where.get(row.node_id) ?? 0) + 1);
       const top = [...where.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -140,16 +140,17 @@ export const getOverview = defineTool({
       ...google.events.map((event) => ({ ...event, origin: "google" as const, localId: null, nodeId: null, nodePath: null })),
       ...local.events.map(fromLocal),
     ].sort((a, b) => Date.parse(a.allDay ? `${a.start}T00:00:00` : a.start) - Date.parse(b.allDay ? `${b.start}T00:00:00` : b.start));
+    const [notes, decisions, links] = [latest("note"), latest("decision"), latest("link")];
     return ok({
       node: { id: node.id, path: node.path, kind: node.kind },
       children: [...scope.all.values()]
         .filter((child) => child.parentId === node.id && scope.reachable.has(child.id))
         .map((child) => ({ id: child.id, name: child.name })),
       openTasks: items.filter((item) => item.type === "task" && item.status === "open").sort(byPriorityThenDue),
-      // A note hanging from a task is the task's: it reads in the task's details, not here.
-      notes: kept("note").slice(0, 20),
-      decisions: kept("decision").slice(0, 10),
-      links: kept("link").slice(0, 30),
+      notes: notes.slice(0, 20),
+      decisions: decisions.slice(0, 10),
+      links: links.slice(0, 30),
+      totals: { notes: notes.length, decisions: decisions.length, links: links.length },
       below: {
         openTasks: summary("task", true),
         notes: summary("note", false),

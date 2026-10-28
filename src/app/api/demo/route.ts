@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         const tokens = await settleDemoTokens(serviceClient(), owner, zone);
-        if (tokens.failed > 0) console.error(`demo: ${tokens.failed} agent tokens kept the moment they were planted`);
+        if (tokens.failed > 0) console.error(`demo: ${tokens.failed} agent tokens kept the moment they were planted: ${tokens.reasons.join("; ")}`);
       } catch (error) {
         console.error(error instanceof Error ? error.message : error);
       }

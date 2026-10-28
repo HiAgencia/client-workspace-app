@@ -31,13 +31,15 @@ import {
 import { NewNode } from "./side-nav";
 import { useWorkspace } from "./workspace";
 
-// The notes, decisions, and links of the node and of everything below it, each with its path.
+// The latest notes, decisions, and links of the node and of everything below it, each with its path, and how many there
+// are in all.
 type Overview = {
   node: { id: string; path: string; kind: TreeNode["kind"] };
   children: Array<{ id: string; name: string }>;
   notes: Item[];
   decisions: Item[];
   links: Item[];
+  totals: Record<"notes" | "decisions" | "links", number>;
 };
 
 type Account = { id: string; email: string; status: string; nodeIds: string[] };
@@ -200,11 +202,11 @@ export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutc
         <ChildrenSection parent={node} nodes={children} board={figures} failed={board.error !== null} />
       </WorkRows>
       <div className="board-row board-row-split">
-        <Section title="Notes" type="note" nodeId={nodeId} items={overview.notes} empty="No notes here yet." />
-        <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty="No decisions here yet." />
+        <Section title="Notes" type="note" nodeId={nodeId} items={overview.notes} total={overview.totals.notes} empty="No notes here yet." />
+        <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} total={overview.totals.decisions} empty="No decisions here yet." />
       </div>
       <div className="board-row board-row-split">
-        <Section title="Links" type="link" nodeId={nodeId} items={overview.links} empty="No links saved here yet." />
+        <Section title="Links" type="link" nodeId={nodeId} items={overview.links} total={overview.totals.links} empty="No links saved here yet." />
         <AccountsCard nodeId={nodeId} accounts={accounts} failed={accountsError} chain={chain} />
       </div>
     </article>
@@ -430,9 +432,11 @@ function AccountsCard({ nodeId, accounts, failed, chain }: { nodeId: string; acc
   );
 }
 
-// What the node and those below it keep: each row says where it lives when that is not the page's own node.
-function Section({ title, type, nodeId, items, empty }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string }) {
+// What the node and those below it keep: each row says where it lives when that is not the page's own node. The section
+// lists the latest ones and says how many there are in all; search finds the rest.
+function Section({ title, type, nodeId, items, total, empty }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; total: number; empty: string }) {
   const id = `section-${type}`;
+  const more = total > items.length;
   return (
     <section className="card board-section" aria-labelledby={id} data-section={type}>
       <div className="section-head">
@@ -440,7 +444,7 @@ function Section({ title, type, nodeId, items, empty }: { title: string; type: I
           <h2 id={id} className="t-title">
             {title}
           </h2>
-          {items.length > 0 && <span className="t-meta">{items.length}</span>}
+          {items.length > 0 && <span className="t-meta">{more ? `${items.length} of ${total}` : items.length}</span>}
         </div>
       </div>
       <QuickAdd nodeId={nodeId} type={type} />
@@ -449,6 +453,7 @@ function Section({ title, type, nodeId, items, empty }: { title: string; type: I
       ) : (
         <ItemList items={items}>{(item) => <ItemRow item={item} showPath={item.nodeId !== nodeId} />}</ItemList>
       )}
+      {more && <p className="t-meta">{`Showing the latest ${items.length} of ${total}. Search finds the others.`}</p>}
     </section>
   );
 }
@@ -456,7 +461,7 @@ function Section({ title, type, nodeId, items, empty }: { title: string; type: I
 function notLanded(target: FocusTarget, landing: Landing): string {
   if (landing === "hidden") return "That place is there, but something on top of it holds the focus: close it and try again.";
   if (target.kind !== "item") return "That place is not on this page.";
-  if (target.type === "decision" || target.type === "link") return `“${target.title}” is not on this page: it lists the latest ${target.type}s.`;
+  if (target.type === "note" || target.type === "decision" || target.type === "link") return `“${target.title}” is not on this page: it lists the latest ${target.type}s.`;
   return `“${target.title}” is not on this page anymore.`;
 }
 

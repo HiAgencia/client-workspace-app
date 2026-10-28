@@ -1648,8 +1648,8 @@ fieldset.stack {
   color: var(--ink);
 }
 /* Where the board is narrow the figures are compact tiles two to a row —each its number beside its words—, so the first
-   tasks are near the top of a phone; the last one of an odd count takes the whole row. It follows the tile's own rules,
-   which it narrows: written before them, they win with the same weight. */
+   tasks are near the top of a phone; the last one of an odd count takes the whole row. It comes after the tile's own
+   rules, which it narrows: with the same weight, the later rule wins. */
 @container board (width < 46rem) {
   .figures {
     gap: 0.5rem;

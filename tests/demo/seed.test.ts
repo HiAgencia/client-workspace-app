@@ -270,7 +270,7 @@ describe("the demo seed", () => {
 
     // The server dates them once planted, as the demo's route does: issued and last used the working minutes ago the tree
     // says, so Settings tells the same story as the activity.
-    expect(await settleDemoTokens(serviceClient(), user.id, ZONE)).toEqual({ settled: declaredTokens().length, failed: 0 });
+    expect(await settleDemoTokens(serviceClient(), user.id, ZONE)).toEqual({ settled: declaredTokens().length, failed: 0, reasons: [] });
     const dated = await user.client.from("agent_tokens").select("node_id, label, created_at, last_used_at");
     expect(dated.error).toBeNull();
     for (const row of dated.data ?? []) {

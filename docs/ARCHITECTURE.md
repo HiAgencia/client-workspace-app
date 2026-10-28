@@ -100,7 +100,7 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 |---|---|---|
 | `list_tree` | yes | The tree visible from the scope, with each node's open tasks and open items to review, each counting its subtree |
 | `get_board` | yes | For the person's day, what is open, late, due today and in a stretch of days (`from`–`through`, such as the whole week), undated, and to review, in everything in reach or below one node, and the same figures per node, each counting its subtree |
-| `get_overview` | yes | A node: open tasks by priority, notes, recent decisions, the links of its subtree, items to review, what the nodes below hold, and (unless asked without them) the next seven days of events from its accounts and the workspace's own |
+| `get_overview` | yes | A node: open tasks by priority; the latest notes, decisions, and links of the node and its subtree, each with its path, and how many there are in all; items to review; what the nodes below hold; and (unless asked without them) the next seven days of events from its accounts and the workspace's own |
 | `browse_items` | yes | Items of a node and its subtree (or everything) by type, status, priority, origin, text, due range, undated, or parent, with each filter's counts and, for a task with subtasks, how many are open and done; an undated item is outside every range |
 | `list_items` | yes | A node's items filtered by type and status, or what hangs from a task |
 | `search_items` | yes | Text search over titles and bodies |
