@@ -39,9 +39,17 @@ function plainToHtml(text: string): string {
     .join("");
 }
 
+// Whether a text is the closed list's HTML: it opens or closes one of its tags. Anything else —"a<b", "Vec<String>", a
+// component's name in a coding agent's note— is plain text and stays whole.
+const KNOWN_TAG = /<\/?(p|br|strong|b|em|i|ul|ol|li|a|span|div|h[1-4]|blockquote)(\s[^>]*)?\/?>/i;
+
+export function isRichHtml(input: string): boolean {
+  return KNOWN_TAG.test(input);
+}
+
 export function sanitizeRichText(input: string | null | undefined): string | null {
   if (input == null) return null;
-  if (!/<[a-z!/]/i.test(input)) input = plainToHtml(input);
+  if (!isRichHtml(input)) input = plainToHtml(input);
   let out = "";
   // The open tags as written to the output, so every one closes in order whatever the input did.
   const open: string[] = [];

@@ -282,9 +282,7 @@ export const linkTaskEvent = defineTool({
       if (error) return dbFail("reading the account", error);
       if (!account) return fail("not_found", `no account with id ${input.account} is reachable here`);
     }
-    // A task lives in one event: the previous link goes first.
-    const { error: clearError } = await ctx.db.from("item_events").delete().eq("item_id", input.task);
-    if (clearError) return dbFail("moving the task", clearError);
+    // A task lives in one event: linking it again replaces its link in one write, so it is never left without one.
     const row = {
       item_id: input.task,
       event_id: input.event ?? null,
@@ -292,7 +290,7 @@ export const linkTaskEvent = defineTool({
       calendar_id: input.event ? null : input.calendar!,
       google_event_id: input.event ? null : input.googleEvent!,
     };
-    const { error } = await ctx.db.from("item_events").insert(row);
+    const { error } = await ctx.db.from("item_events").upsert(row, { onConflict: "item_id" });
     if (error) return dbFail("putting the task in the event", error);
     return ok({
       link: { itemId: row.item_id, eventId: row.event_id, accountId: row.account_id, calendarId: row.calendar_id, googleEventId: row.google_event_id },
@@ -320,11 +318,10 @@ export const unlinkTaskEvent = defineTool({
 
 // The links of some tasks and of some events, both ways: which event each task lives in, and which tasks each event
 // holds.
-export async function taskEventLinks(ctx: ToolContext, filter: { itemIds?: string[]; eventIds?: string[]; googleEventIds?: string[] }) {
+export async function taskEventLinks(ctx: ToolContext, filter: { itemIds?: string[]; eventIds?: string[] }) {
   let query = ctx.db.from("item_events").select("item_id, event_id, account_id, calendar_id, google_event_id");
   if (filter.itemIds) query = query.in("item_id", filter.itemIds);
   if (filter.eventIds) query = query.in("event_id", filter.eventIds);
-  if (filter.googleEventIds) query = query.in("google_event_id", filter.googleEventIds);
   const { data, error } = await query.limit(1000);
   if (error) return dbFail("reading what lives in the events", error);
   return ok({

@@ -287,7 +287,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   );
 }
 
-// The sidebar's content, the same in the wide sidebar and in the phone's drawer: Today, Accounts, and the tree, with
+// The sidebar's content, the same in the wide sidebar and in the phone's drawer: its links, the views, and the tree, with
 // ONE piece marking where the person is.
 function SideNav() {
   const pathname = usePathname();

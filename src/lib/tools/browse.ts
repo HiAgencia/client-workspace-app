@@ -220,9 +220,13 @@ export const browseEvents = defineTool({
     // A node reads its visible accounts; everything reads each client root and each node an account hangs from below a
     // root, once each, in parallel. The workspace's own events come in the same round.
     let anchors: TreeNode[] = node ? [node] : [...scope.all.values()].filter((n) => n.parentId === null && scope.reachable.has(n.id));
+    const failures = new Map<string, EventsFailure>();
     if (!node && ctx.events) {
       const { data: links, error } = await ctx.db.from("node_accounts").select("node_id");
-      if (error) console.error("events: reading where accounts hang", error.message);
+      if (error) {
+        console.error("events: reading where accounts hang", error.message);
+        failures.set("", { accountId: "", accountEmail: "", reason: "the accounts that hang below a client could not be read" });
+      }
       const below = new Set((links ?? []).map((link) => link.node_id));
       anchors = [...anchors, ...[...below].map((id) => scope.all.get(id)).filter((n): n is TreeNode => Boolean(n && n.parentId !== null))];
     }
@@ -232,7 +236,6 @@ export const browseEvents = defineTool({
     ]);
     if (isError(local)) return local;
     const events = new Map<string, BrowsedEvent>();
-    const failures = new Map<string, EventsFailure>();
     for (const answer of google) {
       for (const event of answer.events) events.set(`g:${event.accountId}:${event.calendarId}:${event.id}`, fromGoogle(event));
       for (const failure of answer.failures) failures.set(failure.accountId, failure);

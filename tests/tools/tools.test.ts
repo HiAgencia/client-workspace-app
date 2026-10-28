@@ -611,6 +611,30 @@ describe("versions", () => {
     expect(same.ok && same.revisions).toHaveLength(3);
   });
 
+  it("restoring a subtask deleted before its parent brings the parent back too: no live item under a deleted one", async () => {
+    const { item: parent } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Orphan parent" });
+    const { item: child } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: parent.id, title: "Orphan child" });
+    await run("delete_item", userCtx(a), { id: child.id });
+    await run("delete_item", userCtx(a), { id: parent.id });
+    const restored = await restoreItem(userCtx(a), child.id);
+    expect(restored.ok).toBe(true);
+    const rows = await a!.client.from("items").select("id, deleted_at").in("id", [parent.id, child.id]);
+    expect(rows.data?.every((row) => row.deleted_at === null)).toBe(true);
+  });
+
+  it("restoring a version never moves the deletion of one item alone", async () => {
+    const { item: parent } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Version parent" });
+    const { item: child } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: parent.id, title: "Version child" });
+    await run("delete_item", userCtx(a), { id: parent.id });
+    // The deletion left a version whose photo is the live parent; restoring it must not revive the parent without its child.
+    const listed = await listRevisions(userCtx(a), parent.id);
+    if (!listed.ok) throw new Error(listed.message);
+    const live = listed.revisions.find((revision) => revision.snapshot.deleted_at === null)!;
+    await restoreRevision(userCtx(a), live.id);
+    const rows = await a!.client.from("items").select("id, deleted_at").in("id", [parent.id, child.id]);
+    expect(rows.data?.every((row) => row.deleted_at !== null)).toBe(true);
+  });
+
   it("the trash lists a deleted branch once, by its top item", async () => {
     const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Trash parent" });
     await run("create_task", userCtx(a), { parent: task.id, title: "Trash child" });

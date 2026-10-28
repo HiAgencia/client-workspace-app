@@ -350,6 +350,20 @@ export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolRes
   if (!found.row.deleted_at) return ok({ item: toItem(found.row, found.scope), branch: 0 });
   const mark = origin(ctx);
   if (!mark) return fail("internal", "an agent write needs its token's label");
+  // A subtask deleted before its parent comes back with the parent's branch first: a live item never hangs from a
+  // deleted one. The topmost deleted ancestor is restored, and then the item itself.
+  let top: ItemRow | null = null;
+  for (let cursor = found.row.parent_item_id; cursor; ) {
+    const { data: parent, error: parentError } = await ctx.db.from("items").select(ITEM_COLUMNS).eq("id", cursor).maybeSingle();
+    if (parentError) return dbFail("reading the parent task", parentError);
+    if (!parent) break;
+    if (parent.deleted_at) top = parent;
+    cursor = parent.parent_item_id;
+  }
+  if (top) {
+    const { error: upError } = await ctx.db.rpc("restore_item_branch", { p_item: top.id, p_source: mark.source, p_agent_label: mark.agent_label as string });
+    if (upError) return dbFail("restoring the parent task", upError);
+  }
   const { data, error } = await ctx.db.rpc("restore_item_branch", {
     p_item: id,
     p_source: mark.source,
@@ -358,8 +372,11 @@ export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolRes
   if (error) return dbFail("restoring the item", error);
   const rows = (data ?? []) as ItemRow[];
   const own = rows.find((row) => row.id === id);
-  if (!own) return fail("not_found", `item ${id} was restored or changed meanwhile`);
-  return ok({ item: toItem(own, found.scope), branch: rows.length });
+  if (own) return ok({ item: toItem(own, found.scope), branch: rows.length });
+  // Restoring its parent's branch already brought it back.
+  const again = await reachableItem(ctx, id);
+  if (isError(again)) return fail("not_found", `item ${id} was restored or changed meanwhile`);
+  return ok({ item: toItem(again.row, again.scope), branch: rows.length });
 }
 
 const statusFilter = z
@@ -518,7 +535,8 @@ export async function listRevisions(ctx: ToolContext, itemId: string): Promise<T
   return ok({ revisions });
 }
 
-// Restoring a version writes its photo over the item; that change leaves its own version, so it can be undone too.
+// Restoring a version writes its photo over the item; that change leaves its own version, so it can be undone too. The
+// deletion is not part of it: a branch is deleted and restored only whole, through the trash.
 export async function restoreRevision(ctx: ToolContext, revisionId: string): Promise<ToolResult<z.infer<typeof itemOutput>>> {
   const { data: revision, error: readError } = await ctx.db
     .from("revisions")
@@ -544,7 +562,6 @@ export async function restoreRevision(ctx: ToolContext, revisionId: string): Pro
       priority: photo.priority,
       due_on: photo.due_on,
       parent_item_id: photo.parent_item_id,
-      deleted_at: photo.deleted_at,
       completed_at: photo.completed_at,
       changed_source: mark.source,
       changed_agent_label: mark.agent_label,

@@ -206,7 +206,3 @@ export function patchEvent(fetcher: Fetch, accessToken: string, calendarId: stri
 export async function deleteEvent(fetcher: Fetch, accessToken: string, calendarId: string, eventId: string): Promise<void> {
   await call<null>(fetcher, eventUrl(calendarId, eventId), { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }, "deleting the event");
 }
-
-export function getEvent(fetcher: Fetch, accessToken: string, calendarId: string, eventId: string) {
-  return call<GoogleEvent>(fetcher, eventUrl(calendarId, eventId), { headers: { Authorization: `Bearer ${accessToken}` } }, "reading the event");
-}

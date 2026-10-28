@@ -12,10 +12,11 @@ import { tool, type CalendarEvent, type EventsFailure, type Item } from "./clien
 import { PRIORITIES, TYPE_NAMES } from "./item-parts";
 import { ItemList, ItemRow } from "./items";
 import { Agenda, Empty } from "./node-view";
+import { PANEL_LAST_KEY } from "./panel-state";
 import { SaveView } from "./saved-views";
 import { useWorkspace } from "./workspace";
 
-export type View = "today" | "week" | "month" | "all";
+type View = "today" | "week" | "month" | "all";
 const VIEWS: Array<{ value: View; label: string }> = [
   { value: "today", label: "Today" },
   { value: "week", label: "Week" },
@@ -44,11 +45,10 @@ type Facets = {
 type Browse = { items: Item[]; total: number; counts: Facets; scope: { id: string | null; path: string } };
 type Events = { events: Array<CalendarEvent & { origin: "google" | "local" }>; failures: EventsFailure[] };
 
-export const PANEL_LAST_KEY = "client-workspace:last-view";
 
 // The panel's state lives in the URL, so reloading and going back bring the same view; the last one is also kept in the
 // browser, for the sidebar to offer it again.
-export function readPanel(params: URLSearchParams) {
+function readPanel(params: URLSearchParams) {
   const view = (VIEWS.some((v) => v.value === params.get("view")) ? params.get("view") : "today") as View;
   const date = isDay(params.get("date")) ? (params.get("date") as Day) : today();
   const list = (key: string) => (params.get(key) ?? "").split(",").filter(Boolean);
@@ -115,7 +115,7 @@ function CentralPanel() {
     [params, pathname, router],
   );
 
-  // The last view is kept for the sidebar; the URL stays the source of truth.
+  // The last view is kept for the sidebar to offer it again; the URL stays the source of truth.
   useEffect(() => {
     localStorage.setItem(PANEL_LAST_KEY, params.toString());
   }, [params]);
@@ -351,7 +351,7 @@ function CentralPanel() {
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="filter-group" role="group" aria-label={label}>
-      <span className="t-label filter-label">{label}</span>
+      <span className="t-label">{label}</span>
       <div className="filter-chips">{children}</div>
     </div>
   );
@@ -360,7 +360,7 @@ function FilterGroup({ label, children }: { label: string; children: React.React
 function Chip({ pressed, count, onClick, children, data }: { pressed: boolean; count: number; onClick: () => void; children: string; data: string }) {
   return (
     <button type="button" className="chip" aria-pressed={pressed} onClick={onClick} data-filter={data}>
-      <span className="chip-label">{children}</span>
+      <span>{children}</span>
       <span className="chip-count" aria-label={`${count} ${count === 1 ? "item" : "items"}`}>
         {count}
       </span>

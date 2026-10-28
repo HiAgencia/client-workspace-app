@@ -28,6 +28,12 @@ describe("the rich text sanitizer", () => {
     expect(sanitizeRichText("<p></p><p><br></p>")).toBeNull();
   });
 
+  it("keeps text with a < that opens no tag of the list whole, as plain text", () => {
+    expect(sanitizeRichText("a<b")).toBe("<p>a&lt;b</p>");
+    expect(sanitizeRichText("Fix the padding of <Button> and Vec<String>")).toBe("<p>Fix the padding of &lt;Button&gt; and Vec&lt;String&gt;</p>");
+    expect(richTextToPlain(sanitizeRichText("Vec<String>"))).toBe("Vec<String>");
+  });
+
   it("closes what the input left open and maps b, i, and div to the closed list", () => {
     expect(sanitizeRichText("<div><b>bold<i>both</div>")).toBe("<p><strong>bold<em>both</em></strong></p>");
   });

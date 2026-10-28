@@ -662,12 +662,12 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "main" "act";
   }
-  .row[data-type="task"],
-  .row[data-type="review"] {
+  .row[data-type="task"] {
     grid-template-columns: var(--col-check) minmax(0, 1fr);
     grid-template-areas: "check main" ". chips" ". act";
   }
   .row[data-type="review"] {
+    grid-template-columns: var(--col-check) minmax(0, 1fr);
     grid-template-areas: "check main" ". act";
   }
   .row-chips {
@@ -1201,12 +1201,6 @@ fieldset.stack {
 .panel-title .t-title,
 .panel-path {
   overflow-wrap: anywhere;
-}
-.panel-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
 }
 .panel-field {
   display: flex;

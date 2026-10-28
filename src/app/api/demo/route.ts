@@ -4,7 +4,7 @@ import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
 
-// The visitor's calendar day, so what the demo makes due "today" is due on their Today screen. It is required: the
+// The visitor's calendar day, so what the demo makes due "today" is due in the panel's Today view. It is required: the
 // server's own day is another zone's, and a demo dated from it would put "today" on the visitor's yesterday or tomorrow.
 const input = z.strictObject({ today: z.iso.date() });
 

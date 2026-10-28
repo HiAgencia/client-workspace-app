@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { GoogleError, type GoogleEvent, type GoogleEventInput } from "@/lib/google/api";
-import { richTextToPlain } from "@/lib/rich-text";
+import { isRichHtml, richTextToPlain } from "@/lib/rich-text";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
 import { dbFail, fail, isError, ok, type ToolError } from "./result";
@@ -34,6 +34,11 @@ export const googleEventSchema = z.object({
   accountId: z.string(),
   calendarId: z.string(),
 });
+
+// What Google's description takes: the text as written, or the plain text of the closed list's HTML.
+function description(notes: string): string {
+  return isRichHtml(notes) ? richTextToPlain(notes) : notes;
+}
 
 function shape(event: GoogleEvent, accountId: string, calendarId: string): z.infer<typeof googleEventSchema> {
   const start = event.start?.dateTime ?? event.start?.date ?? null;
@@ -111,7 +116,7 @@ export const createGoogleEvent = defineTool({
         ownerId: ctx.ownerId,
         accountId: input.account,
         calendarId: input.calendar,
-        event: { summary: input.title, ...(input.notes ? { description: richTextToPlain(input.notes) || input.notes } : {}), ...at },
+        event: { summary: input.title, ...(input.notes ? { description: description(input.notes) } : {}), ...at },
       });
       return ok({ event: shape(event, input.account, input.calendar) });
     } catch (error) {
@@ -135,7 +140,7 @@ export const updateGoogleEvent = defineTool({
     if (at && "ok" in at) return at;
     const patch: GoogleEventInput = { ...(at ?? {}) };
     if (input.title !== undefined) patch.summary = input.title;
-    if (input.notes !== undefined) patch.description = input.notes === null ? null : richTextToPlain(input.notes) || input.notes;
+    if (input.notes !== undefined) patch.description = input.notes === null ? null : description(input.notes);
     try {
       const event = await ctx.calendar!.update({ ownerId: ctx.ownerId, accountId: input.account, calendarId: input.calendar, eventId: input.event, event: patch });
       return ok({ event: shape(event, input.account, input.calendar) });
@@ -158,7 +163,7 @@ export const deleteGoogleEvent = defineTool({
       await ctx.calendar!.remove({ ownerId: ctx.ownerId, accountId: input.account, calendarId: input.calendar, eventId: input.event });
       // A task that lived in it is let go.
       const { error } = await ctx.db.from("item_events").delete().eq("account_id", input.account).eq("google_event_id", input.event);
-      if (error) console.error("google: letting go of the tasks of a deleted event", error.message);
+      if (error) return dbFail("the event was deleted in Google, but letting go of its tasks failed", error);
       return ok({ deleted: { id: input.event, accountId: input.account, calendarId: input.calendar } });
     } catch (error) {
       return googleFailure(error);
