@@ -130,7 +130,11 @@ export const getOverview = defineTool({
     
     const [google, local] = await Promise.all([
       eventsForNode(ctx, node, now.toISOString(), until.toISOString()),
-      localEventsIn(ctx, scope, below, now.toISOString().slice(0, 10), until.toISOString().slice(0, 10), { from: now.toISOString(), to: until.toISOString() }),
+      
+      localEventsIn(ctx, scope, below, new Date(now.getTime() - 14 * 3_600_000).toISOString().slice(0, 10), until.toISOString().slice(0, 10), {
+        from: now.toISOString(),
+        to: until.toISOString(),
+      }),
     ]);
     if (isError(local)) return local;
     const failures = google.failures;

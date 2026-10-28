@@ -39,9 +39,17 @@ function plainToHtml(text: string): string {
     .join("");
 }
 
+
+
+const KNOWN_TAG = /<\/?(p|br|strong|b|em|i|ul|ol|li|a|span|div|h[1-4]|blockquote)(\s[^>]*)?\/?>/i;
+
+export function isRichHtml(input: string): boolean {
+  return KNOWN_TAG.test(input);
+}
+
 export function sanitizeRichText(input: string | null | undefined): string | null {
   if (input == null) return null;
-  if (!/<[a-z!/]/i.test(input)) input = plainToHtml(input);
+  if (!isRichHtml(input)) input = plainToHtml(input);
   let out = "";
   
   const open: string[] = [];

@@ -15,7 +15,6 @@ type SelectProps = {
   placeholder?: string;
   
   look?: "field" | "chip";
-  className?: string;
   
   id?: string;
 };
@@ -23,7 +22,7 @@ type SelectProps = {
 
 
 
-export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", className, id }: SelectProps) {
+export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", id }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
   return (
     <Base.Root
@@ -38,7 +37,7 @@ export function Select({ value, onChange, options, label, placeholder = "Choose�
         id={id}
         
         aria-label={`${label}: ${chosen?.label ?? placeholder}`}
-        className={cx("picker", look === "field" ? "field" : "chip-picker", className)}
+        className={cx("picker", look === "field" ? "field" : "chip-picker")}
         data-tone={look === "chip" ? chosen?.tone : undefined}
       >
         <Base.Value className="picker-value" placeholder={placeholder} />

@@ -30,7 +30,7 @@ type Account = { id: string; email: string; status: string; nodeIds: string[] };
 
 const KIND: Record<string, string> = { client: "Client", project: "Project", subproject: "Subproject" };
 
-export function when(event: CalendarEvent, withDay = true): string {
+function when(event: CalendarEvent, withDay = true): string {
   if (event.allDay) {
     const day = new Date(`${event.start}T00:00`).toLocaleDateString(LOCALE, { weekday: "short", month: "short", day: "numeric" });
     return withDay ? `${day} · All day` : "All day";

@@ -186,7 +186,7 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
             <button
               key={tone}
               type="button"
-              className={cx("btn btn-quiet btn-sm rich-tool rich-tone", `tc-${tone}`)}
+              className={cx("btn btn-quiet btn-sm rich-tool", `tc-${tone}`)}
               aria-pressed={state?.tone === tone}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => editor?.chain().focus().setMark("tone", { tone }).run()}
