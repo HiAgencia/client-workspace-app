@@ -247,7 +247,12 @@ export async function seedDemo(db: Db, today: string, zone?: string): Promise<{ 
 
 
 
-export async function settleDemoTokens(service: Db, ownerId: string, zone: string, now = new Date()): Promise<{ settled: number; failed: number }> {
+export async function settleDemoTokens(
+  service: Db,
+  ownerId: string,
+  zone: string,
+  now = new Date(),
+): Promise<{ settled: number; failed: number; reasons: string[] }> {
   const { data: nodes, error } = await service.from("nodes").select("id, parent_id, name").eq("owner_id", ownerId);
   if (error) throw new Error(`demo tokens: reading the nodes: ${error.message}`);
   const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -268,17 +273,19 @@ export async function settleDemoTokens(service: Db, ownerId: string, zone: strin
   walk(demoSeedTree(now.toISOString().slice(0, 10)), "");
   
   const written = await Promise.all(
-    declared.map(async ({ path, token }) => {
+    declared.map(async ({ path, token }): Promise<{ count: number; reason: string | null }> => {
       const nodeId = byPath.get(path);
-      if (!nodeId) return 0;
+      if (!nodeId) return { count: 0, reason: `${path}: no such node` };
       const { data, error: refused } = await service
         .from("agent_tokens")
         .update({ created_at: workingMinutesBefore(now, token.issued, zone).toISOString(), last_used_at: workingMinutesBefore(now, token.lastUsed, zone).toISOString() })
         .eq("node_id", nodeId)
         .eq("label", token.label)
         .select("id");
-      return refused ? 0 : (data?.length ?? 0);
+      if (refused) return { count: 0, reason: `${path}: ${refused.message}` };
+      return data?.length ? { count: data.length, reason: null } : { count: 0, reason: `${path}: no token named ${token.label}` };
     }),
   );
-  return { settled: written.reduce((sum, count) => sum + count, 0), failed: written.filter((count) => count === 0).length };
+  const reasons = written.flatMap((each) => (each.reason ? [each.reason] : []));
+  return { settled: written.reduce((sum, each) => sum + each.count, 0), failed: reasons.length, reasons };
 }
