@@ -868,19 +868,20 @@
 }
 /* Where the list is narrow —a phone, or a column of the board— the title takes the whole row: the chips and the actions
    go to their own line under it, so neither squeezes the title nor leaves a link's title without a column. A task row
-   carries its priority and date besides its actions, so it reaches that point at a wider list than the others. */
+   carries its priority and date besides its actions, so it reaches that point at a wider list than the others; one with
+   no actions —the landing's picture of a project— reaches it with them. */
 @container rows (width < 38rem) {
-  .row[data-type="task"] {
+  .row[data-type="task"]:has(> .row-act) {
     grid-template-columns: var(--col-check) minmax(0, 1fr);
     grid-template-areas: "check main" ". chips" ". act";
   }
-  .row[data-type="task"] .row-chips {
+  .row[data-type="task"]:has(> .row-act) .row-chips {
     grid-area: chips;
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
   }
-  .row[data-type="task"] :is(.row-prio, .row-due) {
+  .row[data-type="task"]:has(> .row-act) :is(.row-prio, .row-due) {
     grid-area: auto;
     width: var(--col-prio);
   }
@@ -889,6 +890,20 @@
   }
 }
 @container rows (width < 30rem) {
+  .row[data-type="task"]:not(:has(> .row-act)) {
+    grid-template-columns: var(--col-check) minmax(0, 1fr);
+    grid-template-areas: "check main" ". chips";
+  }
+  .row[data-type="task"]:not(:has(> .row-act)) .row-chips {
+    grid-area: chips;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .row[data-type="task"]:not(:has(> .row-act)) :is(.row-prio, .row-due) {
+    grid-area: auto;
+    width: var(--col-prio);
+  }
   .row[data-type="decision"],
   .row[data-type="note"],
   .row[data-type="link"] {
