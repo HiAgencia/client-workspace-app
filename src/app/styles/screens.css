@@ -1469,6 +1469,10 @@ fieldset.stack {
   flex-direction: column;
   gap: 0.9rem;
 }
+.landing-preview .row {
+  --col-prio: 4.75em;
+  --col-due: 5.75em;
+}
 .landing .enter:nth-child(2) {
   --enter-delay: 80ms;
 }
