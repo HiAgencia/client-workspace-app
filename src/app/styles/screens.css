@@ -1562,6 +1562,12 @@ fieldset.stack {
   flex-direction: column;
   gap: 0.9rem;
 }
+/* The landing's picture of a project shows plain pills, not the row's dropdowns with their chevrons: its columns are as
+   wide as the widest pill with air, so every title reads on one line where the card is wide. */
+.landing-preview .row {
+  --col-prio: 4.75em;
+  --col-due: 5.75em;
+}
 .landing .enter:nth-child(2) {
   --enter-delay: 80ms;
 }
