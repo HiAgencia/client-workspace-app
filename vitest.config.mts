@@ -11,8 +11,5 @@ export default defineConfig({
     // Integration tests talk to the real Supabase project over the network.
     testTimeout: 30_000,
     hookTimeout: 60_000,
-    // They share that project and its auth service; parallel files stalled on a lost response instead of failing, so
-    // they run one file at a time (the serial run stays under three minutes).
-    fileParallelism: false,
   },
 });

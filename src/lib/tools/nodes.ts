@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { defineTool } from "./define";
+import { browsedEventSchema, fromLocal } from "./browse";
 import { eventsForNode } from "./events";
-import { calendarEventSchema, eventsFailureSchema } from "./events-source";
+import { localEventsIn } from "./local-events";
+import { eventsFailureSchema } from "./events-source";
 import { isError, ok } from "./result";
 import { byPriorityThenDue, itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
 import { loadScope, resolveNode, subtree } from "./tree";
@@ -22,9 +24,10 @@ export const listTree = defineTool({
   name: "list_tree",
   description:
     "List the client → project → subproject tree reachable here (or below one node), each node with its path and " +
-    "its open tasks and things to review. Use it to find where something belongs before writing.",
+    "what is pending in it and everything below it: open tasks (subtasks included) and things to review. Use it to " +
+    "find where something belongs before writing.",
   readOnly: true,
-  input: z.object({
+  input: z.strictObject({
     node: z.string().min(1).optional().describe("List only this node and what is below it: its id or path."),
   }),
   output: z.object({ nodes: z.array(treeNodeSchema) }),
@@ -45,12 +48,16 @@ export const listTree = defineTool({
       "counting open items",
     );
     if (isError(read)) return read;
+    // A node's number is what is pending in its whole subtree —open tasks, subtasks included, and open things to
+    // review—: each open item counts in its node and in every ancestor up to the root.
     const counts = new Map<string, { tasks: number; reviews: number }>();
     for (const row of read.rows) {
-      const count = counts.get(row.node_id) ?? { tasks: 0, reviews: 0 };
-      if (row.type === "task") count.tasks++;
-      else count.reviews++;
-      counts.set(row.node_id, count);
+      for (let id: string | null = row.node_id; id; id = scope.all.get(id)?.parentId ?? null) {
+        const count = counts.get(id) ?? { tasks: 0, reviews: 0 };
+        if (row.type === "task") count.tasks++;
+        else count.reviews++;
+        counts.set(id, count);
+      }
     }
     const nodes = ids
       .map((id) => scope.all.get(id)!)
@@ -71,22 +78,27 @@ export const listTree = defineTool({
 export const getOverview = defineTool({
   name: "get_overview",
   description:
-    "Everything that matters in one node: its open tasks by priority, recent decisions, links, open things to " +
+    "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), its notes, " +
+    "recent decisions, the links of the node and of everything below it, what the nodes below hold (below), open things to " +
     "review, its subprojects, and the events of the next seven days from its accounts. Start here to answer what " +
     "is pending or to advise on what to do next.",
   readOnly: true,
-  input: z.object({
+  input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
   }),
   output: z.object({
     node: z.object({ id: z.string(), path: z.string(), kind: z.string() }),
     children: z.array(z.object({ id: z.string(), name: z.string() })),
     openTasks: z.array(itemSchema),
+    notes: z.array(itemSchema),
     decisions: z.array(itemSchema),
     links: z.array(itemSchema),
     toReview: z.array(itemSchema),
-    events: z.array(calendarEventSchema),
+    events: z.array(browsedEventSchema),
     eventFailures: z.array(eventsFailureSchema),
+    // What the nodes below hold, each kind with its count and the node with the most, so an empty node says where the
+    // work is.
+    below: z.record(z.string(), z.object({ count: z.number(), busiest: z.object({ id: z.string(), path: z.string() }).nullable() })),
   }),
   async run(ctx, input) {
     const loaded = await loadScope(ctx);
@@ -95,24 +107,52 @@ export const getOverview = defineTool({
     const resolved = resolveNode(scope, input.node);
     if (isError(resolved)) return resolved;
     const node = resolved.node;
-    const read = await selectAllItems(ctx, [node.id], (query) => query.is("deleted_at", null), "reading the node");
+    const below = [...subtree(scope.all, node.id)].filter((id) => scope.reachable.has(id));
+    const [read, linksRead] = await Promise.all([
+      selectAllItems(ctx, [node.id], (query) => query.is("deleted_at", null), "reading the node"),
+      // What is below: links are found from every node above them, and the rest is summed so an empty node says where
+      // the work is.
+      selectAllItems(ctx, below, (query) => query.is("deleted_at", null), "reading what is below"),
+    ]);
     if (isError(read)) return read;
+    if (isError(linksRead)) return linksRead;
     const items = read.rows.map((row) => toItem(row, scope));
+    const deeper = linksRead.rows.filter((row) => row.node_id !== node.id);
+    const summary = (type: "task" | "decision" | "review" | "note", open: boolean) => {
+      const rows = deeper.filter((row) => row.type === type && (!open || row.status === "open"));
+      const where = new Map<string, number>();
+      for (const row of rows) where.set(row.node_id, (where.get(row.node_id) ?? 0) + 1);
+      const top = [...where.entries()].sort((a, b) => b[1] - a[1])[0];
+      return { count: rows.length, busiest: top ? { id: top[0], path: scope.all.get(top[0])?.path ?? "" } : null };
+    };
     const now = new Date();
-    const { events, failures } = await eventsForNode(
-      ctx,
-      node,
-      now.toISOString(),
-      new Date(now.getTime() + 7 * DAY_MS).toISOString(),
-    );
+    const until = new Date(now.getTime() + 7 * DAY_MS);
+    // The agenda: the accounts the node sees and the workspace's own events of its subtree, for the next seven days.
+    const [google, local] = await Promise.all([
+      eventsForNode(ctx, node, now.toISOString(), until.toISOString()),
+      localEventsIn(ctx, scope, below, now.toISOString().slice(0, 10), until.toISOString().slice(0, 10), { from: now.toISOString(), to: until.toISOString() }),
+    ]);
+    if (isError(local)) return local;
+    const failures = google.failures;
+    const events = [
+      ...google.events.map((event) => ({ ...event, origin: "google" as const, localId: null, nodeId: null, nodePath: null })),
+      ...local.events.map(fromLocal),
+    ].sort((a, b) => Date.parse(a.allDay ? `${a.start}T00:00:00` : a.start) - Date.parse(b.allDay ? `${b.start}T00:00:00` : b.start));
     return ok({
       node: { id: node.id, path: node.path, kind: node.kind },
       children: [...scope.all.values()]
         .filter((child) => child.parentId === node.id && scope.reachable.has(child.id))
         .map((child) => ({ id: child.id, name: child.name })),
       openTasks: items.filter((item) => item.type === "task" && item.status === "open").sort(byPriorityThenDue),
+      notes: items.filter((item) => item.type === "note" && item.parentId === null).sort(newestFirst).slice(0, 20),
       decisions: items.filter((item) => item.type === "decision").sort(newestFirst).slice(0, 10),
-      links: items.filter((item) => item.type === "link").sort(newestFirst).slice(0, 20),
+      links: linksRead.rows.filter((row) => row.type === "link").map((row) => toItem(row, scope)).sort(newestFirst).slice(0, 30),
+      below: {
+        openTasks: summary("task", true),
+        notes: summary("note", false),
+        decisions: summary("decision", false),
+        toReview: summary("review", true),
+      },
       toReview: items.filter((item) => item.type === "review" && item.status === "open").sort(newestFirst),
       events,
       eventFailures: failures,

@@ -193,8 +193,22 @@
     display: none;
   }
   .palette-trigger {
+    flex: none;
     width: auto;
     margin-left: auto;
+  }
+  /* Where the bar is narrow the save status leaves the row —its box would take the search's room while it is
+     invisible— and shows as a tag just under the header's end. */
+  .save-status {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: var(--gutter);
+    min-width: 0;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-pill);
+    background: var(--card);
+    box-shadow: var(--shadow-control);
+    pointer-events: none;
   }
   .trigger-long {
     display: none;
@@ -335,7 +349,8 @@
   color: var(--accent-ink);
 }
 
-/* The tree: each level indents and carries a guide line, so a project reads under its client. */
+/* The tree: each level indents and carries a guide line that reads against the card (3:1), so a project reads under
+   its client; each level has its own role —the client leads, the project follows, the subproject steps back—. */
 .tree {
   display: flex;
   flex-direction: column;
@@ -347,17 +362,33 @@
 .tree .tree {
   margin-left: 0.95rem;
   padding-left: 0.45rem;
-  border-left: 1px solid var(--division);
+  border-left: 1px solid var(--guide);
 }
 .tree-row {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
 }
-.tree-add-child {
-  align-self: flex-start;
-  margin-left: 0.6rem;
+.side-link[data-kind="client"] {
+  color: var(--ink);
+  font-weight: 750;
+}
+.side-link[data-kind="project"] {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.side-link[data-kind="subproject"] {
+  color: var(--muted);
+  font-weight: 500;
+}
+.side-link[data-kind]:where([aria-current="page"]) {
+  color: var(--accent-ink);
+}
+.side-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 .tree-add {
   flex: none;
@@ -366,7 +397,13 @@
   font-size: var(--text-meta);
 }
 .tree-new {
-  padding: 0.3rem 0 0.3rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0 0 0.6rem 0.4rem;
+}
+.tree-new-where {
+  color: var(--muted);
 }
 
 /* The phone's compact control: the sidebar's content in a drawer from the left. */
@@ -524,6 +561,7 @@
     grid-template-areas: "check main prio due act";
   }
   &[data-type="decision"],
+  &[data-type="note"],
   &[data-type="link"] {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "main act";
@@ -581,7 +619,8 @@
   border: 0;
   background: none;
   text-align: left;
-  overflow-wrap: anywhere;
+  /* A word breaks only when it alone is wider than the column; a title never splits its words to fit beside controls. */
+  overflow-wrap: break-word;
   text-decoration-line: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.22em;
@@ -611,7 +650,52 @@
   gap: 0.3rem 0.5rem;
 }
 .row-body {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+/* Where the window is narrow the title takes the whole row: the chips and the actions go to their own line under it,
+   so neither squeezes the title nor leaves a link's title without a column. */
+@media (width < 40rem) {
+  .row,
+  .row[data-type="decision"],
+  .row[data-type="note"],
+  .row[data-type="link"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "main" "act";
+  }
+  .row[data-type="task"],
+  .row[data-type="review"] {
+    grid-template-columns: var(--col-check) minmax(0, 1fr);
+    grid-template-areas: "check main" ". chips" ". act";
+  }
+  .row[data-type="review"] {
+    grid-template-areas: "check main" ". act";
+  }
+  .row-chips {
+    grid-area: chips;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .row-prio,
+  .row-due {
+    grid-area: auto;
+  }
+  .row-act {
+    justify-content: flex-start;
+  }
+}
+/* A task's subtasks sit under its title, indented on a guide, two levels at most; deeper ones fold behind a button. */
+.subtasks {
+  margin-top: 0.25rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--guide);
+}
+.rows-nested .row {
+  min-height: 2.5rem;
+  padding-block: 0.25rem;
+}
+.subtasks-more {
+  align-self: flex-start;
 }
 /* The title is trimmed to its letters like the chips and buttons beside it, and takes its air back as padding, so its
    target stays whole. */
@@ -1035,20 +1119,8 @@ fieldset.stack {
   min-width: 0;
 }
 
-/* On a narrow screen a row keeps its title on the first line and its chips on the second, under the title. */
+/* On a narrow screen an agenda row stacks its time over its title (the rows of items: §Rows of items). */
 @media (width < 40rem) {
-  .row[data-type="task"] {
-    grid-template-columns: var(--col-check) minmax(0, 1fr) auto;
-    grid-template-areas:
-      "check main act"
-      ". chips chips";
-  }
-  .row-chips {
-    grid-area: chips;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
   .row-chips .row-prio,
   .row-chips .row-due {
     width: var(--col-prio);
@@ -1142,9 +1214,45 @@ fieldset.stack {
   gap: 0.4rem;
   margin-top: 0.25rem;
 }
-.panel-field .field {
+.panel-field .rich-field {
   min-height: 8rem;
   max-height: 20rem;
+  overflow-y: auto;
+}
+/* What hangs from a task, and the versions: sections of the record, each with its label and its rows. */
+.panel-section {
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--division);
+}
+.panel-children {
+  gap: 0.35rem;
+}
+.panel-child-title {
+  text-align: left;
+  &[data-done="true"] {
+    color: var(--muted);
+    text-decoration-line: line-through;
+  }
+}
+.panel-note {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+  }
 }
 .panel-status {
   min-height: 1.2em;
@@ -1200,4 +1308,204 @@ fieldset.stack {
 }
 .session-slot {
   min-height: 5.75rem;
+}
+
+/* ---- The central panel: its bar (view, range, scope), the filters with their counts ------------------------------- */
+.panel-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+}
+.panel-bar .seg {
+  min-width: min(20rem, 100%);
+}
+.panel-scope {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+}
+.panel-scope .picker {
+  width: 100%;
+}
+.filter-group {
+  display: grid;
+  grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+}
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+@media (width < 40rem) {
+  .filter-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* A filter is a toggle: a pill that rises when chosen, with how many items it would show beside its name. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  min-height: 2.25rem;
+  padding: 0.25em 0.45em 0.25em 0.8em;
+  border: 1px solid var(--control-rim);
+  border-radius: var(--radius-pill);
+  background: var(--interior);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), border-color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out);
+
+  &[aria-pressed="true"] {
+    background: var(--accent-tint);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent-ink);
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      border-color: var(--field-rim);
+      box-shadow: var(--shadow-control-hover);
+      transition-duration: var(--dur-hover);
+    }
+    &[aria-pressed="true"]:hover {
+      background: var(--accent-tint-hover);
+    }
+  }
+}
+.chip-count {
+  min-width: 1.6em;
+  padding: 0.1em 0.45em;
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink-soft);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.panel-record {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panel-path {
+  align-self: flex-start;
+}
+
+/* ---- The calendar: a month or a week of days, each a button that opens its detail ------------------------------- */
+.cal-month {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 3px;
+  & th {
+    padding-bottom: 0.3rem;
+    text-align: left;
+  }
+  & td {
+    vertical-align: top;
+  }
+  & td[data-outside] .cal-cell {
+    opacity: 0.55;
+  }
+}
+.cal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+  min-height: 6.5rem;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), border-color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  &[aria-pressed="true"] {
+    background: var(--accent-tint);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  &[aria-current="date"] .cal-cell-day {
+    background: var(--accent-fill);
+    color: var(--on-accent);
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      border-color: var(--division);
+      box-shadow: var(--shadow-control);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.cal-cell-day {
+  align-self: flex-start;
+  min-width: 1.7em;
+  padding: 0.05em 0.35em;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.cal-cell-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.cal-chip {
+  overflow: hidden;
+  padding: 0.05em 0.35em;
+  border-radius: 0.35em;
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--text-meta);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  &[data-origin="google"] {
+    background: var(--info-tint);
+    color: var(--info-ink);
+  }
+  &[data-origin="local"] {
+    background: var(--accent-tint);
+    color: var(--accent-ink);
+  }
+  &[data-done] {
+    color: var(--muted);
+    text-decoration-line: line-through;
+  }
+}
+@media (width < 40rem) {
+  .cal-cell {
+    min-height: 3rem;
+  }
+  .cal-cell-items {
+    display: none;
+  }
+}
+.event-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+}
+.new-event {
+  padding-top: 0.5rem;
 }

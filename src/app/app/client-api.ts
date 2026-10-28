@@ -44,7 +44,9 @@ export type Item = {
   id: string;
   nodeId: string;
   nodePath: string;
-  type: "task" | "decision" | "link" | "review";
+  // The task it hangs from, or null when it hangs from the node.
+  parentId: string | null;
+  type: "task" | "note" | "decision" | "link" | "review";
   title: string;
   body: string | null;
   url: string | null;
@@ -54,6 +56,8 @@ export type Item = {
   source: "manual" | "chat" | "agent";
   agentLabel: string | null;
   createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
 };
 
 export type TreeNode = {
@@ -77,6 +81,10 @@ export type CalendarEvent = {
   accountId: string;
   fromNodeId: string;
   link: string | null;
+  // Where it comes from: a connected Google account, or the workspace's own calendar.
+  origin?: "google" | "local";
+  localId?: string | null;
+  nodeId?: string | null;
 };
 
 export type EventsFailure = { accountId: string; accountEmail: string; reason: string };

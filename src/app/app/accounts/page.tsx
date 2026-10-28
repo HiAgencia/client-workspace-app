@@ -48,7 +48,7 @@ export default function AccountsPage() {
           </p>
           {canConnect ? (
             <div className="inline" aria-label="Connect an account" role="group">
-              <Select label="Where the new account hangs from" placeholder="Pick where it hangs from…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
+              <Select id="connect-where" label="Where the new account hangs from" placeholder="Pick where it hangs from…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
               {connectNode ? (
                 <a className={buttonClass({ variant: "primary" })} href={`/api/google/connect?node=${connectNode}`}>
                   <span className="btn-label">Connect a Google account</span>
@@ -65,7 +65,8 @@ export default function AccountsPage() {
               )}
             </div>
           ) : (
-            accounts && <ConnectBlockedNote reason={connectBlocked} />
+            // With no accounts, the reason is the empty list's own answer, said once below.
+            accounts && accounts.length > 0 && <ConnectBlockedNote reason={connectBlocked} />
           )}
         </header>
         {error && (
@@ -82,8 +83,24 @@ export default function AccountsPage() {
             </div>
           )
         ) : accounts.length === 0 ? (
-          <section className="card fade-enter" aria-label="No accounts">
-            <p className="t-help">No Google accounts connected yet.</p>
+          <section className="card fade-enter" aria-label="No accounts" data-accounts-empty>
+            <div className="empty">
+              <p className="t-help">No Google accounts connected yet.</p>
+              {canConnect ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const trigger = document.getElementById("connect-where");
+                    trigger?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    trigger?.focus({ preventScroll: true });
+                  }}
+                >
+                  Pick where the first one hangs from
+                </Button>
+              ) : (
+                <ConnectBlockedNote reason={connectBlocked} />
+              )}
+            </div>
           </section>
         ) : (
           <ul className="page plain-list fade-enter">

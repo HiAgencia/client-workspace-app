@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Database } from "@/lib/db/types";
+import { firstLine, sanitizeRichText } from "@/lib/rich-text";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
@@ -8,12 +9,19 @@ import { loadScope, resolveNode, subtree, type Scope } from "./tree";
 
 type ItemInsert = Database["public"]["Tables"]["items"]["Insert"];
 type ItemUpdate = Database["public"]["Tables"]["items"]["Update"];
+type ItemRow = Database["public"]["Tables"]["items"]["Row"];
+type Source = Database["public"]["Enums"]["item_source"];
 
 const nodeRef = z
   .string()
   .min(1)
   .optional()
   .describe('The node: its id, or its path such as "Acme / Web / Landing". Omit it to use the current node.');
+
+const parentRef = z
+  .uuid()
+  .optional()
+  .describe("The id of the task it hangs from (a subtask, or a note or link of that task). Its node is the task's.");
 
 const priority = z
   .number()
@@ -28,30 +36,72 @@ const webUrl = z
   .url({ protocol: /^https?$/ })
   .describe("An http or https address.");
 
+const richText = (what: string) =>
+  z
+    .string()
+    .trim()
+    .max(20_000)
+    .describe(`${what}. Plain text, or HTML with paragraphs, bold, italic, lists, and links; anything else is dropped.`);
+
 const itemOutput = z.object({ item: itemSchema });
 
 // The writer's mark: every write says where it came from, and an agent's also which token wrote it.
-function origin(ctx: ToolContext): Pick<ItemInsert, "source" | "agent_label"> | null {
+export function origin(ctx: ToolContext): { source: Source; agent_label: string | null } | null {
   if (ctx.source === "agent") {
     return ctx.agentLabel ? { source: "agent", agent_label: ctx.agentLabel } : null;
   }
   return { source: ctx.source, agent_label: null };
 }
 
-async function insertItem(ctx: ToolContext, nodeRefValue: string | undefined, fields: Omit<ItemInsert, "node_id">) {
+// Where a new item lands: its parent task's node, or the node named, or the scope's node. Naming both must agree.
+async function placeItem(
+  ctx: ToolContext,
+  nodeRefValue: string | undefined,
+  parentId: string | undefined,
+): Promise<ToolResult<{ scope: Scope; nodeId: string; parentId: string | null }>> {
   const loaded = await loadScope(ctx);
   if (isError(loaded)) return loaded;
-  const resolved = resolveNode(loaded.scope, nodeRefValue);
-  if (isError(resolved)) return resolved;
+  if (parentId === undefined) {
+    const resolved = resolveNode(loaded.scope, nodeRefValue);
+    if (isError(resolved)) return resolved;
+    return ok({ scope: loaded.scope, nodeId: resolved.node.id, parentId: null });
+  }
+  const parent = await reachableItem(ctx, parentId);
+  if (isError(parent)) return parent;
+  if (parent.row.type !== "task") return fail("invalid_input", `a ${parent.row.type} has no children: only a task does`);
+  if (nodeRefValue !== undefined) {
+    const resolved = resolveNode(loaded.scope, nodeRefValue);
+    if (isError(resolved)) return resolved;
+    if (resolved.node.id !== parent.row.node_id) {
+      return fail("invalid_input", "the parent task lives in another node: omit the node or name the task's own");
+    }
+  }
+  return ok({ scope: loaded.scope, nodeId: parent.row.node_id, parentId: parent.row.id });
+}
+
+async function insertItem(
+  ctx: ToolContext,
+  place: { node?: string; parent?: string },
+  fields: Omit<ItemInsert, "node_id" | "parent_item_id">,
+) {
+  const placed = await placeItem(ctx, place.node, place.parent);
+  if (isError(placed)) return placed;
   const mark = origin(ctx);
   if (!mark) return fail("internal", "an agent write needs its token's label");
   const { data, error } = await ctx.db
     .from("items")
-    .insert({ ...fields, ...mark, node_id: resolved.node.id })
+    .insert({
+      ...fields,
+      ...mark,
+      changed_source: mark.source,
+      changed_agent_label: mark.agent_label,
+      node_id: placed.nodeId,
+      parent_item_id: placed.parentId,
+    })
     .select(ITEM_COLUMNS)
     .single();
   if (error) return dbFail("saving the item", error);
-  return ok({ item: toItem(data, loaded.scope) });
+  return ok({ item: toItem(data, placed.scope) });
 }
 
 // Reads one item the caller may reach; a deleted one only when asked for.
@@ -69,25 +119,47 @@ async function reachableItem(ctx: ToolContext, id: string, withDeleted = false) 
 export const createTask = defineTool({
   name: "create_task",
   description:
-    "Create a task in a node. Use it for anything someone has to do. Give a short imperative title; put detail in " +
-    "notes. Priority 1 is the most urgent and 4 the least (default 4). Returns the created task.",
+    "Create a task in a node, or a subtask under a task (parent). Use it for anything someone has to do. Give a " +
+    "short imperative title; put detail in notes. Priority 1 is the most urgent and 4 the least (default 4). " +
+    "Returns the created task.",
   readOnly: false,
-  input: z.object({
+  input: z.strictObject({
     node: nodeRef,
+    parent: parentRef,
     title: z.string().trim().min(1).max(500),
-    notes: z.string().trim().max(10_000).optional(),
+    notes: richText("Detail of the task").optional(),
     priority: priority.optional(),
     dueOn: dueOn.optional(),
   }),
   output: itemOutput,
   run: (ctx, input) =>
-    insertItem(ctx, input.node, {
+    insertItem(ctx, input, {
       type: "task",
       title: input.title,
-      body: input.notes ?? null,
+      body: sanitizeRichText(input.notes),
       priority: input.priority ?? 4,
       due_on: input.dueOn ?? null,
     }),
+});
+
+export const addNote = defineTool({
+  name: "add_note",
+  description:
+    "Write a note in a node (a client, project, or subproject) or under a task (parent): meeting notes, what a " +
+    "client said, context to keep. Its first line is its title.",
+  readOnly: false,
+  input: z.strictObject({
+    node: nodeRef,
+    parent: parentRef,
+    text: richText("The note"),
+  }),
+  output: itemOutput,
+  async run(ctx, input) {
+    const body = sanitizeRichText(input.text);
+    const title = firstLine(body);
+    if (!body || !title) return fail("invalid_input", "a note needs some text");
+    return insertItem(ctx, input, { type: "note", title, body });
+  },
 });
 
 export const addDecision = defineTool({
@@ -96,33 +168,36 @@ export const addDecision = defineTool({
     "Record a decision taken in a node, with its rationale, so it is not discussed again. Use it when someone " +
     'settles something ("we go with Stripe", "the launch moves to May").',
   readOnly: false,
-  input: z.object({
+  input: z.strictObject({
     node: nodeRef,
     decision: z.string().trim().min(1).max(500),
-    rationale: z.string().trim().max(10_000).optional(),
+    rationale: richText("Why it was decided").optional(),
   }),
   output: itemOutput,
   run: (ctx, input) =>
-    insertItem(ctx, input.node, { type: "decision", title: input.decision, body: input.rationale ?? null }),
+    insertItem(ctx, { node: input.node }, { type: "decision", title: input.decision, body: sanitizeRichText(input.rationale) }),
 });
 
 export const addLink = defineTool({
   name: "add_link",
-  description: "Save a link in a node: a document, a design, a repository, a ticket. Give it a readable title.",
+  description:
+    "Save a link in a node or under a task (parent): a document, a design, a repository, a ticket. Give it a " +
+    "readable title. A node or a task keeps as many links as it needs.",
   readOnly: false,
-  input: z.object({
+  input: z.strictObject({
     node: nodeRef,
+    parent: parentRef,
     url: webUrl,
     title: z.string().trim().min(1).max(500).optional(),
-    notes: z.string().trim().max(10_000).optional(),
+    notes: richText("What the link is for").optional(),
   }),
   output: itemOutput,
   run: (ctx, input) =>
-    insertItem(ctx, input.node, {
+    insertItem(ctx, input, {
       type: "link",
       url: input.url,
       title: input.title ?? input.url,
-      body: input.notes ?? null,
+      body: sanitizeRichText(input.notes),
     }),
 });
 
@@ -132,19 +207,19 @@ export const addReview = defineTool({
     "Record something to review in a node: a delivery to check, feedback to read, a document to approve. It may " +
     "carry a link.",
   readOnly: false,
-  input: z.object({
+  input: z.strictObject({
     node: nodeRef,
     title: z.string().trim().min(1).max(500),
     url: webUrl.optional(),
-    notes: z.string().trim().max(10_000).optional(),
+    notes: richText("What to look at").optional(),
   }),
   output: itemOutput,
   run: (ctx, input) =>
-    insertItem(ctx, input.node, {
+    insertItem(ctx, { node: input.node }, {
       type: "review",
       title: input.title,
       url: input.url ?? null,
-      body: input.notes ?? null,
+      body: sanitizeRichText(input.notes),
     }),
 });
 
@@ -160,15 +235,15 @@ const changeShape = z.object({
 export const updateItem = defineTool({
   name: "update_item",
   description:
-    "Change an item by id: its title, notes, link, priority or due date (tasks only), or mark it done or open " +
-    "again. Send only what changes; null clears notes, priority, or due date. Returns the item and its previous " +
-    "values.",
+    "Change an item by id: its title, notes (a note's text), link, priority or due date (tasks only), or mark a " +
+    "task, decision, link, or review done or open again. Send only what changes; null clears notes, priority, or " +
+    "due date. Returns the item and its previous values.",
   readOnly: false,
   input: z
-    .object({
+    .strictObject({
       id: z.uuid(),
       title: z.string().trim().min(1).max(500).optional(),
-      notes: z.string().trim().max(10_000).nullable().optional(),
+      notes: richText("The new notes").nullable().optional(),
       url: webUrl.nullable().optional(),
       priority: priority.nullable().optional(),
       dueOn: dueOn.nullable().optional(),
@@ -180,14 +255,27 @@ export const updateItem = defineTool({
     const found = await reachableItem(ctx, input.id);
     if (isError(found)) return found;
     const { row, scope } = found;
+    const mark = origin(ctx);
+    if (!mark) return fail("internal", "an agent write needs its token's label");
     if (row.type !== "task" && (input.priority != null || input.dueOn != null)) {
       return fail("invalid_input", `a ${row.type} has no priority or due date: only tasks do`);
     }
     if (row.type === "link" && input.url === null) return fail("invalid_input", "a link needs its address");
+    if (row.type === "note" && input.status !== undefined) return fail("invalid_input", "a note has no status");
+    if (row.type === "note" && input.title !== undefined) {
+      return fail("invalid_input", "a note's title is its first line: change its notes");
+    }
 
     const patch: ItemUpdate = {};
     if (input.title !== undefined) patch.title = input.title;
-    if (input.notes !== undefined) patch.body = input.notes;
+    if (input.notes !== undefined) {
+      patch.body = sanitizeRichText(input.notes);
+      if (row.type === "note") {
+        const title = firstLine(patch.body);
+        if (!title) return fail("invalid_input", "a note needs some text");
+        patch.title = title;
+      }
+    }
     if (input.url !== undefined) patch.url = input.url;
     if (input.priority !== undefined) patch.priority = input.priority;
     if (input.dueOn !== undefined) patch.due_on = input.dueOn;
@@ -204,6 +292,8 @@ export const updateItem = defineTool({
       status: row.status,
     };
     if (Object.keys(patch).length === 0) return ok({ item: toItem(row, scope), previous });
+    patch.changed_source = mark.source;
+    patch.changed_agent_label = mark.agent_label;
 
     const { data, error } = await ctx.db
       .from("items")
@@ -218,44 +308,58 @@ export const updateItem = defineTool({
   },
 });
 
+const branchOutput = z.object({
+  item: itemSchema,
+  // How many items the deletion or the restore took: the item and what hangs from it.
+  branch: z.number(),
+});
+
 export const deleteItem = defineTool({
   name: "delete_item",
   description:
-    "Delete an item by id. The deletion can be undone, so it does not need confirmation. Returns the deleted item.",
+    "Delete an item by id, with everything that hangs from it (a task's subtasks, notes, and links). The deletion " +
+    "can be undone, so it does not need confirmation. Returns the deleted item and how many items went with it.",
   readOnly: false,
-  input: z.object({ id: z.uuid() }),
-  output: itemOutput,
+  input: z.strictObject({ id: z.uuid() }),
+  output: branchOutput,
   async run(ctx, input) {
     const found = await reachableItem(ctx, input.id, true);
     if (isError(found)) return found;
-    if (found.row.deleted_at) return ok({ item: toItem(found.row, found.scope) });
-    const { data, error } = await ctx.db
-      .from("items")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", input.id)
-      .is("deleted_at", null)
-      .select(ITEM_COLUMNS)
-      .maybeSingle();
+    if (found.row.deleted_at) return ok({ item: toItem(found.row, found.scope), branch: 0 });
+    const mark = origin(ctx);
+    if (!mark) return fail("internal", "an agent write needs its token's label");
+    const { data, error } = await ctx.db.rpc("delete_item_branch", {
+      p_item: input.id,
+      p_source: mark.source,
+      p_agent_label: mark.agent_label as string,
+    });
     if (error) return dbFail("deleting the item", error);
-    // No row: another writer deleted it between the read and the update, which is the same outcome.
-    if (!data) return ok({ item: toItem({ ...found.row, deleted_at: new Date().toISOString() }, found.scope) });
-    return ok({ item: toItem(data, found.scope) });
+    const rows = (data ?? []) as ItemRow[];
+    const own = rows.find((row) => row.id === input.id);
+    // No row of its own: another writer deleted it between the read and the update, which is the same outcome.
+    if (!own) return ok({ item: toItem({ ...found.row, deleted_at: new Date().toISOString() }, found.scope), branch: 0 });
+    return ok({ item: toItem(own, found.scope), branch: rows.length });
   },
 });
 
-// Undo of a deletion. Not offered to models: the screens and the chat's undo button call it.
-export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolResult<z.infer<typeof itemOutput>>> {
+// Undo of a deletion: the branch deleted with the item comes back whole, and nothing deleted before on its own. Not
+// offered to models: the screens and the chat's undo button call it.
+export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolResult<z.infer<typeof branchOutput>>> {
   const found = await reachableItem(ctx, id, true);
   if (isError(found)) return found;
-  if (!found.row.deleted_at) return ok({ item: toItem(found.row, found.scope) });
-  const { data, error } = await ctx.db
-    .from("items")
-    .update({ deleted_at: null })
-    .eq("id", id)
-    .select(ITEM_COLUMNS)
-    .single();
+  if (!found.row.deleted_at) return ok({ item: toItem(found.row, found.scope), branch: 0 });
+  const mark = origin(ctx);
+  if (!mark) return fail("internal", "an agent write needs its token's label");
+  const { data, error } = await ctx.db.rpc("restore_item_branch", {
+    p_item: id,
+    p_source: mark.source,
+    p_agent_label: mark.agent_label as string,
+  });
   if (error) return dbFail("restoring the item", error);
-  return ok({ item: toItem(data, found.scope) });
+  const rows = (data ?? []) as ItemRow[];
+  const own = rows.find((row) => row.id === id);
+  if (!own) return fail("not_found", `item ${id} was restored or changed meanwhile`);
+  return ok({ item: toItem(own, found.scope), branch: rows.length });
 }
 
 const statusFilter = z
@@ -271,11 +375,13 @@ function nodesFor(scope: Scope, nodeId: string, withDescendants: boolean): strin
 export const listItems = defineTool({
   name: "list_items",
   description:
-    "List a node's items, optionally of one type (task, decision, link, review) and status. Tasks come by " +
-    "priority then due date; the rest newest first. With includeSubprojects, also the items of every node below.",
+    "List a node's items, optionally of one type (task, note, decision, link, review) and status, or only what " +
+    "hangs from one task (parent). Tasks come by priority then due date; the rest newest first. With " +
+    "includeSubprojects, also the items of every node below. Each item says the task it hangs from (parentId).",
   readOnly: true,
-  input: z.object({
+  input: z.strictObject({
     node: nodeRef,
+    parent: parentRef,
     type: z.enum(itemTypes).optional(),
     status: statusFilter,
     includeSubprojects: z.boolean().default(false),
@@ -284,14 +390,24 @@ export const listItems = defineTool({
   async run(ctx, input) {
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
-    const resolved = resolveNode(loaded.scope, input.node);
-    if (isError(resolved)) return resolved;
+    let nodeId: string;
+    if (input.parent !== undefined) {
+      const parent = await reachableItem(ctx, input.parent);
+      if (isError(parent)) return parent;
+      nodeId = parent.row.node_id;
+    } else {
+      const resolved = resolveNode(loaded.scope, input.node);
+      if (isError(resolved)) return resolved;
+      nodeId = resolved.node.id;
+    }
     const read = await selectAllItems(
       ctx,
-      nodesFor(loaded.scope, resolved.node.id, input.includeSubprojects),
+      nodesFor(loaded.scope, nodeId, input.includeSubprojects && input.parent === undefined),
       (query) => {
         let q = query.is("deleted_at", null);
+        if (input.parent !== undefined) q = q.eq("parent_item_id", input.parent);
         if (input.type) q = q.eq("type", input.type);
+        // A note keeps the open status: it lists with what is open and never as done.
         if (input.status !== "all") q = q.eq("status", input.status);
         return q;
       },
@@ -301,7 +417,8 @@ export const listItems = defineTool({
     const items = read.rows.map((row) => toItem(row, loaded.scope));
     const tasks = items.filter((item) => item.type === "task").sort(byPriorityThenDue);
     const rest = items.filter((item) => item.type !== "task").sort(newestFirst);
-    return ok({ node: { id: resolved.node.id, path: resolved.node.path }, items: [...tasks, ...rest] });
+    const node = loaded.scope.all.get(nodeId)!;
+    return ok({ node: { id: node.id, path: node.path }, items: [...tasks, ...rest] });
   },
 });
 
@@ -316,7 +433,7 @@ export const searchItems = defineTool({
     "Search the titles and notes of items in a node and every node below it (by default, everything reachable). " +
     "Case-insensitive. Returns up to 50 matches, newest first.",
   readOnly: true,
-  input: z.object({
+  input: z.strictObject({
     query: z.string().trim().min(1).max(200),
     node: nodeRef,
     type: z.enum(itemTypes).optional(),
@@ -354,3 +471,115 @@ export const searchItems = defineTool({
     return ok({ items: [...found.values()].sort(newestFirst).slice(0, 50) });
   },
 });
+
+// Versions and the trash ----------------------------------------------------------------------------------------------
+
+const snapshotSchema = z.object({
+  title: z.string(),
+  body: z.string().nullable(),
+  url: z.string().nullable(),
+  status: z.enum(["open", "done"]),
+  priority: z.number().nullable(),
+  due_on: z.string().nullable(),
+  parent_item_id: z.string().nullable(),
+  deleted_at: z.string().nullable(),
+  completed_at: z.string().nullable(),
+});
+
+export type Revision = {
+  id: string;
+  createdAt: string;
+  source: Source;
+  agentLabel: string | null;
+  snapshot: z.infer<typeof snapshotSchema>;
+};
+
+// The versions an item left, newest first: each holds the item as it was before a change, with who made the change.
+export async function listRevisions(ctx: ToolContext, itemId: string): Promise<ToolResult<{ revisions: Revision[] }>> {
+  const found = await reachableItem(ctx, itemId, true);
+  if (isError(found)) return found;
+  const { data, error } = await ctx.db
+    .from("revisions")
+    .select("id, created_at, source, agent_label, snapshot")
+    .eq("item_id", itemId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(100);
+  if (error) return dbFail("reading the versions", error);
+  const revisions: Revision[] = [];
+  for (const row of data) {
+    const snapshot = snapshotSchema.safeParse(row.snapshot);
+    if (!snapshot.success) {
+      console.error(`revision ${row.id}: its snapshot does not read`, z.prettifyError(snapshot.error));
+      continue;
+    }
+    revisions.push({ id: row.id, createdAt: row.created_at, source: row.source, agentLabel: row.agent_label, snapshot: snapshot.data });
+  }
+  return ok({ revisions });
+}
+
+// Restoring a version writes its photo over the item; that change leaves its own version, so it can be undone too.
+export async function restoreRevision(ctx: ToolContext, revisionId: string): Promise<ToolResult<z.infer<typeof itemOutput>>> {
+  const { data: revision, error: readError } = await ctx.db
+    .from("revisions")
+    .select("id, item_id, snapshot")
+    .eq("id", revisionId)
+    .maybeSingle();
+  if (readError) return dbFail("reading the version", readError);
+  if (!revision?.item_id) return fail("not_found", `no version with id ${revisionId} is reachable here`);
+  const found = await reachableItem(ctx, revision.item_id, true);
+  if (isError(found)) return found;
+  const snapshot = snapshotSchema.safeParse(revision.snapshot);
+  if (!snapshot.success) return fail("internal", "the version could not be read");
+  const mark = origin(ctx);
+  if (!mark) return fail("internal", "an agent write needs its token's label");
+  const photo = snapshot.data;
+  const { data, error } = await ctx.db
+    .from("items")
+    .update({
+      title: photo.title,
+      body: photo.body,
+      url: photo.url,
+      status: photo.status,
+      priority: photo.priority,
+      due_on: photo.due_on,
+      parent_item_id: photo.parent_item_id,
+      deleted_at: photo.deleted_at,
+      completed_at: photo.completed_at,
+      changed_source: mark.source,
+      changed_agent_label: mark.agent_label,
+    })
+    .eq("id", revision.item_id)
+    .select(ITEM_COLUMNS)
+    .single();
+  if (error) return dbFail("restoring the version", error);
+  return ok({ item: toItem(data, found.scope) });
+}
+
+export type TrashEntry = z.infer<typeof itemSchema> & { branch: number };
+
+// The trash: what was deleted, each branch once (by its top item), newest first.
+export async function listTrash(ctx: ToolContext): Promise<ToolResult<{ items: TrashEntry[] }>> {
+  const loaded = await loadScope(ctx);
+  if (isError(loaded)) return loaded;
+  const read = await selectAllItems(ctx, [...loaded.scope.reachable], (query) => query.not("deleted_at", "is", null), "reading the trash");
+  if (isError(read)) return read;
+  const byId = new Map(read.rows.map((row) => [row.id, row]));
+  const tops = new Map<string, { row: ItemRow; branch: number }>();
+  for (const row of read.rows) {
+    // An item deleted with its parent belongs to the parent's branch.
+    let top = row;
+    for (let parent = top.parent_item_id ? byId.get(top.parent_item_id) : undefined; parent && parent.deleted_at === top.deleted_at; ) {
+      top = parent;
+      parent = top.parent_item_id ? byId.get(top.parent_item_id) : undefined;
+    }
+    const entry = tops.get(top.id) ?? { row: top, branch: 0 };
+    entry.branch++;
+    tops.set(top.id, entry);
+  }
+  const items = [...tops.values()]
+    .sort((a, b) => (a.row.deleted_at! < b.row.deleted_at! ? 1 : -1))
+    .slice(0, 200)
+    .map(({ row, branch }) => ({ ...toItem(row, loaded.scope), branch }));
+  return ok({ items });
+}

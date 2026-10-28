@@ -1,5 +1,5 @@
 import { googleDeps } from "@/lib/google/deps";
-import { googleEventsSource } from "@/lib/google/events";
+import { googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
 import { currentUser, userClient, type SessionUser } from "@/lib/supabase/server";
 import type { ToolContext, ToolSource } from "@/lib/tools/context";
 
@@ -15,6 +15,13 @@ export async function sessionContext(
   const deps = await googleDeps();
   return {
     user,
-    ctx: { db, ownerId: user.id, source, scopeNodeId, events: deps ? googleEventsSource(deps) : undefined },
+    ctx: {
+      db,
+      ownerId: user.id,
+      source,
+      scopeNodeId,
+      events: deps ? googleEventsSource(deps) : undefined,
+      calendar: deps ? googleCalendarWriter(deps) : undefined,
+    },
   };
 }

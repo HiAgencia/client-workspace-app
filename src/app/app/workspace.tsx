@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { usePiece } from "@/components/ui/use-piece";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
-import { get, tool, type Item, type TreeNode } from "./client-api";
+import { tool, type Item, type TreeNode } from "./client-api";
 import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
+import { SavedViewsNav } from "./saved-views";
 import { Tree } from "./tree";
 
 type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
@@ -141,12 +142,17 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   useEffect(() => {
     void refreshTree();
-    void get<{ user: { email: string | null; isAnonymous: boolean } }>("/api/me").then((answer) => {
-      if (!answer.ok) return;
-      setWho(answer.user.isAnonymous ? "Demo workspace" : answer.user.email);
-      setIsDemo(answer.user.isAnonymous);
-    });
-  }, [refreshTree]);
+    // Who is shown comes from the session the browser already holds: every data request checks it on the server once,
+    // so the header does not ask the auth server again.
+    void browserClient(config)
+      .auth.getSession()
+      .then(({ data }) => {
+        const user = data.session?.user;
+        if (!user) return;
+        setWho(user.is_anonymous ? "Demo workspace" : (user.email ?? null));
+        setIsDemo(user.is_anonymous ?? false);
+      });
+  }, [refreshTree, config]);
 
   // A session resumes on the last open node.
   useEffect(() => {
@@ -239,7 +245,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       </div>
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} who={who} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <ItemPanel item={detail} saving={saving} onClose={closeItem} />
+      <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onOpenItem={openItem} />
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
@@ -293,10 +299,19 @@ function SideNav() {
         <Link href="/app" className="side-link" aria-current={pathname === "/app" ? "page" : undefined}>
           <span className="side-link-name">Today</span>
         </Link>
+        <Link href="/app/calendar" className="side-link" aria-current={pathname === "/app/calendar" ? "page" : undefined}>
+          <span className="side-link-name">Calendar</span>
+        </Link>
         <Link href="/app/accounts" className="side-link" aria-current={pathname === "/app/accounts" ? "page" : undefined}>
           <span className="side-link-name">Accounts</span>
         </Link>
+        <Link href="/app/trash" className="side-link" aria-current={pathname === "/app/trash" ? "page" : undefined}>
+          <span className="side-link-name">Trash</span>
+        </Link>
       </div>
+      <Suspense fallback={null}>
+        <SavedViewsNav />
+      </Suspense>
       <Tree />
     </nav>
   );
@@ -308,7 +323,12 @@ function PaletteTrigger({ onOpen }: { onOpen: () => void }) {
   // Read once mounted: the server does not know the person's keyboard.
   const mac = useSyncExternalStore(noSubscription, () => /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent), () => false);
   return (
-    <button type="button" className="field palette-trigger" onClick={onOpen} aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}>
+    <button
+      type="button"
+      className="field palette-trigger"
+      onClick={onOpen}
+      aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
+    >
       <span className="trigger-long">Search or jump to…</span>
       <span className="trigger-short">Search</span>
       <span className="kbd" aria-hidden="true">

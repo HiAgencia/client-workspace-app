@@ -7,7 +7,10 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
-export const CONNECT_SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar.readonly"];
+// Reading and writing events, and listing which calendars an account has: nothing broader is asked.
+export const EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+export const CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+export const CONNECT_SCOPES = ["openid", "email", EVENTS_SCOPE, CALENDAR_LIST_SCOPE];
 
 // Every call to Google carries its own deadline: a slow answer is a failure of that account, not a hung request.
 const TIMEOUT_MS = 10_000;
@@ -168,4 +171,42 @@ export async function listEvents(
     pageToken = page.nextPageToken;
   } while (pageToken);
   return events;
+}
+
+// What a write sends: a whole day carries dates (the end exclusive, as Google counts it), a timed event instants.
+export type GoogleEventInput = {
+  summary?: string;
+  description?: string | null;
+  start?: { date: string } | { dateTime: string };
+  end?: { date: string } | { dateTime: string };
+};
+
+function eventUrl(calendarId: string, eventId?: string) {
+  return `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events${eventId ? `/${encodeURIComponent(eventId)}` : ""}`;
+}
+
+export function insertEvent(fetcher: Fetch, accessToken: string, calendarId: string, event: GoogleEventInput) {
+  return call<GoogleEvent>(
+    fetcher,
+    eventUrl(calendarId),
+    { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(event) },
+    "creating the event",
+  );
+}
+
+export function patchEvent(fetcher: Fetch, accessToken: string, calendarId: string, eventId: string, event: GoogleEventInput) {
+  return call<GoogleEvent>(
+    fetcher,
+    eventUrl(calendarId, eventId),
+    { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(event) },
+    "changing the event",
+  );
+}
+
+export async function deleteEvent(fetcher: Fetch, accessToken: string, calendarId: string, eventId: string): Promise<void> {
+  await call<null>(fetcher, eventUrl(calendarId, eventId), { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }, "deleting the event");
+}
+
+export function getEvent(fetcher: Fetch, accessToken: string, calendarId: string, eventId: string) {
+  return call<GoogleEvent>(fetcher, eventUrl(calendarId, eventId), { headers: { Authorization: `Bearer ${accessToken}` } }, "reading the event");
 }

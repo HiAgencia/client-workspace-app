@@ -1,7 +1,7 @@
 import type { Db } from "@/lib/db/client";
-import type { EventsSource } from "@/lib/tools/context";
+import type { CalendarWriter, EventsSource } from "@/lib/tools/context";
 import type { CalendarEvent, EventsFailure } from "@/lib/tools/events-source";
-import { GoogleError, listEvents, refreshAccessToken, type Fetch, type GoogleEvent, type OAuthClient } from "./api";
+import { deleteEvent, GoogleError, insertEvent, listEvents, patchEvent, refreshAccessToken, type Fetch, type GoogleEvent, type OAuthClient } from "./api";
 import { decrypt, encrypt } from "./crypto";
 
 // A token that expires within this margin is renewed first, so it does not expire mid-request.
@@ -135,5 +135,34 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
     );
     events.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
     return { events, failures };
+  };
+}
+
+// Writing to an account's calendar: the account must be the owner's, connected for real (not the demo's) and not revoked;
+// its token is renewed as for reading.
+export function googleCalendarWriter(deps: GoogleDeps): CalendarWriter {
+  async function tokenFor(ownerId: string, accountId: string) {
+    const { data, error } = await deps.service
+      .from("google_accounts")
+      .select("id, email, status, is_demo, refresh_token, access_token, access_token_expires_at")
+      .eq("id", accountId)
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+    if (error) throw new Error(`reading the account: ${error.message}`);
+    if (!data) throw new GoogleError("no such account", 404, "not_found");
+    if (data.is_demo) throw new GoogleError("the demo's sample account is read-only", 403, "read_only");
+    if (data.status === "revoked") throw new GoogleError("access was revoked: connect the account again", 401, "invalid_grant");
+    return accessTokenFor(deps, data);
+  }
+  return {
+    async create({ ownerId, accountId, calendarId, event }) {
+      return insertEvent(deps.fetch, await tokenFor(ownerId, accountId), calendarId, event);
+    },
+    async update({ ownerId, accountId, calendarId, eventId, event }) {
+      return patchEvent(deps.fetch, await tokenFor(ownerId, accountId), calendarId, eventId, event);
+    },
+    async remove({ ownerId, accountId, calendarId, eventId }) {
+      await deleteEvent(deps.fetch, await tokenFor(ownerId, accountId), calendarId, eventId);
+    },
   };
 }

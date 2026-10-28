@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { demoSeedTree } from "@/lib/demo-seed";
+import { demoSeedTree, type SeedItem } from "@/lib/demo-seed";
+import { firstLine } from "@/lib/rich-text";
+import { sanitizeRichText } from "@/lib/rich-text";
 import { createDisposableUser, deleteDisposableUsers, publicClient, type DisposableUser } from "../support/supabase";
 
 // The demo seed is one database call; this test keeps its result identical to the TypeScript tree the first step names,
@@ -10,6 +12,7 @@ type Tree = ReturnType<typeof demoSeedTree>;
 type ExpectedNode = { path: string; kind: string; position: number };
 type ExpectedItem = {
   path: string;
+  parent: string | null;
   type: string;
   title: string;
   body: string | null;
@@ -35,44 +38,52 @@ function expectedNodes(): ExpectedNode[] {
 
 function expectedItems(): ExpectedItem[] {
   const rows: ExpectedItem[] = [];
+  const add = (path: string, item: SeedItem, parent: string | null) => {
+    const { tool, input } = item;
+    const row: ExpectedItem = { path, parent, type: "", title: "", body: null, url: null, priority: null, dueOn: null, status: "open", source: "manual" };
+    if (tool === "create_task") {
+      row.type = "task";
+      row.title = String(input.title);
+      row.body = input.notes ? String(input.notes) : null;
+      row.priority = input.priority ? Number(input.priority) : 4;
+      row.dueOn = input.dueOn ? String(input.dueOn) : null;
+    } else if (tool === "add_note") {
+      row.type = "note";
+      row.body = String(input.text);
+      row.title = firstLine(row.body);
+    } else if (tool === "add_decision") {
+      row.type = "decision";
+      row.title = String(input.decision);
+      row.body = input.rationale ? String(input.rationale) : null;
+    } else if (tool === "add_link") {
+      row.type = "link";
+      row.title = String(input.title ?? input.url);
+      row.url = String(input.url);
+    } else if (tool === "add_review") {
+      row.type = "review";
+      row.title = String(input.title);
+      row.url = input.url ? String(input.url) : null;
+    }
+    rows.push(row);
+    for (const child of item.children ?? []) add(path, child, row.title);
+  };
   const walk = (nodes: Tree, parent: string) => {
     for (const node of nodes) {
       const path = parent ? `${parent} / ${node.name}` : node.name;
-      for (const [tool, input] of node.items ?? []) {
-        const row: ExpectedItem = {
-          path,
-          type: "",
-          title: "",
-          body: null,
-          url: null,
-          priority: null,
-          dueOn: null,
-          status: "open",
-          source: "manual",
-        };
-        if (tool === "create_task") {
-          row.type = "task";
-          row.title = String(input.title);
-          row.body = input.notes ? String(input.notes) : null;
-          row.priority = input.priority ? Number(input.priority) : 4;
-          row.dueOn = input.dueOn ? String(input.dueOn) : null;
-        } else if (tool === "add_decision") {
-          row.type = "decision";
-          row.title = String(input.decision);
-          row.body = input.rationale ? String(input.rationale) : null;
-        } else if (tool === "add_link") {
-          row.type = "link";
-          row.title = String(input.title ?? input.url);
-          row.url = String(input.url);
-        } else if (tool === "add_review") {
-          row.type = "review";
-          row.title = String(input.title);
-          row.url = input.url ? String(input.url) : null;
-        } else {
-          throw new Error(`the demo tree uses an unknown tool: ${tool}`);
-        }
-        rows.push(row);
-      }
+      for (const item of node.items ?? []) add(path, item, null);
+      walk(node.children ?? [], path);
+    }
+  };
+  walk(demoSeedTree(TODAY), "");
+  return rows;
+}
+
+function expectedEvents(): Array<{ path: string; title: string; day: string }> {
+  const rows: Array<{ path: string; title: string; day: string }> = [];
+  const walk = (nodes: Tree, parent: string) => {
+    for (const node of nodes) {
+      const path = parent ? `${parent} / ${node.name}` : node.name;
+      for (const event of node.events ?? []) rows.push({ path, title: event.title, day: event.day });
       walk(node.children ?? [], path);
     }
   };
@@ -117,10 +128,12 @@ describe("the demo seed", () => {
     const byId = new Map(nodeRows.map((row) => [row.id, row]));
     const actualNodes = nodeRows.map((row) => ({ path: pathOf(row, byId), kind: row.kind, position: row.position }));
 
-    const items = await user.client.from("items").select("node_id, type, title, body, url, priority, due_on, status, source");
+    const items = await user.client.from("items").select("id, node_id, parent_item_id, type, title, body, url, priority, due_on, status, source");
     expect(items.error).toBeNull();
+    const titles = new Map((items.data ?? []).map((row) => [row.id, row.title]));
     const actualItems = (items.data ?? []).map((row) => ({
       path: pathOf(byId.get(row.node_id)!, byId),
+      parent: row.parent_item_id ? (titles.get(row.parent_item_id) ?? "?") : null,
       type: row.type,
       title: row.title,
       body: row.body,
@@ -136,7 +149,19 @@ describe("the demo seed", () => {
       expectedItems().sort((a, b) => key(a).localeCompare(key(b))),
     );
     expect(actualNodes).toHaveLength(6);
-    expect(actualItems).toHaveLength(11);
+    expect(actualItems).toHaveLength(expectedItems().length);
+    // Every body is the closed list's HTML, as the tool layer would have written it.
+    for (const row of actualItems) if (row.body) expect(sanitizeRichText(row.body)).toBe(row.body);
+
+    const events = await user.client.from("events").select("node_id, title, all_day, starts_on, ends_on");
+    const actualEvents = (events.data ?? []).map((row) => ({ path: pathOf(byId.get(row.node_id)!, byId), title: row.title, day: row.starts_on! }));
+    expect(actualEvents.sort((a, b) => a.title.localeCompare(b.title))).toEqual(expectedEvents().sort((a, b) => a.title.localeCompare(b.title)));
+    expect((events.data ?? []).every((row) => row.all_day && row.starts_on === row.ends_on)).toBe(true);
+
+    // The item with a first title left that title as a version.
+    const changed = (items.data ?? []).find((row) => row.title === "Present two logo directions")!;
+    const versions = await user.client.from("revisions").select("snapshot").eq("item_id", changed.id);
+    expect(versions.data?.map((row) => (row.snapshot as { title: string }).title)).toEqual(["Present logo directions"]);
 
     const second = await user.client.rpc("seed_demo", { p_today: TODAY });
     expect(second.error).toBeNull();

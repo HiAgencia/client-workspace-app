@@ -16,12 +16,14 @@ type SelectProps = {
   // `field` sinks like a text field; `chip` is the compact pill a row carries.
   look?: "field" | "chip";
   className?: string;
+  // The trigger's id, for an action elsewhere that sends the focus to it.
+  id?: string;
 };
 
 // The product's dropdown: the list is drawn by the system, enters and leaves animated, and follows the keyboard
 // (arrows, Home and End, typing a letter, Enter, Escape). The option under the pointer or the keyboard and the chosen
 // option are two states and both show.
-export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", className }: SelectProps) {
+export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", className, id }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
   return (
     <Base.Root
@@ -33,6 +35,7 @@ export function Select({ value, onChange, options, label, placeholder = "Choose�
       modal={false}
     >
       <Base.Trigger
+        id={id}
         // The name carries the visible value too, so whoever speaks the visible text reaches the control.
         aria-label={`${label}: ${chosen?.label ?? placeholder}`}
         className={cx("picker", look === "field" ? "field" : "chip-picker", className)}

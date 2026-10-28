@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ToolContext, EventsSource } from "@/lib/tools/context";
-import { restoreItem } from "@/lib/tools/items";
-import { changeNode } from "@/lib/tools/tree-writes";
+import { listRevisions, listTrash, restoreItem, restoreRevision } from "@/lib/tools/items";
+import { changeNode, createNode } from "@/lib/tools/tree-writes";
+import { restoreEvent } from "@/lib/tools/local-events";
 import { callTool, tools } from "@/lib/tools/registry";
 import type { ToolError } from "@/lib/tools/result";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
@@ -78,26 +79,37 @@ afterAll(async () => {
 }, 60_000);
 
 describe("the registry", () => {
-  it("publishes the twelve tools, each described, with a read-only flag", () => {
+  it("publishes every tool, each described, with a read-only flag", () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(
       [
         "add_decision",
         "add_link",
+        "add_note",
         "add_review",
+        "browse_events",
+        "browse_items",
+        "create_event",
+        "create_google_event",
         "create_task",
+        "delete_event",
+        "delete_google_event",
         "delete_item",
         "get_overview",
         "get_updates_since",
+        "link_task_event",
         "list_events",
         "list_items",
         "list_tree",
         "search_items",
+        "unlink_task_event",
+        "update_event",
+        "update_google_event",
         "update_item",
       ].sort(),
     );
     for (const tool of tools) expect(tool.description.length).toBeGreaterThan(40);
     expect(tools.filter((tool) => tool.readOnly).map((tool) => tool.name).sort()).toEqual(
-      ["get_overview", "get_updates_since", "list_events", "list_items", "list_tree", "search_items"].sort(),
+      ["browse_events", "browse_items", "get_overview", "get_updates_since", "list_events", "list_items", "list_tree", "search_items"].sort(),
     );
   });
 
@@ -164,7 +176,7 @@ describe("writes", () => {
       decision: "Use Workers",
       rationale: "One deploy target",
     });
-    expect(decision.item).toMatchObject({ type: "decision", title: "Use Workers", body: "One deploy target", priority: null });
+    expect(decision.item).toMatchObject({ type: "decision", title: "Use Workers", body: "<p>One deploy target</p>", priority: null });
     const link = await run<{ item: ItemOut }>("add_link", userCtx(a), { node: treeA.web, url: "https://example.com/spec" });
     expect(link.item).toMatchObject({ type: "link", title: "https://example.com/spec", url: "https://example.com/spec" });
     const review = await run<{ item: ItemOut }>("add_review", userCtx(a), { node: treeA.web, title: "Check the mockups" });
@@ -410,6 +422,304 @@ describe("a scoped agent", () => {
     expect(item.nodeId).toBe(treeA.webLanding);
     const found = await run<{ items: ItemOut[] }>("search_items", ctx, { query: "Sibling's" });
     expect(found.items).toEqual([]);
+  });
+});
+
+// The client with a counter of the tables each call reads: what a tool asks the database, counted where it asks.
+function counting(db: ToolContext["db"]) {
+  const reads = new Map<string, number>();
+  const proxy = new Proxy(db, {
+    get(target, key, receiver) {
+      if (key === "from") {
+        return (table: string) => {
+          reads.set(table, (reads.get(table) ?? 0) + 1);
+          return target.from(table as never);
+        };
+      }
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { db: proxy as ToolContext["db"], reads };
+}
+
+describe("one read of the tree per context", () => {
+  it("a chat turn that reads the tree and then creates tasks does not read it again per task", async () => {
+    const { db, reads } = counting(a!.client);
+    const ctx: ToolContext = { db, ownerId: a!.id, source: "chat", scopeNodeId: treeA.web };
+    await run("list_tree", ctx, {});
+    await run("create_task", ctx, { title: "First of the turn" });
+    await run("create_task", ctx, { node: "Landing", title: "Second of the turn" });
+    expect(reads.get("nodes")).toBe(1);
+    // The switch off: a fresh context per call reads the tree each time.
+    const fresh = counting(a!.client);
+    for (const title of ["Fresh one", "Fresh two"]) {
+      await run("create_task", { db: fresh.db, ownerId: a!.id, source: "chat", scopeNodeId: treeA.web }, { title });
+    }
+    expect(fresh.reads.get("nodes")).toBe(2);
+  });
+
+  it("shaping the tree forgets the read, so the next tool sees the new node", async () => {
+    const ctx = userCtx(a);
+    await run("list_tree", ctx, {});
+    const made = await createNode(ctx, { parent: treeA.acme, name: "Fresh project" });
+    expect(made.ok).toBe(true);
+    const { item } = await run<{ item: ItemOut }>("create_task", ctx, { node: "Acme / Fresh project", title: "In the new node" });
+    expect(item.nodePath).toBe("Acme / Fresh project");
+  });
+});
+
+describe("strict input", () => {
+  it("a field the tool does not know is refused as data, not dropped", async () => {
+    const parent = await refuse("create_task", userCtx(a), { node: treeA.web, title: "With a parent", assignee: "Ana" });
+    expect(parent.code).toBe("invalid_input");
+    expect(parent.message).toMatch(/assignee/);
+    const item = await refuse("add_link", userCtx(a), { node: treeA.web, url: "https://example.com", item: "x" });
+    expect(item.code).toBe("invalid_input");
+    expect(item.message).toMatch(/item/);
+    // Nothing was written by the refused calls.
+    const listed = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.web, status: "all" });
+    expect(listed.items.some((i) => i.title === "With a parent")).toBe(false);
+  });
+});
+
+describe("notes, subtasks, links, and branches", () => {
+  it("a note is an item of its own: its first line is its title, it is listed by type, read and deleted by an agent", async () => {
+    const { item: note } = await run<{ item: ItemOut }>("add_note", userCtx(a), {
+      node: treeA.mobile,
+      text: "<p>Kickoff with <strong>Acme</strong></p><ul><li>budget</li></ul><script>x()</script>",
+    });
+    expect(note.type).toBe("note");
+    expect(note.title).toBe("Kickoff with Acme");
+    expect(note.body).toBe("<p>Kickoff with <strong>Acme</strong></p><ul><li>budget</li></ul>");
+    expect(note.status).toBe("open");
+    const listed = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.mobile, type: "note" });
+    expect(listed.items.map((i) => i.id)).toEqual([note.id]);
+    // A note has no status, priority, or date.
+    expect((await refuse("update_item", userCtx(a), { id: note.id, status: "done" })).code).toBe("invalid_input");
+    expect((await refuse("update_item", userCtx(a), { id: note.id, priority: 1 })).code).toBe("invalid_input");
+    // Changing its text changes its title.
+    const changed = await run<{ item: ItemOut }>("update_item", userCtx(a), { id: note.id, notes: "Second thoughts\nmore" });
+    expect(changed.item.title).toBe("Second thoughts");
+    expect(changed.item.body).toBe("<p>Second thoughts</p><p>more</p>");
+    // The MCP reads it and deletes it.
+    const agent = agentCtx(treeA.acme);
+    const read = await run<{ items: ItemOut[] }>("list_items", agent, { node: treeA.mobile, type: "note" });
+    expect(read.items.some((i) => i.id === note.id)).toBe(true);
+    const gone = await run<{ item: ItemOut }>("delete_item", agent, { id: note.id });
+    expect(gone.item.deletedAt).not.toBeNull();
+  });
+
+  it("a task keeps subtasks, notes, and links; deleting it takes the branch and undo brings the whole branch back", async () => {
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "Parent task" });
+    const { item: sub } = await run<{ item: ItemOut & { parentId: string } }>("create_task", userCtx(a), { parent: task.id, title: "Child" });
+    const { item: grand } = await run<{ item: ItemOut & { parentId: string } }>("create_task", userCtx(a), { parent: sub.id, title: "Grandchild" });
+    const { item: note } = await run<{ item: ItemOut & { parentId: string } }>("add_note", userCtx(a), { parent: task.id, text: "On the task" });
+    const { item: link } = await run<{ item: ItemOut & { parentId: string } }>("add_link", userCtx(a), { parent: task.id, url: "https://example.com/a" });
+    await run("add_link", userCtx(a), { parent: task.id, url: "https://example.com/b" });
+    expect(sub.parentId).toBe(task.id);
+    expect(sub.nodeId).toBe(treeA.mobileLanding);
+    expect(note.parentId).toBe(task.id);
+    expect(link.parentId).toBe(task.id);
+    const children = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { parent: task.id, status: "all" });
+    expect(children.items).toHaveLength(4);
+    // A subtask under a note, or in another node than its parent, is refused.
+    expect((await refuse("create_task", userCtx(a), { parent: note.id, title: "Under a note" })).code).toBe("invalid_input");
+    expect((await refuse("create_task", userCtx(a), { parent: task.id, node: treeA.web, title: "Elsewhere" })).code).toBe("invalid_input");
+
+    // A child deleted before on its own stays deleted when the branch comes back.
+    const { item: early } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: task.id, title: "Deleted before" });
+    await run("delete_item", userCtx(a), { id: early.id });
+
+    const deleted = await run<{ item: ItemOut; branch: number }>("delete_item", userCtx(a), { id: task.id });
+    expect(deleted.branch).toBe(6);
+    const after = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.mobileLanding, status: "all" });
+    expect(after.items.filter((i) => [task.id, sub.id, grand.id, note.id, link.id].includes(i.id))).toEqual([]);
+
+    const restored = await restoreItem(userCtx(a), task.id);
+    expect(restored.ok && restored.branch).toBe(6);
+    const back = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.mobileLanding, status: "all" });
+    const ids = new Set(back.items.map((i) => i.id));
+    for (const id of [task.id, sub.id, grand.id, note.id, link.id]) expect(ids.has(id)).toBe(true);
+    expect(ids.has(early.id)).toBe(false);
+  });
+
+  it("the database refuses a parent that is not a live task of the same node, and a cycle", async () => {
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.web, title: "Cycle root" });
+    const { item: child } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: task.id, title: "Cycle child" });
+    const { item: decision } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.web, decision: "Not a parent" });
+    const cycle = await a!.client.from("items").update({ parent_item_id: child.id }).eq("id", task.id);
+    expect(cycle.error?.code).toBe("23514");
+    const underDecision = await a!.client.from("items").insert({ node_id: treeA.web, type: "task", title: "x", parent_item_id: decision.id });
+    expect(underDecision.error?.code).toBe("23514");
+    const otherNode = await a!.client.from("items").insert({ node_id: treeA.mobile, type: "task", title: "x", parent_item_id: task.id });
+    expect(otherNode.error?.code).toBe("23514");
+    const taskToNote = await a!.client.from("items").update({ type: "note", priority: null }).eq("id", task.id);
+    expect(taskToNote.error?.code).toBe("23514");
+  });
+
+  it("a node's number is what is pending in its subtree, subtasks included", async () => {
+    const { nodes: before } = await run<{ nodes: Array<{ id: string; openTasks: number; openReviews: number }> }>("list_tree", userCtx(a), {});
+    const count = (nodes: typeof before, id: string) => nodes.find((n) => n.id === id)!;
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Counted" });
+    await run("create_task", userCtx(a), { parent: task.id, title: "Counted child" });
+    await run("add_review", userCtx(a), { node: treeA.webLanding, title: "Counted review" });
+    const { nodes: after } = await run<{ nodes: typeof before }>("list_tree", userCtx(a), {});
+    for (const id of [treeA.webLanding, treeA.web, treeA.acme]) {
+      expect(count(after, id).openTasks - count(before, id).openTasks).toBe(2);
+      expect(count(after, id).openReviews - count(before, id).openReviews).toBe(1);
+    }
+    expect(count(after, treeA.mobile).openTasks).toBe(count(before, treeA.mobile).openTasks);
+    // The client sums its projects: its number equals the sum over its subtree's own items.
+    const direct = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.acme, includeSubprojects: true });
+    const reviews = direct.items.filter((i) => i.type === "review").length;
+    const tasks = direct.items.filter((i) => i.type === "task").length;
+    expect(count(after, treeA.acme).openTasks).toBe(tasks);
+    expect(count(after, treeA.acme).openReviews).toBe(reviews);
+  });
+
+  it("a client finds the links of its projects and their tasks", async () => {
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Task with a link" });
+    const { item: link } = await run<{ item: ItemOut }>("add_link", userCtx(a), { parent: task.id, url: "https://example.com/deep", title: "Deep link" });
+    const overview = await run<{ links: ItemOut[] }>("get_overview", userCtx(a), { node: treeA.acme });
+    expect(overview.links.some((l) => l.id === link.id && l.nodePath === "Acme / Web / Landing")).toBe(true);
+  });
+});
+
+describe("versions", () => {
+  it("each change leaves the previous version with its author; restoring returns the exact state and leaves its own", async () => {
+    const { item } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Versioned", priority: 2, notes: "<p>First</p>" });
+    await run("update_item", { ...userCtx(a), source: "chat" }, { id: item.id, title: "Versioned v2", notes: "<p><strong>Second</strong></p>", priority: 1 });
+    await run("update_item", agentCtx(treeA.acme), { id: item.id, status: "done" });
+    const listed = await listRevisions(userCtx(a), item.id);
+    if (!listed.ok) throw new Error(listed.message);
+    expect(listed.revisions).toHaveLength(2);
+    const [newest, oldest] = listed.revisions;
+    expect(newest.source).toBe("agent");
+    expect(newest.agentLabel).toBe("laptop");
+    expect(newest.snapshot.status).toBe("open");
+    expect(oldest.source).toBe("chat");
+    expect(oldest.snapshot).toMatchObject({ title: "Versioned", body: "<p>First</p>", priority: 2, status: "open" });
+
+    const restored = await restoreRevision(userCtx(a), oldest.id);
+    if (!restored.ok) throw new Error(restored.message);
+    expect(restored.item).toMatchObject({ title: "Versioned", body: "<p>First</p>", priority: 2, status: "open", completedAt: null });
+    const again = await listRevisions(userCtx(a), item.id);
+    expect(again.ok && again.revisions).toHaveLength(3);
+    // A change to nothing versioned leaves no version.
+    await run("update_item", userCtx(a), { id: item.id, title: "Versioned" });
+    const same = await listRevisions(userCtx(a), item.id);
+    expect(same.ok && same.revisions).toHaveLength(3);
+  });
+
+  it("the trash lists a deleted branch once, by its top item", async () => {
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Trash parent" });
+    await run("create_task", userCtx(a), { parent: task.id, title: "Trash child" });
+    await run("delete_item", userCtx(a), { id: task.id });
+    const trash = await listTrash(userCtx(a));
+    if (!trash.ok) throw new Error(trash.message);
+    const entry = trash.items.find((i) => i.id === task.id);
+    expect(entry?.branch).toBe(2);
+    expect(trash.items.some((i) => i.title === "Trash child")).toBe(false);
+  });
+});
+
+describe("browsing", () => {
+  type Browse = { items: ItemOut[]; total: number; counts: { type: Record<string, number>; priority: Record<string, number>; source: Record<string, number>; date: { overdue: number; dated: number; undated: number } } };
+
+  it("filters by node and subtree, type, priority, origin, text, and due range, each filter with its count", async () => {
+    const c: DisposableUser = await createDisposableUser("browse");
+    try {
+      const client = await node(c, "client", "Browse Co");
+      const project = await node(c, "project", "Site", client);
+      const ctx: ToolContext = { db: c.client, ownerId: c.id, source: "manual" };
+      await run("create_task", ctx, { node: project, title: "Late one", priority: 1, dueOn: "2026-10-20" });
+      await run("create_task", ctx, { node: project, title: "Due today", priority: 2, dueOn: "2026-10-28" });
+      await run("create_task", ctx, { node: project, title: "Next week", priority: 3, dueOn: "2026-11-04" });
+      await run("create_task", ctx, { node: project, title: "No date at all", priority: 1 });
+      await run("create_task", { ...ctx, source: "chat" }, { node: client, title: "From the chat", dueOn: "2026-10-28" });
+      await run("add_note", ctx, { node: project, text: "A note about the brief" });
+
+      const today = await run<Browse>("browse_items", ctx, { to: "2026-10-28", today: "2026-10-28", sort: "due" });
+      expect(today.items.map((i) => i.title)).toEqual(["Late one", "Due today", "From the chat"]);
+      expect(today.counts.date.overdue).toBe(1);
+      // An undated task never falls in a range: it is only in the unfiltered view.
+      expect(today.items.some((i) => i.title === "No date at all")).toBe(false);
+      const undated = await run<Browse>("browse_items", ctx, { undated: true, type: ["task"] });
+      expect(undated.items.map((i) => i.title)).toEqual(["No date at all"]);
+
+      const week = await run<Browse>("browse_items", ctx, { from: "2026-11-02", to: "2026-11-08" });
+      expect(week.items.map((i) => i.title)).toEqual(["Next week"]);
+
+      const all = await run<Browse>("browse_items", ctx, {});
+      expect(all.total).toBe(6);
+      expect(all.counts.type).toMatchObject({ task: 5, note: 1 });
+      expect(all.counts.priority["1"]).toBe(2);
+      expect(all.counts.source).toMatchObject({ manual: 5, chat: 1 });
+      expect(all.counts.date).toMatchObject({ dated: 4, undated: 2 });
+
+      // A facet's counts leave its own filter out: choosing Urgent still says how many each other priority has.
+      const urgent = await run<Browse>("browse_items", ctx, { priority: [1] });
+      expect(urgent.items.map((i) => i.title).sort()).toEqual(["Late one", "No date at all"]);
+      expect(urgent.counts.priority).toMatchObject({ "1": 2, "2": 1, "3": 1, "4": 1 });
+      expect(urgent.counts.type.task).toBe(2);
+
+      const chat = await run<Browse>("browse_items", ctx, { source: ["chat"] });
+      expect(chat.items.map((i) => i.title)).toEqual(["From the chat"]);
+      const text = await run<Browse>("browse_items", ctx, { text: "BRIEF" });
+      expect(text.items.map((i) => i.type)).toEqual(["note"]);
+      const onlyProject = await run<Browse>("browse_items", ctx, { node: project, subtree: false });
+      expect(onlyProject.items.some((i) => i.title === "From the chat")).toBe(false);
+      const fromClient = await run<Browse>("browse_items", ctx, { node: client });
+      expect(fromClient.total).toBe(6);
+      expect((await refuse("browse_items", ctx, { undated: true, from: "2026-10-01" })).code).toBe("invalid_input");
+    } finally {
+      await deleteDisposableUsers([c]);
+    }
+  });
+});
+
+describe("events of the workspace's own", () => {
+  it("an event is created, edited with its version, deleted and restored; a task lives in it and both see each other", async () => {
+    const ctx = userCtx(a);
+    const { event } = await run<{ event: { id: string; allDay: boolean; startsOn: string; endsOn: string } }>("create_event", ctx, {
+      node: treeA.web,
+      title: "Launch review",
+      startsOn: "2026-11-03",
+    });
+    expect(event).toMatchObject({ allDay: true, startsOn: "2026-11-03", endsOn: "2026-11-03" });
+    const moved = await run<{ event: { startsAt: string; allDay: boolean }; previous: { startsOn: string } }>("update_event", ctx, {
+      id: event.id,
+      startsAt: "2026-11-03T15:00:00Z",
+    });
+    expect(moved.event.allDay).toBe(false);
+    expect(moved.previous.startsOn).toBe("2026-11-03");
+    const versions = await a!.client.from("revisions").select("snapshot, source").eq("event_id", event.id);
+    expect(versions.data).toHaveLength(1);
+    expect((versions.data![0].snapshot as { starts_on: string }).starts_on).toBe("2026-11-03");
+
+    const { item: task } = await run<{ item: ItemOut }>("create_task", ctx, { node: treeA.web, title: "Prepare the deck" });
+    await run("link_task_event", ctx, { task: task.id, event: event.id });
+    const events = await run<{ events: Array<{ origin: string; localId: string | null; title: string }> }>("browse_events", ctx, {
+      node: treeA.acme,
+      from: "2026-11-01T00:00:00Z",
+      to: "2026-11-08T00:00:00Z",
+      fromDay: "2026-11-01",
+      toDay: "2026-11-07",
+    });
+    expect(events.events.filter((e) => e.origin === "local").map((e) => e.localId)).toContain(event.id);
+    const links = await a!.client.from("item_events").select("item_id, event_id").eq("event_id", event.id);
+    expect(links.data).toEqual([{ item_id: task.id, event_id: event.id }]);
+    // A decision does not live in an event.
+    const { item: decision } = await run<{ item: ItemOut }>("add_decision", ctx, { node: treeA.web, decision: "Not in an event" });
+    expect((await refuse("link_task_event", ctx, { task: decision.id, event: event.id })).code).toBe("invalid_input");
+    const unlinked = await run<{ removed: boolean }>("unlink_task_event", ctx, { task: task.id });
+    expect(unlinked.removed).toBe(true);
+
+    await run("delete_event", ctx, { id: event.id });
+    const gone = await run<{ events: Array<{ localId: string | null }> }>("browse_events", ctx, { from: "2026-11-01T00:00:00Z", to: "2026-11-08T00:00:00Z", fromDay: "2026-11-01", toDay: "2026-11-07" });
+    expect(gone.events.some((e) => e.localId === event.id)).toBe(false);
+    const back = await restoreEvent(ctx, event.id);
+    expect(back.ok && back.event.deletedAt).toBeNull();
   });
 });
 

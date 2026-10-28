@@ -66,6 +66,32 @@ export function dueLabel(day: Day | null, now: Day = today()): string {
   return shortDay(day, now);
 }
 
+// The days a view covers, its first and last included: the week from the browser's first weekday, the whole month.
+export function weekOf(day: Day, weekStart: number): { from: Day; to: Day } {
+  const jsStart = weekStart % 7;
+  const back = (toDate(day).getDay() - jsStart + 7) % 7;
+  const from = addDays(day, -back);
+  return { from, to: addDays(from, 6) };
+}
+
+export function monthOf(day: Day): { from: Day; to: Day } {
+  const date = toDate(day);
+  return { from: dayOf(new Date(date.getFullYear(), date.getMonth(), 1)), to: dayOf(new Date(date.getFullYear(), date.getMonth() + 1, 0)) };
+}
+
+// Where a range of calendar days starts and ends as instants, in the browser's own zone (the last day included).
+export function instantsOf(from: Day, to: Day): { from: string; to: string } {
+  return { from: toDate(from).toISOString(), to: toDate(addDays(to, 1)).toISOString() };
+}
+
+export function rangeLabel(from: Day, to: Day): string {
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric" }).formatRange(toDate(from), toDate(to));
+}
+
+export function isDay(value: string | null | undefined): value is Day {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(toDate(value).getTime());
+}
+
 // The first day of the week where the browser says it (1 = Monday … 7 = Sunday), Monday otherwise.
 export function firstWeekday(): number {
   try {

@@ -15,12 +15,16 @@ type Overview = {
   node: { id: string; path: string; kind: string };
   children: Array<{ id: string; name: string }>;
   openTasks: Item[];
+  notes: Item[];
   decisions: Item[];
   links: Item[];
   toReview: Item[];
   events: CalendarEvent[];
   eventFailures: EventsFailure[];
+  below: Record<"openTasks" | "notes" | "decisions" | "toReview", Below>;
 };
+
+type Below = { count: number; busiest: { id: string; path: string } | null };
 
 type Account = { id: string; email: string; status: string; nodeIds: string[] };
 
@@ -135,6 +139,14 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
     .map((account) => ({ account, from: chain.map((n) => n.id).reverse().find((id) => account.nodeIds.includes(id)) }))
     .filter((entry) => entry.from);
   const openReviews = overview.toReview.length;
+  // The node's number is what is pending in its subtree, the same the tree and list_tree show.
+  const counted = tree?.find((n) => n.id === nodeId);
+  const pendingTasks = counted?.openTasks ?? overview.openTasks.length;
+  const pendingReviews = counted?.openReviews ?? openReviews;
+  const allTasks = [...overview.openTasks, ...done];
+  const taskIds = new Set(allTasks.map((task) => task.id));
+  const topOpen = overview.openTasks.filter((task) => !task.parentId || !taskIds.has(task.parentId));
+  const topDone = done.filter((task) => !task.parentId || !taskIds.has(task.parentId));
 
   return (
     <article className="page fade-enter" data-node-view={nodeId}>
@@ -157,8 +169,11 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
         </h1>
         <div className="facts t-meta">
           <span className="nowrap">{KIND[overview.node.kind] ?? overview.node.kind}</span>
-          <span className="nowrap">{plural(overview.openTasks.length, "open task", "open tasks")}</span>
-          <span className="nowrap">{plural(openReviews, "thing to review", "things to review")}</span>
+          <span className="nowrap" data-node-count={pendingTasks + pendingReviews}>
+            {plural(pendingTasks, "open task", "open tasks")}
+          </span>
+          <span className="nowrap">{plural(pendingReviews, "thing to review", "things to review")}</span>
+          {counted && (pendingTasks !== overview.openTasks.length || pendingReviews !== openReviews) && <span className="nowrap">here and below</span>}
           {overview.children.length > 0 && (
             <span>
               {overview.children.length === 1 ? "Subproject" : "Subprojects"}:{" "}
@@ -174,6 +189,9 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
           )}
         </div>
         <div className="inline">
+          <Link className={buttonClass({ size: "sm" })} href={`/app?view=all&scope=${nodeId}`} data-open-in-panel>
+            <span className="btn-label">Filter it in the panel</span>
+          </Link>
           <Link className={buttonClass({ size: "sm" })} href={`/app/node/${nodeId}/agent`}>
             <span className="btn-label">Connect your agent</span>
           </Link>
@@ -200,12 +218,12 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
           <span className="t-meta">{plural(overview.openTasks.length, "open", "open")}</span>
         </div>
         <QuickAdd nodeId={nodeId} type="task" />
-        {overview.openTasks.length === 0 ? (
-          <Empty text="No open tasks here." action="Add a task" onAction={() => focusQuickAdd(nodeId, "task")} />
+        {topOpen.length === 0 ? (
+          <Empty text={emptyText("No open tasks here.", "open tasks", overview.below.openTasks)} action="Add a task" onAction={() => focusQuickAdd(nodeId, "task")} below={overview.below.openTasks} />
         ) : (
-          <ItemList items={overview.openTasks}>{(item) => <ItemRow item={item} />}</ItemList>
+          <TaskTree items={topOpen} all={allTasks} />
         )}
-        {done.length > 0 && (
+        {topDone.length > 0 && (
           <div className="done-toggle">
             <Button
               variant="quiet"
@@ -219,7 +237,7 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
                 setShowDone((v) => !v);
               }}
             >
-              Done ({done.length})
+              Done ({topDone.length})
             </Button>
             <div
               className="fold"
@@ -244,7 +262,7 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
               }}
             >
               <div>
-                <ItemList items={done}>{(item) => <ItemRow item={item} />}</ItemList>
+                <TaskTree items={topDone} all={allTasks} />
               </div>
             </div>
           </div>
@@ -253,8 +271,9 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
 
       <div className="cards-2">
         <div className="cards-2-inner">
-          <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty="No decisions recorded here yet." action="Record a decision" />
-          <Section title="To review" type="review" nodeId={nodeId} items={overview.toReview} empty="Nothing to review here." action="Add something to review" />
+          <Section title="Notes" type="note" nodeId={nodeId} items={overview.notes} empty={emptyText("No notes here yet.", "notes", overview.below.notes)} below={overview.below.notes} action="Write a note" />
+          <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty={emptyText("No decisions recorded here yet.", "decisions", overview.below.decisions)} below={overview.below.decisions} action="Record a decision" />
+          <Section title="To review" type="review" nodeId={nodeId} items={overview.toReview} empty={emptyText("Nothing to review here.", "things to review", overview.below.toReview)} below={overview.below.toReview} action="Add something to review" />
           <Section title="Links" type="link" nodeId={nodeId} items={overview.links} empty="No links saved here yet." action="Save a link" />
           <section className="card" aria-labelledby="accounts">
             <div className="card-head">
@@ -316,7 +335,17 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
           </p>
         ))}
         {overview.events.length === 0 ? (
-          <p className="t-help">No events in the next seven days from the accounts visible here.</p>
+          <div data-agenda-empty>
+            <div className="empty">
+              <p className="t-help">
+                No events in the next seven days: no account visible here has one, and the workspace&apos;s own calendar has none for
+                this project.
+              </p>
+              <Link className={buttonClass({ size: "sm" })} href={`/app/calendar?scope=${nodeId}`}>
+                <span className="btn-label">Add an event</span>
+              </Link>
+            </div>
+          </div>
         ) : (
           <Agenda events={overview.events} />
         )}
@@ -329,12 +358,13 @@ export function Agenda({ events, withDay = true }: { events: CalendarEvent[]; wi
   return (
     <ul className="agenda">
       {events.map((event) => (
-        <li key={`${event.accountId}:${event.id}`} className="agenda-row">
+        <li key={`${event.origin ?? "google"}:${event.accountId}:${event.id}`} className="agenda-row">
           <span className="t-meta">{when(event, withDay)}</span>
           <span className="stack" style={{ gap: "0.1rem" }}>
             <span className="t-value">{event.title}</span>
             <span className="t-meta">
-              {event.calendarName} · {event.accountEmail}
+              {/* An event of the workspace's own says where it lives; a Google one, its calendar and account. */}
+              {event.origin === "local" ? `Workspace event · ${event.calendarName}` : `${event.calendarName} · ${event.accountEmail}`}
             </span>
           </span>
         </li>
@@ -343,7 +373,13 @@ export function Agenda({ events, withDay = true }: { events: CalendarEvent[]; wi
   );
 }
 
-function Section({ title, type, nodeId, items, empty, action }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string; action: string }) {
+// An empty section of a node with work below says so: nothing directly here, N below, and the node that holds the most.
+function emptyText(own: string, what: string, below: Below): string {
+  if (below.count === 0) return own;
+  return `Nothing directly here; ${below.count} ${what} below.`;
+}
+
+function Section({ title, type, nodeId, items, empty, action, below }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string; action: string; below?: Below }) {
   const id = `section-${type}`;
   return (
     <section className="card" aria-labelledby={id}>
@@ -355,19 +391,57 @@ function Section({ title, type, nodeId, items, empty, action }: { title: string;
       </div>
       <QuickAdd nodeId={nodeId} type={type} />
       {items.length === 0 ? (
-        <Empty text={empty} action={action} onAction={() => focusQuickAdd(nodeId, type)} />
+        <Empty text={empty} action={action} onAction={() => focusQuickAdd(nodeId, type)} below={below} />
       ) : (
-        <ItemList items={items}>{(item) => <ItemRow item={item} />}</ItemList>
+        <ItemList items={items}>{(item) => <ItemRow item={item} showPath={item.nodeId !== nodeId} />}</ItemList>
       )}
     </section>
   );
 }
 
-// An empty state says what is missing and carries its own button, which takes the focus to where it is filled.
-export function Empty({ text, action, onAction }: { text: string; action?: string; onAction?: () => void }) {
+// Tasks with their subtasks: a task shows its subtasks under it, open first, and a subtask with subtasks of its own
+// folds them behind one button that opens it, so the list stays two levels deep.
+function TaskTree({ items, all }: { items: Item[]; all: Item[] }) {
+  return <ItemList items={items}>{(item) => <ItemRow item={item} below={<Subtasks parent={item} all={all} depth={1} />} />}</ItemList>;
+}
+
+function Subtasks({ parent, all, depth }: { parent: Item; all: Item[]; depth: number }) {
+  const { openItem } = useWorkspace();
+  const children = all
+    .filter((task) => task.parentId === parent.id)
+    .sort((a, b) => (a.status === b.status ? (a.priority ?? 9) - (b.priority ?? 9) || (a.id < b.id ? -1 : 1) : a.status === "open" ? -1 : 1));
+  if (children.length === 0) return null;
+  if (depth > 1) {
+    return (
+      <Button variant="quiet" size="sm" className="subtasks-more" onClick={() => openItem(parent)} data-subtasks-folded={children.length}>
+        {plural(children.length, "subtask inside", "subtasks inside")}
+      </Button>
+    );
+  }
   return (
-    <div className="empty">
-      <p className="t-help">{text}</p>
+    <div className="subtasks" data-subtasks-of={parent.id}>
+      <ItemList nested items={children}>{(item) => <ItemRow item={item} below={<Subtasks parent={item} all={all} depth={depth + 1} />} />}</ItemList>
+    </div>
+  );
+}
+
+// An empty state says what is missing and carries its own button, which takes the focus to where it is filled.
+export function Empty({ text, action, onAction, below }: { text: string; action?: string; onAction?: () => void; below?: Below }) {
+  return (
+    <div className="empty" data-below={below && below.count > 0 ? below.count : undefined}>
+      <p className="t-help">
+        {text}
+        {below?.busiest && below.count > 0 && (
+          <>
+            {" "}
+            Most are in{" "}
+            <Link className="link" href={`/app/node/${below.busiest.id}`}>
+              {below.busiest.path}
+            </Link>
+            .
+          </>
+        )}
+      </p>
       {action && onAction && (
         <Button size="sm" onClick={onAction}>
           {action}

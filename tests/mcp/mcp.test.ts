@@ -1,4 +1,5 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { tools as registry } from "@/lib/tools/registry";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashAgentToken, newAgentToken } from "@/lib/agent-token";
 import { mcpEndpoint } from "@/lib/mcp/server";
@@ -69,12 +70,12 @@ afterAll(async () => {
 }, 60_000);
 
 describe("the MCP endpoint", () => {
-  it("initializes and lists the twelve tools, the reads marked read-only", async () => {
+  it("initializes and lists every tool of the registry, the reads marked read-only", async () => {
     const client = await connect(token);
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(12);
+    expect(tools.map((t) => t.name).sort()).toEqual(registry.map((t) => t.name).sort());
     const readOnly = tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name).sort();
-    expect(readOnly).toEqual(["get_overview", "get_updates_since", "list_events", "list_items", "list_tree", "search_items"]);
+    expect(readOnly).toEqual(registry.filter((t) => t.readOnly).map((t) => t.name).sort());
     expect(tools.find((t) => t.name === "create_task")?.annotations?.readOnlyHint).toBe(false);
     await client.close();
   });

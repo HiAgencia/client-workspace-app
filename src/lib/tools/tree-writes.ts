@@ -1,12 +1,12 @@
 import { z } from "zod";
 import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
-import { loadScope, resolveNode } from "./tree";
+import { forgetScope, loadScope, resolveNode } from "./tree";
 
 // Shaping the tree is done by hand on screen: creating a node in place, renaming it, archiving it. These are not
 // offered to models; a node a model needs is created by the person, who sees where it lands.
 
-export const createNodeInput = z.object({
+export const createNodeInput = z.strictObject({
   parent: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(200),
 });
@@ -39,11 +39,12 @@ export async function createNode(
     .select("id, name, kind, parent_id")
     .single();
   if (error) return dbFail("creating the node", error);
+  forgetScope(ctx);
   return ok({ node: { id: data.id, name: data.name, kind: data.kind, parentId: data.parent_id } });
 }
 
 export const changeNodeInput = z
-  .object({ name: z.string().trim().min(1).max(200).optional(), archived: z.boolean().optional() })
+  .strictObject({ name: z.string().trim().min(1).max(200).optional(), archived: z.boolean().optional() })
   .refine((value) => value.name !== undefined || value.archived !== undefined, { message: "nothing to change" });
 
 export async function changeNode(
@@ -70,5 +71,6 @@ export async function changeNode(
     .maybeSingle();
   if (error) return dbFail("changing the node", error);
   if (!data) return fail("not_found", `no node with id ${id} is reachable here`);
+  forgetScope(ctx);
   return ok({ node: { id: data.id, name: data.name, archived: data.archived_at !== null } });
 }

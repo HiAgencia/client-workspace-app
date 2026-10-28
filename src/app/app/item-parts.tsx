@@ -11,7 +11,7 @@ export const PRIORITIES: SelectOption[] = [
   { value: "4", label: "Low", tone: "muted" },
 ];
 
-export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", decision: "Decision", link: "Link", review: "To review" };
+export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "Note", decision: "Decision", link: "Link", review: "To review" };
 
 // Who wrote it, in words: what the chat or an agent did reads apart from what the person typed.
 export function Origin({ item }: { item: Item }) {

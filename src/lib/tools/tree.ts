@@ -42,7 +42,31 @@ function splitPath(path: string): string[] {
     .filter((segment) => segment.length > 0);
 }
 
-export async function loadScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>> {
+// One read of the tree per context: a chat turn or a request that calls several tools reads it once. Items do not
+// change the tree; shaping it (create, rename, archive) forgets the read.
+const scopes = new WeakMap<ToolContext, Promise<ToolResult<{ scope: Scope }>>>();
+
+export function loadScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>> {
+  let pending = scopes.get(ctx);
+  if (!pending) {
+    pending = readScope(ctx);
+    scopes.set(ctx, pending);
+    // A failed read is not kept: the next tool asks again.
+    pending.then(
+      (result) => {
+        if (!result.ok) scopes.delete(ctx);
+      },
+      () => scopes.delete(ctx),
+    );
+  }
+  return pending;
+}
+
+export function forgetScope(ctx: ToolContext): void {
+  scopes.delete(ctx);
+}
+
+async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>> {
   const { data, error } = await ctx.db
     .from("nodes")
     .select("id, parent_id, kind, name, position, created_at")

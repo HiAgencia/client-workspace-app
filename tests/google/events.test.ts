@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Fetch } from "@/lib/google/api";
 import { connectAccount } from "@/lib/google/connect";
 import { decrypt, encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
-import { googleEventsSource, type GoogleDeps } from "@/lib/google/events";
+import { googleCalendarWriter, googleEventsSource, type GoogleDeps } from "@/lib/google/events";
 import { callTool } from "@/lib/tools/registry";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
@@ -13,6 +13,9 @@ let user: DisposableUser | undefined;
 let deps: GoogleDeps;
 const ids = { root: "", project: "", leaf: "", agency: "", landing: "", revoked: "" };
 const calls: string[] = [];
+let grantedScope =
+  "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/userinfo.email";
+let written = 0;
 
 const googleEvents: Record<string, unknown[]> = {
   "token-agency": [
@@ -37,7 +40,7 @@ const fakeGoogle: Fetch = async (input, init) => {
       access_token: "token-new",
       refresh_token: "refresh-new",
       expires_in: 3600,
-      scope: "openid https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email",
+      scope: grantedScope,
     });
   }
   if (url.pathname === "/v1/userinfo") return json(200, { email: "New.Account@example.com", email_verified: true });
@@ -46,7 +49,29 @@ const fakeGoogle: Fetch = async (input, init) => {
   }
   if (url.pathname.includes("/events")) {
     const token = (init?.headers as Record<string, string>).Authorization.replace("Bearer ", "");
-    return json(200, { items: googleEvents[token] ?? [] });
+    const list = (googleEvents[token] ??= []) as Array<Record<string, unknown>>;
+    const eventId = decodeURIComponent(url.pathname.split("/events/")[1] ?? "");
+    const method = init?.method ?? "GET";
+    // Google simulated: it keeps what is written per account, as the real calendar would.
+    if (method === "POST") {
+      const created = { id: `w${++written}`, htmlLink: "https://calendar.example/e", ...JSON.parse(String(init?.body)) };
+      list.push(created);
+      return json(200, created);
+    }
+    if (eventId) {
+      const at = list.findIndex((event) => event.id === eventId);
+      if (at === -1) return json(404, { error: { status: "NOT_FOUND" } });
+      if (method === "PATCH") {
+        list[at] = { ...list[at], ...JSON.parse(String(init?.body)) };
+        return json(200, list[at]);
+      }
+      if (method === "DELETE") {
+        list.splice(at, 1);
+        return new Response(null, { status: 204 });
+      }
+      return json(200, list[at]);
+    }
+    return json(200, { items: list });
   }
   return json(404, { error: "not_found" });
 };
@@ -173,5 +198,68 @@ describe("connecting an account", () => {
     expect(holidays.data!.selected).toBe(true);
     const links = await service.from("node_accounts").select("node_id").eq("account_id", again.accountId);
     expect(new Set(links.data!.map((l) => l.node_id))).toEqual(new Set([ids.project, ids.leaf]));
+  });
+});
+
+describe("writing to Google", () => {
+  const ctx = () => ({ db: user!.client, ownerId: user!.id, source: "manual" as const, events: googleEventsSource(deps), calendar: googleCalendarWriter(deps) });
+
+  it("creating, changing, and deleting an event is reflected in Google and read back", async () => {
+    const created = (await callTool("create_google_event", ctx(), { account: ids.agency, calendar: "primary", title: "Client call", startsAt: "2026-11-04T15:00:00Z" })) as {
+      ok: boolean;
+      event: { id: string; start: string; end: string; allDay: boolean };
+    };
+    expect(created.ok).toBe(true);
+    expect(created.event).toMatchObject({ start: "2026-11-04T15:00:00.000Z", end: "2026-11-04T16:00:00.000Z", allDay: false });
+    const read = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: ids.root, ...window });
+    expect(read.events.map((e) => e.title)).toContain("Client call");
+
+    const moved = (await callTool("update_google_event", ctx(), { account: ids.agency, calendar: "primary", event: created.event.id, title: "Client call (moved)", startsOn: "2026-11-05", endsOn: "2026-11-06" })) as {
+      ok: boolean;
+      event: { title: string; allDay: boolean; start: string; end: string };
+    };
+    expect(moved.event).toMatchObject({ title: "Client call (moved)", allDay: true, start: "2026-11-05", end: "2026-11-06" });
+    const stored = (googleEvents["token-agency"] as Array<{ id: string; end: { date: string } }>).find((e) => e.id === created.event.id);
+    // Google counts a whole day's end as the next day.
+    expect(stored?.end).toEqual({ date: "2026-11-07" });
+
+    const removed = await callTool("delete_google_event", ctx(), { account: ids.agency, calendar: "primary", event: created.event.id });
+    expect(removed.ok).toBe(true);
+    expect((googleEvents["token-agency"] as Array<{ id: string }>).some((e) => e.id === created.event.id)).toBe(false);
+    const missing = await callTool("delete_google_event", ctx(), { account: ids.agency, calendar: "primary", event: created.event.id });
+    expect(missing).toMatchObject({ ok: false, code: "not_found" });
+  });
+
+  it("a revoked account, another owner's account, and a scoped access outside its accounts are refused", async () => {
+    const revoked = await callTool("create_google_event", ctx(), { account: ids.revoked, calendar: "primary", title: "x", startsOn: "2026-11-04" });
+    expect(revoked).toMatchObject({ ok: false });
+    const other = await createDisposableUser("google-writer");
+    try {
+      const foreign = await callTool("create_google_event", { db: other.client, ownerId: other.id, source: "manual", calendar: googleCalendarWriter(deps) }, { account: ids.agency, calendar: "primary", title: "x", startsOn: "2026-11-04" });
+      expect(foreign).toMatchObject({ ok: false, code: "not_found" });
+    } finally {
+      await deleteDisposableUsers([other]);
+    }
+    // A token scoped to the root does not see the account that hangs from the subproject.
+    const scoped = await callTool("create_google_event", { ...ctx(), db: serviceClient(), scopeNodeId: ids.root, source: "agent", agentLabel: "laptop" }, { account: ids.landing, calendar: "primary", title: "x", startsOn: "2026-11-04" });
+    expect(scoped).toMatchObject({ ok: false, code: "not_found" });
+    const notConfigured = await callTool("create_google_event", { db: user!.client, ownerId: user!.id, source: "manual" }, { account: ids.agency, calendar: "primary", title: "x", startsOn: "2026-11-04" });
+    expect(notConfigured).toMatchObject({ ok: false, code: "not_found" });
+  });
+
+  it("connecting refuses an authorization without the events or the calendar list permission", async () => {
+    grantedScope = "openid https://www.googleapis.com/auth/calendar.readonly";
+    try {
+      await expect(connectAccount(deps, { ownerId: user!.id, nodeId: ids.project }, "code", "http://localhost/api/google/callback")).rejects.toThrow(/calendar access/);
+    } finally {
+      grantedScope =
+        "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/userinfo.email";
+    }
+  });
+
+  it("the authorization asks exactly for the events and the calendar list, besides identity", async () => {
+    const { authorizationUrl } = await import("@/lib/google/connect");
+    const scope = new URL(authorizationUrl("id", "http://localhost/cb", "state")).searchParams.get("scope");
+    expect(scope?.split(" ").sort()).toEqual(["email", "https://www.googleapis.com/auth/calendar.calendarlist.readonly", "https://www.googleapis.com/auth/calendar.events", "openid"]);
   });
 });

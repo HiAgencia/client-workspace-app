@@ -1093,3 +1093,87 @@ textarea.field {
     animation: none;
   }
 }
+
+/* ---- Rich text: the editor and what it paints ---------------------------------------------------------------------
+   One editor for notes, decisions, and tasks; its bar is the system's quiet buttons and its colors the palette's roles.
+   What it painted reads the same in the rows and the panel. */
+.rich {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.rich-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+.rich-tool[aria-pressed="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+.rich-tones {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.rich-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  & .field {
+    flex: 1 1 14rem;
+  }
+}
+.rich-field {
+  position: relative;
+  display: block;
+  width: 100%;
+  white-space: pre-wrap;
+  cursor: text;
+}
+/* The empty field says what goes in it, in the help's ink, without being text the person has to delete. */
+.rich[data-empty] .rich-field::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: var(--muted);
+  pointer-events: none;
+}
+.rich-field,
+.rich-text {
+  & p {
+    margin: 0 0 0.5em;
+  }
+  & p:last-child {
+    margin-bottom: 0;
+  }
+  & ul,
+  & ol {
+    margin: 0 0 0.5em;
+    padding-left: 1.3em;
+  }
+  & a {
+    color: var(--accent);
+    text-decoration-line: underline;
+    text-underline-offset: 0.2em;
+  }
+  & strong {
+    font-weight: 700;
+  }
+}
+.tc-red {
+  color: var(--tone-red);
+}
+.tc-amber {
+  color: var(--tone-amber);
+}
+.tc-green {
+  color: var(--tone-green);
+}
+.tc-blue {
+  color: var(--tone-blue);
+}
+.tc-violet {
+  color: var(--tone-violet);
+}

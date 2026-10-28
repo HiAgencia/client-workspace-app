@@ -101,6 +101,8 @@ export default function AgentPage() {
               </h2>
               <div className="quick-add">
                 <Field
+                  id="token-name"
+                  name="token-name"
                   aria-label="Token name"
                   aria-describedby="token-name-help"
                   aria-invalid={labelMissing || undefined}
@@ -145,7 +147,15 @@ export default function AgentPage() {
                 {data.tokens.length > 0 && <span className="t-meta">{data.tokens.length}</span>}
               </div>
               {data.tokens.length === 0 ? (
-                <Empty text="No tokens yet. Issue one above for each place an agent runs." />
+                <Empty
+                  text="No tokens yet. Issue one for each place an agent runs."
+                  action="Name the first token"
+                  onAction={() => {
+                    const field = document.getElementById("token-name");
+                    field?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    field?.focus({ preventScroll: true });
+                  }}
+                />
               ) : (
                 <ul className="rows">
                   {data.tokens.map((token) => (

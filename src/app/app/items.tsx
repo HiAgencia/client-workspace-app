@@ -7,13 +7,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
+import { richTextToPlain } from "@/lib/rich-text";
 import { post, tool, type Item } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
 import { Origin, PRIORITIES } from "./item-parts";
 import { useWorkspace } from "./workspace";
 
 // A redrawn list travels: what moved goes from its old place to the new one, and what arrives enters; nothing jumps.
-export function ItemList({ items, children }: { items: Item[]; children: (item: Item) => ReactNode }) {
+export function ItemList({ items, children, nested }: { items: Item[]; children: (item: Item) => ReactNode; nested?: boolean }) {
   const list = useRef<HTMLUListElement>(null);
   const last = useRef(new Map<string, number>());
   useLayoutEffect(() => {
@@ -38,7 +39,7 @@ export function ItemList({ items, children }: { items: Item[]; children: (item: 
     last.current = next;
   });
   return (
-    <ul className="rows" ref={list}>
+    <ul className={nested ? "rows rows-nested" : "rows"} ref={list}>
       {items.map((item) => (
         <li key={item.id} data-key={item.id} className="row-fold">
           {children(item)}
@@ -50,7 +51,7 @@ export function ItemList({ items, children }: { items: Item[]; children: (item: 
 
 // One row: title, priority, due date, and status change in place; Enter confirms, Esc cancels; delete folds the row
 // away and offers undo.
-export function ItemRow({ item, showPath = false }: { item: Item; showPath?: boolean }) {
+export function ItemRow({ item, showPath = false, below }: { item: Item; showPath?: boolean; below?: ReactNode }) {
   const { saving, notify, touch, openItem } = useWorkspace();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
@@ -127,6 +128,7 @@ export function ItemRow({ item, showPath = false }: { item: Item; showPath?: boo
 
   const done = item.status === "done";
   const checkable = item.type === "task" || item.type === "review";
+  const summary = richTextToPlain(item.body).split("\n").slice(0, 2).join(" ");
   return (
     <div
       ref={row}
@@ -161,14 +163,16 @@ export function ItemRow({ item, showPath = false }: { item: Item; showPath?: boo
             type="button"
             className="row-title t-value"
             data-item-title
-            onClick={() => setEditing(true)}
-            aria-label={`Edit “${item.title}”`}
+            // A note's title is its first line: it is edited in its panel, with the rest of its text.
+            onClick={() => (item.type === "note" ? openItem(item) : setEditing(true))}
+            aria-label={item.type === "note" ? `Open the note “${item.title}”` : `Edit “${item.title}”`}
           >
             {item.title}
           </button>
         )}
-        {item.body && <p className="row-body t-help">{item.body}</p>}
+        {summary && !(item.type === "note" && summary === item.title) && <p className="row-body t-help">{item.type === "note" ? summary.slice(item.title.length).trim() || summary : summary}</p>}
         <RowMeta item={item} showPath={showPath} />
+        {below}
       </div>
       {item.type === "task" && (
         <div className="row-chips">
@@ -260,7 +264,9 @@ export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] 
     const request =
       type === "task"
         ? tool("create_task", { node: nodeId, title, priority: Number(priority), ...(dueOn ? { dueOn } : {}) })
-        : type === "decision"
+        : type === "note"
+          ? tool("add_note", { node: nodeId, text: title })
+          : type === "decision"
           ? tool("add_decision", { node: nodeId, decision: title, ...(extra.trim() ? { rationale: extra } : {}) })
           : type === "link"
             ? tool("add_link", { node: nodeId, url: extra, ...(title.trim() ? { title } : {}) })
@@ -275,8 +281,8 @@ export function QuickAdd({ nodeId, type }: { nodeId: string; type: Item["type"] 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") void add();
   };
-  const label = { task: "New task", decision: "New decision", link: "Link title (optional)", review: "Something to review" }[type];
-  const extraLabel = { task: "", decision: "Why (optional)", link: "Address (https://…)", review: "Link (optional)" }[type];
+  const label = { task: "New task", note: "New note", decision: "New decision", link: "Link title (optional)", review: "Something to review" }[type];
+  const extraLabel = { task: "", note: "", decision: "Why (optional)", link: "Address (https://…)", review: "Link (optional)" }[type];
 
   return (
     <div className="quick-add" data-quick-add={type}>

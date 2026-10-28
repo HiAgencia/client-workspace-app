@@ -7,14 +7,16 @@ import type { Scope } from "./tree";
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 
 export const ITEM_COLUMNS =
-  "id, node_id, type, title, body, url, status, priority, due_on, source, agent_label, created_at, updated_at, completed_at, deleted_at";
+  "id, node_id, parent_item_id, type, title, body, url, status, priority, due_on, source, agent_label, changed_source, changed_agent_label, created_at, updated_at, completed_at, deleted_at";
 
-export const itemTypes = ["task", "decision", "link", "review"] as const;
+export const itemTypes = ["task", "note", "decision", "link", "review"] as const;
 
 export const itemSchema = z.object({
   id: z.string(),
   nodeId: z.string(),
   nodePath: z.string(),
+  // The task it hangs from, or null when it hangs from the node.
+  parentId: z.string().nullable(),
   type: z.enum(itemTypes),
   title: z.string(),
   body: z.string().nullable(),
@@ -37,6 +39,7 @@ export function toItem(row: ItemRow, scope: Scope): Item {
     id: row.id,
     nodeId: row.node_id,
     nodePath: scope.all.get(row.node_id)?.path ?? "",
+    parentId: row.parent_item_id,
     type: row.type,
     title: row.title,
     body: row.body,
@@ -89,9 +92,12 @@ export function byPriorityThenDue(a: Item, b: Item): number {
   const da = a.dueOn ?? "9999-12-31";
   const db = b.dueOn ?? "9999-12-31";
   if (da !== db) return da < db ? -1 : 1;
-  return a.createdAt < b.createdAt ? -1 : 1;
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+  // Two items written in one statement share their moment: the id keeps them in the same place on every read.
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 export function newestFirst(a: Item, b: Item): number {
-  return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

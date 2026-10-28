@@ -230,6 +230,92 @@ describe("accounts and tokens", () => {
   });
 });
 
+describe("events, the task inside an event, versions, and saved views", () => {
+  async function eventOf(user: DisposableUser, node: string, title: string) {
+    return must(
+      await user.client
+        .from("events")
+        .insert({ node_id: node, title, all_day: true, starts_on: "2026-11-02", ends_on: "2026-11-02" })
+        .select("id")
+        .single(),
+      `insert event ${title}`,
+    ).id;
+  }
+
+  it("A does not read, write into, change, or delete B's events", async () => {
+    const own = await eventOf(a!, treeA.project, "A meeting");
+    const foreign = await eventOf(b!, treeB.project, "B meeting");
+    const read = await userA().from("events").select("id").in("id", [own, foreign]);
+    expect(read.data?.map((row) => row.id)).toEqual([own]);
+    const inserted = await userA().from("events").insert({ node_id: treeB.project, title: "Forged", all_day: true, starts_on: "2026-11-02", ends_on: "2026-11-02" });
+    expect(inserted.error?.code).toBe("42501");
+    const changed = await userA().from("events").update({ title: "Hijacked" }).eq("id", foreign).select("id");
+    expect(changed.data).toEqual([]);
+    const deleted = await userA().from("events").delete().eq("id", foreign).select("id");
+    expect(deleted.data).toEqual([]);
+    const still = must(await serviceClient().from("events").select("title").eq("id", foreign).single(), "read B event");
+    expect(still.title).toBe("B meeting");
+    // The shape of a moment: a whole day carries days, a timed event carries instants.
+    const mixed = await userA().from("events").insert({ node_id: treeA.project, title: "Mixed", all_day: true, starts_at: "2026-11-02T10:00:00Z", ends_at: "2026-11-02T11:00:00Z" });
+    expect(mixed.error?.code).toBe("23514");
+  });
+
+  it("a task lives in one event of its owner: never in B's event, never a decision", async () => {
+    const own = await eventOf(a!, treeA.project, "A review");
+    const foreign = await eventOf(b!, treeB.project, "B review");
+    const linked = await userA().from("item_events").insert({ item_id: treeA.item, event_id: own }).select("item_id");
+    expect(linked.error).toBeNull();
+    const twice = await userA().from("item_events").insert({ item_id: treeA.item, event_id: own });
+    expect(twice.error?.code).toBe("23505");
+    await userA().from("item_events").delete().eq("item_id", treeA.item);
+    const intoForeign = await userA().from("item_events").insert({ item_id: treeA.item, event_id: foreign });
+    expect(intoForeign.error?.code).toBe("42501");
+    const foreignTask = await userA().from("item_events").insert({ item_id: treeB.item, event_id: own });
+    expect(foreignTask.error?.code).toBe("42501");
+    const read = await userA().from("item_events").select("item_id").eq("item_id", treeB.item);
+    expect(read.data).toEqual([]);
+  });
+
+  it("versions are written by the database and only read by their owner", async () => {
+    must(await userA().from("items").update({ title: "A first task, renamed" }).eq("id", treeA.item).select("id"), "rename");
+    const own = await userA().from("revisions").select("id, snapshot").eq("item_id", treeA.item);
+    expect(own.data?.length).toBeGreaterThan(0);
+    must(await b!.client.from("items").update({ title: "B renamed" }).eq("id", treeB.item).select("id"), "rename B");
+    const foreign = await userA().from("revisions").select("id").eq("item_id", treeB.item);
+    expect(foreign.data).toEqual([]);
+    const forged = await userA().from("revisions").insert({ item_id: treeA.item, snapshot: {}, source: "manual" });
+    expect(forged.error?.code).toBe("42501");
+    const rewritten = await userA().from("revisions").update({ snapshot: {} }).eq("item_id", treeA.item);
+    expect(rewritten.error?.code).toBe("42501");
+  });
+
+  it("the branch functions reach nothing of another owner", async () => {
+    const deleted = await userA().rpc("delete_item_branch", { p_item: treeB.item, p_source: "manual", p_agent_label: null as unknown as string });
+    expect(deleted.error).toBeNull();
+    expect(deleted.data).toEqual([]);
+    const still = must(await serviceClient().from("items").select("deleted_at").eq("id", treeB.item).single(), "read B item");
+    expect(still.deleted_at).toBeNull();
+  });
+
+  it("saved views belong to their owner", async () => {
+    const own = must(await userA().from("saved_views").insert({ owner_id: a!.id, name: "Urgent", query: "view=all&priority=1" }).select("id").single(), "save view");
+    const forged = await userA().from("saved_views").insert({ owner_id: b!.id, name: "Forged", query: "x" });
+    expect(forged.error?.code).toBe("42501");
+    const bView = must(await b!.client.from("saved_views").insert({ owner_id: b!.id, name: "Mine", query: "y" }).select("id").single(), "B view");
+    const read = await userA().from("saved_views").select("id").in("id", [own.id, bView.id]);
+    expect(read.data?.map((row) => row.id)).toEqual([own.id]);
+    const deleted = await userA().from("saved_views").delete().eq("id", bView.id).select("id");
+    expect(deleted.data).toEqual([]);
+  });
+
+  it("a visitor without a session reads none of them", async () => {
+    for (const table of ["events", "item_events", "revisions", "saved_views"] as const) {
+      const { error } = await publicClient().from(table).select("*").limit(1);
+      expect(error?.code).toBe("42501");
+    }
+  });
+});
+
 describe("tree functions", () => {
   it("node_subtree returns the node and all its descendants", async () => {
     const { data, error } = await userA().rpc("node_subtree", { root: treeA.root });

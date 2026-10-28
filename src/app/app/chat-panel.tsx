@@ -20,6 +20,7 @@ type WriteOutput = {
 
 const DONE: Record<string, string> = {
   create_task: "Created task",
+  add_note: "Wrote note",
   add_decision: "Recorded decision",
   add_link: "Saved link",
   add_review: "Added to review",
@@ -212,7 +213,7 @@ function Conversation({ nodeId, initial }: { nodeId: string; initial: UIMessage[
               words rather than the browser's own "choose file" text. */}
           <label className={`${buttonClass({ size: "sm" })} file-button`}>
             <span className="btn-label">Attach an image</span>
-            <input type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
+            <input id="chat-image" name="chat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
           </label>
           <VoiceNote onText={(text) => setInput((current) => (current ? `${current} ${text}` : text))} onNotice={setNotice} />
         </div>

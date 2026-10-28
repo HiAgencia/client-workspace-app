@@ -166,6 +166,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       <div className="palette-search">
         <input
           autoFocus
+          id="palette-search"
+          name="palette-search"
           className="field"
           role="combobox"
           aria-expanded={flat.length > 0}
