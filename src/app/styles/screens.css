@@ -814,17 +814,17 @@
   overflow-wrap: break-word;
 }
 @container rows (width < 38rem) {
-  .row[data-type="task"] {
+  .row[data-type="task"]:has(> .row-act) {
     grid-template-columns: var(--col-check) minmax(0, 1fr);
     grid-template-areas: "check main" ". chips" ". act";
   }
-  .row[data-type="task"] .row-chips {
+  .row[data-type="task"]:has(> .row-act) .row-chips {
     grid-area: chips;
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
   }
-  .row[data-type="task"] :is(.row-prio, .row-due) {
+  .row[data-type="task"]:has(> .row-act) :is(.row-prio, .row-due) {
     grid-area: auto;
     width: var(--col-prio);
   }
@@ -833,6 +833,20 @@
   }
 }
 @container rows (width < 30rem) {
+  .row[data-type="task"]:not(:has(> .row-act)) {
+    grid-template-columns: var(--col-check) minmax(0, 1fr);
+    grid-template-areas: "check main" ". chips";
+  }
+  .row[data-type="task"]:not(:has(> .row-act)) .row-chips {
+    grid-area: chips;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .row[data-type="task"]:not(:has(> .row-act)) :is(.row-prio, .row-due) {
+    grid-area: auto;
+    width: var(--col-prio);
+  }
   .row[data-type="decision"],
   .row[data-type="note"],
   .row[data-type="link"] {

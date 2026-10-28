@@ -87,7 +87,6 @@ function Preview() {
                   </span>
                 </span>
               </span>
-              <span className="row-act" />
             </li>
           ))}
         </ul>
