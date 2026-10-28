@@ -8,7 +8,8 @@ import type { Item } from "./client-api";
 
 export type FocusTarget =
   | { kind: "node"; nodeId: string }
-  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"] }
+
+  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"]; done?: boolean }
   | { kind: "quick-add"; nodeId: string; type: Item["type"] };
 
 export type FocusRequest = { target: FocusTarget; acted: boolean };

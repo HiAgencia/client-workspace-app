@@ -6,17 +6,22 @@ import { forgetScope, loadScope, resolveNode } from "./tree";
 
 
 
-export const createNodeInput = z.strictObject({
-  parent: z.string().min(1).optional(),
-  name: z.string().trim().min(1).max(200),
-});
+
+
+export const createNodeInput = z
+  .strictObject({
+    parent: z.string().min(1).optional(),
+    kind: z.enum(["client", "project"]).optional(),
+    name: z.string().trim().min(1).max(200),
+  })
+  .refine((value) => !(value.parent && value.kind), { message: "a node below another takes its kind from its parent" });
 
 export async function createNode(
   ctx: ToolContext,
   input: z.infer<typeof createNodeInput>,
 ): Promise<ToolResult<{ node: { id: string; name: string; kind: string; parentId: string | null } }>> {
   let parentId: string | null = null;
-  let kind: "client" | "project" | "subproject" = "client";
+  let kind: "client" | "project" | "subproject" = input.kind ?? "client";
   if (input.parent) {
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
@@ -25,7 +30,7 @@ export async function createNode(
     parentId = parent.node.id;
     kind = parent.node.kind === "client" ? "project" : "subproject";
   } else if (ctx.scopeNodeId) {
-    return fail("not_found", "a scoped access cannot create a client");
+    return fail("not_found", "a scoped access cannot create a node at the root");
   }
   const siblings = ctx.db.from("nodes").select("position").eq("owner_id", ctx.ownerId);
   const { data: last, error: positionError } = await (parentId ? siblings.eq("parent_id", parentId) : siblings.is("parent_id", null))

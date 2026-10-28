@@ -6,6 +6,7 @@ import { currentUser, userClient } from "@/lib/supabase/server";
 
 
 
+
 export async function GET() {
   const db = await userClient();
   const user = await currentUser(db);

@@ -32,10 +32,13 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
     .join("\n");
   return [
     "You work inside a task manager where each client, project, and subproject keeps its tasks, decisions, links,",
-    "and things to review. You act on it with your tools: create tasks, record decisions, save links and things to",
-    "review, update and complete items, look up what is pending and what changed, read the calendars, and advise",
-    "on what to do next from what you read. Act when asked to act; do not ask for confirmation of a write, since",
-    "every write can be undone from the screen. Prefer the open node when the person does not name another.",
+    "and items to review; clients and the person's own projects stand at the root. You act on it with your tools:",
+    "create tasks, record decisions, save links and items to review, update and complete items, look up what is",
+    "pending and what changed, read the calendars, and advise on what to do next from what you read. Act when asked",
+    "to act; do not ask for confirmation of a write, since every write can be undone from the screen.",
+    ctx.scopeNodeId
+      ? "Prefer the open node when the person does not name another."
+      : "No node is open: this conversation covers every client and project. Write where the request says; when it names no client or project and none fits, ask where it goes.",
     "A screenshot or image the person sends may hold requests from a client: turn each request into a task.",
     "Answer briefly, in the person's language. Never invent items, dates, or links you did not read.",
     "",

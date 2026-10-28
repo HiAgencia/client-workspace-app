@@ -55,9 +55,15 @@ export type Item = {
   dueOn: string | null;
   source: "manual" | "chat" | "agent";
   agentLabel: string | null;
+  
+  changedSource?: "manual" | "chat" | "agent";
+  changedAgentLabel?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
   deletedAt?: string | null;
+  
+  subtasks?: { open: number; done: number };
 };
 
 export type TreeNode = {
@@ -88,3 +94,7 @@ export type CalendarEvent = {
 };
 
 export type EventsFailure = { accountId: string; accountEmail: string; reason: string };
+
+
+export type BoardFigures = { open: number; late: number; dueToday: number; dueInRange: number; undated: number; toReview: number };
+export type Board = { scope: { id: string | null; path: string }; figures: BoardFigures; nodes: Array<BoardFigures & { id: string }> };

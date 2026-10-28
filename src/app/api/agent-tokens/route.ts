@@ -9,15 +9,12 @@ import { isUuid } from "@/lib/tools/tree";
 
 
 export async function GET(request: NextRequest) {
-  const nodeId = request.nextUrl.searchParams.get("node") ?? "";
-  if (!isUuid(nodeId)) return problem(400, "say which node");
+  const nodeId = request.nextUrl.searchParams.get("node");
+  if (nodeId !== null && !isUuid(nodeId)) return problem(400, "no such node");
   const db = await userClient();
   if (!(await currentUser(db))) return problem(401, "not signed in");
-  const { data, error } = await db
-    .from("agent_tokens")
-    .select("id, label, created_at, last_used_at, revoked_at")
-    .eq("node_id", nodeId)
-    .order("created_at", { ascending: false });
+  const query = db.from("agent_tokens").select("id, node_id, label, created_at, last_used_at, revoked_at");
+  const { data, error } = await (nodeId ? query.eq("node_id", nodeId) : query).order("created_at", { ascending: false });
   if (error) {
     console.error("agent tokens:", error.message);
     return problem(500, "the tokens could not be read");
@@ -28,6 +25,7 @@ export async function GET(request: NextRequest) {
     mcpJson: mcpJson(new URL("/api/mcp", request.nextUrl.origin).toString()),
     tokens: data.map((row) => ({
       id: row.id,
+      nodeId: row.node_id,
       label: row.label,
       createdAt: row.created_at,
       lastUsedAt: row.last_used_at,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { boardQuery } from "@/lib/board-params";
 import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
@@ -37,14 +38,10 @@ export async function POST(request: Request) {
     return json({ ok: true });
   }
   
-  const kept = new URLSearchParams();
-  for (const [key, value] of new URLSearchParams(body.value.query)) {
-    if (["view", "date", "scope", "type", "status", "priority", "source"].includes(key) && value) kept.set(key, value);
-  }
   
   const { data, error } = await db
     .from("saved_views")
-    .upsert({ owner_id: session.user.id, name: body.value.name, query: kept.toString() }, { onConflict: "owner_id,name" })
+    .upsert({ owner_id: session.user.id, name: body.value.name, query: boardQuery(body.value.query) }, { onConflict: "owner_id,name" })
     .select("id, name, query, position")
     .single();
   if (error) {

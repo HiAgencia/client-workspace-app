@@ -1,44 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
-import { DEMO_FIRST_STEP } from "@/lib/demo";
-import { LOCALE } from "@/lib/dates";
-import { get, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
+import { firstWeekday, today, weekOf } from "@/lib/dates";
+import { Empty } from "./blocks";
+import { ChatToggle } from "./chat-panel";
+import { get, tool, type Board, type Item, type TreeNode } from "./client-api";
 import { ConnectBlockedNote, type ConnectBlocked } from "./connect-blocked";
-import { land, onFocusRequest, takeFocusRequest, type FocusRequest, type FocusTarget, type Landing } from "./focus-request";
+import { land, onFocusRequest, takeFocusRequest, type FocusTarget, type Landing } from "./focus-request";
 import { ItemList, ItemRow, QuickAdd } from "./items";
+import {
+  ActivitySection,
+  AgendaSection,
+  KIND_NAME,
+  NodeCards,
+  placesIn,
+  plural,
+  ReviewSection,
+  TasksSection,
+  tasksInput,
+  useAgenda,
+  useBoardState,
+  useRead,
+  type BoardState,
+  type Browse,
+  type Read,
+  type SetBoard,
+} from "./sections";
+import { NewNode } from "./side-nav";
 import { useWorkspace } from "./workspace";
 
+
 type Overview = {
-  node: { id: string; path: string; kind: string };
+  node: { id: string; path: string; kind: TreeNode["kind"] };
   children: Array<{ id: string; name: string }>;
-  openTasks: Item[];
   notes: Item[];
   decisions: Item[];
   links: Item[];
-  toReview: Item[];
-  events: CalendarEvent[];
-  eventFailures: EventsFailure[];
-  below: Record<"openTasks" | "notes" | "decisions" | "toReview", Below>;
 };
 
-type Below = { count: number; busiest: { id: string; path: string } | null };
-
 type Account = { id: string; email: string; status: string; nodeIds: string[] };
-
-const KIND: Record<string, string> = { client: "Client", project: "Project", subproject: "Subproject" };
-
-function when(event: CalendarEvent, withDay = true): string {
-  if (event.allDay) {
-    const day = new Date(`${event.start}T00:00`).toLocaleDateString(LOCALE, { weekday: "short", month: "short", day: "numeric" });
-    return withDay ? `${day} · All day` : "All day";
-  }
-  const start = new Date(event.start);
-  const time = start.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
-  return withDay ? `${start.toLocaleDateString(LOCALE, { weekday: "short", month: "short", day: "numeric" })} · ${time}` : time;
-}
+type Accounts = { list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked };
 
 function ancestorsOf(tree: TreeNode[] | null, nodeId: string): TreeNode[] {
   const chain: TreeNode[] = [];
@@ -49,27 +52,42 @@ function ancestorsOf(tree: TreeNode[] | null, nodeId: string): TreeNode[] {
 
 
 
-export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; googleOutcome: string | null; onReveal?: () => void }) {
-  const { version, tree, notify, isDemo } = useWorkspace();
+
+export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutcome: string | null }) {
+  const { version, tree, notify } = useWorkspace();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [done, setDone] = useState<Item[]>([]);
-  const [showDone, setShowDone] = useState(false);
+  const [accounts, setAccounts] = useState<Accounts | null>(null);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [weekStart] = useState(() => firstWeekday());
+  const now = today();
+  const week = weekOf(now, weekStart);
+  const board = useRead<Board>("get_board", { node: nodeId, today: now, from: week.from, through: week.to });
+  const { state, set } = useBoardState("all");
   
-  const [doneSettled, setDoneSettled] = useState(false);
   
-  
-  const pendingDone = useRef<FocusRequest | null>(null);
-  const [accounts, setAccounts] = useState<{ list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked } | null>(null);
+  const [firstTasks, setFirstTasks] = useState<{ read: Read<Browse> | null } | null>(null);
+  const firstInput = useRef(tasksInput(nodeId, state, now, weekStart));
+
+  useEffect(() => {
+    let live = true;
+    const input = firstInput.current;
+    void tool<Browse>("browse_items", input).then((answer) => {
+      
+      if (live) setFirstTasks({ read: answer.ok ? { key: JSON.stringify(input), value: answer } : null });
+    });
+    return () => {
+      live = false;
+    };
+  }, [nodeId]);
 
   useEffect(() => {
     let live = true;
     void Promise.all([
-      tool<Overview>("get_overview", { node: nodeId }),
-      tool<{ items: Item[] }>("list_items", { node: nodeId, type: "task", status: "done" }),
+      tool<Overview>("get_overview", { node: nodeId, withEvents: false }),
       get<{ accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked }>("/api/accounts"),
-    ]).then(([answer, finished, accountsAnswer]) => {
+    ]).then(([answer, accountsAnswer]) => {
       
       if (!live) return;
       if (answer.ok) {
@@ -77,382 +95,362 @@ export function NodeView({ nodeId, googleOutcome, onReveal }: { nodeId: string; 
         setError(null);
       } else if (answer.code === "not_found") setNotFound(true);
       else setError(answer.message);
-      if (finished.ok) setDone(finished.items);
-      else notify({ text: "The done tasks could not be read.", tone: "error" });
-      if (accountsAnswer.ok) setAccounts({ list: accountsAnswer.accounts, canConnect: accountsAnswer.canConnect, connectBlocked: accountsAnswer.connectBlocked });
+      if (accountsAnswer.ok) {
+        setAccounts({ list: accountsAnswer.accounts, canConnect: accountsAnswer.canConnect, connectBlocked: accountsAnswer.connectBlocked });
+        setAccountsError(null);
+      } else setAccountsError(accountsAnswer.message);
     });
     return () => {
       live = false;
     };
-  }, [nodeId, version, notify]);
+  }, [nodeId, version]);
 
   
   
   
-  const ready = overview !== null;
+  const setBoard = useRef(set);
+  useEffect(() => {
+    setBoard.current = set;
+  }, [set]);
+  
+  
+  const ready = overview !== null && tree !== null && firstTasks !== null && (board.data !== null || board.error !== null);
   useEffect(() => {
     if (!ready) return;
+    let watch: MutationObserver | null = null;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      watch?.disconnect();
+      watch = null;
+      clearTimeout(deadline);
+    };
     const apply = () => {
       const request = takeFocusRequest(nodeId);
       if (!request) return;
+      stop();
       const { target } = request;
-      onReveal?.();
-      if (target.kind === "item" && done.some((item) => item.id === target.itemId)) {
-        setShowDone(true);
-        
-        
-        
-        if (!doneSettled) pendingDone.current = request;
-      }
+      
+      
+      const section = target.kind === "item" && target.done ? (target.type === "task" ? "tasks" : target.type === "review" ? "review" : null) : null;
+      if (section === "tasks") setBoard.current({ status: "done", tasks: null, priority: null });
+      if (section === "review") setBoard.current({ review: "done" });
+      const tab = section ? `[data-section='${section}'] [role='tab'][data-tab='done'][aria-selected='true']` : null;
+      const page = () => document.querySelector(`[data-node-view="${nodeId}"]`);
+      const attempt = (final: boolean): boolean => {
+        const landing = land(target, { acted: request.acted });
+        if (landing === "landed" || landing === "busy") return true;
+        const reading = page()?.querySelector("[aria-busy='true']") || (tab !== null && !document.querySelector(tab));
+        if (landing === "missing" && !final && reading) return false;
+        notify({ text: notLanded(target, landing), tone: "status" });
+        return true;
+      };
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          const landing = land(target, { acted: request.acted });
-          if (landing === "missing" || landing === "hidden") notify({ text: notLanded(target, landing), tone: "status" });
+          const root = page();
+          if (attempt(false) || !root) return;
+          watch = new MutationObserver(() => {
+            if (attempt(false)) stop();
+          });
+          watch.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-busy", "aria-selected"] });
+          deadline = setTimeout(() => {
+            stop();
+            attempt(true);
+          }, 15_000);
         }),
       );
     };
     apply();
-    return onFocusRequest(apply);
-  }, [ready, nodeId, done, onReveal, notify, doneSettled]);
+    const off = onFocusRequest(apply);
+    return () => {
+      off();
+      stop();
+    };
+  }, [ready, nodeId, notify]);
 
   if (notFound) {
     return (
       <section className="card stack" aria-labelledby="missing">
         <h1 id="missing" className="t-h1">
-          This project is not here
+          This client or project is not here
         </h1>
-        <p className="t-help">It was deleted, or it belongs to another account. Pick one from the list of projects, or start from today.</p>
+        <p className="t-help">It was deleted, or it belongs to another account. Pick one in the sidebar, or go back to the Overview.</p>
         <div>
           <Link className={buttonClass({ variant: "primary" })} href="/app">
-            <span className="btn-label">Go to Today</span>
+            <span className="btn-label">Go to the Overview</span>
           </Link>
         </div>
       </section>
     );
   }
-  if (!overview) return <NodeSkeleton failed={error} />;
+  
+  
+  
+  if (!ready || !overview || tree === null || firstTasks === null) return <NodeSkeleton failed={error} />;
 
   const chain = ancestorsOf(tree, nodeId);
-  const name = chain.at(-1)?.name ?? overview.node.path.split(" / ").at(-1) ?? overview.node.path;
-  const ancestors = chain.slice(0, -1);
-  const visible = (accounts?.list ?? [])
-    .map((account) => ({ account, from: chain.map((n) => n.id).reverse().find((id) => account.nodeIds.includes(id)) }))
-    .filter((entry) => entry.from);
-  const openReviews = overview.toReview.length;
-  
-  const counted = tree?.find((n) => n.id === nodeId);
-  const pendingTasks = counted?.openTasks ?? overview.openTasks.length;
-  const pendingReviews = counted?.openReviews ?? openReviews;
-  const allTasks = [...overview.openTasks, ...done];
-  const taskIds = new Set(allTasks.map((task) => task.id));
-  const topOpen = overview.openTasks.filter((task) => !task.parentId || !taskIds.has(task.parentId));
-  const topDone = done.filter((task) => !task.parentId || !taskIds.has(task.parentId));
+  const node = chain.at(-1);
+  const name = node?.name ?? overview.node.path.split(" / ").at(-1) ?? overview.node.path;
+  const children = tree.filter((entry) => entry.parentId === nodeId);
+  const figures = board.stale ? null : board.data;
 
   return (
-    <article className="page fade-enter" data-node-view={nodeId}>
-      <header className="card page-head">
-        {ancestors.length > 0 && (
-          <nav aria-label="Path">
-            <ol className="crumbs t-meta">
-              {ancestors.map((node) => (
-                <li key={node.id}>
-                  <Link className="link" href={`/app/node/${node.id}`}>
-                    {node.name}
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          </nav>
-        )}
-        <h1 className="t-h1" tabIndex={-1} data-node-title>
-          {name}
-        </h1>
-        <div className="facts t-meta">
-          <span className="nowrap">{KIND[overview.node.kind] ?? overview.node.kind}</span>
-          <span className="nowrap" data-node-count={pendingTasks + pendingReviews}>
-            {plural(pendingTasks, "open task", "open tasks")}
-          </span>
-          <span className="nowrap">{plural(pendingReviews, "thing to review", "things to review")}</span>
-          {counted && (pendingTasks !== overview.openTasks.length || pendingReviews !== openReviews) && <span className="nowrap">here and below</span>}
-          {overview.children.length > 0 && (
-            <span>
-              {overview.children.length === 1 ? "Subproject" : "Subprojects"}:{" "}
-              {overview.children.map((child, index) => (
-                <span key={child.id}>
-                  {index > 0 && ", "}
-                  <Link className="link" href={`/app/node/${child.id}`}>
-                    {child.name}
-                  </Link>
-                </span>
-              ))}
-            </span>
-          )}
-        </div>
-        <div className="inline">
-          <Link className={buttonClass({ size: "sm" })} href={`/app?view=all&scope=${nodeId}`} data-open-in-panel>
-            <span className="btn-label">Filter it in the panel</span>
-          </Link>
-          <Link className={buttonClass({ size: "sm" })} href={`/app/node/${nodeId}/agent`}>
-            <span className="btn-label">Connect your agent</span>
-          </Link>
-        </div>
-        {isDemo && overview.node.path === DEMO_FIRST_STEP && (
-          <p className="inline-note" data-tone="accent" data-first-step-note>
-            Add a task with the field under Tasks, or ask the chat panel to add one. This is the project the demo starts
-            on.
-          </p>
-        )}
-        {googleOutcome && <GoogleOutcome outcome={googleOutcome} />}
-        {error && (
-          <p role="alert" className="inline-note" data-tone="alert">
-            The project could not be refreshed: {error}. What you see is the last version read.
-          </p>
-        )}
-      </header>
-
-      <section className="card" aria-labelledby="tasks">
-        <div className="card-head">
-          <h2 id="tasks" className="t-title">
-            Tasks
-          </h2>
-          <span className="t-meta">{plural(overview.openTasks.length, "open", "open")}</span>
-        </div>
-        <QuickAdd nodeId={nodeId} type="task" />
-        {topOpen.length === 0 ? (
-          <Empty text={emptyText("No open tasks here.", "open tasks", overview.below.openTasks)} action="Add a task" onAction={() => focusQuickAdd(nodeId, "task")} below={overview.below.openTasks} />
-        ) : (
-          <TaskTree items={topOpen} all={allTasks} />
-        )}
-        {topDone.length > 0 && (
-          <div className="done-toggle">
-            <Button
-              variant="quiet"
-              size="sm"
-              aria-expanded={showDone}
-              aria-controls="done-tasks"
-              onClick={() => {
-                setDoneSettled(false);
-                
-                pendingDone.current = null;
-                setShowDone((v) => !v);
-              }}
-            >
-              Done ({topDone.length})
-            </Button>
-            <div
-              className="fold"
-              id="done-tasks"
-              data-open={showDone}
-              data-settled={(showDone && doneSettled) || undefined}
-              onTransitionEnd={(event) => {
-                if (event.target !== event.currentTarget || event.propertyName !== "grid-template-rows") return;
-                setDoneSettled(showDone);
-                
-                
-                if (showDone && pendingDone.current) {
-                  const request = pendingDone.current;
-                  pendingDone.current = null;
-                  land(request.target, { acted: request.acted });
-                }
-              }}
-              onTransitionCancel={(event) => {
-                if (event.target !== event.currentTarget) return;
-                pendingDone.current = null;
-                setDoneSettled(false);
-              }}
-            >
-              <div>
-                <TaskTree items={topDone} all={allTasks} />
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <div className="cards-2">
-        <div className="cards-2-inner">
-          <Section title="Notes" type="note" nodeId={nodeId} items={overview.notes} empty={emptyText("No notes here yet.", "notes", overview.below.notes)} below={overview.below.notes} action="Write a note" />
-          <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty={emptyText("No decisions recorded here yet.", "decisions", overview.below.decisions)} below={overview.below.decisions} action="Record a decision" />
-          <Section title="To review" type="review" nodeId={nodeId} items={overview.toReview} empty={emptyText("Nothing to review here.", "things to review", overview.below.toReview)} below={overview.below.toReview} action="Add something to review" />
-          <Section title="Links" type="link" nodeId={nodeId} items={overview.links} empty="No links saved here yet." action="Save a link" />
-          <section className="card" aria-labelledby="accounts">
-            <div className="card-head">
-              <h2 id="accounts" className="t-title">
-                Google accounts
-              </h2>
-            </div>
-            {accounts === null ? (
-              <div className="stack" role="status" aria-label="Loading accounts" aria-busy="true">
-                <span className="skeleton" style={{ width: "70%" }} />
-                <span className="skeleton" style={{ width: "45%" }} />
-              </div>
-            ) : (
-              <div className="stack">
-                {visible.length === 0 ? (
-                  <p className="t-help">No Google account is visible here: one connected here or above shows its calendars in this project.</p>
-                ) : (
-                  <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                    {visible.map(({ account, from }) => (
-                      <li key={account.id} className="account-line">
-                        <span className="t-name">{account.email}</span>
-                        <span className="pill" data-tone={from === nodeId ? "accent" : undefined}>
-                          {from === nodeId ? "Own" : `Inherited from ${tree?.find((n) => n.id === from)?.name ?? "a parent"}`}
-                        </span>
-                        {account.status !== "active" && (
-                          <span className="pill" data-tone="alert">
-                            {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {accounts.canConnect ? (
-                  <div>
-                    <a className={buttonClass({ size: "sm" })} href={`/api/google/connect?node=${nodeId}`}>
-                      <span className="btn-label">Connect a Google account here</span>
-                    </a>
-                  </div>
-                ) : (
-                  <ConnectBlockedNote reason={accounts.connectBlocked} />
-                )}
-              </div>
-            )}
-          </section>
-        </div>
+    <article className="page board fade-enter" data-node-view={nodeId} data-node-kind={overview.node.kind}>
+      <NodeHeader overview={overview} name={name} ancestors={chain.slice(0, -1)} board={figures} below={children} node={node} googleOutcome={googleOutcome} error={error} />
+      <WorkRows nodeId={nodeId} tree={tree} state={state} set={set} now={now} weekStart={weekStart} firstTasks={firstTasks.read}>
+        <ChildrenSection parent={node} nodes={children} board={figures} failed={board.error !== null} />
+      </WorkRows>
+      <div className="board-row board-row-split">
+        <Section title="Notes" type="note" nodeId={nodeId} items={overview.notes} empty="No notes here yet." />
+        <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} empty="No decisions here yet." />
       </div>
-
-      <section className="card" aria-labelledby="agenda">
-        <div className="card-head">
-          <h2 id="agenda" className="t-title">
-            Agenda
-          </h2>
-          <span className="t-meta">Next seven days</span>
-        </div>
-        {overview.eventFailures.map((failure) => (
-          <p key={failure.accountId} role="alert" className="inline-note" data-tone="alert">
-            {failure.accountEmail} could not be read: {failure.reason}
-          </p>
-        ))}
-        {overview.events.length === 0 ? (
-          <div data-agenda-empty>
-            <div className="empty">
-              <p className="t-help">
-                No events in the next seven days: no account visible here has one, and the workspace&apos;s own calendar has none for
-                this project.
-              </p>
-              <Link className={buttonClass({ size: "sm" })} href={`/app/calendar?scope=${nodeId}`}>
-                <span className="btn-label">Add an event</span>
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <Agenda events={overview.events} />
-        )}
-      </section>
+      <div className="board-row board-row-split">
+        <Section title="Links" type="link" nodeId={nodeId} items={overview.links} empty="No links saved here yet." />
+        <AccountsCard nodeId={nodeId} accounts={accounts} failed={accountsError} chain={chain} />
+      </div>
     </article>
   );
 }
 
-export function Agenda({ events, withDay = true }: { events: CalendarEvent[]; withDay?: boolean }) {
+
+
+function WorkRows({
+  nodeId,
+  tree,
+  state,
+  set,
+  now,
+  weekStart,
+  firstTasks,
+  children,
+}: {
+  nodeId: string;
+  tree: TreeNode[];
+  state: BoardState;
+  set: SetBoard;
+  now: string;
+  weekStart: number;
+  firstTasks: Read<Browse> | null;
+  children: ReactNode;
+}) {
+  const agenda = useAgenda(nodeId, state.agenda, now, weekStart);
   return (
-    <ul className="agenda">
-      {events.map((event) => (
-        <li key={`${event.origin ?? "google"}:${event.accountId}:${event.id}`} className="agenda-row">
-          <span className="t-meta">{when(event, withDay)}</span>
-          <span className="stack" style={{ gap: "0.1rem" }}>
-            <span className="t-value">{event.title}</span>
-            <span className="t-meta">
-              {}
-              {event.origin === "local" ? `Workspace event · ${event.calendarName}` : `${event.calendarName} · ${event.accountEmail}`}
-            </span>
+    <>
+      <div className="board-row board-row-wide">
+        <TasksSection scope={nodeId} state={state} set={set} now={now} weekStart={weekStart} places={placesIn(tree, nodeId)} defaultTasks="all" initial={firstTasks} />
+        <AgendaSection agenda={agenda} state={state} set={set} now={now} weekStart={weekStart} calendarHref={`/app/calendar?scope=${nodeId}`} />
+      </div>
+      {children}
+      <div className="board-row board-row-split">
+        <ReviewSection scope={nodeId} state={state} set={set} addTo={nodeId} />
+        <ActivitySection scope={nodeId} state={state} set={set} />
+      </div>
+    </>
+  );
+}
+
+function NodeHeader({
+  overview,
+  name,
+  ancestors,
+  board,
+  below,
+  node,
+  googleOutcome,
+  error,
+}: {
+  overview: Overview;
+  name: string;
+  ancestors: TreeNode[];
+  board: Board | null;
+  
+  below: TreeNode[];
+  node: TreeNode | undefined;
+  googleOutcome: string | null;
+  error: string | null;
+}) {
+  const figures = board?.figures;
+  
+  
+  const open = figures?.open ?? node?.openTasks;
+  const perNode = new Map((board?.nodes ?? []).map((entry) => [entry.id, entry.open]));
+  const busy = below.filter((child) => (perNode.get(child.id) ?? 0) > 0);
+  const inChildren = busy.reduce((sum, child) => sum + (perNode.get(child.id) ?? 0), 0);
+  const kind = overview.node.kind;
+  return (
+    <header className="card page-head">
+      <div className="page-head-row page-head-split">
+        <div className="stack page-head-text">
+          {ancestors.length > 0 ? (
+            <nav aria-label="Path" className="t-meta node-eyebrow">
+              <span>{KIND_NAME[kind]} of</span>
+              <ol className="crumbs">
+                {ancestors.map((entry) => (
+                  <li key={entry.id}>
+                    <Link className="link" href={`/app/node/${entry.id}`}>
+                      {entry.name}
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          ) : (
+            <p className="t-meta">{kind === "client" ? "Client" : "Project of your own"}</p>
+          )}
+          <h1 className="t-h1" tabIndex={-1} data-node-title>
+            {name}
+          </h1>
+        </div>
+        <div className="page-actions">
+          <ChatToggle />
+          <Link className={buttonClass({ size: "sm" })} href={`/app/settings?node=${overview.node.id}#agent-tokens`}>
+            <span className="btn-label">Issue an agent token</span>
+          </Link>
+        </div>
+      </div>
+      <div className="facts t-meta" data-node-count={open}>
+        {kind === "client" && <span className="nowrap">{plural(below.length, "project", "projects")}</span>}
+        {open !== undefined && (
+          <span className="nowrap">
+            {plural(open, "open task", "open tasks")}
+            {kind !== "client" && inChildren > 0 && `, ${inChildren} in ${busy.length === 1 ? busy[0].name : "subprojects"}`}
           </span>
-        </li>
-      ))}
-    </ul>
+        )}
+        {figures && <span className="nowrap">{figures.late} late</span>}
+        {(figures || node) && <span className="nowrap">{plural(figures?.toReview ?? node!.openReviews, "item to review", "items to review")}</span>}
+      </div>
+      {googleOutcome && <GoogleOutcome outcome={googleOutcome} />}
+      {error && (
+        <p role="alert" className="inline-note" data-tone="alert">
+          It could not be refreshed: {error}. What you see is the last version read.
+        </p>
+      )}
+    </header>
   );
 }
 
 
-function emptyText(own: string, what: string, below: Below): string {
-  if (below.count === 0) return own;
-  return `Nothing directly here; ${below.count} ${what} below.`;
+function ChildrenSection({ parent, nodes, board, failed }: { parent: TreeNode | undefined; nodes: TreeNode[]; board: Board | null; failed: boolean }) {
+  const { tree } = useWorkspace();
+  const [adding, setAdding] = useState(false);
+  if (!parent) return null;
+  const many = parent.kind === "client" ? "projects" : "subprojects";
+  const one = parent.kind === "client" ? "project" : "subproject";
+  return (
+    <section className="card board-section" aria-labelledby="children-title" id="children" data-section="children">
+      <div className="section-head">
+        <div className="section-title">
+          <h2 id="children-title" className="t-title" tabIndex={-1}>
+            {`${many[0].toUpperCase()}${many.slice(1)} of ${parent.name}`}
+          </h2>
+          <span className="t-meta">{nodes.length}</span>
+        </div>
+        <div className="section-filters">
+          <Button size="sm" onClick={() => setAdding(true)} data-add-child>
+            {`New ${one}`}
+          </Button>
+        </div>
+      </div>
+      {adding && (
+        <div className="tree-new section-new">
+          <NewNode parent={parent} onDone={() => setAdding(false)} />
+        </div>
+      )}
+      <NodeCards nodes={nodes} tree={tree ?? []} board={board} failed={failed} empty={!adding && <Empty text={`No ${many} in ${parent.name} yet.`} />} />
+    </section>
+  );
 }
 
-function Section({ title, type, nodeId, items, empty, action, below }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string; action: string; below?: Below }) {
-  const id = `section-${type}`;
+function AccountsCard({ nodeId, accounts, failed, chain }: { nodeId: string; accounts: Accounts | null; failed: string | null; chain: TreeNode[] }) {
+  const { tree } = useWorkspace();
+  const visible = (accounts?.list ?? [])
+    .map((account) => ({ account, from: chain.map((n) => n.id).reverse().find((id) => account.nodeIds.includes(id)) }))
+    .filter((entry) => entry.from);
+  const node = chain.at(-1);
+  const above = chain.slice(0, -1);
   return (
-    <section className="card" aria-labelledby={id}>
-      <div className="card-head">
-        <h2 id={id} className="t-title">
-          {title}
-        </h2>
-        {items.length > 0 && <span className="t-meta">{items.length}</span>}
+    <section className="card board-section" aria-labelledby="accounts">
+      <div className="section-head">
+        <div className="section-title">
+          <h2 id="accounts" className="t-title">
+            Google accounts
+          </h2>
+        </div>
       </div>
-      <QuickAdd nodeId={nodeId} type={type} />
-      {items.length === 0 ? (
-        <Empty text={empty} action={action} onAction={() => focusQuickAdd(nodeId, type)} below={below} />
+      {accounts === null ? (
+        failed ? (
+          <p role="alert" className="inline-note" data-tone="alert">
+            The Google accounts could not be read: {failed}. Reload the page to try again.
+          </p>
+        ) : (
+          <div className="stack" role="status" aria-label="Loading accounts" aria-busy="true">
+            <span className="skeleton" style={{ width: "70%" }} />
+            <span className="skeleton" style={{ width: "45%" }} />
+          </div>
+        )
       ) : (
-        <ItemList items={items}>{(item) => <ItemRow item={item} showPath={item.nodeId !== nodeId} />}</ItemList>
+        <div className="stack">
+          {visible.length === 0 ? (
+            <p className="t-help">
+              {`No Google account connected yet. An account connected here${above.length > 0 ? `, or to ${above.map((n) => n.name).join(" or ")},` : ""} shows its calendars on this page${node?.kind === "client" ? " and on its projects" : ""}.`}
+            </p>
+          ) : (
+            <ul className="plain-list stack">
+              {visible.map(({ account, from }) => (
+                <li key={account.id} className="account-line">
+                  <span className="t-name">{account.email}</span>
+                  <span className="pill" data-tone={from === nodeId ? "accent" : undefined}>
+                    {from === nodeId ? "Connected here" : `Connected to ${tree?.find((n) => n.id === from)?.name ?? "a parent"}`}
+                  </span>
+                  {account.status !== "active" && (
+                    <span className="pill" data-tone="alert">
+                      {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {failed && (
+            <p role="alert" className="inline-note" data-tone="alert">
+              The Google accounts could not be refreshed: {failed}.
+            </p>
+          )}
+          {accounts.canConnect ? (
+            <div>
+              <a className={buttonClass({ size: "sm" })} href={`/api/google/connect?node=${nodeId}`}>
+                <span className="btn-label">Connect a Google account here</span>
+              </a>
+            </div>
+          ) : (
+            <ConnectBlockedNote reason={accounts.connectBlocked} />
+          )}
+        </div>
       )}
     </section>
   );
 }
 
 
-
-function TaskTree({ items, all }: { items: Item[]; all: Item[] }) {
-  return <ItemList items={items}>{(item) => <ItemRow item={item} below={<Subtasks parent={item} all={all} depth={1} />} />}</ItemList>;
-}
-
-function Subtasks({ parent, all, depth }: { parent: Item; all: Item[]; depth: number }) {
-  const { openItem } = useWorkspace();
-  const children = all
-    .filter((task) => task.parentId === parent.id)
-    .sort((a, b) => (a.status === b.status ? (a.priority ?? 9) - (b.priority ?? 9) || (a.id < b.id ? -1 : 1) : a.status === "open" ? -1 : 1));
-  if (children.length === 0) return null;
-  if (depth > 1) {
-    return (
-      <Button variant="quiet" size="sm" className="subtasks-more" onClick={() => openItem(parent)} data-subtasks-folded={children.length}>
-        {plural(children.length, "subtask inside", "subtasks inside")}
-      </Button>
-    );
-  }
+function Section({ title, type, nodeId, items, empty }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; empty: string }) {
+  const id = `section-${type}`;
   return (
-    <div className="subtasks" data-subtasks-of={parent.id}>
-      <ItemList nested items={children}>{(item) => <ItemRow item={item} below={<Subtasks parent={item} all={all} depth={depth + 1} />} />}</ItemList>
-    </div>
-  );
-}
-
-
-export function Empty({ text, action, onAction, below }: { text: string; action?: string; onAction?: () => void; below?: Below }) {
-  return (
-    <div className="empty" data-below={below && below.count > 0 ? below.count : undefined}>
-      <p className="t-help">
-        {text}
-        {below?.busiest && below.count > 0 && (
-          <>
-            {" "}
-            Most are in{" "}
-            <Link className="link" href={`/app/node/${below.busiest.id}`}>
-              {below.busiest.path}
-            </Link>
-            .
-          </>
-        )}
-      </p>
-      {action && onAction && (
-        <Button size="sm" onClick={onAction}>
-          {action}
-        </Button>
+    <section className="card board-section" aria-labelledby={id} data-section={type}>
+      <div className="section-head">
+        <div className="section-title">
+          <h2 id={id} className="t-title">
+            {title}
+          </h2>
+          {items.length > 0 && <span className="t-meta">{items.length}</span>}
+        </div>
+      </div>
+      <QuickAdd nodeId={nodeId} type={type} />
+      {items.length === 0 ? (
+        <Empty text={empty} />
+      ) : (
+        <ItemList items={items}>{(item) => <ItemRow item={item} showPath={item.nodeId !== nodeId} />}</ItemList>
       )}
-    </div>
+    </section>
   );
-}
-
-function focusQuickAdd(nodeId: string, type: Item["type"]) {
-  land({ kind: "quick-add", nodeId, type });
 }
 
 function notLanded(target: FocusTarget, landing: Landing): string {
@@ -462,21 +460,17 @@ function notLanded(target: FocusTarget, landing: Landing): string {
   return `“${target.title}” is not on this page anymore.`;
 }
 
-function plural(count: number, one: string, many: string): string {
-  return new Intl.PluralRules("en").select(count) === "one" ? `${count} ${one}` : `${count} ${many}`;
-}
-
 function NodeSkeleton({ failed }: { failed: string | null }) {
   if (failed) {
     return (
       <section className="card stack" role="alert">
-        <h1 className="t-title">The project could not be read</h1>
+        <h1 className="t-title">This page could not be read</h1>
         <p className="t-help">{failed}. Reload the page to try again.</p>
       </section>
     );
   }
   return (
-    <div className="page" role="status" aria-label="Loading the project" aria-busy="true">
+    <div className="page" role="status" aria-label="Loading" aria-busy="true">
       <div className="card stack">
         <span className="skeleton" style={{ width: "18%" }} />
         <span className="skeleton skeleton-title" style={{ width: "42%", height: "1.9rem" }} />
@@ -501,7 +495,7 @@ const outcomes: Record<string, string> = {
   "not-configured": "Connecting Google accounts is not configured on this server.",
 };
 
-function GoogleOutcome({ outcome }: { outcome: string }) {
+export function GoogleOutcome({ outcome }: { outcome: string }) {
   const text = outcomes[outcome];
   if (!text) return null;
   return (

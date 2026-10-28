@@ -103,6 +103,32 @@ describe("the chat with the simulated model", () => {
   });
 });
 
+describe("the workspace's own chat, with no node open", () => {
+  const wide = (): ToolContext => ({ db: user!.client, ownerId: user!.id, source: "chat" });
+
+  it("a request that names its project lands there, and asking what is pending reads every project", async () => {
+    const { message } = await drain(
+      await runChat({ ctx: wide(), model: simulatedModel(), messages: ask("Create a task in Acme / Web to call the printer"), timeZone: "UTC" }),
+    );
+    const toolPart = message?.parts.find((part) => part.type === "tool-create_task") as { output: { ok: boolean; item: { title: string; nodeId: string } } } | undefined;
+    expect(toolPart?.output).toMatchObject({ ok: true, item: { title: "call the printer", nodeId } });
+    const pending = await drain(await runChat({ ctx: wide(), model: simulatedModel(), messages: ask("What is pending?"), timeZone: "UTC" }));
+    expect(pending.message?.parts.some((part) => part.type === "tool-browse_items")).toBe(true);
+    const answer = pending.message?.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
+    expect(answer).toContain("call the printer");
+  });
+
+  it("keeps its conversation apart from each node's", async () => {
+    const rows = ["workspace one", "workspace two"].map((text, i) => ({ node_id: null, role: i === 0 ? "user" : "assistant", parts: [{ type: "text", text }] }));
+    const { error } = await user!.client.from("chat_messages").insert(rows);
+    expect(error).toBeNull();
+    const workspace = await loadHistory(user!.client, null);
+    expect(workspace.map((m) => (m.parts[0] as { text: string }).text)).toEqual(["workspace one", "workspace two"]);
+    const node = await loadHistory(user!.client, nodeId);
+    expect(node.some((m) => (m.parts[0] as { text?: string }).text?.startsWith("workspace"))).toBe(false);
+  });
+});
+
 describe("the conversation the model reads", () => {
   it("is the node's latest messages in the order they were written, built on the server", async () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({

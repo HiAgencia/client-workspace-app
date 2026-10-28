@@ -3,15 +3,14 @@ import type { Db } from "@/lib/db/client";
 
 
 
+
 export const HISTORY_MESSAGES = 30;
 
 type Row = { id: string; role: string; parts: unknown; seq: number };
 
-export async function loadHistory(db: Db, nodeId: string, limit = HISTORY_MESSAGES): Promise<UIMessage[]> {
-  const { data, error } = await db
-    .from("chat_messages")
-    .select("id, role, parts, seq")
-    .eq("node_id", nodeId)
+export async function loadHistory(db: Db, nodeId: string | null, limit = HISTORY_MESSAGES): Promise<UIMessage[]> {
+  const base = db.from("chat_messages").select("id, role, parts, seq");
+  const { data, error } = await (nodeId ? base.eq("node_id", nodeId) : base.is("node_id", null))
     .order("seq", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`reading the conversation: ${error.message}`);

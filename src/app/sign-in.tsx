@@ -72,7 +72,7 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
     const seeded = await fetch("/api/demo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ today: dayOf(new Date()) }),
+      body: JSON.stringify({ today: dayOf(new Date()), zone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     });
     setBusy(null);
     if (!seeded.ok) return setError("The demo workspace could not be prepared. Reload to try again.");

@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
-import { DEMO_FIRST_STEP } from "@/lib/demo";
+import { demoShape } from "@/lib/demo-seed";
 import { publicConfig } from "@/lib/env";
 import { SignIn, SignInPlaceholder } from "./sign-in";
 
@@ -14,6 +14,7 @@ async function SessionControls({ searchParams }: { searchParams: PageProps<"/">[
 }
 
 export default function Home({ searchParams }: PageProps<"/">) {
+  const shape = demoShape();
   return (
     <main className="landing">
       <div className="landing-copy">
@@ -26,8 +27,9 @@ export default function Home({ searchParams }: PageProps<"/">) {
         </div>
         <h1 className="t-h1 enter">Work organized by project, with everything each one needs in one place.</h1>
         <p className="t-body landing-lead enter">
-          Tasks, decisions, links, and what is waiting for review live in the project they belong to, beside the calendars of every
-          account it uses. A chat and your coding agent work on the same place, and say what they did.
+          Tasks, decisions, links, and what waits for review live in the project they belong to, next to the calendars of the Google
+          accounts connected to it. A chat and your coding agent work in the same projects: they add tasks, record decisions, and
+          say what they did.
         </p>
         <div className="session-slot enter">
           <Suspense fallback={<SignInPlaceholder />}>
@@ -35,15 +37,15 @@ export default function Home({ searchParams }: PageProps<"/">) {
           </Suspense>
         </div>
         <section className="landing-first enter" data-first-step aria-labelledby="first-step-title">
-          <p id="first-step-title" className="t-label">
+          <h2 id="first-step-title" className="t-title">
             Inside the demo
-          </p>
-          <p className="t-value">
-            The demo opens on <span className="t-name">{DEMO_FIRST_STEP}</span>.
+          </h2>
+          <p className="t-body">
+            The demo opens on the Overview of a small agency: {shape.clients} clients and {shape.ownProjects} projects of its own.
           </p>
           <p className="t-help">
-            Add a task with the field under Tasks, or ask the chat panel to add one for you. It is your own copy; nothing
-            is shared.
+            Add a task with the field under Tasks, or open the chat and ask it to add one for you. Google calendars show once you
+            sign in with Google.
           </p>
         </section>
       </div>
@@ -57,12 +59,12 @@ function Preview() {
   const rows = [
     { title: "Send the homepage draft for review", priority: "Urgent", tone: "alert", due: "Today", dueTone: "accent" },
     { title: "Collect product photos from the client", priority: "High", tone: "warn", due: "Yesterday", dueTone: "alert" },
-    { title: "Map the pickup time slots", priority: "Normal", tone: undefined, due: "Tomorrow", dueTone: undefined },
+    { title: "Confirm the delivery date with the client", priority: "Normal", tone: undefined, due: "Tomorrow", dueTone: undefined },
   ];
   return (
     <figure className="landing-preview enter" aria-labelledby="preview-caption">
       <div className="card stack" inert>
-        <p className="t-meta">Northwind Bakery</p>
+        <p className="t-meta">Larkspur Bakery</p>
         <p className="t-title">Website</p>
         <ul className="rows">
           {rows.map((row) => (
@@ -90,12 +92,12 @@ function Preview() {
           ))}
         </ul>
         <div className="action-card">
-          <span className="t-value">Created task “Confirm the delivery date with the client”</span>
+          <span className="t-value">Added task “Confirm the delivery date with the client”</span>
           <span className="pill">By the chat</span>
         </div>
       </div>
       <figcaption id="preview-caption" className="t-meta">
-        A project in the demo: its tasks by priority and due day, and what the chat did there.
+        A project in the demo: its tasks by priority and due date, and what the chat did there.
       </figcaption>
     </figure>
   );
