@@ -497,7 +497,9 @@ export function TaskCircle({ title, priority, done, onToggle, className }: { tit
       type="button"
       role="checkbox"
       aria-checked={done}
-      aria-label={done ? `Mark “${inlinePlain(title)}” open` : `Complete “${inlinePlain(title)}”`}
+      
+      
+      aria-label={`${done ? `Mark “${inlinePlain(title)}” open` : `Complete “${inlinePlain(title)}”`}, ${priorityName(priority)} priority`}
       className={cx("task-circle", className)}
       data-priority={priority ?? 4}
       onClick={(event) => {

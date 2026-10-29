@@ -428,6 +428,14 @@
     }
   }
 }
+@media (pointer: coarse) {
+  .task-when .picker {
+    --chip: 0.8625rem;
+    --target: 1.5rem;
+    min-height: var(--target);
+    margin-block: calc((var(--chip) - var(--target)) / 2);
+  }
+}
 .task-subtasks-toggle {
   --chip: calc(1.7em + 2px);
   --target: max(1.5rem, var(--chip));
