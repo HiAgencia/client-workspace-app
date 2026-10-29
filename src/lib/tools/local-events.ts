@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withInitialCapital } from "@/lib/initial-capital";
 import type { Database } from "@/lib/db/types";
 import { sanitizeRichText } from "@/lib/rich-text";
 import type { ToolContext } from "./context";
@@ -133,7 +134,7 @@ export const createEvent = defineTool({
       .insert({
         owner_id: ctx.ownerId,
         node_id: resolved.node?.id ?? null,
-        title: input.title,
+        title: withInitialCapital(input.title),
         body: sanitizeRichText(input.notes),
         ...times(at),
         ...mark,
@@ -168,7 +169,7 @@ export const updateEvent = defineTool({
     const mark = origin(ctx);
     if (!mark) return fail("internal", "an agent write needs its token's label");
     const patch: EventUpdate = { changed_source: mark.source, changed_agent_label: mark.agent_label };
-    if (input.title !== undefined) patch.title = input.title;
+    if (input.title !== undefined) patch.title = withInitialCapital(input.title);
     if (input.notes !== undefined) patch.body = sanitizeRichText(input.notes);
     if (input.startsOn || input.startsAt) {
       const at = moment(input);

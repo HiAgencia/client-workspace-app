@@ -101,7 +101,7 @@ export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEve
     items: [
       task({ title: "Call the bank about the card limit", priority: 2, dueOn: day(0), dueTime: "11:30" }, { ago: 212 }),
       task({ title: "Book the dentist appointment", priority: 3, dueOn: day(3) }, { ago: 1388 }),
-      task({ title: "Sell the Meta shares when the price reaches $275", priority: 3 }, { ago: 2954, rank: 1 }),
+      task({ title: "Renew the passport before the trip", priority: 3 }, { ago: 2954, rank: 1 }),
       task({ title: "Check the flight prices to Lisbon", priority: 4 }, { ago: 1730, rank: 3 }),
       task(
         { title: "Plan the team offsite", priority: 3 },

@@ -75,11 +75,11 @@ describe("the chat with the simulated model", () => {
     const { message } = await drain(stream);
     const toolPart = message?.parts.find((part) => part.type === "tool-create_task") as { state: string; output: { ok: boolean; item: { title: string; nodeId: string; source: string } } } | undefined;
     expect(toolPart?.state).toBe("output-available");
-    expect(toolPart?.output).toMatchObject({ ok: true, item: { title: "send the invoice to Acme", nodeId, source: "chat" } });
+    expect(toolPart?.output).toMatchObject({ ok: true, item: { title: "Send the invoice to Acme", nodeId, source: "chat" } });
     expect(message?.parts.some((part) => part.type === "text" && part.text.startsWith("Done"))).toBe(true);
     expect(stored?.role).toBe("assistant");
     const { data } = await user!.client.from("items").select("title, source").eq("node_id", nodeId);
-    expect(data).toContainEqual({ title: "send the invoice to Acme", source: "chat" });
+    expect(data).toContainEqual({ title: "Send the invoice to Acme", source: "chat" });
   });
 
   it("an image becomes a task, and asking what is pending reads the node", async () => {
@@ -88,7 +88,7 @@ describe("the chat with the simulated model", () => {
     expect(withImage.message?.parts.some((part) => part.type === "tool-create_task")).toBe(true);
     const pending = await drain(await runChat({ ctx: ctx(), model: simulatedModel(), messages: ask("What is pending?"), timeZone: "UTC" }));
     const answer = pending.message?.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
-    expect(answer).toContain("send the invoice to Acme");
+    expect(answer).toContain("Send the invoice to Acme");
   });
 
   it("a provider failure reaches the panel as a readable error, not an exception", async () => {
@@ -111,11 +111,11 @@ describe("the workspace's own chat, with no node open", () => {
       await runChat({ ctx: wide(), model: simulatedModel(), messages: ask("Create a task in Acme / Web to call the printer"), timeZone: "UTC" }),
     );
     const toolPart = message?.parts.find((part) => part.type === "tool-create_task") as { output: { ok: boolean; item: { title: string; nodeId: string } } } | undefined;
-    expect(toolPart?.output).toMatchObject({ ok: true, item: { title: "call the printer", nodeId } });
+    expect(toolPart?.output).toMatchObject({ ok: true, item: { title: "Call the printer", nodeId } });
     const pending = await drain(await runChat({ ctx: wide(), model: simulatedModel(), messages: ask("What is pending?"), timeZone: "UTC" }));
     expect(pending.message?.parts.some((part) => part.type === "tool-browse_items")).toBe(true);
     const answer = pending.message?.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
-    expect(answer).toContain("call the printer");
+    expect(answer).toContain("Call the printer");
   });
 
   it("«Review my day» runs the daily review through its tool, on purpose, for the person's day", async () => {
