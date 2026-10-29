@@ -6,9 +6,19 @@
   gap: var(--gap-cards);
 }
 .settings-boxes {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--gap-cards);
+}
+/* While the boxes read they keep their place out of sight (a box without `data-shown`, boxes.css); what they read is said
+   where they will be, without taking room. */
+.settings-wait {
+  position: absolute;
+  inset: 0 0 auto;
+  margin: 0;
+  padding: var(--pad-card);
+  pointer-events: none;
 }
 .settings-box .box-body > p {
   margin: 0;
