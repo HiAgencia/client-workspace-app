@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NODE_COLORS } from "@/lib/node-colors";
 import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 import { forgetScope, loadScope, resolveNode } from "./tree";
@@ -49,14 +50,19 @@ export async function createNode(
 }
 
 export const changeNodeInput = z
-  .strictObject({ name: z.string().trim().min(1).max(200).optional(), archived: z.boolean().optional() })
-  .refine((value) => value.name !== undefined || value.archived !== undefined, { message: "nothing to change" });
+  .strictObject({
+    name: z.string().trim().min(1).max(200).optional(),
+    archived: z.boolean().optional(),
+    
+    color: z.enum(NODE_COLORS).nullable().optional(),
+  })
+  .refine((value) => value.name !== undefined || value.archived !== undefined || value.color !== undefined, { message: "nothing to change" });
 
 export async function changeNode(
   ctx: ToolContext,
   id: string,
   input: z.infer<typeof changeNodeInput>,
-): Promise<ToolResult<{ node: { id: string; name: string; archived: boolean } }>> {
+): Promise<ToolResult<{ node: { id: string; name: string; archived: boolean; color: string | null } }>> {
   const loaded = await loadScope(ctx);
   if (isError(loaded)) return loaded;
   
@@ -64,18 +70,19 @@ export async function changeNode(
     const resolved = resolveNode(loaded.scope, id);
     if (isError(resolved)) return resolved;
   }
-  const patch: { name?: string; archived_at?: string | null } = {};
+  const patch: { name?: string; archived_at?: string | null; color?: string | null } = {};
   if (input.name !== undefined) patch.name = input.name;
+  if (input.color !== undefined) patch.color = input.color;
   if (input.archived !== undefined) patch.archived_at = input.archived ? new Date().toISOString() : null;
   const { data, error } = await ctx.db
     .from("nodes")
     .update(patch)
     .eq("id", id)
     .eq("owner_id", ctx.ownerId)
-    .select("id, name, archived_at")
+    .select("id, name, archived_at, color")
     .maybeSingle();
   if (error) return dbFail("changing the node", error);
   if (!data) return fail("not_found", `no node with id ${id} is reachable here`);
   forgetScope(ctx);
-  return ok({ node: { id: data.id, name: data.name, archived: data.archived_at !== null } });
+  return ok({ node: { id: data.id, name: data.name, archived: data.archived_at !== null, color: data.color } });
 }

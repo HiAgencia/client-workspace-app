@@ -1,5 +1,8 @@
 import type { Db } from "@/lib/db/client";
 import type { GoogleEvent, GoogleEventInput } from "@/lib/google/api";
+import type { TakeResult } from "@/lib/chat/usage";
+import type { MailSource } from "@/lib/mail/source";
+import type { ReviewJudge } from "@/lib/review/judge";
 import type { CalendarEvent, EventsFailure } from "./events-source";
 
 export type ToolSource = "manual" | "chat" | "agent";
@@ -33,4 +36,11 @@ export type ToolContext = {
   updatesSince?: string;
   events?: EventsSource;
   calendar?: CalendarWriter;
+  
+  
+  mail?: MailSource;
+  reviewJudge?: ReviewJudge;
+  
+  
+  reviewQuota?: () => Promise<TakeResult>;
 };

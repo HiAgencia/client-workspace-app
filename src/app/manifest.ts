@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
 import { BROWSER_BAR, MANIFEST_BACKGROUND } from "@/lib/theme";
 
 
@@ -7,10 +8,9 @@ import { BROWSER_BAR, MANIFEST_BACKGROUND } from "@/lib/theme";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "client-workspace",
-    short_name: "client-workspace",
-    description:
-      "Work organized by project: tasks, decisions, links, and calendars in one tree, with a chat and your coding agent on the same place.",
+    name: PRODUCT_NAME,
+    short_name: PRODUCT_NAME,
+    description: PRODUCT_DESCRIPTION,
     start_url: "/",
     display: "standalone",
     background_color: MANIFEST_BACKGROUND,

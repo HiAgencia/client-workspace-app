@@ -1,7 +1,10 @@
 import { googleDeps } from "@/lib/google/deps";
 import { googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
-import { currentUser, userClient, type SessionUser } from "@/lib/supabase/server";
+import { demoMailSource } from "@/lib/mail/source";
+import { takeUsageFor } from "@/lib/chat/usage";
+import { currentUser, serviceClient, userClient, type SessionUser } from "@/lib/supabase/server";
 import type { ToolContext, ToolSource } from "@/lib/tools/context";
+
 
 
 
@@ -22,6 +25,8 @@ export async function sessionContext(
       scopeNodeId,
       events: deps ? googleEventsSource(deps) : undefined,
       calendar: deps ? googleCalendarWriter(deps) : undefined,
+      mail: demoMailSource(),
+      reviewQuota: () => takeUsageFor(serviceClient(), user, "daily_review"),
     },
   };
 }

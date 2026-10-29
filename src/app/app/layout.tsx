@@ -13,8 +13,11 @@ export default function WorkspaceLayout({ children }: LayoutProps<"/app">) {
   return (
     <Suspense
       fallback={
+        
+        
         <div className="shell" role="status" aria-busy="true" aria-label="Opening your workspace">
           <div className="topbar" />
+          <div className="sidebar" />
         </div>
       }
     >

@@ -5,16 +5,23 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
+import { today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
 import { ChatDock, useDocked } from "./chat-panel";
-import { post, tool, type Item, type TreeNode } from "./client-api";
+import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
 import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
-import { SideNav } from "./side-nav";
+import { QuickAddDialog } from "./quick-add";
+import { ReviewNotice } from "./review-notice";
+import { TaskDetail } from "./task-detail";
+import { openTaskDetail } from "./task-row";
+import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
-type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
+
+
+type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void; quiet?: boolean; lasts?: number };
 
 
 
@@ -25,6 +32,12 @@ type Workspace = {
   config: PublicConfig;
   tree: TreeNode[] | null;
   treeError: string | null;
+  
+  taskCounts: { overdue: number; today: number } | null;
+  
+  mailUnread: number | null;
+  
+  who: string | null;
   refreshTree: () => Promise<void>;
   
   version: number;
@@ -70,6 +83,8 @@ function subscribeStorage(onChange: () => void) {
 export function WorkspaceShell({ config, children }: { config: PublicConfig; children: ReactNode }) {
   const [tree, setTree] = useState<TreeNode[] | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
+  const [taskCounts, setTaskCounts] = useState<Workspace["taskCounts"]>(null);
+  const [mailUnread, setMailUnread] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -103,13 +118,17 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   const refreshTree = useCallback(
     () =>
-      tool<{ nodes: TreeNode[] }>("list_tree", {}).then((answer) => {
-        
-        if (answer.ok) {
-          setTree(answer.nodes);
-          setTreeError(null);
-        } else setTreeError(answer.message);
-      }),
+      tool<{ nodes: TreeNode[]; tasks: { overdue: number; today: number } | null; mail: { unread: number } | null }>("list_tree", { today: today(), withMail: true }).then(
+        (answer) => {
+          
+          if (answer.ok) {
+            setTree(answer.nodes);
+            setTaskCounts(answer.tasks);
+            setMailUnread(answer.mail?.unread ?? null);
+            setTreeError(null);
+          } else setTreeError(answer.message);
+        },
+      ),
     [],
   );
 
@@ -141,7 +160,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     
     if (notice.tone === "status") {
       clearTimeout(timer.current);
-      timer.current = setTimeout(dismiss, notice.undo ? 6000 : 3000);
+      timer.current = setTimeout(dismiss, notice.lasts ?? (notice.undo ? 6000 : 3000));
     }
   }, [notice, leaving, dismiss]);
 
@@ -213,25 +232,55 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   }
 
   
+  
+  const currentNode = useCurrentNode();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen(true);
+        return;
       }
+      if (event.key.toLowerCase() !== "q" || event.ctrlKey || event.metaKey || event.altKey || event.repeat || event.isComposing) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      if (document.querySelector("dialog[open]")) return;
+      event.preventDefault();
+      startTask(currentNode);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [currentNode]);
 
   async function signOut() {
+    await forgetLayout();
     await browserClient(config).auth.signOut();
     localStorage.removeItem(LAST_NODE_KEY);
     router.replace("/");
   }
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
-  const openItem = useCallback((item: Item) => setDetail(item), []);
+  
+  const openItem = useCallback((item: Item) => {
+    if (item.type !== "task") return setDetail(item);
+    openTaskDetail({
+      id: item.id,
+      task: {
+        id: item.id,
+        title: item.title,
+        nodeId: item.nodeId,
+        path: item.nodePath,
+        parentId: item.parentId,
+        status: item.status,
+        priority: item.priority,
+        dueOn: item.dueOn,
+        dueTime: item.dueTime ?? null,
+        source: item.source,
+        agentLabel: item.agentLabel,
+        createdAt: item.createdAt,
+      },
+    });
+  }, []);
   
   const closeItem = useCallback((id: string) => {
     setDetail(null);
@@ -258,7 +307,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     [notify, touch, saving],
   );
   const chat: Chat = { scope: chatScope, open: chatOpen, setOpen: setChatOpen };
-  const value: Workspace = { config, tree, treeError, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
+  const value: Workspace = { config, tree, treeError, taskCounts, mailUnread, who, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
   const chatColumn = docked && chatOpen && chatScope !== undefined;
 
   return (
@@ -268,35 +317,36 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       </a>
       <div className="shell" data-chat={chatColumn ? "open" : undefined}>
         <header className="topbar">
-          <Button className="menu-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
+          <Button className="drawer-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
             Menu
           </Button>
-          <Link href="/app" className="brand" aria-label="client-workspace, Overview">
+          <Link href="/app" className="brand" aria-label="Client Workspace, Overview">
             <BrandMark className="brand-mark" />
-            <span className="brand-name">client-workspace</span>
+            <span className="brand-name">Client Workspace</span>
           </Link>
-          <PaletteTrigger onOpen={openPalette} />
-          <div className="topbar-end">
-            <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
-              {lastStatus}
-            </span>
-            {who && <span className="who t-meta only-wide">{who}</span>}
-            <Button size="sm" className="only-wide" onClick={() => void signOut()}>
-              Sign out
-            </Button>
-          </div>
         </header>
-        <aside className="sidebar card" aria-label="Workspace">
-          <SideNav />
+        <aside className="sidebar" aria-label="Workspace">
+          <SideNav onSignOut={() => void signOut()} />
         </aside>
+        {}
+        <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
+          {lastStatus}
+        </span>
         <main id="content" className="main" tabIndex={-1}>
           {children}
         </main>
         <ChatDock />
       </div>
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} who={who} />
+      {}
+      <Button variant="primary" className="add-task-float" data-add-task-float onClick={() => startTask(currentNode)} aria-keyshortcuts="Q">
+        Add task
+      </Button>
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onOpenItem={openItem} onDelete={(item) => void deleteItem(item)} />
+      <TaskDetail />
+      <QuickAddDialog />
+      <ReviewNotice />
+      <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onDelete={(item) => void deleteItem(item)} />
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
@@ -317,7 +367,8 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                 size="sm"
                 variant="primary"
                 
-                autoFocus
+                
+                autoFocus={!notice.quiet}
                 onClick={() => {
                   notice.undo?.();
                   dismiss();
@@ -338,29 +389,8 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   );
 }
 
-const noSubscription = () => () => {};
 
-function PaletteTrigger({ onOpen }: { onOpen: () => void }) {
-  
-  const mac = useSyncExternalStore(noSubscription, () => /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent), () => false);
-  return (
-    <button
-      type="button"
-      className="field palette-trigger"
-      onClick={onOpen}
-      aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
-    >
-      <span className="trigger-long">Search or jump to…</span>
-      <span className="trigger-short">Search</span>
-      <span className="kbd" aria-hidden="true">
-        {mac ? "⌘ K" : "Ctrl K"}
-      </span>
-    </button>
-  );
-}
-
-
-function Drawer({ open, onClose, onSignOut, who }: { open: boolean; onClose: () => void; onSignOut: () => void; who: string | null }) {
+function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => void; onSignOut: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = dialog.current;
@@ -383,25 +413,17 @@ function Drawer({ open, onClose, onSignOut, who }: { open: boolean; onClose: () 
         if (dialog.current) delete dialog.current.dataset.downOutside;
       }}
     >
-      {open && (
-        <div className="drawer-in">
-          <div className="drawer-head">
-            <h2 id="drawer-title" className="t-title">
-              Menu
-            </h2>
-            <Button size="sm" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-          <SideNav />
-          <div className="drawer-head drawer-foot">
-            {who && <span className="who t-meta">{who}</span>}
-            <Button size="sm" onClick={onSignOut}>
-              Sign out
-            </Button>
-          </div>
+      <div className="drawer-in">
+        <div className="drawer-head">
+          <h2 id="drawer-title" className="t-title">
+            Menu
+          </h2>
+          <Button size="sm" onClick={onClose}>
+            Close
+          </Button>
         </div>
-      )}
+        <SideNav inDrawer onLeave={onClose} onSignOut={onSignOut} />
+      </div>
     </dialog>
   );
 }

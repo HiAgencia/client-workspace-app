@@ -8,6 +8,8 @@ export type Tool<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodTyp
   name: string;
   description: string;
   readOnly: boolean;
+  
+  personOnly?: boolean;
   input: I;
   output: O;
   run(ctx: ToolContext, input: z.output<I>): Promise<ToolResult<z.output<O>>>;

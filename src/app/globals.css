@@ -2,6 +2,7 @@
 @import "./styles/tokens.css";
 @import "./styles/system.css";
 @import "./styles/screens.css";
+@import "./styles/shell.css";
 @theme {
   --font-display: var(--font-madefor-display), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-text: var(--font-madefor-text), ui-sans-serif, system-ui, "Segoe UI", sans-serif;

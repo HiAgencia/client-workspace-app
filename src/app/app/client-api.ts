@@ -36,27 +36,36 @@ export function post<T>(url: string, body: unknown, method = "POST"): Promise<An
   return send<T>(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
 
+
+
+export async function forgetLayout(): Promise<void> {
+  const answer = await send<Record<string, never>>("/api/preferences", { method: "DELETE" });
+  if (!answer.ok) console.error("The saved order of the boxes could not be forgotten on signing out:", answer.message);
+}
+
 export function tool<T>(name: string, input: Record<string, unknown>): Promise<Answer<T>> {
   return post<T>(`/api/tools/${name}`, input);
 }
 
 export type Item = {
   id: string;
-  nodeId: string;
-  nodePath: string;
+  
+  nodeId: string | null;
+  nodePath: string | null;
   
   parentId: string | null;
-  type: "task" | "note" | "decision" | "link" | "review";
+  type: "task" | "note" | "decision";
   title: string;
   body: string | null;
-  url: string | null;
   status: "open" | "done";
   priority: number | null;
   dueOn: string | null;
-  source: "manual" | "chat" | "agent";
+  dueTime?: string | null;
+  position?: number;
+  source: "manual" | "chat" | "agent" | "review";
   agentLabel: string | null;
   
-  changedSource?: "manual" | "chat" | "agent";
+  changedSource?: "manual" | "chat" | "agent" | "review";
   changedAgentLabel?: string | null;
   completedAt?: string | null;
   createdAt: string;
@@ -73,7 +82,9 @@ export type TreeNode = {
   name: string;
   path: string;
   openTasks: number;
-  openReviews: number;
+  
+  color: string | null;
+  ownColor: string | null;
 };
 
 export type CalendarEvent = {
@@ -94,7 +105,3 @@ export type CalendarEvent = {
 };
 
 export type EventsFailure = { accountId: string; accountEmail: string; reason: string };
-
-
-export type BoardFigures = { open: number; late: number; dueToday: number; dueInRange: number; undated: number; toReview: number };
-export type Board = { scope: { id: string | null; path: string }; figures: BoardFigures; nodes: Array<BoardFigures & { id: string }> };

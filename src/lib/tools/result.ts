@@ -9,6 +9,8 @@ export const errorCodes = [
   "since_required",
   "db_error",
   "internal",
+  
+  "cap",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

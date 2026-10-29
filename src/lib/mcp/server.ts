@@ -1,7 +1,8 @@
 import { createMcpHandler, McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import type { Db } from "@/lib/db/client";
+import { demoMailSource } from "@/lib/mail/source";
 import type { CalendarWriter, EventsSource, ToolContext } from "@/lib/tools/context";
-import { callTool, tools } from "@/lib/tools/registry";
+import { agentTools, callTool } from "@/lib/tools/registry";
 import { authenticateAgent, type AgentAccess } from "./auth";
 
 type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter };
@@ -17,6 +18,7 @@ function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
     updatesSince: access.lastReadAt ?? "1970-01-01T00:00:00Z",
     events: deps.events,
     calendar: deps.calendar,
+    mail: demoMailSource(),
   };
 }
 
@@ -32,7 +34,7 @@ async function markRead(deps: Dependencies, access: AgentAccess, until: string):
 function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
   const server = new McpServer({ name: "client-workspace", version: "1.0.0" });
   const ctx = contextFor(access, deps);
-  for (const definition of tools) {
+  for (const definition of agentTools) {
     server.registerTool(
       definition.name,
       {

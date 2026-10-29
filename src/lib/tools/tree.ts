@@ -1,6 +1,7 @@
 import type { Database } from "@/lib/db/types";
+import { isNodeColor, type NodeColor } from "@/lib/node-colors";
 import type { ToolContext } from "./context";
-import { dbFail, fail, ok, type ToolResult } from "./result";
+import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 
 export type NodeKind = Database["public"]["Enums"]["node_kind"];
 
@@ -13,13 +14,19 @@ export type TreeNode = {
   createdAt: string;
   path: string;
   segments: string[];
+  
+  ownColor: NodeColor | null;
+  color: NodeColor | null;
 };
+
+
 
 
 export type Scope = {
   all: Map<string, TreeNode>;
   reachable: Set<string>;
   root: TreeNode | null;
+  general: boolean;
 };
 
 export const PATH_SEPARATOR = " / ";
@@ -69,7 +76,7 @@ export function forgetScope(ctx: ToolContext): void {
 async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>> {
   const { data, error } = await ctx.db
     .from("nodes")
-    .select("id, parent_id, kind, name, position, created_at")
+    .select("id, parent_id, kind, name, position, color, created_at")
     .eq("owner_id", ctx.ownerId)
     .is("archived_at", null)
     .order("position")
@@ -87,6 +94,8 @@ async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>
       createdAt: row.created_at,
       path: "",
       segments: [],
+      ownColor: isNodeColor(row.color) ? row.color : null,
+      color: null,
     });
   }
   
@@ -98,6 +107,7 @@ async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>
     
     for (let depth = 0; cursor && depth < 64; depth++) {
       names.unshift(cursor.name);
+      node.color ??= cursor.ownColor;
       if (cursor.parentId === null) {
         rooted = true;
         break;
@@ -113,11 +123,11 @@ async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>
   }
 
   if (!ctx.scopeNodeId) {
-    return ok({ scope: { all, reachable: new Set(all.keys()), root: null } });
+    return ok({ scope: { all, reachable: new Set(all.keys()), root: null, general: true } });
   }
   const root = all.get(ctx.scopeNodeId);
   if (!root) return fail("not_found", "the node this access is scoped to no longer exists");
-  return ok({ scope: { all, reachable: subtree(all, root.id), root } });
+  return ok({ scope: { all, reachable: subtree(all, root.id), root, general: false } });
 }
 
 export function subtree(all: Map<string, TreeNode>, rootId: string): Set<string> {
@@ -175,4 +185,50 @@ export function resolveNode(scope: Scope, ref: string | undefined): ToolResult<{
     ambiguous: true,
     candidates: partial.map(describeNode),
   });
+}
+
+
+
+export function resolveWritePlace(scope: Scope, ref: string | null | undefined): ToolResult<{ node: TreeNode | null }> {
+  if (ref === null || (ref === undefined && !scope.root)) {
+    if (!scope.general) return fail("not_found", "this access reaches only its own node and what is below it, not General");
+    return ok({ node: null });
+  }
+  return resolveNode(scope, ref);
+}
+
+
+
+export type ReadPlace = { kind: "all" } | { kind: "general" } | { kind: "node"; node: TreeNode };
+
+export function resolveReadPlace(scope: Scope, ref: string | null | undefined): ToolResult<{ place: ReadPlace }> {
+  if (ref === null) {
+    if (!scope.general) return fail("not_found", "this access reaches only its own node and what is below it, not General");
+    return ok({ place: { kind: "general" } });
+  }
+  if (ref === undefined && !scope.root) return ok({ place: { kind: "all" } });
+  const resolved = resolveNode(scope, ref);
+  if (isError(resolved)) return resolved;
+  return ok({ place: { kind: "node", node: resolved.node } });
+}
+
+
+export type Reach = { nodeIds: string[]; general: boolean };
+
+export function reachOf(scope: Scope, place: ReadPlace, withSubtree = true): Reach {
+  if (place.kind === "general") return { nodeIds: [], general: true };
+  if (place.kind === "all") return { nodeIds: [...scope.reachable], general: scope.general };
+  if (!withSubtree) return { nodeIds: [place.node.id], general: false };
+  return { nodeIds: [...subtree(scope.all, place.node.id)].filter((id) => scope.reachable.has(id)), general: false };
+}
+
+
+export function reaches(scope: Scope, ownerId: string, row: { node_id: string | null; owner_id: string }): boolean {
+  if (row.node_id === null) return scope.general && row.owner_id === ownerId;
+  return scope.reachable.has(row.node_id);
+}
+
+export function describePlace(place: ReadPlace) {
+  if (place.kind === "node") return { kind: place.kind, id: place.node.id, path: place.node.path };
+  return { kind: place.kind, id: null, path: null };
 }

@@ -1,0 +1,25 @@
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.action-card-review {
+  align-items: flex-start;
+
+  & .action-text {
+    gap: 0.2rem;
+    min-width: 0;
+  }
+  & .btn {
+    flex: none;
+  }
+}
+.action-title-wait {
+  display: inline-block;
+  width: 9em;
+  height: 0.9em;
+  vertical-align: -0.1em;
+}
+.action-sentence {
+  overflow-wrap: anywhere;
+}

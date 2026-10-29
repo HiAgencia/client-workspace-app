@@ -81,6 +81,7 @@ function toEvent(
 
 
 
+
 export function googleEventsSource(deps: GoogleDeps): EventsSource {
   return async ({ ownerId, nodeId, from, to }) => {
     const visible = await deps.service.rpc("visible_accounts", { node: nodeId });
@@ -90,8 +91,9 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
 
     const accounts = await deps.service
       .from("google_accounts")
-      .select("id, email, status, refresh_token, access_token, access_token_expires_at")
+      .select("id, email, status, is_demo, refresh_token, access_token, access_token_expires_at")
       .eq("owner_id", ownerId)
+      .eq("is_demo", false)
       .in("id", [...fromNode.keys()]);
     if (accounts.error) throw new Error(`reading the accounts: ${accounts.error.message}`);
     const calendars = await deps.service
