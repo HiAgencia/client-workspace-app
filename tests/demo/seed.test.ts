@@ -7,7 +7,7 @@ import { inlineLink } from "@/lib/inline-links";
 import { firstLine, noteTitle } from "@/lib/rich-text";
 import { sanitizeRichText } from "@/lib/rich-text";
 import { isWorkingTime, workingMinutesBetween } from "@/lib/working-time";
-import { createAnonymousUser, deleteDisposableUsers, publicClient, serviceClient, type Db, type DisposableUser } from "../support/supabase";
+import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, publicClient, serviceClient, type Db, type DisposableUser } from "../support/supabase";
 
 // The demo seed is one database call; this test keeps its result identical to the TypeScript tree and its general work,
 // its moments in the visitor's working time, its manual order, its linked event, its tokens and its conversations as the
@@ -487,6 +487,52 @@ describe("the demo seed", () => {
       expect((theirs.data ?? []).every((node) => !mineIds.has(node.id))).toBe(true);
     } finally {
       await deleteDisposableUsers([other]);
+    }
+  });
+
+  it("starts over: a demo's workspace is emptied, and one that is not a demo's cannot", async () => {
+    if (!user) throw new Error("the test user was not created");
+    // Whatever an earlier test left is emptied first, so the planted tree this measures is the one it deletes.
+    const first = await user.client.rpc("reset_demo");
+    expect(first.error).toBeNull();
+    expect(first.data).toBe(true);
+    const seeded = await user.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
+    expect(seeded.error).toBeNull();
+    expect(seeded.data).toBe(true);
+    const reset = await user.client.rpc("reset_demo");
+    expect(reset.error).toBeNull();
+    expect(reset.data).toBe(true);
+    // Nothing the demo plants survives, what hangs from no node included. Each table is counted by a column the person's
+    // role may read: a token's is out of its reach.
+    const emptied = [
+      ["nodes", "id"],
+      ["items", "id"],
+      ["events", "id"],
+      ["google_accounts", "id"],
+      ["demo_mail", "id"],
+      ["mail_links", "id"],
+      ["task_mail", "item_id"],
+      ["daily_reviews", "id"],
+      ["review_actions", "id"],
+      ["chat_messages", "id"],
+      ["preferences", "owner_id"],
+    ] as const;
+    for (const [table, column] of emptied) {
+      const { count, error } = await user.client.from(table).select(column, { count: "exact", head: true });
+      expect(error, table).toBeNull();
+      expect(count, table).toBe(0);
+    }
+    // And the workspace plants again, whole: starting over is not a one-way door.
+    const again = await user.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
+    expect(again.error).toBeNull();
+    expect(again.data).toBe(true);
+    // A person's own session never starts over: the reset is a demo's.
+    const person = await createDisposableUser("reset-refused");
+    try {
+      const refused = await person.client.rpc("reset_demo");
+      expect(refused.error?.code).toBe("42501");
+    } finally {
+      await deleteDisposableUsers([person]);
     }
   });
 });

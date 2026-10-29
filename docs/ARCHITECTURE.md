@@ -311,6 +311,12 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 
 - "Try the demo" starts an anonymous Supabase session and copies the seed into a tree of that session's own, so
   each visitor works on their own copy.
+- **Starting over**: `DELETE /api/demo` empties the visitor's own copy through `public.reset_demo`, and the next read
+  plants it again. A session that is not a demo's is refused (`42501`), and the function is `security definer` with its
+  `search_path` empty because it deletes the tables a demo's rows live in without the owner holding a delete policy on
+  each one; its only filter is the caller's own owner. The tests and the probe browser keep a few demo sessions and
+  reuse them, emptying each before using it, because the project's anonymous sign-ups share a rate limit and a run that
+  opened one per step ran into it.
 - The demo is the emulation of a real case —a small agency's week— and opens on its Overview like any workspace, with no
   banner or guide of its own; the landing says what it holds (its clients and its own projects, read from the seed's
   tree) and where to write first.
@@ -331,7 +337,8 @@ asked for on purpose is the chat's tool `run_daily_review`, which `/api/tools/<n
 living day, and takes a unit of the day when Meta's model reads it; `GET /api/review` lists the last days' runs with their actions;
 `POST /api/review/actions/<id>/undo` undoes one), and marking a message opened (`POST /api/mail/opened`) have their own
 routes, because they are not offered to models.
-Every writing route demands this site's `Origin` and a bounded JSON body.
+Every writing route demands this site's `Origin` and a bounded JSON body. The demo's own are `/api/demo`: the `POST` plants
+the visitor's copy, and the `DELETE` empties it so the next read plants it again.
 
 1. **Landing**: the brand, a title and a line, "Try the demo" and "Sign in with Google", and what the demo holds; beside
    them a picture of the demo's Overview drawn with the workspace's own pieces (`src/app/landing-preview.tsx`, styled by

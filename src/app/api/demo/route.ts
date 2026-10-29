@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { z } from "zod";
-import { seedDemo, settleDemoTokens } from "@/lib/demo-seed";
-import { json, problem } from "@/lib/http";
+import { resetDemo, seedDemo, settleDemoTokens } from "@/lib/demo-seed";
+import { json, problem, sameOrigin } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
 import { serviceClient } from "@/lib/supabase/server";
@@ -41,4 +41,21 @@ export async function POST(request: Request) {
     });
   }
   return json({ ok: true, ...seeded });
+}
+
+// A demo starts over: the visitor's own copy is emptied, so the next read plants it again. The tests and the probe browser
+// keep a few demo sessions and reuse them, and this is how each use begins from the same workspace (the project's
+// anonymous sign-ups share a rate limit, and one session per step ran into it).
+export async function DELETE(request: Request) {
+  if (!sameOrigin(request)) return problem(403, "the request must come from this site");
+  const session = await sessionContext("manual");
+  if (!session) return problem(401, "not signed in");
+  if (!session.user.isAnonymous) return problem(403, "only a demo session starts over");
+  try {
+    await resetDemo(session.ctx.db);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return problem(500, "the demo could not start over");
+  }
+  return json({ ok: true });
 }

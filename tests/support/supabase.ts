@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import type { Db } from "@/lib/db/client";
 import type { Database } from "@/lib/db/types";
+import { resetDemo } from "@/lib/demo-seed";
 
 export type { Db };
 
-export type DisposableUser = { id: string; email: string; client: Db };
+export type DisposableUser = { id: string; email: string; client: Db; pooled?: string };
 
 // A test that cannot reach its database fails with the reason; it never passes or skips.
 export function requireEnv(name: string): string {
@@ -56,25 +60,113 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
   return { id: created.data.user.id, email, client };
 }
 
-// A demo session: an anonymous user, the only one the demo's sample accounts and mail are planted for. Its email is a
-// label for the failure messages; deleting it works like any other user.
-export async function createAnonymousUser(label: string): Promise<DisposableUser> {
-  const client = publicClient();
-  const signedIn = await client.auth.signInAnonymously();
-  if (signedIn.error || !signedIn.data.user) {
-    throw new Error(`could not open a demo session for ${label}: ${signedIn.error?.message ?? "no user returned"}`);
+// The demo sessions the suite reuses, one per label, kept under the machine's temporary folder and never in the
+// repository: the project limits the anonymous sign-ups one address opens per hour, and a run that opened one per step
+// ran into it. The session of a label lives between runs, and a caller starts from an
+// empty workspace because it is emptied before every use. `DEMO_POOL_LIMPIAR=1` deletes them instead of keeping them.
+const POOL_FILE = join(tmpdir(), "cw-demo-pool.json");
+const POOL_LOCK = join(tmpdir(), "cw-demo-pool.lock");
+
+type Pool = Record<string, { id: string; refreshToken: string }>;
+
+const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+// A lock of the file itself: the suite's files run at once, each in its own process, and two of them writing the pool at
+// the same moment would lose one of the two sessions.
+async function withPoolLock<T>(fn: () => T): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      mkdirSync(POOL_LOCK);
+      break;
+    } catch {
+      try {
+        if (Date.now() - statSync(POOL_LOCK).mtimeMs > 20_000) rmSync(POOL_LOCK, { recursive: true, force: true });
+      } catch {
+        // The lock went away between the two calls: the next attempt takes it.
+      }
+      if (attempt > 1200) throw new Error("the demo pool's lock was never released");
+      await wait(50);
+    }
   }
-  return { id: signedIn.data.user.id, email: `demo session ${label}`, client };
+  try {
+    return fn();
+  } finally {
+    rmSync(POOL_LOCK, { recursive: true, force: true });
+  }
 }
 
-// Deleting the user cascades to everything it owns.
+function readPool(): Pool {
+  try {
+    const read = JSON.parse(readFileSync(POOL_FILE, "utf8"));
+    return read && typeof read === "object" ? (read as Pool) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePool(pool: Pool): void {
+  writeFileSync(POOL_FILE, JSON.stringify(pool, null, 2));
+}
+
+async function remember(label: string, session: { id: string; refreshToken: string }): Promise<void> {
+  await withPoolLock(() => {
+    writePool({ ...readPool(), [label]: session });
+  });
+}
+
+async function forget(label: string): Promise<void> {
+  await withPoolLock(() => {
+    const pool = readPool();
+    delete pool[label];
+    writePool(pool);
+  });
+}
+
+// A demo session: an anonymous user, the only one the demo's sample accounts and mail are planted for. Its email is a
+// label for the failure messages. The same label keeps the same session between runs, emptied first, so the suite does
+// not open one per step.
+export async function createAnonymousUser(label: string): Promise<DisposableUser> {
+  const client = publicClient();
+  const kept = await withPoolLock(() => readPool()[label]);
+  let id: string | undefined;
+  let refreshToken: string | undefined;
+  if (kept) {
+    // The session of a previous run answers with a new access token; a session that no longer answers is deleted so the
+    // pool never keeps dead users.
+    const renewed = await client.auth.refreshSession({ refresh_token: kept.refreshToken });
+    if (!renewed.error && renewed.data.session) {
+      id = renewed.data.user?.id ?? kept.id;
+      refreshToken = renewed.data.session.refresh_token;
+    } else {
+      await forget(label);
+      await serviceClient().auth.admin.deleteUser(kept.id);
+    }
+  }
+  if (!id || !refreshToken) {
+    const opened = await client.auth.signInAnonymously();
+    if (opened.error || !opened.data.user || !opened.data.session) {
+      throw new Error(`could not open a demo session for ${label}: ${opened.error?.message ?? "no session returned"}`);
+    }
+    id = opened.data.user.id;
+    refreshToken = opened.data.session.refresh_token;
+  }
+  await remember(label, { id, refreshToken });
+  await resetDemo(client);
+  return { id, email: `demo session ${label}`, client, pooled: label };
+}
+
+// Deleting the user cascades to everything it owns. A demo session of the pool is kept for the next run instead, unless
+// the run was told to leave nothing behind.
 export async function deleteDisposableUsers(users: Array<DisposableUser | undefined>): Promise<void> {
   const admin = serviceClient();
+  const clearing = process.env.DEMO_POOL_LIMPIAR === "1";
   const failures: string[] = [];
   for (const user of users) {
     if (!user) continue;
+    if (user.pooled && !clearing) continue;
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) failures.push(`${user.email}: ${error.message}`);
+    if (user.pooled && !error) await forget(user.pooled);
   }
   if (failures.length > 0) throw new Error(`test users left behind: ${failures.join("; ")}`);
 }

@@ -394,6 +394,15 @@ export async function seedDemo(db: Db, today: string, zone?: string): Promise<{ 
   return { planted: data === true };
 }
 
+// Empties a demo's own workspace so it can be planted again: the tests and the probe browser keep a few anonymous sessions
+// and reuse them, because the project's anonymous sign-ups share a rate limit. The database refuses it for a session that
+// is not a demo's.
+export async function resetDemo(db: Db): Promise<{ reset: boolean }> {
+  const { data, error } = await db.rpc("reset_demo");
+  if (error) throw new Error(`demo reset: ${error.message}`);
+  return { reset: data === true };
+}
+
 // When the demo's tokens were issued and last used. The person's role may write only a token's node, hash and label, so
 // the server's client dates them once the seed planted them, filtering by the owner itself; a token it could not date
 // is counted with its reason, and keeps the moment it was planted.

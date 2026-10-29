@@ -1022,6 +1022,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      reset_demo: { Args: never; Returns: boolean }
       restore_item_branch: {
         Args: {
           p_agent_label: string
