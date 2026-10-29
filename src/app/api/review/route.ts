@@ -6,7 +6,9 @@ import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
 import { toolResponse } from "@/lib/tool-response";
 import { isError } from "@/lib/tools/result";
+import { isLivingDay } from "@/lib/living-day";
 import { validZone } from "@/lib/working-time";
+
 
 
 
@@ -16,13 +18,6 @@ const input = z.strictObject({
   today: z.iso.date(),
   zone: z.string().min(1).max(64).optional(),
 });
-
-const DAY_MS = 86_400_000;
-
-function isLivingDay(day: string, now = Date.now()): boolean {
-  const days = [now - DAY_MS, now, now + DAY_MS].map((moment) => new Date(moment).toISOString().slice(0, 10));
-  return days.includes(day);
-}
 
 export async function POST(request: Request) {
   const body = await readInput(request, input);

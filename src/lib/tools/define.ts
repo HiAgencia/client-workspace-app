@@ -9,7 +9,7 @@ export type Tool<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodTyp
   description: string;
   readOnly: boolean;
   
-  personOnly?: boolean;
+  chatOnly?: boolean;
   input: I;
   output: O;
   run(ctx: ToolContext, input: z.output<I>): Promise<ToolResult<z.output<O>>>;

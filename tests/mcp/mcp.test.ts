@@ -88,7 +88,7 @@ describe("the MCP endpoint", () => {
     expect(everyTool.map((t) => t.name)).toContain("run_daily_review");
     expect(Object.keys(chatTools({ db: user!.client, ownerId: user!.id, source: "chat" }))).toContain("run_daily_review");
     
-    expect(registry.filter((t) => t.personOnly)).toEqual([]);
+    expect(registry.filter((t) => t.chatOnly)).toEqual([]);
     await client.close();
   });
 

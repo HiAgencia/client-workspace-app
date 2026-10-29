@@ -59,7 +59,13 @@ export const tools: Tool[] = [
 ];
 
 
-export const agentTools: Tool[] = tools.filter((tool) => !tool.personOnly);
+export const agentTools: Tool[] = tools.filter((tool) => !tool.chatOnly);
+
+
+export function findScreenTool(name: string): Tool | undefined {
+  const tool = findTool(name);
+  return tool && !tool.chatOnly ? tool : undefined;
+}
 
 export function findTool(name: string): Tool | undefined {
   return tools.find((tool) => tool.name === name);
