@@ -497,7 +497,9 @@ export function TaskCircle({ title, priority, done, onToggle, className }: { tit
       type="button"
       role="checkbox"
       aria-checked={done}
-      aria-label={done ? `Mark “${inlinePlain(title)}” open` : `Complete “${inlinePlain(title)}”`}
+      // The circle's color is one of the two only marks of its priority: its name says the priority in words, so Normal
+      // and Low read alike to whoever does not see the color.
+      aria-label={`${done ? `Mark “${inlinePlain(title)}” open` : `Complete “${inlinePlain(title)}”`}, ${priorityName(priority)} priority`}
       className={cx("task-circle", className)}
       data-priority={priority ?? 4}
       onClick={(event) => {

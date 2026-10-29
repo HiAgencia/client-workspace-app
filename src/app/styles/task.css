@@ -454,6 +454,17 @@
     }
   }
 }
+/* A finger needs 24 of target, not 14: on a touch screen the chip grows around its words —its border box is the target—
+   and its block margins give the line back what it took, so the row keeps its height (the same construction as the
+   subtasks' count below). */
+@media (pointer: coarse) {
+  .task-when .picker {
+    --chip: 0.8625rem;
+    --target: 1.5rem;
+    min-height: var(--target);
+    margin-block: calc((var(--chip) - var(--target)) / 2);
+  }
+}
 /* The subtasks' count is a chip as tall as its line; the button around it is the target a finger needs (24 tall), and its
    margins give that room back, so the line keeps its height. The chip is drawn behind the words: a rim one pixel in at
    rest, two pixels of the control's rim on hover. */
