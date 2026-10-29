@@ -105,21 +105,21 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
         </div>
       </div>
       <div ref={foot} className="side-foot side-pieces">
-        <div className="side-foot-row">
-          <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
-            <span className="side-link-name">Trash</span>
-          </Link>
-          <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
-            <span className="side-link-name">Settings</span>
-          </Link>
-        </div>
-        <div className="side-account">
-          {}
-          {who && <span className="t-meta side-who">{who}</span>}
-          <Button size="sm" variant="quiet" className="side-sign-out" onClick={onSignOut}>
-            Sign out
-          </Button>
-        </div>
+        <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
+          <span className="side-link-name">Trash</span>
+        </Link>
+        <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
+          <span className="side-link-name">Settings</span>
+        </Link>
+        {}
+        {who && (
+          <span className="t-meta side-who" title={who}>
+            {who}
+          </span>
+        )}
+        <Button size="sm" variant="quiet" className="side-sign-out" onClick={onSignOut}>
+          Sign out
+        </Button>
       </div>
     </nav>
   );

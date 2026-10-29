@@ -94,7 +94,8 @@ const RUN_COLUMNS = "id, day, instruction, requested, provider, task_ids, create
 
 
 
-const RUNNING_FOR_MS = 5 * 60_000;
+
+const HEARTBEAT_FLOOR_MS = 5 * 60_000;
 
 function toAction(row: ActionRow, task: ReviewAction["task"] = null): ReviewAction {
   return {
@@ -227,8 +228,15 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
     failures.push(`${what} “${task.title}”`);
     return { ok: false, message: `${what} failed: try it again later` };
   };
+  
+  
+  const beat = async () => {
+    const { error } = await ctx.db.from("daily_reviews").update({ heartbeat_at: new Date().toISOString() }).eq("id", run.id).is("finished_at", null);
+    if (error) console.error(`daily review: the heartbeat of ${run.id} could not be written: ${error.message}`);
+  };
   const tools: ReviewTools = {
     async writeMailStatus({ task, status, sentence, message }) {
+      await beat();
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       
@@ -273,6 +281,7 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "written" };
     },
     async completeTask({ task }) {
+      await beat();
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       if (!met.has(task) || !target.mail.decidedMessageId) return { ok: false, message: "complete a task only once its mail is written as met" };
@@ -284,14 +293,15 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "completed" };
     },
   };
-  return { tools, rows, failures };
+  return { tools, rows, failures, beat };
 }
+
 
 
 async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean) {
   const { data, error } = await ctx.db
     .from("daily_reviews")
-    .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null })
+    .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null, heartbeat_at: null })
     .eq("id", run.id)
     .select(RUN_COLUMNS)
     .single();
@@ -316,15 +326,17 @@ export async function runDailyReview(
       const run = toRun(data as RunRow);
       
       
+      
       let claimed: RunRow | null = null;
       if (!run.finishedAt) {
-        const cutoff = new Date(Date.now() - RUNNING_FOR_MS).toISOString();
+        const now = new Date().toISOString();
+        const cutoff = new Date(Date.now() - HEARTBEAT_FLOOR_MS).toISOString();
         const claim = await ctx.db
           .from("daily_reviews")
-          .update({ attempt_started_at: new Date().toISOString() })
+          .update({ attempt_started_at: now, heartbeat_at: now })
           .eq("id", run.id)
           .is("finished_at", null)
-          .or(`attempt_started_at.is.null,attempt_started_at.lt.${cutoff}`)
+          .or(`heartbeat_at.is.null,heartbeat_at.lt.${cutoff}`)
           .select(RUN_COLUMNS)
           .maybeSingle();
         if (claim.error) return dbFail("resuming the day's review", claim.error);
@@ -356,7 +368,7 @@ export async function runDailyReview(
   if (!run) {
     const { data: inserted, error } = await ctx.db
       .from("daily_reviews")
-      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds })
+      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds, heartbeat_at: new Date().toISOString() })
       .select(RUN_COLUMNS)
       .single();
     if (error?.code === "23505") {
@@ -366,10 +378,10 @@ export async function runDailyReview(
     if (error) return dbFail("starting the review", error);
     run = toRun(inserted as RunRow);
   }
-  const { tools, rows, failures } = toolsFor(ctx, run, gathered.waiting);
+  const { tools, rows, failures, beat } = toolsFor(ctx, run, gathered.waiting);
   let judged: Awaited<ReturnType<ReviewJudge["review"]>>;
   try {
-    judged = await judge.review(gathered.waiting, tools, { instruction, today: input.today, zone: input.zone ?? "UTC" });
+    judged = await judge.review(gathered.waiting, tools, { instruction, today: input.today, zone: input.zone ?? "UTC", beat });
   } catch (cause) {
     
     console.error("daily review: the judge stopped:", cause instanceof Error ? cause.message : cause);

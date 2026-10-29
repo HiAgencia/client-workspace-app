@@ -299,6 +299,10 @@ describe("reads", () => {
   });
 
   it("get_overview gathers a node's pending work and its events", async () => {
+    
+    
+    await run("create_task", userCtx(a), { node: treeA.web, title: "Draft the launch checklist" });
+    await run("add_decision", userCtx(a), { node: treeA.web, decision: "Launch on a Tuesday" });
     const events: EventsSource = async ({ nodeId }) => ({
       events: [
         {

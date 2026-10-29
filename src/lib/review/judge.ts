@@ -12,7 +12,12 @@ import type { ReviewTask, ReviewTools } from "./run";
 export type ReviewJudge = {
   provider: "simulated" | "meta";
   
-  review(tasks: ReviewTask[], tools: ReviewTools, context: { instruction: string; today: string; zone: string }): Promise<void | { failures: string[] }>;
+  
+  review(
+    tasks: ReviewTask[],
+    tools: ReviewTools,
+    context: { instruction: string; today: string; zone: string; beat?: () => Promise<void> },
+  ): Promise<void | { failures: string[] }>;
 };
 
 
@@ -51,8 +56,10 @@ function when(iso: string, zone: string): string {
 
 export const simulatedJudge: ReviewJudge = {
   provider: "simulated",
-  async review(tasks, tools, { zone }) {
+  async review(tasks, tools, { zone, beat }) {
     for (const task of tasks) {
+      
+      await beat?.();
       
       const message = task.messages.find((entry) => answers(task, entry));
       if (!message) continue;
@@ -124,6 +131,10 @@ export function metaJudge(model?: LanguageModel): ReviewJudge {
         providerOptions: { openai: { store: false } },
         
         stopWhen: isStepCount(tasks.length * 2 + 2),
+        
+        onStepFinish: async () => {
+          await context.beat?.();
+        },
         tools: {
           write_mail_status: tool({
             description: "Write the state of the mail a task waits for, with one sentence that quotes the deciding line, and the message that decides it.",

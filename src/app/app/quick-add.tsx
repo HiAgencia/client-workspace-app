@@ -228,6 +228,9 @@ function QuickAddEditor({
           className="qa-input"
           rows={1}
           autoFocus
+          
+          
+          lang="en"
           aria-label="Task: what to do, with a day, #place and p1 to p4"
           placeholder="Call the printer tomorrow 4pm #Website p2"
           role="combobox"

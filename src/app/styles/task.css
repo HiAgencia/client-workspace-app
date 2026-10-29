@@ -583,7 +583,8 @@
 .inline-link {
   font-weight: inherit;
 }
-.task-title .inline-link {
+.task-title .inline-link,
+.note-title .inline-link {
   padding-block: max(0px, (1.5rem - 1em) / 2);
 }
 .task-drop-mark {

@@ -93,6 +93,16 @@ export function isDay(value: string | null | undefined): value is Day {
 }
 
 
+
+export function untilAgain(seconds: number | null): string {
+  if (!seconds || !Number.isFinite(seconds)) return "tomorrow";
+  const hours = Math.round(seconds / 3600);
+  if (hours >= 2) return `in about ${hours} hours`;
+  if (hours === 1) return "in about an hour";
+  return "in a few minutes";
+}
+
+
 export function firstWeekday(): number {
   try {
     const locale = new Intl.Locale(navigator.language) as Intl.Locale & {
