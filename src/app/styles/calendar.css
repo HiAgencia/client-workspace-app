@@ -356,7 +356,11 @@
 .cal-month-name {
   padding: 0 0.4rem 0.2rem;
   font-family: var(--font-display);
+  font-size: var(--text-meta);
   font-weight: 650;
+  line-height: 1.4;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .cal-month-cell {
   position: relative;
