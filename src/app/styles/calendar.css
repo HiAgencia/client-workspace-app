@@ -460,6 +460,13 @@
   }
 }
 
+/* The band's «+N more» is a marker of its own, not the button the month draws: it keeps the size and the ink its role
+   gives it —the words of a count— and stops claiming the metadata role, which is one style everywhere. */
+.cal-more-band {
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
 /* A narrow month keeps its numbers and how much each day holds; the chosen day reads below. */
 .cal-month[data-narrow] .cal-month-cell {
   min-height: 0;

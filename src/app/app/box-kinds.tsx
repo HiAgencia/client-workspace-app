@@ -263,6 +263,14 @@ export function tasksCount(view: TasksView | null): number | undefined {
   return view.groups.overdue.count + view.groups.today.count + view.groups.upcoming.count;
 }
 
+// What the box's number counts: the open tasks that have a date —the ones its groups show—, said in words, because the
+// page's own figure counts every open task, the undated ones included, and two bare numbers over the same word read as a
+// contradiction.
+export function tasksCountLabel(view: TasksView | null): string | undefined {
+  const dated = tasksCount(view);
+  return dated === undefined ? undefined : `${dated} scheduled`;
+}
+
 // The No date box: the tasks without a day, in the order the person drags them into.
 export function NoDateBoxContent({ read, placeId, showPlace, pageNode }: { read: BoxRead<TasksView>; placeId: string | null; showPlace: boolean; pageNode?: string | null }) {
   const { data, error, stale, retry } = read;

@@ -43,12 +43,22 @@ export function placeFromUrl(value: string | null, tree: TreeNode[] | null): str
   return tree.some((node) => node.id === value) ? value : ALL;
 }
 
-const withCount = (label: string, n: number) => `${label} (${n})`;
+// What a filter's number counts. Each page passes its own: the same filter counts open tasks on the Overview and Tasks,
+// messages on Mail, and what the range brings on the Calendar. A number without its unit reads as the same thing on
+// every screen, and it is not.
+export type FilterUnit = { one: string; many: string };
+export const TASKS: FilterUnit = { one: "task", many: "tasks" };
+export const MESSAGES: FilterUnit = { one: "message", many: "messages" };
+export const ITEMS: FilterUnit = { one: "item", many: "items" };
+export const EVENTS: FilterUnit = { one: "event", many: "events" };
+
+const withCount = (label: string, n: number, unit: FilterUnit) => `${label} (${n} ${n === 1 ? unit.one : unit.many})`;
 
 export function PlaceFilter({
   value,
   tree,
   counts,
+  unit,
   onChange,
   noGeneral = false,
   shows,
@@ -57,6 +67,8 @@ export function PlaceFilter({
   tree: TreeNode[] | null;
   // How much each place brings, by `all`, `general`, or a node's id.
   counts: Map<string, number>;
+  // What those numbers count on this page.
+  unit: FilterUnit;
   onChange: (value: string) => void;
   // Where General never brings anything (no account hangs from it), it is not offered.
   noGeneral?: boolean;
@@ -65,11 +77,11 @@ export function PlaceFilter({
   shows?: Set<string>;
 }) {
   const options = [
-    { value: ALL, label: withCount("All places", counts.get(ALL) ?? 0) },
-    ...(!noGeneral && ((counts.get(GENERAL) ?? 0) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [{ value: GENERAL, label: withCount("General", counts.get(GENERAL) ?? 0) }] : []),
+    { value: ALL, label: withCount("All places", counts.get(ALL) ?? 0, unit) },
+    ...(!noGeneral && ((counts.get(GENERAL) ?? 0) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [{ value: GENERAL, label: withCount("General", counts.get(GENERAL) ?? 0, unit) }] : []),
     ...(tree ?? [])
       .filter((node) => (counts.get(node.id) ?? 0) > 0 || shows?.has(node.id) || node.id === value)
-      .map((node) => ({ value: node.id, label: withCount(node.path, counts.get(node.id) ?? 0) })),
+      .map((node) => ({ value: node.id, label: withCount(node.path, counts.get(node.id) ?? 0, unit) })),
   ];
   return <Select label="Place" value={value} options={options} onChange={onChange} />;
 }
@@ -78,19 +90,21 @@ export function AccountFilter({
   value,
   accounts,
   counts,
+  unit,
   onChange,
 }: {
   value: string;
   accounts: Array<{ id: string; email: string }>;
   counts: Map<string, number>;
+  unit: FilterUnit;
   onChange: (value: string) => void;
 }) {
   const offered = accounts.filter((account) => (counts.get(account.id) ?? 0) > 0 || account.id === value);
   // With nothing to choose between, the control does not appear.
   if (offered.length === 0) return null;
   const options = [
-    { value: ALL, label: withCount("All accounts", counts.get(ALL) ?? 0) },
-    ...offered.map((account) => ({ value: account.id, label: withCount(account.email, counts.get(account.id) ?? 0) })),
+    { value: ALL, label: withCount("All accounts", counts.get(ALL) ?? 0, unit) },
+    ...offered.map((account) => ({ value: account.id, label: withCount(account.email, counts.get(account.id) ?? 0, unit) })),
   ];
   return <Select label="Account" value={value} options={options} onChange={onChange} />;
 }

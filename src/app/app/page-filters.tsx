@@ -7,7 +7,7 @@ import type { TasksView } from "@/lib/tools/tasks";
 import { useToolRead } from "./boxes";
 import { placeValue, readPlace, type MailList, type Place } from "./box-kinds";
 import type { TreeNode } from "./client-api";
-import { AccountFilter, ALL, PlaceFilter } from "./place-filters";
+import { AccountFilter, ALL, MESSAGES, PlaceFilter, TASKS } from "./place-filters";
 
 // The header filters of the pages of boxes and of Tasks: the workspace's own place and account filters, with what each
 // option counts on these pages —open tasks for a place, what the Mail box shows for an account—, kept in the address.
@@ -58,7 +58,7 @@ export function TasksPlaceFilter({ place, onChange, tree, now }: { place: Place;
   const generalCount = general.data ? total(general.data) : 0;
   const counts = new Map<string, number>([[ALL, (tree ?? []).filter((node) => node.parentId === null).reduce((sum, node) => sum + node.openTasks, 0) + generalCount], ["general", generalCount]]);
   for (const node of tree ?? []) counts.set(node.id, node.openTasks);
-  return <PlaceFilter value={placeValue(place) ?? ALL} tree={tree} counts={counts} shows={shows} onChange={(value) => onChange(value === ALL ? { kind: "all" } : readPlace(value, tree))} />;
+  return <PlaceFilter value={placeValue(place) ?? ALL} tree={tree} counts={counts} unit={TASKS} shows={shows} onChange={(value) => onChange(value === ALL ? { kind: "all" } : readPlace(value, tree))} />;
 }
 
 // The account the Mail box reads, each option with what it would show there: what a task waits for and what is unread.
@@ -66,5 +66,5 @@ export function MailAccountFilter({ account, onChange, mail }: { account: string
   const shown = mail ? [...mail.groups.forTasks.messages, ...mail.groups.unread.messages] : [];
   const counts = new Map<string, number>([[ALL, new Set(shown.map((message) => `${message.accountId}:${message.id}`)).size]]);
   for (const entry of mail?.accounts ?? []) counts.set(entry.id, new Set(shown.filter((message) => message.accountId === entry.id).map((message) => message.id)).size);
-  return <AccountFilter value={account ?? ALL} accounts={mail?.accounts ?? []} counts={counts} onChange={(value) => onChange(value === ALL ? null : value)} />;
+  return <AccountFilter value={account ?? ALL} accounts={mail?.accounts ?? []} counts={counts} unit={MESSAGES} onChange={(value) => onChange(value === ALL ? null : value)} />;
 }

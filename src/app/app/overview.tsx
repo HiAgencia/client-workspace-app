@@ -13,7 +13,7 @@ import {
   placeInput,
   placeValue,
   TasksBoxContent,
-  tasksCount,
+  tasksCountLabel,
   useNotesRead,
   useTasksRead,
   type MailList,
@@ -65,7 +65,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
         tasks: {
           id: "tasks",
           title: NAMES.tasks,
-          count: tasksCount(tasks.data),
+          count: tasksCountLabel(tasks.data),
           menu: [{ kind: "action", label: "Open Tasks", onSelect: () => router.push(tasksHref) }],
           content: <TasksBoxContent read={tasks} now={now} place={place} placeId={placeId} showPlace layout="list" allHref={tasksHref} />,
         },

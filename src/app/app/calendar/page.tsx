@@ -27,7 +27,7 @@ import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, mon
 import { inlinePlain } from "@/lib/inline-links";
 import { get, post, tool, type EventsFailure, type Item, type TreeNode } from "../client-api";
 import { PageHeader } from "../page-header";
-import { AccountFilter, ALL, branchOf, GENERAL, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
+import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
 import { count, openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
 import { useSwap } from "../use-swap";
 import { useChatScope, useWorkspace } from "../workspace";
@@ -377,11 +377,12 @@ function Calendar() {
           count={loaded ? counted : "Reading the calendar…"}
           filters={
             <>
-              <PlaceFilter value={place} tree={tree} counts={placeCounts} onChange={(value) => set({ place: value === ALL ? null : value })} />
+              <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
               <AccountFilter
                 value={account}
                 accounts={loaded?.accounts ?? []}
                 counts={accountCounts}
+                unit={EVENTS}
                 onChange={(value) => set({ account: value === ALL ? null : value })}
               />
             </>
@@ -652,7 +653,7 @@ function WeekGrid({
           return (
             <div key={day} role="gridcell" className="cal-slot" data-day={day} onClick={(event) => onGap(event, day, null)} {...dropOn(day)}>
               {items.slice(0, ALL_DAY_CHIPS)}
-              {more > 0 && <span className="cal-more t-meta">+{more} more</span>}
+              {more > 0 && <span className="cal-more cal-more-band">+{more} more</span>}
               <span className="sr-only">{fullDay(day)}, all day</span>
               <span className="cal-add-hint" aria-hidden="true">
                 Add event
