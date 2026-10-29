@@ -29,7 +29,7 @@ async function markRead(deps: Dependencies, access: AgentAccess, until: string):
   if (error) console.error("mcp: moving the token's read mark failed", error.message);
 }
 
-// One server per request, built for the token that made it: the registry's tools but the person's own, run with the service client but
+// One server per request, built for the token that made it: the registry's tools but the chat's own, run with the service client but
 // filtered to the token's owner and node subtree by the tools themselves, writing as the agent with the token's label.
 function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
   const server = new McpServer({ name: "client-workspace", version: "1.0.0" });

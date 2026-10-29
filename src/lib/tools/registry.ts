@@ -58,8 +58,14 @@ export const tools: Tool[] = [
   runDailyReviewTool,
 ];
 
-// What a coding agent's MCP publishes: every tool but the person's own.
-export const agentTools: Tool[] = tools.filter((tool) => !tool.personOnly);
+// What a coding agent's MCP publishes: every tool but the chat's own.
+export const agentTools: Tool[] = tools.filter((tool) => !tool.chatOnly);
+
+// What the screens' tool route dispatches: every tool but the chat's own.
+export function findScreenTool(name: string): Tool | undefined {
+  const tool = findTool(name);
+  return tool && !tool.chatOnly ? tool : undefined;
+}
 
 export function findTool(name: string): Tool | undefined {
   return tools.find((tool) => tool.name === name);

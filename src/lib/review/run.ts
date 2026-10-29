@@ -4,12 +4,12 @@ import { MAIL_LIMIT, type MailContent } from "@/lib/mail/source";
 import { readPreferences } from "@/lib/preferences";
 import { richTextToPlain } from "@/lib/rich-text";
 import type { ToolContext } from "@/lib/tools/context";
-import { accountMap, mailOf, taskMailOf, type TaskMail } from "@/lib/tools/mail";
+import { accountMap, fromExpected, mailOf, taskMailOf, type TaskMail } from "@/lib/tools/mail";
 import { dbFail, fail, isError, ok, type ToolResult } from "@/lib/tools/result";
 import { selectAllItems } from "@/lib/tools/rows";
 import { groupOf } from "@/lib/tools/tasks";
 import { loadScope, reachOf } from "@/lib/tools/tree";
-import { judgeFor, type ReviewJudge } from "./judge";
+import { answers, judgeFor, type ReviewJudge } from "./judge";
 
 // The daily review: it walks the tasks of the person's day —overdue and due today— and those that wait for a message
 // whatever their date; for each that waits, it reads what arrived in its accounts since the task exists and lets a judge
@@ -91,8 +91,9 @@ type RunRow = { id: string; day: string; instruction: string; requested: boolean
 const ACTION_COLUMNS = "id, review_id, item_id, kind, before, after, created_at, undone_at";
 const RUN_COLUMNS = "id, day, instruction, requested, provider, task_ids, created_at, finished_at, failures";
 
-// A run with no end and no stop recorded is another call's, still running, until this long has passed: then it is taken
-// as cut (a worker that died) and resumed.
+// A run with no end is another call's while its attempt is younger than this: each attempt marks its start
+// (`attempt_started_at`), and one older is taken as cut (a worker that died) and resumed. A stop clears the mark, so the
+// next call resumes at once.
 const RUNNING_FOR_MS = 5 * 60_000;
 
 function toAction(row: ActionRow, task: ReviewAction["task"] = null): ReviewAction {
@@ -194,6 +195,9 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
   for (const failure of arrived.flatMap((answer) => answer.failures)) console.error(`daily review: ${failure.accountEmail}: ${failure.reason}`);
   const waiting = reading.map((row): ReviewTask => {
     const accounts = accountsOfTask.get(row.id)!;
+    // A task that names who it waits for reads only that sender's mail: what anyone else sent to the same account is not
+    // its answer, and never reaches the judge as one.
+    const expectFrom = mail.byTask.get(row.id)!.expectFrom;
     return {
       id: row.id,
       title: row.title,
@@ -202,7 +206,7 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
       createdAt: row.created_at,
       mail: mail.byTask.get(row.id)!,
       messages: messages
-        .filter((message) => accounts.has(message.accountId) && message.receivedAt >= row.created_at)
+        .filter((message) => accounts.has(message.accountId) && message.receivedAt >= row.created_at && (!expectFrom || fromExpected(message, expectFrom)))
         .slice(0, MAIL_LIMIT)
         .map(({ html, text, ...message }) => ({ ...message, text: text ?? richTextToPlain(html) })),
     };
@@ -231,6 +235,12 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       if (status !== "waiting" && !message) return { ok: false, message: "name the message that decides it" };
       const decided = message ? target.messages.find((entry) => entry.id === message) : undefined;
       if (message && !decided) return { ok: false, message: "that message did not arrive for this task" };
+      // The message that decides is the task's own answer: from the sender it waits for, or, when it names none, one about
+      // it.
+      if (decided && status !== "waiting") {
+        const fits = target.mail.expectFrom ? fromExpected(decided, target.mail.expectFrom) : answers(target, decided);
+        if (!fits) return { ok: false, message: target.mail.expectFrom ? "that message is not from the sender the task waits for" : "that message is not about this task" };
+      }
       const clean = sentence.replace(/\s+/g, " ").trim().slice(0, 1000);
       if (!clean) return { ok: false, message: "the state needs its sentence" };
       const now = target.mail;
@@ -277,10 +287,11 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
   return { tools, rows, failures };
 }
 
+// The end of an attempt: finished, or stopped with its failures counted and its mark cleared, so the next call resumes it.
 async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean) {
   const { data, error } = await ctx.db
     .from("daily_reviews")
-    .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null })
+    .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null })
     .eq("id", run.id)
     .select(RUN_COLUMNS)
     .single();
@@ -303,14 +314,28 @@ export async function runDailyReview(
     if (error) return dbFail("reading the day's review", error);
     if (data) {
       const run = toRun(data as RunRow);
-      // A run that stopped says so with a failure and no end; one with neither is another call's, unless it was cut.
-      const running = !run.finishedAt && run.failures === 0 && Date.now() - Date.parse(run.createdAt) < RUNNING_FOR_MS;
-      if (run.finishedAt || running) {
+      // A run with no end is taken over in one statement, only when no attempt is under way: of two calls at once, one
+      // resumes it and the other answers that it runs.
+      let claimed: RunRow | null = null;
+      if (!run.finishedAt) {
+        const cutoff = new Date(Date.now() - RUNNING_FOR_MS).toISOString();
+        const claim = await ctx.db
+          .from("daily_reviews")
+          .update({ attempt_started_at: new Date().toISOString() })
+          .eq("id", run.id)
+          .is("finished_at", null)
+          .or(`attempt_started_at.is.null,attempt_started_at.lt.${cutoff}`)
+          .select(RUN_COLUMNS)
+          .maybeSingle();
+        if (claim.error) return dbFail("resuming the day's review", claim.error);
+        claimed = claim.data as RunRow | null;
+      }
+      if (!claimed) {
         const done = await actionsOf(ctx, [run.id]);
         if (isError(done)) return done;
         return ok({ review: run, ran: false, skipped: run.finishedAt ? ("already_ran" as const) : ("running" as const), actions: done.actions, failures: [] });
       }
-      resumed = run;
+      resumed = toRun(claimed);
     } else if (!prefs.preferences.dailyReview) {
       return ok({ review: null, ran: false, skipped: "off" as const, actions: [], failures: [] });
     }
@@ -348,8 +373,11 @@ export async function runDailyReview(
   } catch (cause) {
     // The run stays unfinished, with its stop counted, so the next call of the day resumes it.
     console.error("daily review: the judge stopped:", cause instanceof Error ? cause.message : cause);
-    await finish(ctx, run, failures.length + 1, false);
-    return fail("internal", `the review stopped: ${cause instanceof Error ? cause.message : "the judge failed"}`);
+    const stopped = await finish(ctx, run, failures.length + 1, false);
+    // A stop that could not be recorded leaves the run looking under way until its mark ages: it is said, never lost.
+    if (isError(stopped)) console.error("daily review: recording the stop failed:", stopped.message);
+    const unrecorded = isError(stopped) ? `; recording the stop failed too: ${stopped.message}` : "";
+    return fail("internal", `the review stopped: ${cause instanceof Error ? cause.message : "the judge failed"}${unrecorded}`);
   }
   const all = [...failures, ...(judged?.failures ?? [])];
   const closed = await finish(ctx, run, all.length, true);

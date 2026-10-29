@@ -35,7 +35,7 @@ and the screens. When the code changes a decision described here, this document 
 | `mail_links` | A message linked to a task, or to a client or project | `owner_id`, `account_id`, `message_id`, and either `item_id` or `node_id`; each pair once |
 | `mail_opened` | What the person opened here (Gmail is read only and keeps its own state) | `owner_id`, `account_id`, `message_id`, `opened_at` |
 | `task_mail` | The mail a task waits for and what the daily review wrote | `item_id` (the key), `owner_id`, `account_id` (null for every account of its place), `expect_from` (words of the sender), `status` (`waiting` · `met` · `not_met`), `sentence`, `decided_account_id` + `decided_message_id`, `checked_at` |
-| `daily_reviews` | Each run of the daily review | `owner_id`, `day`, `instruction`, `requested` (asked for on purpose; the day's own run is once per person and day), `task_ids`, `provider` (`simulated` · `meta`), `finished_at` (null while it runs or after it stopped), `failures` (the steps that failed, a stop included) |
+| `daily_reviews` | Each run of the daily review | `owner_id`, `day`, `instruction`, `requested` (asked for on purpose; the day's own run is once per person and day), `task_ids`, `provider` (`simulated` · `meta`), `finished_at` (null while it runs or after it stopped), `failures` (the steps that failed, a stop included), `attempt_started_at` (when the attempt under way started; cleared by a stop) |
 | `review_actions` | Each thing a run did, for its undo | `review_id`, `owner_id`, `item_id`, `kind` (`mail_status` · `complete`), `before`, `after`, `undone_at` (the only column a person changes) |
 | `preferences` | One row per person | `owner_id`, `boards` (per page —`overview`, `tasks`, `node:<id>`— the order of its boxes and the hidden ones), `layouts` (per page, `list` or `board`), `daily_review` (on by default), `daily_review_instruction` |
 | `google_accounts` | Each connected Google account | `id`, `owner_id`, `email`, encrypted `refresh_token`, encrypted `access_token` and its expiry, `scopes`, `status`, `is_demo` |
@@ -138,13 +138,16 @@ and the screens. When the code changes a decision described here, this document 
   accounts marked as the demo's without tokens, once.
 - **The daily review** (`src/lib/review/`) walks the person's overdue tasks, today's, and every open task that waits for
   a message whatever its date; for each that waits, it reads what arrived in its accounts since the task exists (each
-  account read once, from the oldest wait that reads it), and a judge decides with two tools only, bound to the tasks of
-  the run: write the state of a task's mail (with a sentence that quotes the deciding line and, for `met` and `not_met`,
-  the message that decides it, one that arrived for that task), and complete a task this run wrote as `met`. Each writes
+  account read once, from the oldest wait that reads it), and only from its sender when it names one (`fromExpected`).
+  A judge decides with two tools only, bound to the tasks of the run: write the state of a task's mail (with a sentence
+  that quotes the deciding line and, for `met` and `not_met`, the message that decides it: one that arrived for that
+  task, from its sender, or about it when it names none), and complete a task this run wrote as `met`. Each writes
   its action in the same statement (`public.review_write_mail_status`, `public.review_complete_task`), and neither
   throws: a failure is counted in the run's `failures` and said in the answer. A run counts as the day's once it
-  finishes; one that stopped is resumed by the next call of the day, and one another call is still running answers
-  `skipped: "running"`. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
+  finishes. Each attempt marks its start (`attempt_started_at`): a run without an end is taken over in one statement
+  only when no attempt is under way —its mark cleared by a stop, or older than a few minutes, a worker that died—, so
+  of two calls at once one resumes it and the other answers `skipped: "running"`; a stop that cannot be recorded is
+  logged and said in the answer. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
   it does not run. The
   simulated judge follows fixed rules —the sender, and the words of the subject and the text: a refusal first, then an
   approval—; Meta's judge (`MODEL_PROVIDER=meta`) reads the same data with a prompt that fences the messages as data. A
@@ -163,7 +166,7 @@ a route), and shaping the tree forgets that read. `db` is the signed-in user's S
 for the screens and the chat, and the service client for the MCP server; either way the tools filter by owner and by
 the scope's subtree in code. A context without a scope reaches General too; one scoped to a node —an agent's token, a
 node's chat— reaches only that node and what is below it, never General. One registry exports them and `callTool` validates the input; two adapters publish them,
-one for the AI SDK (the chat) and one for the MCP server, which leaves out the tools marked `personOnly` (`agentTools`).
+one for the AI SDK (the chat) and one for the MCP server, which leaves out the tools marked `chatOnly` (`agentTools`); `/api/tools/<name>` leaves them out too.
 The screens call the same functions through their routes.
 A failure comes back as data (`{ ok: false, code, message }`), never as an exception, so a model can correct itself.
 
@@ -199,7 +202,7 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 | `link_mail`, `unlink_mail` | no | Links a message to a task or to a client or project, or takes it off |
 | `create_task_from_mail` | no | A task from a message, where the message's account hangs, with the message linked |
 | `set_task_mail` | no | Says that a task waits for a message —in one account or every account of its place, from a sender— or for none |
-| `run_daily_review` | no | The chat's "Review my day": the daily review asked for on purpose, over everything; an access scoped to a node does not run it, and the MCP server does not publish it (`personOnly`) |
+| `run_daily_review` | no | The chat's "Review my day": the daily review asked for on purpose, over everything; an access scoped to a node does not run it, and neither the MCP server nor the screens' tool route dispatches it (`chatOnly`); its day is checked like `POST /api/review`'s |
 
 - A node is addressed by id or by its readable path ("Acme / Web / Landing", or its last segments, "Web / Landing"),
   ignoring case and accents; a whole path wins, an ambiguous one returns the candidates instead of picking one, and
@@ -263,7 +266,7 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 - Stateless SDK server with its `Request`/`Response` handler mounted on a Next route; Streamable HTTP transport.
 - **Authentication**: `Authorization: Bearer <token>`. The server stores only the hash, and the token defines the
   reachable node (that node and its descendants). Missing or revoked token: 401. The `Origin` header is validated.
-- It publishes every tool but the person's own (`personOnly`): the daily review is asked for from the app or the chat,
+- It publishes every tool but the chat's own (`chatOnly`): the daily review is asked for from the app or the chat,
   and its writes record their owner from the signed-in session, which the service client does not have.
 - Read tools carry `readOnlyHint`, so the agent does not ask for approval to read.
 - **Each code repository declares it in its `.mcp.json`** with the token in an environment variable (Claude Code
@@ -323,7 +326,8 @@ a deletion, accounts and calendars, agent tokens, the preferences (`/api/prefere
 `cw_layout` cookie the server reads to paint a page in its order; the cookie names its owner, a page reads it only for
 that person, and `DELETE /api/preferences` clears it on signing out), the daily review (`POST /api/review` runs the
 day's own, once per day, for a day some time zone is living —the UTC day, the one before, or the one after—; a review
-asked for on purpose comes only from the chat; `GET /api/review` lists the last days' runs with their actions;
+asked for on purpose is the chat's tool `run_daily_review`, which `/api/tools/<name>` does not dispatch, checks the same
+living day, and takes a unit of the day when Meta's model reads it; `GET /api/review` lists the last days' runs with their actions;
 `POST /api/review/actions/<id>/undo` undoes one), and marking a message opened (`POST /api/mail/opened`) have their own
 routes, because they are not offered to models.
 Every writing route demands this site's `Origin` and a bounded JSON body.

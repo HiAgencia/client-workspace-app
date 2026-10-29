@@ -124,6 +124,7 @@ export type Database = {
       }
       daily_reviews: {
         Row: {
+          attempt_started_at: string | null
           created_at: string
           day: string
           failures: number
@@ -136,6 +137,7 @@ export type Database = {
           task_ids: string[]
         }
         Insert: {
+          attempt_started_at?: string | null
           created_at?: string
           day: string
           failures?: number
@@ -148,6 +150,7 @@ export type Database = {
           task_ids?: string[]
         }
         Update: {
+          attempt_started_at?: string | null
           created_at?: string
           day?: string
           failures?: number
@@ -1130,37 +1133,6 @@ export type Database = {
       seed_demo: {
         Args: { p_today: string; p_zone?: string }
         Returns: boolean
-      }
-      set_item_positions: {
-        Args: { p_items: string[]; p_positions: number[] }
-        Returns: {
-          agent_label: string | null
-          body: string | null
-          changed_agent_label: string | null
-          changed_source: Database["public"]["Enums"]["item_source"]
-          completed_at: string | null
-          created_at: string
-          deleted_at: string | null
-          due_on: string | null
-          due_time: string | null
-          id: string
-          node_id: string | null
-          owner_id: string
-          parent_item_id: string | null
-          position: number
-          priority: number | null
-          source: Database["public"]["Enums"]["item_source"]
-          status: Database["public"]["Enums"]["item_status"]
-          title: string
-          type: Database["public"]["Enums"]["item_type"]
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "items"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       take_usage: {
         Args: { p_cap: number; p_day: string; p_kind: string; p_owner: string }

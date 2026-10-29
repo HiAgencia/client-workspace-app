@@ -87,8 +87,8 @@ describe("the MCP endpoint", () => {
     expect(tools.map((t) => t.name)).not.toContain("run_daily_review");
     expect(everyTool.map((t) => t.name)).toContain("run_daily_review");
     expect(Object.keys(chatTools({ db: user!.client, ownerId: user!.id, source: "chat" }))).toContain("run_daily_review");
-    // Nothing else the MCP publishes is the person's own.
-    expect(registry.filter((t) => t.personOnly)).toEqual([]);
+    // Nothing else the MCP publishes is the chat's own.
+    expect(registry.filter((t) => t.chatOnly)).toEqual([]);
     await client.close();
   });
 

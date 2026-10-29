@@ -8,8 +8,8 @@ export type Tool<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodTyp
   name: string;
   description: string;
   readOnly: boolean;
-  // The person's own, over everything: the screens and the chat offer it, and a coding agent's MCP does not.
-  personOnly?: boolean;
+  // Only the chat publishes it: neither a coding agent's MCP nor the screens' tool route dispatches it.
+  chatOnly?: boolean;
   input: I;
   output: O;
   run(ctx: ToolContext, input: z.output<I>): Promise<ToolResult<z.output<O>>>;
