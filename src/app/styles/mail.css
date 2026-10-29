@@ -220,12 +220,10 @@
   gap: 0.5rem 1rem;
   padding: 0.6rem 0.75rem;
   border-radius: var(--radius-control);
-  background: var(--info-tint);
-
+  background: var(--interior);
   & .t-help {
     flex: 1 1 16rem;
     margin: 0;
-    color: var(--info-ink);
   }
 }
 .mail-actions {
@@ -411,5 +409,15 @@
     --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
     --btn-ink: var(--ink);
     --btn-shadow: var(--shadow-control-hover);
+  }
+}
+.mail-linked-open .t-value,
+.task-mail-link .t-value {
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+@media (hover: hover) {
+  .mail-linked-open:hover .t-value,
+  .task-mail-link:hover .t-value {
+    transition-duration: var(--dur-hover);
   }
 }
