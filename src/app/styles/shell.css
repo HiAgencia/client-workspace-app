@@ -466,49 +466,57 @@
   width: var(--fold-w);
   height: var(--nav-row);
 }
-/* The fold is the target a finger needs (24 wide): a clear edge at its right reaches over the start of the name's own
-   padding, where nothing is written, and its margin gives that room back, so the row and the drawn fold stay as they
-   were. Its fill and rim stay inside that edge. */
+/* The fold is the target a finger needs (24 wide): the button reaches over the start of the name's own padding, where
+   nothing is written, and its margin gives that room back, so the row stays as it was. What is seen —its fill and rim on
+   hover, and its chevron— is drawn inside the fold's own width, each with its transition. */
 .tree-toggle {
   --fold-reach: max(0px, 1.5rem - var(--fold-w));
   position: relative;
   z-index: 1;
   display: grid;
   place-items: center;
-  box-sizing: content-box;
+  width: calc(var(--fold-w) + var(--fold-reach));
   margin-right: calc(-1 * var(--fold-reach));
   padding: 0;
   border: 0;
-  border-right: var(--fold-reach) solid transparent;
-  background-clip: padding-box;
-  border-radius: var(--radius-control) calc(var(--radius-control) + var(--fold-reach)) calc(var(--radius-control) + var(--fold-reach))
-    var(--radius-control);
   background: transparent;
   color: var(--muted);
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
-    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
 
   &::before {
     content: "";
+    position: absolute;
+    inset: 0 var(--fold-reach) 0 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+  }
+  &::after {
+    content: "";
+    position: relative;
     width: 0.4em;
     height: 0.4em;
+    margin-right: var(--fold-reach);
     margin-left: -0.15em;
     border-right: 1.5px solid currentColor;
     border-bottom: 1.5px solid currentColor;
     rotate: -45deg;
     transition: rotate var(--dur) var(--ease-std), margin var(--dur) var(--ease-std);
   }
-  &[aria-expanded="true"]::before {
+  &[aria-expanded="true"]::after {
     margin-left: 0;
     margin-top: -0.2em;
     rotate: 45deg;
   }
   @media (hover: hover) {
     &:hover {
+      color: var(--accent);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover::before {
       background: var(--interior-hover);
       box-shadow: inset 0 0 0 1px var(--division);
-      color: var(--accent);
       transition-duration: var(--dur-hover);
     }
   }

@@ -397,13 +397,19 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   );
 }
 
-// The open modal dialog that is last in the page, or null: while one is open, everything outside it is inert.
+// The open modal dialog that is last in the page, or null: while one is open, everything outside it is inert. A dialog
+// can leave the page while open (a sheet that unmounts, a page left with its dialog showing), its `open` untouched: the
+// page's children are watched too, and a dialog no longer in the document is never the host.
 function useModalHost(): HTMLElement | null {
   const [host, setHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
-    const read = () => setHost([...document.querySelectorAll<HTMLDialogElement>("dialog[open]")].filter((dialog) => dialog.matches(":modal")).at(-1) ?? null);
-    const watch = new MutationObserver(read);
-    watch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+    const read = () =>
+      setHost([...document.querySelectorAll<HTMLDialogElement>("dialog[open]")].filter((dialog) => dialog.isConnected && dialog.matches(":modal")).at(-1) ?? null);
+    const holdsDialog = (node: Node) => node instanceof Element && (node.matches("dialog") || node.querySelector("dialog") !== null);
+    const watch = new MutationObserver((changes) => {
+      if (changes.some((change) => change.type === "attributes" || [...change.addedNodes, ...change.removedNodes].some(holdsDialog))) read();
+    });
+    watch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open"] });
     read();
     return () => watch.disconnect();
   }, []);
