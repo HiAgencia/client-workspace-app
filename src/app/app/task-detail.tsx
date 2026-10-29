@@ -339,8 +339,9 @@ export function TaskDetail() {
                     onBlur={() => void flush()}
                     onEscape={close}
                   />
-                  <p className="t-meta task-detail-status" role="status" data-shown={status || undefined}>
-                    {status ? SAVE[status] : ""}
+                  {/* The line keeps its room while empty; the meta words exist only while there is something to say. */}
+                  <p className="task-detail-status" role="status" data-shown={status || undefined}>
+                    {status && <span className="t-meta">{SAVE[status]}</span>}
                   </p>
                 </div>
                 {!isSubtask && <SubtaskSection key={`s-${item.id}`} task={item} version={version} />}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queued = useRef<Notice | null>(null);
+  const noticeHost = useModalHost();
   const counter = useRef(0);
   const router = useRouter();
   const pathname = usePathname();
@@ -351,43 +353,68 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
-      <div className="notices" aria-live="polite">
-        {notice && (
-          <div
-            key={notice.id}
-            role={notice.tone === "error" ? "alert" : "status"}
-            className="notice"
-            data-tone={notice.tone}
-            data-leaving={leaving ? "" : undefined}
-            inert={leaving}
-            data-notice
-          >
-            <span className="t-value notice-text">{notice.text}</span>
-            {notice.undo && (
-              <Button
-                size="sm"
-                variant="primary"
-                // The deleted row held the focus; it goes to the undo of what was just deleted, not to the page. A notice
-                // that arrived on its own leaves the focus where it is.
-                autoFocus={!notice.quiet}
-                onClick={() => {
-                  notice.undo?.();
-                  dismiss();
-                }}
-              >
-                Undo
-              </Button>
-            )}
-            {notice.tone === "error" && (
-              <Button size="sm" onClick={dismiss}>
-                Close
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
+      {/* The notices are a layer of their own over the page; while a modal dialog is open they live inside it, the only
+          place outside its inert backdrop, so an «Undo» born with the task's detail open is pressed, not the backdrop. */}
+      {withHost(
+        noticeHost,
+        <div className="notices" popover="manual" ref={showLayer} aria-live="polite">
+          {notice && (
+            <div
+              key={notice.id}
+              role={notice.tone === "error" ? "alert" : "status"}
+              className="notice"
+              data-tone={notice.tone}
+              data-leaving={leaving ? "" : undefined}
+              inert={leaving}
+              data-notice
+            >
+              <span className="t-value notice-text">{notice.text}</span>
+              {notice.undo && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  // The deleted row held the focus; it goes to the undo of what was just deleted, not to the page. A notice
+                  // that arrived on its own leaves the focus where it is.
+                  autoFocus={!notice.quiet}
+                  onClick={() => {
+                    notice.undo?.();
+                    dismiss();
+                  }}
+                >
+                  Undo
+                </Button>
+              )}
+              {notice.tone === "error" && (
+                <Button size="sm" onClick={dismiss}>
+                  Close
+                </Button>
+              )}
+            </div>
+          )}
+        </div>,
+      )}
     </WorkspaceContext.Provider>
   );
+}
+
+// The open modal dialog that is last in the page, or null: while one is open, everything outside it is inert.
+function useModalHost(): HTMLElement | null {
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const read = () => setHost([...document.querySelectorAll<HTMLDialogElement>("dialog[open]")].filter((dialog) => dialog.matches(":modal")).at(-1) ?? null);
+    const watch = new MutationObserver(read);
+    watch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+    read();
+    return () => watch.disconnect();
+  }, []);
+  return host;
+}
+
+const withHost = (host: HTMLElement | null, layer: ReactNode) => (host ? createPortal(layer, host) : layer);
+
+// A layer enters the top layer as soon as it mounts: over the page, and over the dialog it was moved into.
+function showLayer(element: HTMLElement | null) {
+  if (element && !element.matches(":popover-open")) element.showPopover();
 }
 
 // The phone's menu: the same sidebar in a drawer from the left. Its content stays mounted, so closing fades it whole.

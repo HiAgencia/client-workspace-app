@@ -466,12 +466,23 @@
   width: var(--fold-w);
   height: var(--nav-row);
 }
+/* The fold is the target a finger needs (24 wide): a clear edge at its right reaches over the start of the name's own
+   padding, where nothing is written, and its margin gives that room back, so the row and the drawn fold stay as they
+   were. Its fill and rim stay inside that edge. */
 .tree-toggle {
+  --fold-reach: max(0px, 1.5rem - var(--fold-w));
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
+  box-sizing: content-box;
+  margin-right: calc(-1 * var(--fold-reach));
   padding: 0;
   border: 0;
-  border-radius: var(--radius-control);
+  border-right: var(--fold-reach) solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-control) calc(var(--radius-control) + var(--fold-reach)) calc(var(--radius-control) + var(--fold-reach))
+    var(--radius-control);
   background: transparent;
   color: var(--muted);
   box-shadow: inset 0 0 0 1px transparent;

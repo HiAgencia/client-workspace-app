@@ -152,8 +152,7 @@
   }
 }
 .cal-task-circle {
-  width: 1rem;
-  height: 1rem;
+  --circle: 1rem;
 }
 .cal-task-open {
   display: flex;
