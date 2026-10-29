@@ -596,7 +596,7 @@ function AddNote({ node }: { node: string | null }) {
     const value = text.trim();
     if (!value || busy) return;
     setBusy(true);
-    const answer = await tool<{ item: { id: string } }>("add_note", { node, text: value[0].toUpperCase() + value.slice(1) });
+    const answer = await tool<{ item: { id: string } }>("add_note", { node, text: value });
     setBusy(false);
     if (!(await saving(Promise.resolve(answer)))) return;
     setText("");
