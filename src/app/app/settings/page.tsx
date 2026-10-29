@@ -189,6 +189,8 @@ function DailyReviewSection() {
               type="button"
               role="switch"
               aria-checked={prefs.dailyReview}
+              
+              aria-label="Daily review"
               className="switch settings-switch"
               data-review-switch
               onClick={() => void toggle()}
@@ -584,7 +586,12 @@ function AgentTokensSection() {
                         Revoked
                       </span>
                     ) : (
-                      <ConfirmButton confirm="The agent using it stops at once. This cannot be undone." onConfirm={() => void revoke(token.id)}>
+                      <ConfirmButton
+                        
+                        label={`Revoke “${token.label}” for ${path(token.nodeId)}`}
+                        confirm="The agent using it stops at once. This cannot be undone."
+                        onConfirm={() => void revoke(token.id)}
+                      >
                         Revoke
                       </ConfirmButton>
                     )}
