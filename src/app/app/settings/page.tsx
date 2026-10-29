@@ -189,6 +189,8 @@ function DailyReviewSection() {
               type="button"
               role="switch"
               aria-checked={prefs.dailyReview}
+              // The name says what it switches on; its state is `aria-checked`, and the word beside it says it too.
+              aria-label="Daily review"
               className="switch settings-switch"
               data-review-switch
               onClick={() => void toggle()}
@@ -584,7 +586,12 @@ function AgentTokensSection() {
                         Revoked
                       </span>
                     ) : (
-                      <ConfirmButton confirm="The agent using it stops at once. This cannot be undone." onConfirm={() => void revoke(token.id)}>
+                      <ConfirmButton
+                        // Two tokens can carry the same name: the button names the token and the place it reaches.
+                        label={`Revoke “${token.label}” for ${path(token.nodeId)}`}
+                        confirm="The agent using it stops at once. This cannot be undone."
+                        onConfirm={() => void revoke(token.id)}
+                      >
                         Revoke
                       </ConfirmButton>
                     )}

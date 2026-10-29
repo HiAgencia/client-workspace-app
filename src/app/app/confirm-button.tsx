@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 
 // What cannot be undone is never one click away: the first press asks in place, with "Back" offered first and holding
 // the focus; Escape goes back too. The question takes the button's place and gives it back.
-export function ConfirmButton({ children, confirm, onConfirm }: { children: ReactNode; confirm: string; onConfirm: () => void }) {
+// `label` is the button's name when its words alone do not say which one it is —two tokens with the same name—: the
+// visible word stays the action.
+export function ConfirmButton({ children, confirm, label, onConfirm }: { children: ReactNode; confirm: string; label?: string; onConfirm: () => void }) {
   const [asking, setAsking] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
 
@@ -16,7 +18,7 @@ export function ConfirmButton({ children, confirm, onConfirm }: { children: Reac
 
   if (!asking) {
     return (
-      <Button ref={opener} variant="danger" size="sm" onClick={() => setAsking(true)}>
+      <Button ref={opener} variant="danger" size="sm" aria-label={label} onClick={() => setAsking(true)}>
         {children}
       </Button>
     );
