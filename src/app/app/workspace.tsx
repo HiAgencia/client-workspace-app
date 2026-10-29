@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const statusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const queued = useRef<Notice | null>(null);
+  const noticeHost = useModalHost();
   const counter = useRef(0);
   const router = useRouter();
   const pathname = usePathname();
@@ -350,43 +352,67 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
-      <div className="notices" aria-live="polite">
-        {notice && (
-          <div
-            key={notice.id}
-            role={notice.tone === "error" ? "alert" : "status"}
-            className="notice"
-            data-tone={notice.tone}
-            data-leaving={leaving ? "" : undefined}
-            inert={leaving}
-            data-notice
-          >
-            <span className="t-value notice-text">{notice.text}</span>
-            {notice.undo && (
-              <Button
-                size="sm"
-                variant="primary"
-                
-                
-                autoFocus={!notice.quiet}
-                onClick={() => {
-                  notice.undo?.();
-                  dismiss();
-                }}
-              >
-                Undo
-              </Button>
-            )}
-            {notice.tone === "error" && (
-              <Button size="sm" onClick={dismiss}>
-                Close
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
+      {}
+      {withHost(
+        noticeHost,
+        <div className="notices" popover="manual" ref={showLayer} aria-live="polite">
+          {notice && (
+            <div
+              key={notice.id}
+              role={notice.tone === "error" ? "alert" : "status"}
+              className="notice"
+              data-tone={notice.tone}
+              data-leaving={leaving ? "" : undefined}
+              inert={leaving}
+              data-notice
+            >
+              <span className="t-value notice-text">{notice.text}</span>
+              {notice.undo && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  
+                  
+                  autoFocus={!notice.quiet}
+                  onClick={() => {
+                    notice.undo?.();
+                    dismiss();
+                  }}
+                >
+                  Undo
+                </Button>
+              )}
+              {notice.tone === "error" && (
+                <Button size="sm" onClick={dismiss}>
+                  Close
+                </Button>
+              )}
+            </div>
+          )}
+        </div>,
+      )}
     </WorkspaceContext.Provider>
   );
+}
+
+
+function useModalHost(): HTMLElement | null {
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const read = () => setHost([...document.querySelectorAll<HTMLDialogElement>("dialog[open]")].filter((dialog) => dialog.matches(":modal")).at(-1) ?? null);
+    const watch = new MutationObserver(read);
+    watch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+    read();
+    return () => watch.disconnect();
+  }, []);
+  return host;
+}
+
+const withHost = (host: HTMLElement | null, layer: ReactNode) => (host ? createPortal(layer, host) : layer);
+
+
+function showLayer(element: HTMLElement | null) {
+  if (element && !element.matches(":popover-open")) element.showPopover();
 }
 
 

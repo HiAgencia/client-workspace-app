@@ -147,23 +147,35 @@
   --prio: var(--prio-low);
 }
 .task-circle {
+  --circle: 1.2rem;
+  --hit: max(1.5rem, var(--circle));
   position: relative;
   flex: none;
   display: inline-grid;
   place-items: center;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: var(--hit);
+  height: var(--hit);
+  margin: calc((var(--circle) - var(--hit)) / 2);
   padding: 0;
-  border: 2px solid var(--prio);
+  border: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--prio) 9%, transparent);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--prio) 22%, transparent);
-  transition-property: background-color, box-shadow, border-color;
-  transition-duration: var(--dur-hover-out);
-  transition-timing-function: var(--ease-hover-out);
+  background: transparent;
 
+  &::before {
+    content: "";
+    position: absolute;
+    inset: calc((var(--hit) - var(--circle)) / 2);
+    border: 2px solid var(--prio);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--prio) 9%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--prio) 22%, transparent);
+    transition-property: background-color, box-shadow, border-color;
+    transition-duration: var(--dur-hover-out);
+    transition-timing-function: var(--ease-hover-out);
+  }
   &::after {
     content: "";
+    position: relative;
     width: 0.24rem;
     height: 0.46rem;
     margin-top: -0.1rem;
@@ -173,8 +185,11 @@
     opacity: 0;
     transition: opacity var(--dur-hover-out) var(--ease-hover-out), border-color var(--dur) var(--ease-std);
   }
+  &:focus-visible {
+    outline-offset: calc(2px + (var(--circle) - var(--hit)) / 2);
+  }
   @media (hover: hover) {
-    &:hover {
+    &:hover::before {
       background: color-mix(in srgb, var(--prio) 18%, transparent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--prio) 22%, transparent);
       transition-duration: var(--dur-hover);
@@ -185,7 +200,7 @@
       transition-duration: var(--dur-hover);
     }
   }
-  &[aria-checked="true"] {
+  &[aria-checked="true"]::before {
     background: var(--prio);
   }
   &[aria-checked="true"]::after {
@@ -193,15 +208,13 @@
     border-color: var(--card);
   }
   @media (pointer: coarse) {
-    &::before {
-      content: "";
-      position: absolute;
-      inset: -0.8rem;
-    }
+    --hit: calc(var(--circle) + 1.6rem);
   }
   @media (forced-colors: active) {
-    border-color: CanvasText;
-    &[aria-checked="true"] {
+    &::before {
+      border-color: CanvasText;
+    }
+    &[aria-checked="true"]::before {
       background: Highlight;
     }
   }
@@ -299,7 +312,7 @@
 .task-check {
   grid-column: 1;
   grid-row: 1;
-  margin-top: calc((1lh - 1.2rem) / 2);
+  margin-top: calc((1lh - var(--hit)) / 2);
 }
 .task-title {
   grid-column: 2;
@@ -740,7 +753,7 @@
   gap: 0.75rem;
 
   & .task-check {
-    margin-top: calc((var(--text-lead) * 1.25 + 0.7rem - 1.2rem) / 2);
+    margin-top: calc((var(--text-lead) * 1.25 + 0.7rem - var(--hit)) / 2);
   }
 }
 .task-detail-title {
@@ -807,6 +820,8 @@
     visibility 0s linear var(--dur);
 }
 .task-detail-status {
+  font-size: var(--text-meta);
+  line-height: 1.4;
   min-height: 1lh;
   margin: 0.25rem 0 0;
   opacity: 0;

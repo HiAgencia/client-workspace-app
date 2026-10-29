@@ -365,11 +365,18 @@
 }
 .notices {
   position: fixed;
-  right: var(--gutter);
-  bottom: var(--gutter);
+  inset: auto var(--gutter) var(--gutter) auto;
   z-index: var(--layer-notice);
   display: flex;
   justify-content: flex-end;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
   pointer-events: none;
 }
 .notices > .notice {
