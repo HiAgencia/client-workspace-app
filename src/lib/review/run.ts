@@ -91,10 +91,11 @@ type RunRow = { id: string; day: string; instruction: string; requested: boolean
 const ACTION_COLUMNS = "id, review_id, item_id, kind, before, after, created_at, undone_at";
 const RUN_COLUMNS = "id, day, instruction, requested, provider, task_ids, created_at, finished_at, failures";
 
-// A run with no end is another call's while its attempt is younger than this: each attempt marks its start
-// (`attempt_started_at`), and one older is taken as cut (a worker that died) and resumed. A stop clears the mark, so the
-// next call resumes at once.
-const RUNNING_FOR_MS = 5 * 60_000;
+// A run with no end writes its heartbeat as it walks its tasks (`heartbeat_at`), and the next call decides with it: a run
+// whose last beat is older than this floor is taken as cut —a worker that died— and resumed, and one that keeps beating
+// is another call's, however long its attempt has been going. The floor is one task's read with room to spare: a live run
+// beats again well inside it. A stop clears the beat, so the next call resumes at once.
+const HEARTBEAT_FLOOR_MS = 5 * 60_000;
 
 function toAction(row: ActionRow, task: ReviewAction["task"] = null): ReviewAction {
   return {
@@ -227,8 +228,15 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
     failures.push(`${what} “${task.title}”`);
     return { ok: false, message: `${what} failed: try it again later` };
   };
+  // The run's heartbeat: the judge writes it as it walks its tasks, and every write of a tool counts as one. A beat that
+  // cannot be written is said in the log and the run goes on: it only risks another call taking it as cut later.
+  const beat = async () => {
+    const { error } = await ctx.db.from("daily_reviews").update({ heartbeat_at: new Date().toISOString() }).eq("id", run.id).is("finished_at", null);
+    if (error) console.error(`daily review: the heartbeat of ${run.id} could not be written: ${error.message}`);
+  };
   const tools: ReviewTools = {
     async writeMailStatus({ task, status, sentence, message }) {
+      await beat();
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       // A state that says a message did or did not do what the task waits for names that message.
@@ -273,6 +281,7 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "written" };
     },
     async completeTask({ task }) {
+      await beat();
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       if (!met.has(task) || !target.mail.decidedMessageId) return { ok: false, message: "complete a task only once its mail is written as met" };
@@ -284,14 +293,15 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "completed" };
     },
   };
-  return { tools, rows, failures };
+  return { tools, rows, failures, beat };
 }
 
-// The end of an attempt: finished, or stopped with its failures counted and its mark cleared, so the next call resumes it.
+// The end of an attempt: finished, or stopped with its failures counted and its marks cleared —the attempt's and the
+// beat's—, so the next call resumes it.
 async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean) {
   const { data, error } = await ctx.db
     .from("daily_reviews")
-    .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null })
+    .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null, heartbeat_at: null })
     .eq("id", run.id)
     .select(RUN_COLUMNS)
     .single();
@@ -314,17 +324,19 @@ export async function runDailyReview(
     if (error) return dbFail("reading the day's review", error);
     if (data) {
       const run = toRun(data as RunRow);
-      // A run with no end is taken over in one statement, only when no attempt is under way: of two calls at once, one
-      // resumes it and the other answers that it runs.
+      // A run with no end is taken over in one statement, only when its last beat is old enough to call it cut: of two
+      // calls at once, one resumes it and the other answers that it runs. The claim writes the beat, so the run is the
+      // claimant's from here on.
       let claimed: RunRow | null = null;
       if (!run.finishedAt) {
-        const cutoff = new Date(Date.now() - RUNNING_FOR_MS).toISOString();
+        const now = new Date().toISOString();
+        const cutoff = new Date(Date.now() - HEARTBEAT_FLOOR_MS).toISOString();
         const claim = await ctx.db
           .from("daily_reviews")
-          .update({ attempt_started_at: new Date().toISOString() })
+          .update({ attempt_started_at: now, heartbeat_at: now })
           .eq("id", run.id)
           .is("finished_at", null)
-          .or(`attempt_started_at.is.null,attempt_started_at.lt.${cutoff}`)
+          .or(`heartbeat_at.is.null,heartbeat_at.lt.${cutoff}`)
           .select(RUN_COLUMNS)
           .maybeSingle();
         if (claim.error) return dbFail("resuming the day's review", claim.error);
@@ -356,7 +368,7 @@ export async function runDailyReview(
   if (!run) {
     const { data: inserted, error } = await ctx.db
       .from("daily_reviews")
-      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds })
+      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds, heartbeat_at: new Date().toISOString() })
       .select(RUN_COLUMNS)
       .single();
     if (error?.code === "23505") {
@@ -366,10 +378,10 @@ export async function runDailyReview(
     if (error) return dbFail("starting the review", error);
     run = toRun(inserted as RunRow);
   }
-  const { tools, rows, failures } = toolsFor(ctx, run, gathered.waiting);
+  const { tools, rows, failures, beat } = toolsFor(ctx, run, gathered.waiting);
   let judged: Awaited<ReturnType<ReviewJudge["review"]>>;
   try {
-    judged = await judge.review(gathered.waiting, tools, { instruction, today: input.today, zone: input.zone ?? "UTC" });
+    judged = await judge.review(gathered.waiting, tools, { instruction, today: input.today, zone: input.zone ?? "UTC", beat });
   } catch (cause) {
     // The run stays unfinished, with its stop counted, so the next call of the day resumes it.
     console.error("daily review: the judge stopped:", cause instanceof Error ? cause.message : cause);

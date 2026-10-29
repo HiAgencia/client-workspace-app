@@ -11,8 +11,13 @@ import type { ReviewTask, ReviewTools } from "./run";
 
 export type ReviewJudge = {
   provider: "simulated" | "meta";
-  // What it could not do comes back as failures, in plain words, and the run counts them.
-  review(tasks: ReviewTask[], tools: ReviewTools, context: { instruction: string; today: string; zone: string }): Promise<void | { failures: string[] }>;
+  // What it could not do comes back as failures, in plain words, and the run counts them. `beat` writes the run's
+  // heartbeat: the judge calls it as it takes each task, so a run that is alive says so however long it takes.
+  review(
+    tasks: ReviewTask[],
+    tools: ReviewTools,
+    context: { instruction: string; today: string; zone: string; beat?: () => Promise<void> },
+  ): Promise<void | { failures: string[] }>;
 };
 
 // What the rules read as an answer that does what a task waits for, and as one that does not; a refusal is read first, so
@@ -51,8 +56,10 @@ function when(iso: string, zone: string): string {
 
 export const simulatedJudge: ReviewJudge = {
   provider: "simulated",
-  async review(tasks, tools, { zone }) {
+  async review(tasks, tools, { zone, beat }) {
     for (const task of tasks) {
+      // Each task the rules take is a beat of the run: it is alive while it walks them.
+      await beat?.();
       // The latest message that answers the task decides; one that answers nothing changes nothing.
       const message = task.messages.find((entry) => answers(task, entry));
       if (!message) continue;
@@ -124,6 +131,10 @@ export function metaJudge(model?: LanguageModel): ReviewJudge {
         providerOptions: { openai: { store: false } },
         // Each task takes at most a state and a completion.
         stopWhen: isStepCount(tasks.length * 2 + 2),
+        // A step of the model is a beat of the run: a model that reads and decides for minutes keeps it alive.
+        onStepFinish: async () => {
+          await context.beat?.();
+        },
         tools: {
           write_mail_status: tool({
             description: "Write the state of the mail a task waits for, with one sentence that quotes the deciding line, and the message that decides it.",

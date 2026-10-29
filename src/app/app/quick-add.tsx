@@ -228,6 +228,9 @@ function QuickAddEditor({
           className="qa-input"
           rows={1}
           autoFocus
+          // What the field writes is English, and the browser's spell checker follows the element's language, not the
+          // system's: without this, every word here was underlined in a Spanish browser.
+          lang="en"
           aria-label="Task: what to do, with a day, #place and p1 to p4"
           placeholder="Call the printer tomorrow 4pm #Website p2"
           role="combobox"

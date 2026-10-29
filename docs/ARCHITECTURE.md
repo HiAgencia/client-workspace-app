@@ -35,7 +35,7 @@ and the screens. When the code changes a decision described here, this document 
 | `mail_links` | A message linked to a task, or to a client or project | `owner_id`, `account_id`, `message_id`, and either `item_id` or `node_id`; each pair once |
 | `mail_opened` | What the person opened here (Gmail is read only and keeps its own state) | `owner_id`, `account_id`, `message_id`, `opened_at` |
 | `task_mail` | The mail a task waits for and what the daily review wrote | `item_id` (the key), `owner_id`, `account_id` (null for every account of its place), `expect_from` (words of the sender), `status` (`waiting` · `met` · `not_met`), `sentence`, `decided_account_id` + `decided_message_id`, `checked_at` |
-| `daily_reviews` | Each run of the daily review | `owner_id`, `day`, `instruction`, `requested` (asked for on purpose; the day's own run is once per person and day), `task_ids`, `provider` (`simulated` · `meta`), `finished_at` (null while it runs or after it stopped), `failures` (the steps that failed, a stop included), `attempt_started_at` (when the attempt under way started; cleared by a stop) |
+| `daily_reviews` | Each run of the daily review | `owner_id`, `day`, `instruction`, `requested` (asked for on purpose; the day's own run is once per person and day), `task_ids`, `provider` (`simulated` · `meta`), `finished_at` (null while it runs or after it stopped), `failures` (the steps that failed, a stop included), `attempt_started_at` (when the attempt under way started) and `heartbeat_at` (its last beat; both cleared by a stop, and the next call decides with the beat) |
 | `review_actions` | Each thing a run did, for its undo | `review_id`, `owner_id`, `item_id`, `kind` (`mail_status` · `complete`), `before`, `after`, `undone_at` (the only column a person changes) |
 | `preferences` | One row per person | `owner_id`, `boards` (per page —`overview`, `tasks`, `node:<id>`— the order of its boxes and the hidden ones), `layouts` (per page, `list` or `board`), `daily_review` (on by default), `daily_review_instruction` |
 | `google_accounts` | Each connected Google account | `id`, `owner_id`, `email`, encrypted `refresh_token`, encrypted `access_token` and its expiry, `scopes`, `status`, `is_demo` |
@@ -145,10 +145,12 @@ and the screens. When the code changes a decision described here, this document 
   task, from its sender, or about it when it names none), and complete a task this run wrote as `met`. Each writes
   its action in the same statement (`public.review_write_mail_status`, `public.review_complete_task`), and neither
   throws: a failure is counted in the run's `failures` and said in the answer. A run counts as the day's once it
-  finishes. Each attempt marks its start (`attempt_started_at`): a run without an end is taken over in one statement
-  only when no attempt is under way —its mark cleared by a stop, or older than a few minutes, a worker that died—, so
-  of two calls at once one resumes it and the other answers `skipped: "running"`; a stop that cannot be recorded is
-  logged and said in the answer. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
+  finishes. A run under way writes its heartbeat (`heartbeat_at`) as the judge takes each task and on each step of the
+  model, and the next call decides with it: a run whose last beat is older than the floor —one task's read with room to
+  spare— is taken over in one statement, as a worker that died, and one that keeps beating is another call's, however
+  long its attempt has been going (`attempt_started_at` is when that attempt began). So of two calls at once one resumes
+  it and the other answers `skipped: "running"`; a stop clears both marks, so the next call picks it up at once, and a
+  stop that cannot be recorded is logged and said in the answer. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
   it does not run. The
   simulated judge follows fixed rules —the sender, and the words of the subject and the text: a refusal first, then an
   approval—; Meta's judge (`MODEL_PROVIDER=meta`) reads the same data with a prompt that fences the messages as data. A

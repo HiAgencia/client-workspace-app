@@ -206,7 +206,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       .then(({ data }) => {
         const user = data.session?.user;
         if (!user) return;
-        setWho(user.is_anonymous ? null : (user.email ?? null));
+        setWho(user.is_anonymous ? "Demo session" : (user.email ?? null));
       });
   }, [refreshTree, config]);
 

@@ -616,10 +616,11 @@
 .inline-link {
   font-weight: inherit;
 }
-/* A link in a task's title can be the whole title, the only text a finger aims at: its box reaches 24 tall above and below
-   its letters, which an inline box does without moving the line. An inline box is its letters' height (a little over its
-   font size) plus its padding, so the padding starts from the font size. */
-.task-title .inline-link {
+/* A link in a task's or a note's title can be the whole title, the only text a finger aims at: its box reaches 24 tall
+   above and below its letters, which an inline box does without moving the line. An inline box is its letters' height (a
+   little over its font size) plus its padding, so the padding starts from the font size. */
+.task-title .inline-link,
+.note-title .inline-link {
   padding-block: max(0px, (1.5rem - 1em) / 2);
 }
 

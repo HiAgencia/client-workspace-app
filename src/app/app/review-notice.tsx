@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { LOCALE, today } from "@/lib/dates";
+import { LOCALE, today, untilAgain } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { browserClient } from "@/lib/supabase/browser";
 import { post } from "./client-api";
@@ -76,15 +76,6 @@ export function reviewNotes(review: { skipped?: Review["skipped"]; failures?: st
     notes.push(`${steps} of the daily review could not be done: ${list.format(failures)}. Ask the chat to review your day to try again.`);
   }
   return notes;
-}
-
-// How long until the limit opens again, from the server's Retry-After (seconds): «in about 5 hours», «in a few minutes».
-export function untilAgain(seconds: number | null): string {
-  if (!seconds || !Number.isFinite(seconds)) return "tomorrow";
-  const hours = Math.round(seconds / 3600);
-  if (hours >= 2) return `in about ${hours} hours`;
-  if (hours === 1) return "in about an hour";
-  return "in a few minutes";
 }
 
 // Resolves once the page has entered: every box of its boards in view and its entrance played, and no dialog open over it.

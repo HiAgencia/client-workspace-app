@@ -129,6 +129,7 @@ export type Database = {
           day: string
           failures: number
           finished_at: string | null
+          heartbeat_at: string | null
           id: string
           instruction: string
           owner_id: string
@@ -142,6 +143,7 @@ export type Database = {
           day: string
           failures?: number
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
           instruction: string
           owner_id?: string
@@ -155,6 +157,7 @@ export type Database = {
           day?: string
           failures?: number
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
           instruction?: string
           owner_id?: string

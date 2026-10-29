@@ -105,21 +105,22 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
         </div>
       </div>
       <div ref={foot} className="side-foot side-pieces">
-        <div className="side-foot-row">
-          <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
-            <span className="side-link-name">Trash</span>
-          </Link>
-          <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
-            <span className="side-link-name">Settings</span>
-          </Link>
-        </div>
-        <div className="side-account">
-          {/* A session without an email (the demo's) shows no name. */}
-          {who && <span className="t-meta side-who">{who}</span>}
-          <Button size="sm" variant="quiet" className="side-sign-out" onClick={onSignOut}>
-            Sign out
-          </Button>
-        </div>
+        <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
+          <span className="side-link-name">Trash</span>
+        </Link>
+        <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
+          <span className="side-link-name">Settings</span>
+        </Link>
+        {/* Who is signed in sits over Trash and «Sign out» over Settings, so the foot is two columns of two and nothing
+            hangs at the end of a row. A demo session has no address: it says it is one. */}
+        {who && (
+          <span className="t-meta side-who" title={who}>
+            {who}
+          </span>
+        )}
+        <Button size="sm" variant="quiet" className="side-sign-out" onClick={onSignOut}>
+          Sign out
+        </Button>
       </div>
     </nav>
   );

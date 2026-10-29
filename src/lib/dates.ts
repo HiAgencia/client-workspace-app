@@ -92,6 +92,16 @@ export function isDay(value: string | null | undefined): value is Day {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(toDate(value).getTime());
 }
 
+// When a limit lifts, in the words of whoever reads it: the hours left, or that it comes back tomorrow. The day of a
+// limit is cut in UTC, which is not the reader's midnight, so it is never named as a time of the day.
+export function untilAgain(seconds: number | null): string {
+  if (!seconds || !Number.isFinite(seconds)) return "tomorrow";
+  const hours = Math.round(seconds / 3600);
+  if (hours >= 2) return `in about ${hours} hours`;
+  if (hours === 1) return "in about an hour";
+  return "in a few minutes";
+}
+
 // The first day of the week where the browser says it (1 = Monday … 7 = Sunday), Monday otherwise.
 export function firstWeekday(): number {
   try {

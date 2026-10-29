@@ -22,7 +22,7 @@ const input = z.strictObject({
 export async function POST(request: Request) {
   const body = await readInput(request, input);
   if (!body.ok) return body.response;
-  if (!isLivingDay(body.value.today)) return problem(422, "today is not a day any time zone is living now");
+  if (!isLivingDay(body.value.today)) return problem(422, "the date sent is not a day anyone is living now: reload the page and ask again");
   const session = await sessionContext("manual");
   if (!session) return problem(401, "not signed in");
   return toolResponse("daily review", await runDailyReview(session.ctx, { today: body.value.today, zone: validZone(body.value.zone) }));

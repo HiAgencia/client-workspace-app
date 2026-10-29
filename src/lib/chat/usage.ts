@@ -1,3 +1,4 @@
+import { untilAgain } from "@/lib/dates";
 import type { Db } from "@/lib/db/client";
 import { serverEnv } from "@/lib/env";
 
@@ -64,9 +65,12 @@ export async function takeUsageFor(
   return takeUsage(service, user.id, kind, dailyCap("demoSession", kind), now);
 }
 
-export function capMessage(reason: "cap" | "demo_cap", kind: UsageKind): string {
+// The cap's sentence says when it lifts in the words of whoever reads it —the hours left, or that it comes back
+// tomorrow—, never as «midnight UTC», which is a time the person does not live in.
+export function capMessage(reason: "cap" | "demo_cap", kind: UsageKind, seconds = secondsToNextDay()): string {
   const what = kind === "chat_message" ? "chat messages" : kind === "transcription" ? "voice notes" : "daily reviews";
+  const when = untilAgain(seconds);
   return reason === "demo_cap"
-    ? `The demo reached today's limit of ${what} for everyone. Sign in with Google to keep going, or come back after midnight UTC.`
-    : `You reached today's limit of ${what}. It resets at midnight UTC.`;
+    ? `The demo reached today's limit of ${what} for everyone. Sign in with Google to keep going, or come back ${when}.`
+    : `You reached today's limit of ${what}. It comes back ${when}.`;
 }

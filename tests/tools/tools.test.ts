@@ -299,6 +299,10 @@ describe("reads", () => {
   });
 
   it("get_overview gathers a node's pending work and its events", async () => {
+    // La prueba planta lo suyo: corrida sola con `-t` leía un nodo vacío y el paso medía el vacío, porque las tareas que
+    // encontraba las creaban las pruebas anteriores del bloque.
+    await run("create_task", userCtx(a), { node: treeA.web, title: "Draft the launch checklist" });
+    await run("add_decision", userCtx(a), { node: treeA.web, decision: "Launch on a Tuesday" });
     const events: EventsSource = async ({ nodeId }) => ({
       events: [
         {

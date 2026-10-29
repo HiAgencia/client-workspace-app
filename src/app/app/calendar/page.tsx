@@ -70,6 +70,8 @@ const VIEWS = [
   { value: "month", label: "Month" },
 ];
 const OWN_CALENDAR = "Client Workspace calendar";
+// How many chips the all-day strip of a week shows in a day before it says how many more it holds.
+const ALL_DAY_CHIPS = 3;
 
 export default function CalendarPage() {
   return (
@@ -640,10 +642,17 @@ function WeekGrid({
         <span className="cal-gutter t-meta">All day</span>
         {days.map((day) => {
           const entry = byDay.get(day);
+          // The strip is a cell of a seventh of the week: three chips read, and the rest is said by its number instead of
+          // being cut to a few letters.
+          const items = [
+            ...(entry?.events ?? []).filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />),
+            ...(entry?.tasks ?? []).filter((task) => !task.dueTime).map((task) => <TaskChip key={task.id} task={task} chips={chips} />),
+          ];
+          const more = items.length - ALL_DAY_CHIPS;
           return (
             <div key={day} role="gridcell" className="cal-slot" data-day={day} onClick={(event) => onGap(event, day, null)} {...dropOn(day)}>
-              {entry?.events.filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />)}
-              {entry?.tasks.filter((task) => !task.dueTime).map((task) => <TaskChip key={task.id} task={task} chips={chips} />)}
+              {items.slice(0, ALL_DAY_CHIPS)}
+              {more > 0 && <span className="cal-more t-meta">+{more} more</span>}
               <span className="sr-only">{fullDay(day)}, all day</span>
               <span className="cal-add-hint" aria-hidden="true">
                 Add event

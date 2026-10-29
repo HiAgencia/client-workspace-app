@@ -281,6 +281,11 @@
   background: var(--card);
   box-shadow: 0 1px 0 var(--division);
 }
+/* How many more chips a day of the all-day strip holds, when three are already shown. */
+.cal-more {
+  padding: 0 0.15rem;
+  color: var(--muted);
+}
 .cal-slot {
   position: relative;
   display: flex;

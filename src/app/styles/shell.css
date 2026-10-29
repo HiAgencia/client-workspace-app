@@ -209,35 +209,26 @@
   padding: 0;
   list-style: none;
 }
+/* The foot is two columns of two: Trash over the person signed in, Settings over «Sign out», so no piece hangs alone at
+   the end of a row. */
 .side-foot {
   flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.25rem 2px;
   padding: 0.5rem 0.75rem max(0.75rem, env(safe-area-inset-bottom));
   box-shadow: 0 -1px 0 var(--division);
 }
-.side-foot-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-}
-.side-account {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-height: var(--nav-row);
-  padding-left: 0.55rem;
-}
 .side-who {
   min-width: 0;
+  padding-left: 0.55rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .side-sign-out {
-  margin-left: auto;
+  justify-self: start;
 }
 .side-pieces {
   position: relative;

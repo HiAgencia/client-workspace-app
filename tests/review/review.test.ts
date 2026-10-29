@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { ReviewJudge } from "@/lib/review/judge";
 import { runDailyReview, undoReviewAction } from "@/lib/review/run";
 import type { ToolContext } from "@/lib/tools/context";
 import type { MailRow } from "@/lib/tools/mail";
@@ -319,6 +320,118 @@ describe("the daily review's seeded cases", () => {
     expect(refusals.map((answer) => answer.ok)).toEqual([false, false, false, false]);
     const bystander = await cases!.client.from("items").select("status").eq("id", ids.bystander).single();
     expect(bystander.data?.status).toBe("open");
+  });
+});
+
+// The heartbeat: a run under way writes it as it walks its tasks, so a call that finds it beating leaves the run alone
+// however long its attempt has been going, and one whose beat stopped is taken as cut and resumed.
+const dayPlus = (days: number) => {
+  const day = new Date(`${TODAY}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + days);
+  return day.toISOString().slice(0, 10);
+};
+
+describe("a review that keeps beating", () => {
+  const DAY = dayPlus(3);
+  const CONTROL = dayPlus(4);
+  let user: DisposableUser | undefined;
+  const ids = { approve: "", refuse: "" };
+
+  beforeAll(async () => {
+    user = await createDisposableUser("review-beating");
+    const { data: client } = await user.client.from("nodes").insert({ owner_id: user.id, kind: "client", name: "Beat Co" }).select("id").single();
+    const { data: project } = await user.client
+      .from("nodes")
+      .insert({ owner_id: user.id, kind: "project", name: "Beat project", parent_id: client!.id })
+      .select("id")
+      .single();
+    const { data: account, error } = await serviceClient().from("google_accounts").insert({ owner_id: user.id, email: "team@beatco.example", is_demo: true }).select("id").single();
+    if (error) throw new Error(error.message);
+    await serviceClient().from("node_accounts").insert({ node_id: client!.id, account_id: account!.id });
+    const task = async (title: string, from: string) => {
+      const { data } = await user!.client.from("items").insert({ owner_id: user!.id, node_id: project!.id, type: "task", title }).select("id").single();
+      await user!.client.from("task_mail").insert({ item_id: data!.id, expect_from: from });
+      return data!.id;
+    };
+    ids.approve = await task("Wait for the venue contract", "Venue Team");
+    ids.refuse = await task("Wait for the insurance quote", "Insurer");
+    const at = new Date(Date.now() + 60_000).toISOString();
+    const message = (from_name: string, from_email: string, subject: string, text_body: string) => ({
+      owner_id: user!.id,
+      account_id: account!.id,
+      from_name,
+      from_email,
+      subject,
+      snippet: text_body,
+      text_body,
+      html: `<p>${text_body}</p>`,
+      received_at: at,
+    });
+    const { error: mailError } = await serviceClient()
+      .from("demo_mail")
+      .insert([
+        message("Venue Team", "team@venue.example", "Contract approved", "The venue contract was approved and signed."),
+        message("Insurer", "quotes@insurer.example", "Quote rejected", "Your insurance quote was rejected: the address is missing."),
+      ]);
+    if (mailError) throw new Error(mailError.message);
+  }, 60_000);
+
+  afterAll(async () => {
+    await deleteDisposableUsers([user]);
+  }, 60_000);
+
+  it("a second call past the attempt's threshold answers that it runs, and the first call's actions are the only ones", async () => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let began: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      began = resolve;
+    });
+    const slow: ReviewJudge = {
+      provider: "simulated",
+      async review(tasks, tools, context) {
+        await context.beat?.();
+        began();
+        await held;
+        // One state per task, each naming the message that decides it: one action per task, no completion.
+        await tools.writeMailStatus({ task: ids.approve, status: "met", sentence: "The venue contract was approved.", message: tasks.find((task) => task.id === ids.approve)!.messages[0].id });
+        await tools.writeMailStatus({ task: ids.refuse, status: "not_met", sentence: "The insurer rejected the quote.", message: tasks.find((task) => task.id === ids.refuse)!.messages[0].id });
+      },
+    };
+    const first = runDailyReview(as(user), { today: DAY, zone: ZONE, judge: slow });
+    await started;
+    const row = await user!.client.from("daily_reviews").select("id").eq("day", DAY).single();
+    const id = row.data!.id;
+    // The attempt is ten minutes old —past the floor— and the beat is from now: the run is alive and says so.
+    const aged = await user!.client.from("daily_reviews").update({ attempt_started_at: new Date(Date.now() - 10 * 60_000).toISOString() }).eq("id", id);
+    expect(aged.error).toBeNull();
+    const second = await runDailyReview(as(user), { today: DAY, zone: ZONE });
+    expect(second).toMatchObject({ ok: true, ran: false, skipped: "running", review: { id }, actions: [] });
+    release();
+    const done = await first;
+    if (!done.ok) throw new Error(done.message);
+    expect(done).toMatchObject({ ran: true, skipped: null, review: { id } });
+    const actions = await user!.client.from("review_actions").select("review_id, item_id, kind").order("created_at");
+    expect(actions.data).toEqual([
+      { review_id: id, item_id: ids.approve, kind: "mail_status" },
+      { review_id: id, item_id: ids.refuse, kind: "mail_status" },
+    ]);
+  });
+
+  it("a run whose beat stopped is taken as cut and resumed, which is the case of a worker that died", async () => {
+    const stale = new Date(Date.now() - 10 * 60_000).toISOString();
+    const { data, error } = await user!.client
+      .from("daily_reviews")
+      .insert({ day: CONTROL, instruction: "Review my day", requested: false, provider: "simulated", task_ids: [], attempt_started_at: stale, heartbeat_at: stale })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    const taken = await runDailyReview(as(user), { today: CONTROL, zone: ZONE, judge: { provider: "simulated", async review() {} } });
+    if (!taken.ok) throw new Error(taken.message);
+    expect(taken).toMatchObject({ ran: true, review: { id: data!.id } });
+    expect(taken.review!.finishedAt).not.toBeNull();
   });
 });
 

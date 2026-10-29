@@ -64,15 +64,25 @@ function forMode(html: string, mode: Theme): string {
 }
 
 const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escapeAttr = (text: string) => escapeText(text).replace(/"/g, "&quot;");
 
 function documentFor(message: MailContent, mode: Theme, images: boolean): { doc: string; adapts: boolean } {
   const html = message.html.trim();
   // A message of plain text has no design of its own: it reads in the product's colors.
   const adapts = html === "" || ownDark(html);
   const scheme = adapts ? mode : "light";
-  // Held images do not even carry their address into the frame, so neither the policy nor the browser's early scan of
-  // the document has a request to make; asked for, the address goes back where it was.
-  const held = (markup: string) => (images ? markup : markup.replace(/(<img\b[^>]*?)\ssrc="(https?:[^"]*)"/gi, '$1 data-held-src="$2"'));
+  // A held image is not painted as an image: one without its address draws the browser's broken-picture icon and its
+  // alt text, which reads as a failure of the message. It leaves a neutral place that says it is held, and the viewer's
+  // «Show images» paints it for real. An image that carries its own bytes —`data:`, `cid:`— loads no network and stays.
+  const held = (markup: string) =>
+    images
+      ? markup
+      : markup.replace(/<img\b[^>]*>/gi, (tag) => {
+          if (!/\ssrc="https?:/i.test(tag)) return tag;
+          const alt = /\salt="([^"]*)"/i.exec(tag)?.[1] ?? "";
+          const label = alt.trim() || "Image held";
+          return `<span class="cw-held" role="img" aria-label="${escapeAttr(label)}">${escapeText(label)}</span>`;
+        });
   const body = html ? held(forMode(html, mode)) :`<pre class="cw-plain">${escapeText(message.text ?? message.snippet)}</pre>`;
   const policy = [
     "default-src 'none'",
@@ -87,7 +97,7 @@ function documentFor(message: MailContent, mode: Theme, images: boolean): { doc:
 html,body{margin:0}
 body{padding:16px;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;overflow-wrap:break-word}
 img{max-width:100%;height:auto}
-${images ? "" : "img[data-held-src]{outline:1px dashed GrayText;outline-offset:-1px;min-width:2rem;min-height:2rem}"}
+.cw-held{display:inline-block;max-width:100%;min-width:2rem;min-height:2rem;padding:0.5rem 0.75rem;border:1px dashed GrayText;border-radius:6px;color:GrayText;font-size:13px}
 .cw-plain{margin:0;white-space:pre-wrap;font:inherit}
 </style></head><body>${body}</body></html>`;
   return { doc, adapts };

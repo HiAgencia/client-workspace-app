@@ -327,7 +327,10 @@ describe("I3: a review that stops is resumed, and what failed is counted", () =>
 
   it("a run another call is still running is not run twice", async () => {
     const day = reviewDay(-23);
-    const started = await user!.client.from("daily_reviews").insert({ owner_id: user!.id, day, instruction: "Review.", provider: "simulated", task_ids: [] });
+    // A run under way says so with its beat: that is what the next call reads.
+    const started = await user!.client
+      .from("daily_reviews")
+      .insert({ owner_id: user!.id, day, instruction: "Review.", provider: "simulated", task_ids: [], heartbeat_at: new Date().toISOString() });
     expect(started.error).toBeNull();
     const judged = vi.fn(async () => {});
     const second = await runDailyReview(me(), { today: day, judge: { provider: "simulated", review: judged } });
