@@ -70,6 +70,11 @@ and the screens. When the code changes a decision described here, this document 
 - **Links over words**: a title keeps a link as `[words](address)` and the screen paints it (`src/lib/inline-links.ts`);
   a body keeps it as rich text, an `<a href>`. Plain text written with `[words](address)` becomes that link in the body
   (`writtenBody`), and a note's title, its body's first line, keeps the link over its words (`noteTitle`).
+- **The initial capital**: a name or a title someone writes is kept with its first letter in capital, whoever writes it
+  —a screen, the chat, an agent—: the tool layer sets it on every write of an item's title (a note's text included, whose
+  first line is its title), an event's title (Google's included), and a node's name, and the agent tokens' route sets it on
+  a token's label (`src/lib/initial-capital.ts`). Only that letter changes; the marks that open the text (`[`, `¿`, a quote) are
+  skipped, and a text that opens with a number or an address stays as it is.
 - **The manual order**: a new item's `position` is the moment it is written, so it is last in any group it joins; a
   reorder deals out the positions the group already holds in the order given (`public.reorder_item_positions`, in SQL,
   so a position never passes through a JavaScript number, which holds fewer digits than one written by the clock), so
