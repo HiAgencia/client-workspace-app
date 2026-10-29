@@ -520,11 +520,12 @@ function EventChip({ event, chips, style, timed }: { event: CalEvent; chips: Chi
       data-origin={event.origin}
       style={style}
       onClick={() => chips.onOpenEvent(event)}
-      aria-label={`${event.title}, ${whenText(event)}`}
       data-cal-event={event.id}
     >
+      {/* The name is what shows, then what the reader also needs: the whole moment. */}
       <span className="cal-event-when">{when}</span>
       <span className="cal-event-title">{event.title}</span>
+      <span className="sr-only">, event, {whenText(event)}</span>
     </button>
   );
 }
@@ -640,9 +641,10 @@ function WeekGrid({
         {days.map((day) => {
           const entry = byDay.get(day);
           return (
-            <div key={day} role="gridcell" aria-label={fullDay(day)} className="cal-slot" data-day={day} onClick={(event) => onGap(event, day, null)} {...dropOn(day)}>
+            <div key={day} role="gridcell" className="cal-slot" data-day={day} onClick={(event) => onGap(event, day, null)} {...dropOn(day)}>
               {entry?.events.filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />)}
               {entry?.tasks.filter((task) => !task.dueTime).map((task) => <TaskChip key={task.id} task={task} chips={chips} />)}
+              <span className="sr-only">{fullDay(day)}, all day</span>
               <span className="cal-add-hint" aria-hidden="true">
                 Add event
               </span>
@@ -672,7 +674,6 @@ function WeekGrid({
             <div
               key={day}
               role="gridcell"
-              aria-label={`${fullDay(day)}, by the hour`}
               className="cal-day-hours"
               data-day={day}
               data-today={day === now ? "" : undefined}
@@ -698,6 +699,7 @@ function WeekGrid({
                 );
               })}
               {day === now && <NowLine first={first} />}
+              <span className="sr-only">{fullDay(day)}, by the hour</span>
             </div>
           );
         })}
@@ -846,11 +848,13 @@ function MonthGrid({
                     className="cal-month-pick"
                     aria-pressed={(chosen ?? now) === day}
                     aria-current={day === now ? "date" : undefined}
-                    aria-label={`${Number(day.slice(8))}, ${fullDay(day)}: ${total === 0 ? "nothing" : count(total, "item", "items")}`}
                     onClick={() => onChoose(day)}
                   >
+                    {/* The name is what shows —the day's number and what it holds— with the rest said after it. */}
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
+                    <span className="sr-only">, {fullDay(day)}: </span>
                     <span className="cal-month-count">{total > 0 ? total : ""}</span>
+                    <span className="sr-only">{total === 0 ? "nothing" : new Intl.PluralRules(LOCALE).select(total) === "one" ? " item" : " items"}</span>
                   </button>
                 </div>
               );
@@ -860,7 +864,6 @@ function MonthGrid({
               <div
                 key={day}
                 role="gridcell"
-                aria-label={fullDay(day)}
                 className="cal-month-cell"
                 data-day={day}
                 data-outside={day.slice(0, 7) !== month ? "" : undefined}
@@ -869,6 +872,7 @@ function MonthGrid({
                 {...dropOn(day)}
               >
                 <span className="cal-month-num">{Number(day.slice(8))}</span>
+                <span className="sr-only">, {fullDay(day)}</span>
                 <div className="cal-month-items">
                   {shown}
                   {total > shown.length && (

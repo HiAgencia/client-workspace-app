@@ -743,3 +743,13 @@
     border: 1px solid CanvasText;
   }
 }
+
+/* The words of a linked row take the accent with the row's hover, through their intermediate values. */
+.cal-linked-open .t-value {
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+@media (hover: hover) {
+  .cal-linked-open:hover .t-value {
+    transition-duration: var(--dur-hover);
+  }
+}
