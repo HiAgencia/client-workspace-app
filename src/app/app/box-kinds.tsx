@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useMemo, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
@@ -368,8 +368,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
               data-day={day}
               aria-pressed={day === chosen}
               aria-current={day === now ? "date" : undefined}
-              aria-label={`${shown}, ${count(many, "event", "events")}`}
-              aria-description={longDay(day)}
+              aria-label={`${shown}, ${longDay(day)}, ${count(many, "event", "events")}`}
               data-over={over === day || undefined}
               onClick={() => setChosen(day)}
               onDragOver={(event) => {
@@ -381,7 +380,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
               onDragLeave={() => setOver((value) => (value === day ? null : value))}
               onDrop={(event) => onDrop(event, day)}
             >
-              <span className="week-name">{shown.split(" ")[0]}</span>
+              <span className="week-name">{shown.split(" ")[0]}</span>{" "}
               <span className="week-number">{date.getDate()}</span>
               <span className="week-mark" data-some={many > 0 || undefined} aria-hidden="true" />
             </button>
