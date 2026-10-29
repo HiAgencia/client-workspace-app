@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import type { Db } from "@/lib/db/client";
 import type { Database } from "@/lib/db/types";
+import { resetDemo } from "@/lib/demo-seed";
 
 export type { Db };
 
-export type DisposableUser = { id: string; email: string; client: Db };
+export type DisposableUser = { id: string; email: string; client: Db; pooled?: string };
 
 
 export function requireEnv(name: string): string {
@@ -58,23 +62,111 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
 
 
 
+
+
+const POOL_FILE = join(tmpdir(), "cw-demo-pool.json");
+const POOL_LOCK = join(tmpdir(), "cw-demo-pool.lock");
+
+type Pool = Record<string, { id: string; refreshToken: string }>;
+
+const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+
+
+async function withPoolLock<T>(fn: () => T): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      mkdirSync(POOL_LOCK);
+      break;
+    } catch {
+      try {
+        if (Date.now() - statSync(POOL_LOCK).mtimeMs > 20_000) rmSync(POOL_LOCK, { recursive: true, force: true });
+      } catch {
+        
+      }
+      if (attempt > 1200) throw new Error("the demo pool's lock was never released");
+      await wait(50);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    rmSync(POOL_LOCK, { recursive: true, force: true });
+  }
+}
+
+function readPool(): Pool {
+  try {
+    const read = JSON.parse(readFileSync(POOL_FILE, "utf8"));
+    return read && typeof read === "object" ? (read as Pool) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePool(pool: Pool): void {
+  writeFileSync(POOL_FILE, JSON.stringify(pool, null, 2));
+}
+
+async function remember(label: string, session: { id: string; refreshToken: string }): Promise<void> {
+  await withPoolLock(() => {
+    writePool({ ...readPool(), [label]: session });
+  });
+}
+
+async function forget(label: string): Promise<void> {
+  await withPoolLock(() => {
+    const pool = readPool();
+    delete pool[label];
+    writePool(pool);
+  });
+}
+
+
+
+
 export async function createAnonymousUser(label: string): Promise<DisposableUser> {
   const client = publicClient();
-  const signedIn = await client.auth.signInAnonymously();
-  if (signedIn.error || !signedIn.data.user) {
-    throw new Error(`could not open a demo session for ${label}: ${signedIn.error?.message ?? "no user returned"}`);
+  const kept = await withPoolLock(() => readPool()[label]);
+  let id: string | undefined;
+  let refreshToken: string | undefined;
+  if (kept) {
+    
+    
+    const renewed = await client.auth.refreshSession({ refresh_token: kept.refreshToken });
+    if (!renewed.error && renewed.data.session) {
+      id = renewed.data.user?.id ?? kept.id;
+      refreshToken = renewed.data.session.refresh_token;
+    } else {
+      await forget(label);
+      await serviceClient().auth.admin.deleteUser(kept.id);
+    }
   }
-  return { id: signedIn.data.user.id, email: `demo session ${label}`, client };
+  if (!id || !refreshToken) {
+    const opened = await client.auth.signInAnonymously();
+    if (opened.error || !opened.data.user || !opened.data.session) {
+      throw new Error(`could not open a demo session for ${label}: ${opened.error?.message ?? "no session returned"}`);
+    }
+    id = opened.data.user.id;
+    refreshToken = opened.data.session.refresh_token;
+  }
+  await remember(label, { id, refreshToken });
+  await resetDemo(client);
+  return { id, email: `demo session ${label}`, client, pooled: label };
 }
+
 
 
 export async function deleteDisposableUsers(users: Array<DisposableUser | undefined>): Promise<void> {
   const admin = serviceClient();
+  const clearing = process.env.DEMO_POOL_LIMPIAR === "1";
   const failures: string[] = [];
   for (const user of users) {
     if (!user) continue;
+    if (user.pooled && !clearing) continue;
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) failures.push(`${user.email}: ${error.message}`);
+    if (user.pooled && !error) await forget(user.pooled);
   }
   if (failures.length > 0) throw new Error(`test users left behind: ${failures.join("; ")}`);
 }

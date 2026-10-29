@@ -397,6 +397,15 @@ export async function seedDemo(db: Db, today: string, zone?: string): Promise<{ 
 
 
 
+export async function resetDemo(db: Db): Promise<{ reset: boolean }> {
+  const { data, error } = await db.rpc("reset_demo");
+  if (error) throw new Error(`demo reset: ${error.message}`);
+  return { reset: data === true };
+}
+
+
+
+
 export async function settleDemoTokens(
   service: Db,
   ownerId: string,
