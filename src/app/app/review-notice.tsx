@@ -66,9 +66,10 @@ export function reviewSentence(actions: ReviewAction[]): string {
 
 
 
+
 export function reviewNotes(review: { skipped?: Review["skipped"]; failures?: string[] }): string[] {
   const notes: string[] = [];
-  if (review.skipped === "running") notes.push("The daily review is already running in another tab: what it does shows in Activity.");
+  if (review.skipped === "running") notes.push("The daily review is running. What it does shows in Activity.");
   const failures = review.failures ?? [];
   if (failures.length > 0) {
     const steps = plural.select(failures.length) === "one" ? "1 step" : `${failures.length} steps`;
@@ -156,6 +157,8 @@ export function ReviewNotice() {
   
   const lastDay = useRef<string | null>(null);
   const asking = useRef(false);
+  
+  const saidRunning = useRef<string | null>(null);
 
   useEffect(() => {
     async function ask() {
@@ -197,8 +200,17 @@ export function ReviewNotice() {
               : `The daily review did not run. ${asSentence(answer.message || "The server refused it")}`;
         return notify({ text: `${cause} It runs again the next time you open the workspace.`, tone: "error" });
       }
-      localStorage.setItem(ASKED_KEY, mark);
       const review = answer.review;
+      if (review.skipped === "running") {
+        
+        
+        lastDay.current = null;
+        if (saidRunning.current === day) return;
+        saidRunning.current = day;
+        await afterTheLoad();
+        return notify({ text: reviewNotes(review).join(" "), tone: "status", quiet: true, lasts: 12000 });
+      }
+      localStorage.setItem(ASKED_KEY, mark);
       
       const actions = review.ran ? review.actions.filter((action) => !action.undoneAt) : [];
       const notes = reviewNotes(review);
