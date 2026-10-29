@@ -434,7 +434,7 @@ Every writing route demands this site's `Origin` and a bounded JSON body.
    `task` its action carries (no read per task), once the page's boards entered and played their entrance and no dialog
    is open; it leaves the focus where it is. Its «Undo» undoes each action, what it completed first, through
    `POST /api/review/actions/<id>/undo`. The other answers are said in words: steps that failed (`failures`, with how
-   many, and that asking in the chat tries them again), a run another tab is running (`skipped: "running"`), the day's
+   many, and that asking in the chat tries them again), a run that is running (`skipped: "running"`: said once, the day not remembered, and asked again when the tab is looked at again, so a run cut short is picked up), the day's
    limit (429 `cap`: the server's own sentence, which says which limit and when it resets; the day is then remembered),
    and a run that did not run or stopped (its cause once —stopped before it finished, not reached, or a refusal's
    reason— and once that it runs again the next time the workspace opens: not remembered, so a stopped run is picked up

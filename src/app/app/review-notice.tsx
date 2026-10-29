@@ -12,7 +12,7 @@ import { useWorkspace } from "./workspace";
 // second call with that run, so this browser also remembers the day it asked for and does not ask again. A tab left
 // open asks again when it is looked at on a new day. When the run did something, one sentence says so with its «Undo»,
 // once the page has entered and no dialog is open over it; what it did also shows in the Activity box, which reads
-// again. A run that stopped, that hit the day's limit, that another tab is running, or that could not do every step says
+// again. A run that stopped, that hit the day's limit, that is still running, or that could not do every step says
 // so in words.
 
 type ActionTask = { id: string; title: string; nodeId: string | null; path: string | null; status: string } | null;
@@ -64,11 +64,12 @@ export function reviewSentence(actions: ReviewAction[]): string {
   return closed(`The daily review read the mail of ${read.length} tasks`);
 }
 
-// The steps a finished run could not do, and that another tab is running it: the same words in the notice and in the
-// chat. A step that failed is not tried again by the day's own run; asking for the review in the chat runs it anew.
+// The steps a finished run could not do, and that the review is running: the same words in the notice and in the chat.
+// A step that failed is not tried again by the day's own run; asking for the review in the chat runs it anew. «Running»
+// says only that: the run may be another call's, or one cut short that the server has not yet taken as stopped.
 export function reviewNotes(review: { skipped?: Review["skipped"]; failures?: string[] }): string[] {
   const notes: string[] = [];
-  if (review.skipped === "running") notes.push("The daily review is already running in another tab: what it does shows in Activity.");
+  if (review.skipped === "running") notes.push("The daily review is running. What it does shows in Activity.");
   const failures = review.failures ?? [];
   if (failures.length > 0) {
     const steps = plural.select(failures.length) === "one" ? "1 step" : `${failures.length} steps`;
@@ -156,6 +157,8 @@ export function ReviewNotice() {
   // The day this tab last asked for (or decided it had nothing to ask), and whether a call is on its way.
   const lastDay = useRef<string | null>(null);
   const asking = useRef(false);
+  // The day this tab already said the review is running, so looking again while it runs does not say it twice.
+  const saidRunning = useRef<string | null>(null);
 
   useEffect(() => {
     async function ask() {
@@ -197,8 +200,17 @@ export function ReviewNotice() {
               : `The daily review did not run. ${asSentence(answer.message || "The server refused it")}`;
         return notify({ text: `${cause} It runs again the next time you open the workspace.`, tone: "error" });
       }
-      localStorage.setItem(ASKED_KEY, mark);
       const review = answer.review;
+      if (review.skipped === "running") {
+        // Not remembered: a run that is still going —or one cut short that the server has not yet taken as stopped— is
+        // asked about again when the tab is looked at again, and the day's run is picked up then.
+        lastDay.current = null;
+        if (saidRunning.current === day) return;
+        saidRunning.current = day;
+        await afterTheLoad();
+        return notify({ text: reviewNotes(review).join(" "), tone: "status", quiet: true, lasts: 12000 });
+      }
+      localStorage.setItem(ASKED_KEY, mark);
       // Only the run this visit started speaks of what it did; one that already ran today said it then, and lives in Activity.
       const actions = review.ran ? review.actions.filter((action) => !action.undoneAt) : [];
       const notes = reviewNotes(review);

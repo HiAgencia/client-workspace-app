@@ -361,7 +361,7 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
 
 // What «Review my day» did: one card per task it touched, named by the task each action carries, with the line that
 // decided it and its undo —what it completed opens again first, then the mail's state goes back, through the review's
-// own route—. A run that could not do everything, that another tab is running, or that hit the day's limit says so.
+// own route—. A run that could not do everything, that is still running, or that hit the day's limit says so.
 function ReviewCards({ output }: { output: ReviewOutput }) {
   const { saving } = useWorkspace();
   const [undone, setUndone] = useState<Record<string, boolean>>({});
