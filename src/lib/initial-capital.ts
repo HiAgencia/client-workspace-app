@@ -2,10 +2,15 @@
 
 
 
+
+
 const ADDRESS = /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+)/i;
 
+const BRAND = /^\p{Ll}+\p{Lu}/u;
+
 function capitalAt(text: string, index: number): string {
-  if (ADDRESS.test(text.slice(index))) return text;
+  const rest = text.slice(index);
+  if (ADDRESS.test(rest) || BRAND.test(rest)) return text;
   const letter = String.fromCodePoint(text.codePointAt(index)!);
   const capital = letter.toUpperCase();
   
