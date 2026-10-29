@@ -23,6 +23,16 @@ describe("the initial capital", () => {
     expect(withInitialCapital("")).toBe("");
   });
 
+  it("keeps a brand that already carries a capital after its first letter as it was written", () => {
+    expect(withInitialCapital("iOS release checklist")).toBe("iOS release checklist");
+    expect(withInitialCapital("eBay listing for the client")).toBe("eBay listing for the client");
+    expect(withInitialCapital("macOS build notes")).toBe("macOS build notes");
+    expect(withInitialCapital("[iOS build](https://code.example/ios)")).toBe("[iOS build](https://code.example/ios)");
+    expect(withInitialCapitalHtml("<p>iOS release notes</p>")).toBe("<p>iOS release notes</p>");
+    // A word with no capital past its first letter is no brand: it takes its initial capital like any other.
+    expect(withInitialCapital("npm run dev fails")).toBe("Npm run dev fails");
+  });
+
   it("in a body, the first letter of its text, past its tags and its entities", () => {
     expect(withInitialCapitalHtml("<p>met the client today</p><p>notes</p>")).toBe("<p>Met the client today</p><p>notes</p>");
     expect(withInitialCapitalHtml('<p><a href="https://x.example">the brief</a> is in</p>')).toBe('<p><a href="https://x.example">The brief</a> is in</p>');
