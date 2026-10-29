@@ -92,7 +92,9 @@ function documentFor(message: MailContent, mode: Theme, images: boolean): { doc:
     "form-action 'none'",
     "base-uri 'none'",
   ].join("; ");
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><base target="_blank"><style>
+  // The document of a message declares its language like the product's own does, so a reader knows how to pronounce it.
+  const lang = LOCALE.split("-")[0];
+  const doc = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><base target="_blank"><style>
 :root{color-scheme:${scheme};background:Canvas;color:CanvasText}
 html,body{margin:0}
 body{padding:16px;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;overflow-wrap:break-word}

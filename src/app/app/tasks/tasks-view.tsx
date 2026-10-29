@@ -50,6 +50,9 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   }
 
   const due = data ? data.groups.overdue.count + data.groups.today.count : null;
+  // What the page lists, and of it what is due: two figures with their own words, so the page's number and the box's
+  // —which counts only what has a date— never read as the same thing told twice.
+  const open = data ? data.groups.overdue.count + data.groups.today.count + data.groups.upcoming.count + data.groups.noDate.count : null;
   const placeId = place.kind === "node" ? place.id : null;
 
   return (
@@ -57,7 +60,16 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
       <div className="page page-tasks" data-tasks-page data-layout={layout}>
         <PageHeader
           title="Tasks"
-          count={due === null ? <span className="page-count-wait" aria-hidden="true" /> : due === 0 ? "Nothing overdue or due today" : `${count(due, "task", "tasks")} overdue or due today`}
+          count={
+            open === null ? (
+              <span className="page-count-wait" aria-hidden="true" />
+            ) : (
+              <>
+                {count(open, "open task", "open tasks")}
+                {due === 0 ? " · nothing overdue or due today" : ` · ${count(due ?? 0, "task", "tasks")} overdue or due today`}
+              </>
+            )
+          }
           filters={<TasksPlaceFilter place={place} onChange={(next) => set({ place: placeValue(next) })} tree={tree} now={now} />}
           layout={{ value: layout, onChange: chooseLayout }}
           chat
@@ -72,7 +84,11 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
             />
           }
         />
-        <section className="tasks-page card" aria-label="Every task" aria-busy={!data || stale || undefined}>
+        <section className="tasks-page card" aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
+          {/* The groups below are h3: the page names what it holds with an h2, so no heading level is skipped. */}
+          <h2 id="tasks-page-title" className="sr-only">
+            Every task
+          </h2>
           {!data ? (
             error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading every task…" rows={5} />
           ) : (
