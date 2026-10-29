@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { prepare, rank } from "@/lib/fuzzy";
+import { inlinePlain } from "@/lib/inline-links";
 import { currentTheme, setTheme } from "@/lib/theme";
 import { tool, type Item, type TreeNode } from "./client-api";
 import { requestFocus, type FocusTarget } from "./focus-request";
@@ -239,7 +240,8 @@ function EntryView({ entry }: { entry: Entry }) {
           {item.status === "done" ? "Done" : TYPE_NAMES[item.type]}
         </span>
         <span className="stack palette-text">
-          <span className="t-value">{item.title}</span>
+          {/* A title keeps its link as `[words](address)`: the palette paints the words, like every other list. */}
+          <span className="t-value">{inlinePlain(item.title)}</span>
           <span className="t-meta">{item.nodePath}</span>
         </span>
       </>
