@@ -576,7 +576,9 @@ textarea.field {
   font-family: var(--font-text);
   font-size: var(--text-body);
   font-weight: 500;
-  outline: none;
+  /* No `outline: none` here: this rule is outside a layer and would beat the focus ring of `@layer base`, which is the
+     only thing that says where the keyboard is in a list of options (SC 2.4.7). The marked option's fill is not enough:
+     it reads 1.23:1 in the light theme. */
   user-select: none;
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
     box-shadow var(--dur-hover-out) var(--ease-hover-out);

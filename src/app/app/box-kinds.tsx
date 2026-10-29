@@ -273,7 +273,7 @@ export function NoDateBoxContent({ read, placeId, showPlace, pageNode }: { read:
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
       {error && <BoxFailed what="The tasks without a date" message={error} kept onRetry={retry} />}
       <TaskList group="noDate" label="No date" tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
-      {group.tasks.length === 0 && <p className="t-help group-empty">Every task has a date. One added here waits without one, in the order you give it.</p>}
+      {group.tasks.length === 0 && <p className="t-help group-empty">Nothing waits without a date. One added here stays without one, in the order you give it.</p>}
       <QuickAddInline day={null} placeId={placeId} />
     </div>
   );
@@ -824,7 +824,7 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const byOther = (revision: Revision) => revision.source !== who || (who === "agent" && revision.agentLabel !== label);
   if (kind === "created") {
     // Every change since it was added leaves a version: one by someone else is theirs to keep.
-    if (versions.revisions.some(byOther)) return { ok: false, message: `${name} was changed after it was added, so it stays: delete it from its «More» if it should go.` };
+    if (versions.revisions.some(byOther)) return { ok: false, message: `${name} was changed after it was added, so it stays: delete it from its "More" if it should go.` };
     return tool("delete_item", { id: item.id });
   }
   // The version this change left: the newest one made by whoever made it. What came after it says what it changed.
@@ -850,8 +850,8 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const fields = (["title", "body", "status", "priority", "due_on", "due_time", "parent_item_id"] as const).filter((field) => !same(field, before, after));
   if (fields.length === 0) return { ok: false, message: `${name} reads as it did before this change: there is nothing to undo.` };
   const touched = fields.filter((field) => !same(field, after, now));
-  if (touched.length > 0) return { ok: false, message: `${name} was changed again since, so it stays as it is: open it and go back from its «Versions».` };
-  if (fields.includes("parent_item_id")) return { ok: false, message: `This change moved ${name}: open it and go back from its «Versions».` };
+  if (touched.length > 0) return { ok: false, message: `${name} was changed again since, so it stays as it is: open it and go back from its "Versions".` };
+  if (fields.includes("parent_item_id")) return { ok: false, message: `This change moved ${name}: open it and go back from its "Versions".` };
   const note = item.type !== "task";
   const input: Record<string, unknown> = { id: item.id };
   if (fields.includes("title") && !note) input.title = before.title;

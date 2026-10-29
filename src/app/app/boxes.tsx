@@ -151,7 +151,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   }
 
   function hide(id: string, name: string) {
-    commit({ ...layout, hidden: [...layout.hidden, id] }, `${name} is hidden. «More» of the page, «Customize», shows it again.`);
+    commit({ ...layout, hidden: [...layout.hidden, id] }, `${name} is hidden. "More" of the page, "Customize", shows it again.`);
     // The box held the focus: it goes to the page's title, the start of what is left.
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true }));
   }
@@ -239,6 +239,21 @@ function useFinePointer(): boolean {
     },
     () => window.matchMedia(fineQuery).matches,
     () => false,
+  );
+}
+
+// The board is two columns where the window is wide and one under 40rem (`boxes.css`): there the «other column» does not
+// exist, and the box's action says what it really does.
+const wideQuery = "(width >= 40rem)";
+function useWideBoard(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      const query = window.matchMedia(wideQuery);
+      query.addEventListener("change", change);
+      return () => query.removeEventListener("change", change);
+    },
+    () => window.matchMedia(wideQuery).matches,
+    () => true,
   );
 }
 
@@ -440,12 +455,13 @@ function Box({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const titleId = `box-${spec.id}-title`;
+  const wide = useWideBoard();
   const moves: MenuEntry[] = fixed
     ? []
     : [
         { kind: "action", label: "Move up", disabled: isFirst, detail: isFirst ? "First already" : undefined, onSelect: () => board.step(spec.id, -1, spec.title) },
         { kind: "action", label: "Move down", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.step(spec.id, 1, spec.title) },
-        { kind: "action", label: column === 0 ? "Move to the second column" : "Move to the first column", onSelect: () => board.otherColumn(spec.id, spec.title) },
+        { kind: "action", label: wide ? (column === 0 ? "Move to the second column" : "Move to the first column") : "Move to the end", onSelect: () => board.otherColumn(spec.id, spec.title) },
         { kind: "separator" },
       ];
   const entries: MenuEntry[] = [...(spec.menu?.length ? [...spec.menu, { kind: "separator" } as const] : []), ...moves, { kind: "action", label: "Hide this box", onSelect: () => board.hide(spec.id, spec.title) }];

@@ -54,7 +54,7 @@ export default function TrashPage() {
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-settings">
-        <PageHeader title="Trash" count={items === null ? undefined : count(items.length, "deleted item", "deleted items")} />
+        <PageHeader title="Trash" count={items === null || items.length === 0 ? undefined : count(items.length, "deleted item", "deleted items")} />
         <section className="box settings-box" aria-labelledby="trash-title" data-settings="trash" data-shown="">
           <header className="box-head">
             <h2 id="trash-title" className="t-title box-title">

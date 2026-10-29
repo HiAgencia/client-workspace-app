@@ -460,7 +460,7 @@ function Calendar() {
               {!stale && events.length === 0 && tasks.length === 0 && (
                 <p className="t-help cal-empty">
                   {place === ALL && account === ALL
-                    ? `Nothing in this ${view === "week" ? "week" : "month"}: no events and no tasks due. «New event» adds one.`
+                    ? `Nothing in this ${view === "week" ? "week" : "month"}: no events and no tasks due. "New event" adds one.`
                     : `Nothing in this ${view === "week" ? "week" : "month"} for the chosen place and account.`}
                 </p>
               )}
@@ -1222,7 +1222,7 @@ function EventDetail({ event, tree, tasks, onClose }: { event: CalEvent | null; 
                 <span className="skeleton" aria-label="Reading the tasks of the event" />
               )
             ) : items.length === 0 ? (
-              <p className="t-help">No task is linked yet: «Link…» puts one in this event.</p>
+              <p className="t-help">No task is linked yet: &ldquo;Link…&rdquo; puts one in this event.</p>
             ) : (
               <ul className="cal-linked-list">
                 {items.map((item) => (

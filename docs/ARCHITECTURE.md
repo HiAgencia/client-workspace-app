@@ -365,8 +365,9 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    its widest measure (`--content-w`).
 3. **The boxes** (`src/app/app/boxes.tsx`, styled by `src/app/styles/boxes.css`): the Overview and a client's or a
    project's page are boxes the person orders. A box is a surface with its title and its count; its «More» shows with the
-   pointer or the focus (always on a touch screen) and holds the box's own entries, «Move up», «Move down», «Move to the
-   other column», and «Hide this box»; the page's «More» → «Customize» shows the hidden ones again and puts the first
+   pointer or the focus (always on a touch screen) and holds the box's own entries, «Move up», «Move down», the move to the
+   other column —which under 40rem, where the board is one column, says «Move to the end»—, and «Hide this box»; the
+   page's «More» → «Customize» shows the hidden ones again and puts the first
    order back. A box is dragged by its head to another place or to the other column, with no edit mode, and travels when
    it moves. The order is one list read from the first column to the second (a `split` mark between them): two columns
    side by side where the board is wide, one column in that same order where it is not, each box as tall as its content.
