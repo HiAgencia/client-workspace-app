@@ -836,7 +836,7 @@ function MonthGrid({
     <div className="cal-month" role="grid" aria-label={monthTitle(`${month}-01`)} data-narrow={narrow ? "" : undefined}>
       <div className="cal-month-row cal-month-head" role="row">
         {names.map((name) => (
-          <span key={name.long} role="columnheader" className="t-meta cal-month-name" aria-label={name.long}>
+          <span key={name.long} role="columnheader" className="cal-month-name" aria-label={name.long}>
             {name.short}
           </span>
         ))}

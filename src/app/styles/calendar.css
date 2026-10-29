@@ -373,10 +373,16 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
+/* The month's weekday names are a small label of their own, not metadata: they keep the words' values —display family,
+   bold, the metadata size and ink— and declare them here, so the metadata role stays one style everywhere. */
 .cal-month-name {
   padding: 0 0.4rem 0.2rem;
   font-family: var(--font-display);
+  font-size: var(--text-meta);
   font-weight: 650;
+  line-height: 1.4;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .cal-month-cell {
   position: relative;
