@@ -198,7 +198,7 @@ function Mail() {
       <div className="page mail-page">
         <PageHeader
           title="Mail"
-          count={!mail ? "Reading the mail…" : noAccounts ? "No account connected" : unread === 0 ? "Nothing unread" : `${unread} unread`}
+          count={!mail ? "Reading the mail…" : noAccounts ? "No account connected" : `${unread} unread, ${mail.groups.earlier.count + mail.groups.unread.count + mail.groups.forTasks.count} in all`}
           filters={
             mail && !noAccounts ? (
               <>

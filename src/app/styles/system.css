@@ -530,7 +530,6 @@ textarea.field {
   font-family: var(--font-text);
   font-size: var(--text-body);
   font-weight: 500;
-  outline: none;
   user-select: none;
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
     box-shadow var(--dur-hover-out) var(--ease-hover-out);
