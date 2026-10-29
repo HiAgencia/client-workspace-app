@@ -11,7 +11,7 @@ import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
 import { ChatDock, useDocked } from "./chat-panel";
 import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
-import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
+import { dropFocusRequestOutside, hasFocusRequest, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
@@ -218,6 +218,22 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   // A landing asked for another place is dropped once the person is somewhere else.
   useEffect(() => dropFocusRequestOutside(pathname), [pathname]);
+
+  // Changing screen moves the focus to the new title, which the reader announces with its name (SC 2.4.3), unless the
+  // person asked to land on a place inside it (`focus-request`), which does it when that place has its data. The first
+  // load is not a change: the focus stays at the top of the document.
+  const firstScreen = useRef(true);
+  useEffect(() => {
+    if (firstScreen.current) {
+      firstScreen.current = false;
+      return;
+    }
+    if (hasFocusRequest(pathname)) return;
+    const focusTitle = () => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true });
+    focusTitle();
+    const frame = requestAnimationFrame(focusTitle);
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
 
   // A landing asked for from inside the drawer closes it first: a modal holds the focus, and the place behind it could
   // not take it. The request waits for the node's data, so closing here does not lose it.

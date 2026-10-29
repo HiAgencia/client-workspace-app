@@ -43,6 +43,12 @@ export function dropFocusRequestOutside(pathname: string): void {
   if (pending && pathname !== `/app/node/${pending.target.nodeId}`) pending = null;
 }
 
+// Whether a landing is waiting for this address: the shell leaves the focus alone when the person asked for a place
+// inside the page that is arriving, and `land()` puts it there once its data is on screen.
+export function hasFocusRequest(pathname: string): boolean {
+  return pending !== null && pathname === `/app/node/${pending.target.nodeId}`;
+}
+
 export function onFocusRequest(listener: () => void): () => void {
   window.addEventListener(EVENT, listener);
   return () => window.removeEventListener(EVENT, listener);
