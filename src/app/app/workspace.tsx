@@ -11,7 +11,7 @@ import type { PublicConfig } from "@/lib/env";
 import { browserClient } from "@/lib/supabase/browser";
 import { ChatDock, useDocked } from "./chat-panel";
 import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
-import { dropFocusRequestOutside, onFocusRequest } from "./focus-request";
+import { dropFocusRequestOutside, hasFocusRequest, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
@@ -218,6 +218,22 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   
   useEffect(() => dropFocusRequestOutside(pathname), [pathname]);
+
+  
+  
+  
+  const firstScreen = useRef(true);
+  useEffect(() => {
+    if (firstScreen.current) {
+      firstScreen.current = false;
+      return;
+    }
+    if (hasFocusRequest(pathname)) return;
+    const focusTitle = () => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true });
+    focusTitle();
+    const frame = requestAnimationFrame(focusTitle);
+    return () => cancelAnimationFrame(frame);
+  }, [pathname]);
 
   
   

@@ -43,6 +43,12 @@ export function dropFocusRequestOutside(pathname: string): void {
   if (pending && pathname !== `/app/node/${pending.target.nodeId}`) pending = null;
 }
 
+
+
+export function hasFocusRequest(pathname: string): boolean {
+  return pending !== null && pathname === `/app/node/${pending.target.nodeId}`;
+}
+
 export function onFocusRequest(listener: () => void): () => void {
   window.addEventListener(EVENT, listener);
   return () => window.removeEventListener(EVENT, listener);

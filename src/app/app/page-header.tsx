@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { usePiece } from "@/components/ui/use-piece";
+import { PRODUCT_NAME } from "@/lib/product";
 import { cx } from "@/lib/utils";
 import { useWorkspace } from "./workspace";
 
@@ -35,6 +36,29 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, count, trail, filters, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
   const hasTools = Boolean(filters || layout || views || chat || more);
+  const heading = useRef<HTMLHeadingElement>(null);
+  
+  
+  useEffect(() => {
+    const el = heading.current;
+    if (!el) return;
+    const name = () => {
+      const shown = el.textContent?.replace(/\s+/g, " ").trim();
+      const wanted = shown ? `${shown} · ${PRODUCT_NAME}` : "";
+      if (wanted && document.title !== wanted) document.title = wanted;
+    };
+    name();
+    const watchHeading = new MutationObserver(name);
+    watchHeading.observe(el, { childList: true, characterData: true, subtree: true });
+    
+    
+    const watchTitle = new MutationObserver(name);
+    watchTitle.observe(document.head, { childList: true, subtree: true, characterData: true });
+    return () => {
+      watchHeading.disconnect();
+      watchTitle.disconnect();
+    };
+  }, []);
   return (
     <header className={cx("page-header", className)} data-page-header>
       <div className="page-header-text">
@@ -55,7 +79,7 @@ export function PageHeader({ title, count, trail, filters, layout, views, chat, 
             </ol>
           </nav>
         )}
-        <h1 className="t-h1 page-title" tabIndex={-1} data-page-title {...titleProps}>
+        <h1 ref={heading} className="t-h1 page-title" tabIndex={-1} data-page-title {...titleProps}>
           {title}
         </h1>
         {count !== undefined && count !== null && count !== false && <p className="page-count">{count}</p>}
