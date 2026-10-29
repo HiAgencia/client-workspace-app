@@ -222,7 +222,8 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   );
 }
 
-// Renaming: one field with the current name, Enter keeps the new one, Escape leaves it as it was.
+// Renaming: one field with the current name, chosen whole so typing replaces it; Enter keeps the new one, Escape leaves
+// it as it was.
 function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: string; nodeId: string; onClose: () => void }) {
   const { saving } = useWorkspace();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -241,7 +242,7 @@ function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: st
     event.preventDefault();
     const next = value.trim();
     if (!next || next === name) return onClose();
-    if (await saving(post(`/api/nodes/${nodeId}`, { name: next[0].toUpperCase() + next.slice(1) }, "PATCH"))) onClose();
+    if (await saving(post(`/api/nodes/${nodeId}`, { name: next }, "PATCH"))) onClose();
   }
 
   return (
@@ -250,7 +251,7 @@ function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: st
         <h2 id="rename-title" className="t-title">
           Rename
         </h2>
-        <Field autoFocus aria-label="Name" value={value} onChange={(event) => setValue(event.target.value)} />
+        <Field autoFocus aria-label="Name" value={value} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setValue(event.target.value)} />
         <div className="rename-actions">
           <Button size="sm" onClick={onClose}>
             Cancel
