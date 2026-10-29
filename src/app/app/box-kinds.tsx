@@ -264,6 +264,14 @@ export function tasksCount(view: TasksView | null): number | undefined {
 }
 
 
+
+
+export function tasksCountLabel(view: TasksView | null): string | undefined {
+  const dated = tasksCount(view);
+  return dated === undefined ? undefined : `${dated} scheduled`;
+}
+
+
 export function NoDateBoxContent({ read, placeId, showPlace, pageNode }: { read: BoxRead<TasksView>; placeId: string | null; showPlace: boolean; pageNode?: string | null }) {
   const { data, error, stale, retry } = read;
   useBoxSettled(read.settled);

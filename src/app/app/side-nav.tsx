@@ -84,7 +84,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
             <li>
               <Link href="/app/tasks" className="side-link" aria-current={here("/app/tasks")}>
                 <span className="side-link-name">Tasks</span>
-                {due > 0 && <Count value={due} spoken={`${due} overdue or due today`} />}
+                {due > 0 && <Count value={due} unit="due" spoken={`${due} overdue or due today`} />}
               </Link>
             </li>
             <li>
@@ -142,10 +142,14 @@ export function useMac(): boolean {
 }
 
 
-function Count({ value, spoken }: { value: number; spoken: string }) {
+
+function Count({ value, unit, spoken }: { value: number; unit?: string; spoken: string }) {
   return (
     <span className="side-count">
-      <span aria-hidden="true">{value}</span>
+      <span aria-hidden="true">
+        {value}
+        {unit ? ` ${unit}` : ""}
+      </span>
       <span className="sr-only">, {spoken}</span>
     </span>
   );

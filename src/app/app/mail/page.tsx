@@ -11,7 +11,7 @@ import { inlinePlain } from "@/lib/inline-links";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { get, post, tool, type Item, type TreeNode } from "../client-api";
 import { PageHeader } from "../page-header";
-import { AccountFilter, ALL, branchOf, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
+import { AccountFilter, ALL, branchOf, lineOf, MESSAGES, PlaceFilter, placeFromUrl } from "../place-filters";
 import { openTaskDetail, PlaceName, type TaskData } from "../task-row";
 import { useChatScope, useWorkspace } from "../workspace";
 import { MailViewer } from "./mail-viewer";
@@ -202,8 +202,8 @@ function Mail() {
           filters={
             mail && !noAccounts ? (
               <>
-                <PlaceFilter value={place} tree={tree} counts={placeCounts} onChange={(value) => set({ place: value === ALL ? null : value, message: null })} noGeneral />
-                <AccountFilter value={account} accounts={mail.accounts} counts={accountCounts} onChange={(value) => set({ account: value === ALL ? null : value, message: null })} />
+                <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={MESSAGES} onChange={(value) => set({ place: value === ALL ? null : value, message: null })} noGeneral />
+                <AccountFilter value={account} accounts={mail.accounts} counts={accountCounts} unit={MESSAGES} onChange={(value) => set({ account: value === ALL ? null : value, message: null })} />
               </>
             ) : undefined
           }

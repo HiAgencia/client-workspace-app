@@ -16,7 +16,7 @@ import {
   NotesBoxContent,
   SubprojectsBoxContent,
   TasksBoxContent,
-  tasksCount,
+  tasksCountLabel,
   useMailRead,
   useNotesRead,
   useTasksRead,
@@ -181,7 +181,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const tasksBox: BoxSpec = {
     id: "tasks",
     title: "Tasks",
-    count: tasksCount(view),
+    count: tasksCountLabel(view),
     content: <TasksBoxContent read={tasksRead} now={now} place={place} placeId={nodeId} showPlace pageNode={nodeId} layout={layout} allHref={`/app/tasks?place=${nodeId}`} />,
   };
   const boxes: Record<string, BoxSpec> = {

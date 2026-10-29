@@ -439,6 +439,10 @@
     }
   }
 }
+.cal-more-band {
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
 .cal-month[data-narrow] .cal-month-cell {
   min-height: 0;
   padding: 0;
