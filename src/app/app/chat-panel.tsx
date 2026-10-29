@@ -6,9 +6,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
-import { get, post, tool } from "./client-api";
+import { get, post } from "./client-api";
 import { onFocusRequest } from "./focus-request";
+import { quoted, WRITES, type WriteOutput } from "./chat-cards";
+import { asSentence, reviewNotes, type ReviewAction } from "./review-notice";
 import { useWorkspace } from "./workspace";
+import "../styles/chat.css";
 
 // Where the window holds the page and the chat side by side, the chat docks as a column of the page; narrower, it opens
 // as a sheet over the page, a modal with its own close.
@@ -23,17 +26,6 @@ function subscribeDock(onChange: () => void) {
 // Whether the window holds the chat as a column beside the page.
 export function useDocked(): boolean {
   return useSyncExternalStore(subscribeDock, () => window.matchMedia(DOCK_QUERY).matches, () => true);
-}
-
-// The page's "Chat": it opens and closes the chat beside the page, which keeps the conversation of the place. Its words
-// say what the next press does.
-export function ChatToggle() {
-  const { chat } = useWorkspace();
-  return (
-    <Button size="sm" aria-controls={chat.open ? "chat-panel" : undefined} onClick={() => chat.setOpen(!chat.open)} data-chat-toggle={chat.open ? "open" : "closed"}>
-      {chat.open ? "Close the chat" : "Open the chat"}
-    </Button>
-  );
 }
 
 // The chat the page offers, when it is open: docked as a column, or as a sheet where the window is narrow.
@@ -85,23 +77,18 @@ function ChatSheet({ onClose, children }: { onClose: () => void; children: React
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 
-type WriteOutput = {
+type ReviewOutput = {
   ok: boolean;
+  code?: string;
   message?: string;
-  item?: { id: string; title: string; type: string };
-  previous?: { title: string; body: string | null; url: string | null; priority: number | null; dueOn: string | null; status: string };
+  skipped?: "already_ran" | "running" | "off" | null;
+  actions?: ReviewAction[];
+  failures?: string[];
 };
 
-// What the chat did, in the verbs the activity uses for the same things.
-const DONE: Record<string, string> = {
-  create_task: "Added task",
-  add_note: "Added note",
-  add_decision: "Added decision",
-  add_link: "Added link",
-  add_review: "Added item to review",
-  update_item: "Changed",
-  delete_item: "Deleted",
-};
+// The chat's fixed suggestion over the whole workspace: the daily review, asked for now. A client's or a project's chat
+// does not offer it, because the review reads everything and runs only in the workspace's own conversation.
+const REVIEW_MY_DAY = "Review my day";
 
 // The chat of the open place —a node, or the whole workspace on the Overview—: one card the height of the window. It loads
 // the stored conversation first, then hands it to the live chat; the conversation scrolls inside the card and the message
@@ -131,7 +118,7 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
           <p className="t-meta">{reach}</p>
         </div>
         <Button size="sm" onClick={onClose} data-chat-close>
-          Close
+          Close chat
         </Button>
       </div>
       {initial === null ? (
@@ -192,6 +179,14 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
     setImage(null);
   }
 
+  // A suggestion is sent as the person's own words, so the conversation reads what was asked.
+  function suggest(text: string) {
+    if (busy) return;
+    clearError();
+    setNotice(null);
+    void sendMessage({ role: "user", parts: [{ type: "text", text }] });
+  }
+
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
     // Enter sends; Shift+Enter starts a new line.
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -215,7 +210,7 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
         {messages.length === 0 && (
           <li className="inline-note">
             {nodeId === null
-              ? "Ask what is pending across every client and project, or to add a task to one of them by its name. Attach an image of a message and it turns it into tasks."
+              ? "Ask what is pending across every client and project, to add a task to one of them by its name, or to review your day against the mail your tasks wait for. Attach an image of a message and it turns it into tasks."
               : "Ask it to add a task, record a decision, or tell you what is pending here. Attach an image of a message and it turns it into tasks."}
           </li>
         )}
@@ -240,6 +235,9 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
                     Image: {part.filename ?? "attached"}
                   </p>
                 );
+              }
+              if (part.type === "tool-run_daily_review" && "state" in part && part.state === "output-available") {
+                return <ReviewCards key={index} output={part.output as ReviewOutput} />;
               }
               if (part.type.startsWith("tool-") && "state" in part && part.state === "output-available") {
                 return <ActionCard key={index} toolName={part.type.slice(5)} output={part.output as WriteOutput} />;
@@ -280,6 +278,13 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
             </Button>
           </p>
         )}
+        {nodeId === null && (
+          <div className="chat-suggestions" role="group" aria-label="Suggestions">
+            <Button size="sm" className="chat-suggestion"disabled={busy} onClick={() => suggest(REVIEW_MY_DAY)} data-chat-suggestion="review">
+              {REVIEW_MY_DAY}
+            </Button>
+          </div>
+        )}
         <div className="compose-line">
           <TextArea
             aria-label="Message to the assistant"
@@ -317,54 +322,108 @@ function readable(message: string): string {
   }
 }
 
-// What the chat did, with its undo: a creation is deleted, a change gets its previous values back, a deletion is
-// restored. Undoing goes through the same tools as everything else. The card keeps its box when it turns into
-// "Undone", so nothing beside it moves.
+// What the chat did, with its undo, from what each tool's output already says —its item, or the title it returns—, so
+// a card never reads anything to say what it is. Undoing goes through the same tools as everything else. The card keeps
+// its box when it turns into «Undone», so nothing beside it moves.
 function ActionCard({ toolName, output }: { toolName: string; output: WriteOutput }) {
   const { saving } = useWorkspace();
   const [undone, setUndone] = useState(false);
-  if (!(toolName in DONE)) return null;
-  if (!output?.ok || !output.item) {
+  if (!(toolName in WRITES)) return null;
+  if (!output?.ok) {
     return (
       <p className="action-card t-help" data-card="failed">
         Could not {toolName.replace(/_/g, " ")}: {output?.message}
       </p>
     );
   }
-  const item = output.item;
+  const card = WRITES[toolName](output);
+  if (!card) return null;
 
   async function undo() {
-    let request;
-    if (toolName === "delete_item") request = post(`/api/items/${item.id}/restore`, {});
-    else if (toolName === "update_item" && output.previous) {
-      const p = output.previous;
-      // Every replaced value goes back, a link that was empty included (only a link item cannot lose its address).
-      request = tool("update_item", {
-        id: item.id,
-        title: p.title,
-        notes: p.body,
-        priority: p.priority,
-        dueOn: p.dueOn,
-        status: p.status,
-        ...(item.type === "link" && !p.url ? {} : { url: p.url }),
-      });
-    } else request = tool("delete_item", { id: item.id });
-    if (await saving(request)) setUndone(true);
+    if (card?.undo && (await saving(card.undo()))) setUndone(true);
   }
 
   return (
     <div className="action-card" data-card={toolName}>
-      <span className="t-value action-text">
-        {DONE[toolName]} “{item.title}”
-      </span>
+      <span className="t-value action-text">{card.what}</span>
       {undone ? (
         <span className="pill">Undone</span>
-      ) : (
-        <Button size="sm" onClick={() => void undo()}>
+      ) : card.undo ? (
+        <Button size="sm" onClick={() => void undo()} aria-label={`Undo: ${card.what}`}>
           Undo
         </Button>
+      ) : (
+        card.why && <span className="t-meta action-sentence">{card.why}</span>
       )}
     </div>
+  );
+}
+
+// What «Review my day» did: one card per task it touched, named by the task each action carries, with the line that
+// decided it and its undo —what it completed opens again first, then the mail's state goes back, through the review's
+// own route—. A run that could not do everything, that another tab is running, or that hit the day's limit says so.
+function ReviewCards({ output }: { output: ReviewOutput }) {
+  const { saving } = useWorkspace();
+  const [undone, setUndone] = useState<Record<string, boolean>>({});
+  if (!output?.ok) {
+    return (
+      <p className="action-card t-help" data-card="failed">
+        {output?.code === "cap"
+          ? asSentence(output.message || "The daily review reached its limit for today")
+          : output?.code === "internal"
+            ? "The daily review stopped before it finished. Ask again to run it."
+            : `The daily review did not run. ${asSentence(output?.message || "The server refused it")}`}
+      </p>
+    );
+  }
+  const actions = output.actions ?? [];
+  const tasks = [...new Map(actions.map((action) => [action.taskId, action.task])).entries()];
+  const notes = reviewNotes(output);
+
+  return (
+    <>
+      {tasks.map(([taskId, task]) => {
+        const own = actions.filter((action) => action.taskId === taskId);
+        const completed = own.some((action) => action.kind === "complete");
+        // A task the run touched that no longer reads (deleted since) is said as such, without opening anything.
+        // A card stored before actions carried their task names none.
+        const named = task ? quoted(task.title) : task === null ? "a task that is no longer there" : "a task";
+        const what = `${completed ? "Completed" : "Wrote the mail's state of"} ${named}`;
+        const sentence = own.map((action) => action.after.sentence).find((value): value is string => typeof value === "string");
+        const done = undone[taskId] || own.every((action) => action.undoneAt);
+        async function undo() {
+          const open = own.filter((action) => !action.undoneAt).sort((a, b) => Number(b.kind === "complete") - Number(a.kind === "complete"));
+          const request = (async () => {
+            for (const action of open) {
+              const answer = await post(`/api/review/actions/${action.id}/undo`, {});
+              if (!answer.ok) return answer;
+            }
+            return { ok: true };
+          })();
+          if (await saving(request)) setUndone((known) => ({ ...known, [taskId]: true }));
+        }
+        return (
+          <div key={taskId} className="action-card action-card-review" data-card="run_daily_review">
+            <span className="stack action-text">
+              <span className="t-value">{what}</span>
+              {sentence && <span className="t-meta action-sentence">{sentence}</span>}
+            </span>
+            {done ? (
+              <span className="pill">Undone</span>
+            ) : (
+              <Button size="sm" onClick={() => void undo()} aria-label={`Undo: ${what}`}>
+                Undo
+              </Button>
+            )}
+          </div>
+        );
+      })}
+      {notes.map((note) => (
+        <p key={note} className="action-card t-help" data-card="run_daily_review_note">
+          {note}
+        </p>
+      ))}
+    </>
   );
 }
 

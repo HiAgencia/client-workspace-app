@@ -122,6 +122,110 @@ export type Database = {
           },
         ]
       }
+      daily_reviews: {
+        Row: {
+          created_at: string
+          day: string
+          failures: number
+          finished_at: string | null
+          id: string
+          instruction: string
+          owner_id: string
+          provider: string
+          requested: boolean
+          task_ids: string[]
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          failures?: number
+          finished_at?: string | null
+          id?: string
+          instruction: string
+          owner_id?: string
+          provider: string
+          requested?: boolean
+          task_ids?: string[]
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          failures?: number
+          finished_at?: string | null
+          id?: string
+          instruction?: string
+          owner_id?: string
+          provider?: string
+          requested?: boolean
+          task_ids?: string[]
+        }
+        Relationships: []
+      }
+      demo_mail: {
+        Row: {
+          account_id: string
+          created_at: string
+          from_email: string
+          from_name: string | null
+          gmail_id: string
+          html: string | null
+          id: string
+          important: boolean
+          owner_id: string
+          received_at: string
+          snippet: string
+          subject: string
+          text_body: string | null
+          thread_id: string
+          to_emails: string[]
+          unread: boolean
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          from_email: string
+          from_name?: string | null
+          gmail_id?: string
+          html?: string | null
+          id?: string
+          important?: boolean
+          owner_id: string
+          received_at: string
+          snippet?: string
+          subject?: string
+          text_body?: string | null
+          thread_id?: string
+          to_emails?: string[]
+          unread?: boolean
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          from_email?: string
+          from_name?: string | null
+          gmail_id?: string
+          html?: string | null
+          id?: string
+          important?: boolean
+          owner_id?: string
+          received_at?: string
+          snippet?: string
+          subject?: string
+          text_body?: string | null
+          thread_id?: string
+          to_emails?: string[]
+          unread?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demo_mail_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           agent_label: string | null
@@ -134,7 +238,8 @@ export type Database = {
           ends_at: string | null
           ends_on: string | null
           id: string
-          node_id: string
+          node_id: string | null
+          owner_id: string
           source: Database["public"]["Enums"]["item_source"]
           starts_at: string | null
           starts_on: string | null
@@ -152,7 +257,8 @@ export type Database = {
           ends_at?: string | null
           ends_on?: string | null
           id?: string
-          node_id: string
+          node_id?: string | null
+          owner_id?: string
           source?: Database["public"]["Enums"]["item_source"]
           starts_at?: string | null
           starts_on?: string | null
@@ -170,7 +276,8 @@ export type Database = {
           ends_at?: string | null
           ends_on?: string | null
           id?: string
-          node_id?: string
+          node_id?: string | null
+          owner_id?: string
           source?: Database["public"]["Enums"]["item_source"]
           starts_at?: string | null
           starts_on?: string | null
@@ -179,11 +286,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "events_node_id_fkey"
-            columns: ["node_id"]
+            foreignKeyName: "events_node_same_owner"
+            columns: ["node_id", "owner_id"]
             isOneToOne: false
             referencedRelation: "nodes"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "owner_id"]
           },
         ]
       }
@@ -288,16 +395,18 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           due_on: string | null
+          due_time: string | null
           id: string
-          node_id: string
+          node_id: string | null
+          owner_id: string
           parent_item_id: string | null
+          position: number
           priority: number | null
           source: Database["public"]["Enums"]["item_source"]
           status: Database["public"]["Enums"]["item_status"]
           title: string
           type: Database["public"]["Enums"]["item_type"]
           updated_at: string
-          url: string | null
         }
         Insert: {
           agent_label?: string | null
@@ -308,16 +417,18 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           due_on?: string | null
+          due_time?: string | null
           id?: string
-          node_id: string
+          node_id?: string | null
+          owner_id?: string
           parent_item_id?: string | null
+          position?: number
           priority?: number | null
           source?: Database["public"]["Enums"]["item_source"]
           status?: Database["public"]["Enums"]["item_status"]
           title: string
           type: Database["public"]["Enums"]["item_type"]
           updated_at?: string
-          url?: string | null
         }
         Update: {
           agent_label?: string | null
@@ -328,30 +439,113 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           due_on?: string | null
+          due_time?: string | null
           id?: string
-          node_id?: string
+          node_id?: string | null
+          owner_id?: string
           parent_item_id?: string | null
+          position?: number
           priority?: number | null
           source?: Database["public"]["Enums"]["item_source"]
           status?: Database["public"]["Enums"]["item_status"]
           title?: string
           type?: Database["public"]["Enums"]["item_type"]
           updated_at?: string
-          url?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "items_node_id_fkey"
-            columns: ["node_id"]
+            foreignKeyName: "items_node_same_owner"
+            columns: ["node_id", "owner_id"]
             isOneToOne: false
             referencedRelation: "nodes"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "owner_id"]
           },
           {
             foreignKeyName: "items_parent_item_id_fkey"
             columns: ["parent_item_id"]
             isOneToOne: false
             referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_links: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          item_id: string | null
+          message_id: string
+          node_id: string | null
+          owner_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          message_id: string
+          node_id?: string | null
+          owner_id?: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          item_id?: string | null
+          message_id?: string
+          node_id?: string | null
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_links_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mail_links_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mail_links_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_opened: {
+        Row: {
+          account_id: string
+          message_id: string
+          opened_at: string
+          owner_id: string
+        }
+        Insert: {
+          account_id: string
+          message_id: string
+          opened_at?: string
+          owner_id?: string
+        }
+        Update: {
+          account_id?: string
+          message_id?: string
+          opened_at?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_opened_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -389,9 +583,62 @@ export type Database = {
           },
         ]
       }
+      node_events: {
+        Row: {
+          account_id: string | null
+          calendar_id: string | null
+          created_at: string
+          event_id: string | null
+          google_event_id: string | null
+          id: string
+          node_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          calendar_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          node_id: string
+        }
+        Update: {
+          account_id?: string | null
+          calendar_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          google_event_id?: string | null
+          id?: string
+          node_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "node_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "node_events_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "node_events_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nodes: {
         Row: {
           archived_at: string | null
+          color: string | null
           created_at: string
           id: string
           kind: Database["public"]["Enums"]["node_kind"]
@@ -403,6 +650,7 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          color?: string | null
           created_at?: string
           id?: string
           kind: Database["public"]["Enums"]["node_kind"]
@@ -414,6 +662,7 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          color?: string | null
           created_at?: string
           id?: string
           kind?: Database["public"]["Enums"]["node_kind"]
@@ -430,6 +679,87 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "nodes"
             referencedColumns: ["id", "owner_id"]
+          },
+        ]
+      }
+      preferences: {
+        Row: {
+          boards: Json
+          created_at: string
+          daily_review: boolean
+          daily_review_instruction: string
+          layouts: Json
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          boards?: Json
+          created_at?: string
+          daily_review?: boolean
+          daily_review_instruction?: string
+          layouts?: Json
+          owner_id?: string
+          updated_at?: string
+        }
+        Update: {
+          boards?: Json
+          created_at?: string
+          daily_review?: boolean
+          daily_review_instruction?: string
+          layouts?: Json
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      review_actions: {
+        Row: {
+          after: Json
+          before: Json
+          created_at: string
+          id: string
+          item_id: string
+          kind: string
+          owner_id: string
+          review_id: string
+          undone_at: string | null
+        }
+        Insert: {
+          after: Json
+          before: Json
+          created_at?: string
+          id?: string
+          item_id: string
+          kind: string
+          owner_id?: string
+          review_id: string
+          undone_at?: string | null
+        }
+        Update: {
+          after?: Json
+          before?: Json
+          created_at?: string
+          id?: string
+          item_id?: string
+          kind?: string
+          owner_id?: string
+          review_id?: string
+          undone_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_actions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_actions_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "daily_reviews"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -478,32 +808,69 @@ export type Database = {
           },
         ]
       }
-      saved_views: {
+      task_mail: {
         Row: {
+          account_id: string | null
+          checked_at: string | null
           created_at: string
-          id: string
-          name: string
+          decided_account_id: string | null
+          decided_message_id: string | null
+          expect_from: string | null
+          item_id: string
           owner_id: string
-          position: number
-          query: string
+          sentence: string | null
+          status: string
+          updated_at: string
         }
         Insert: {
+          account_id?: string | null
+          checked_at?: string | null
           created_at?: string
-          id?: string
-          name: string
-          owner_id: string
-          position?: number
-          query: string
+          decided_account_id?: string | null
+          decided_message_id?: string | null
+          expect_from?: string | null
+          item_id: string
+          owner_id?: string
+          sentence?: string | null
+          status?: string
+          updated_at?: string
         }
         Update: {
+          account_id?: string | null
+          checked_at?: string | null
           created_at?: string
-          id?: string
-          name?: string
+          decided_account_id?: string | null
+          decided_message_id?: string | null
+          expect_from?: string | null
+          item_id?: string
           owner_id?: string
-          position?: number
-          query?: string
+          sentence?: string | null
+          status?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "task_mail_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_mail_decided_account_id_fkey"
+            columns: ["decided_account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_mail_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       usage_counters: {
         Row: {
@@ -550,16 +917,55 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           due_on: string | null
+          due_time: string | null
           id: string
-          node_id: string
+          node_id: string | null
+          owner_id: string
           parent_item_id: string | null
+          position: number
           priority: number | null
           source: Database["public"]["Enums"]["item_source"]
           status: Database["public"]["Enums"]["item_status"]
           title: string
           type: Database["public"]["Enums"]["item_type"]
           updated_at: string
-          url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      move_item_branch: {
+        Args: {
+          p_agent_label: string
+          p_item: string
+          p_node: string
+          p_parent: string
+          p_source: Database["public"]["Enums"]["item_source"]
+        }
+        Returns: {
+          agent_label: string | null
+          body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          due_on: string | null
+          due_time: string | null
+          id: string
+          node_id: string | null
+          owner_id: string
+          parent_item_id: string | null
+          position: number
+          priority: number | null
+          source: Database["public"]["Enums"]["item_source"]
+          status: Database["public"]["Enums"]["item_status"]
+          title: string
+          type: Database["public"]["Enums"]["item_type"]
+          updated_at: string
         }[]
         SetofOptions: {
           from: "*"
@@ -573,6 +979,45 @@ export type Database = {
         Returns: {
           id: string
         }[]
+      }
+      plant_demo_accounts: {
+        Args: { p_accounts: Json }
+        Returns: {
+          account_id: string
+          email: string
+        }[]
+      }
+      plant_demo_mail: { Args: { p_messages: Json }; Returns: number }
+      reorder_item_positions: {
+        Args: { p_items: string[] }
+        Returns: {
+          agent_label: string | null
+          body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          due_on: string | null
+          due_time: string | null
+          id: string
+          node_id: string | null
+          owner_id: string
+          parent_item_id: string | null
+          position: number
+          priority: number | null
+          source: Database["public"]["Enums"]["item_source"]
+          status: Database["public"]["Enums"]["item_status"]
+          title: string
+          type: Database["public"]["Enums"]["item_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       restore_item_branch: {
         Args: {
@@ -589,16 +1034,18 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           due_on: string | null
+          due_time: string | null
           id: string
-          node_id: string
+          node_id: string | null
+          owner_id: string
           parent_item_id: string | null
+          position: number
           priority: number | null
           source: Database["public"]["Enums"]["item_source"]
           status: Database["public"]["Enums"]["item_status"]
           title: string
           type: Database["public"]["Enums"]["item_type"]
           updated_at: string
-          url: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -607,9 +1054,113 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      review_complete_task: {
+        Args: { p_item: string; p_review: string }
+        Returns: {
+          after: Json
+          before: Json
+          created_at: string
+          id: string
+          item_id: string
+          kind: string
+          owner_id: string
+          review_id: string
+          undone_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "review_actions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      review_write_mail_status: {
+        Args: {
+          p_account: string
+          p_item: string
+          p_message: string
+          p_review: string
+          p_sentence: string
+          p_status: string
+        }
+        Returns: {
+          after: Json
+          before: Json
+          created_at: string
+          id: string
+          item_id: string
+          kind: string
+          owner_id: string
+          review_id: string
+          undone_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "review_actions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      save_preferences: {
+        Args: {
+          p_board: Json
+          p_board_clear: boolean
+          p_daily_review: boolean
+          p_instruction: string
+          p_layout: string
+          p_layout_clear: boolean
+          p_page: string
+        }
+        Returns: {
+          boards: Json
+          created_at: string
+          daily_review: boolean
+          daily_review_instruction: string
+          layouts: Json
+          owner_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "preferences"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       seed_demo: {
         Args: { p_today: string; p_zone?: string }
         Returns: boolean
+      }
+      set_item_positions: {
+        Args: { p_items: string[]; p_positions: number[] }
+        Returns: {
+          agent_label: string | null
+          body: string | null
+          changed_agent_label: string | null
+          changed_source: Database["public"]["Enums"]["item_source"]
+          completed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          due_on: string | null
+          due_time: string | null
+          id: string
+          node_id: string | null
+          owner_id: string
+          parent_item_id: string | null
+          position: number
+          priority: number | null
+          source: Database["public"]["Enums"]["item_source"]
+          status: Database["public"]["Enums"]["item_status"]
+          title: string
+          type: Database["public"]["Enums"]["item_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       take_usage: {
         Args: { p_cap: number; p_day: string; p_kind: string; p_owner: string }
@@ -629,7 +1180,7 @@ export type Database = {
     }
     Enums: {
       account_status: "active" | "error" | "revoked"
-      item_source: "manual" | "chat" | "agent"
+      item_source: "manual" | "chat" | "agent" | "review"
       item_status: "open" | "done"
       item_type: "task" | "decision" | "link" | "review" | "note"
       node_kind: "client" | "project" | "subproject"
@@ -761,7 +1312,7 @@ export const Constants = {
   public: {
     Enums: {
       account_status: ["active", "error", "revoked"],
-      item_source: ["manual", "chat", "agent"],
+      item_source: ["manual", "chat", "agent", "review"],
       item_status: ["open", "done"],
       item_type: ["task", "decision", "link", "review", "note"],
       node_kind: ["client", "project", "subproject"],

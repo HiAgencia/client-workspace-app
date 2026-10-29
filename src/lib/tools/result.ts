@@ -9,6 +9,8 @@ export const errorCodes = [
   "since_required",
   "db_error",
   "internal",
+  // A daily limit of the person or of the demo was reached; it resets at midnight UTC.
+  "cap",
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

@@ -80,7 +80,8 @@ function toEvent(
 }
 
 // The events of every account visible from a node, its own and those inherited from its ancestors, merged in time
-// order. An account that fails is reported with its reason and the others still answer.
+// order. An account that fails is reported with its reason and the others still answer. The demo's sample accounts hold
+// no tokens and no calendar of Google's: nothing is asked for them, and they are no failure.
 export function googleEventsSource(deps: GoogleDeps): EventsSource {
   return async ({ ownerId, nodeId, from, to }) => {
     const visible = await deps.service.rpc("visible_accounts", { node: nodeId });
@@ -90,8 +91,9 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
 
     const accounts = await deps.service
       .from("google_accounts")
-      .select("id, email, status, refresh_token, access_token, access_token_expires_at")
+      .select("id, email, status, is_demo, refresh_token, access_token, access_token_expires_at")
       .eq("owner_id", ownerId)
+      .eq("is_demo", false)
       .in("id", [...fromNode.keys()]);
     if (accounts.error) throw new Error(`reading the accounts: ${accounts.error.message}`);
     const calendars = await deps.service

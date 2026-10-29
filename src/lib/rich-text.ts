@@ -166,23 +166,37 @@ export function sanitizeRichText(input: string | null | undefined): string | nul
   return cleaned === "" ? null : cleaned;
 }
 
-// The text a body reads as, one line per block: what search, the palette, the lists, and a note's title read.
-export function richTextToPlain(html: string | null | undefined): string {
+// The text a body reads as, one line per block: what search, the palette, and the lists read. With `links`, a link
+// keeps its address over its words as a title holds it, `[words](address)`: what a note's title reads.
+export function richTextToPlain(html: string | null | undefined, options: { links?: boolean } = {}): string {
   if (!html) return "";
   let text = "";
   let skipping = 0;
+  // The address of each open link, or null for one that is not written as a link.
+  const links: Array<string | null> = [];
   const parser = new Parser(
     {
-      onopentag(name) {
+      onopentag(name, attrs) {
         if (SKIP_CONTENT.has(name)) skipping++;
         if (name === "br") text += "\n";
         if ((name === "p" || name === "li" || name === "div") && text !== "" && !text.endsWith("\n")) text += "\n";
+        if (name === "a") {
+          const href = options.links && skipping === 0 ? safeHref(attrs.href ?? "") : null;
+          links.push(href);
+          if (href) text += "[";
+        }
       },
       ontext(chunk) {
-        if (skipping === 0) text += chunk;
+        if (skipping > 0) return;
+        // Inside a link, brackets would end its words early.
+        text += links.some(Boolean) ? chunk.replace(/\[/g, "(").replace(/\]/g, ")") : chunk;
       },
       onclosetag(name) {
         if (SKIP_CONTENT.has(name)) skipping = Math.max(0, skipping - 1);
+        if (name === "a") {
+          const href = links.pop();
+          if (href) text += `](${href.replace(/\(/g, "%28").replace(/\)/g, "%29")})`;
+        }
       },
     },
     { decodeEntities: true, lowerCaseTags: true },
@@ -196,8 +210,15 @@ export function richTextToPlain(html: string | null | undefined): string {
     .join("\n");
 }
 
-// A note's title: the first line of its text, bounded like any title.
+// The first line of a text, in plain words, bounded like any title.
 export function firstLine(html: string | null | undefined, max = 500): string {
   const line = richTextToPlain(html).split("\n")[0] ?? "";
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}
+
+// A note's title: the first line of its text, its links kept over their words as `[words](address)`. A line too long for
+// a title keeps its words and drops its addresses rather than cutting one in half.
+export function noteTitle(html: string | null | undefined, max = 500): string {
+  const line = richTextToPlain(html, { links: true }).split("\n")[0] ?? "";
+  return line.length > max ? firstLine(html, max) : line;
 }

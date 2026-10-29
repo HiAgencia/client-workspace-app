@@ -1,14 +1,17 @@
 import type { Db } from "@/lib/db/client";
+import { inlineLink } from "@/lib/inline-links";
 import { workingMinutesBefore } from "@/lib/working-time";
 
 // The demo workspace each visitor gets as their own copy: a small agency with three clients and their projects, and
-// projects of its own beside them —its website, its operations, a component library it reuses—. It carries the work such
-// a team has in a normal week: tasks due around today and some late, a task with its subtasks, notes, decisions, links,
-// items to review, events of the workspace's own, and an item that already left a version, written over the past working
-// days by hand, by the chat, and by a coding agent whose tokens Settings lists. Each item the chat wrote has the
-// conversation that wrote it. It also carries the gaps a real workspace has: a client with one project, a project with no
-// notes or links, tasks without a date. The shape lives here for the tests and the landing; the database plants it
-// through `public.seed_demo`, one statement and one round trip, and a test keeps both sides equal.
+// projects of its own beside them —its website, its operations, a component library it reuses—, and the general work that
+// belongs to no client or project. It carries the work such a team has in a normal week: tasks due around today and some
+// late, one at an hour, tasks without a date in the order the person set by hand, a task with its subtasks and notes,
+// notes in nodes, in tasks, and loose, links over the words of a note, decisions, a review a coding agent asked for,
+// events of the workspace's own, one of them linked to a project, and an item that already left a version, written over
+// the past working days by hand, by the chat, and by a coding agent whose tokens Settings lists. Each item the chat wrote
+// has the conversation that wrote it. It also carries the gaps a real workspace has: a client with one project, a project
+// with no notes, tasks without a date or a description. The shape lives here for the tests and the landing; the database
+// plants it through `public.seed_demo`, one statement and one round trip, and a test keeps both sides equal.
 
 export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
 
@@ -17,7 +20,7 @@ export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: str
 export type SeedChat = { ask: string; answer: string; workspace?: true };
 
 export type SeedItem = {
-  tool: "create_task" | "add_note" | "add_decision" | "add_link" | "add_review";
+  tool: "create_task" | "add_note" | "add_decision" | "request_review";
   input: Record<string, unknown>;
   // What hangs from a task.
   children?: SeedItem[];
@@ -30,51 +33,141 @@ export type SeedItem = {
   // Who wrote it, when it was not the person by hand.
   by?: SeedSource;
   chat?: SeedChat;
+  // Its place in the manual order of the tasks without a date, 1 first.
+  rank?: number;
+  // The message it waits for: the account it arrives in, and words of the sender.
+  waitsFor?: { account: string; from: string };
 };
+
+// A sample message of a demo account: who sent it, what it says, and how many working minutes ago it arrived.
+export type SeedMail = {
+  from: { name: string; email: string };
+  subject: string;
+  snippet: string;
+  text: string;
+  ago: number;
+  unread: boolean;
+  important: boolean;
+};
+
+// A sample account of the demo, attached to the node it is declared on, with its messages (none, for one of them).
+export type SeedAccount = { email: string; mail: SeedMail[] };
+
+// An event of the workspace's own, a whole day, and the clients or projects it is linked to besides the node it lives in.
+export type SeedEvent = { title: string; day: string; linkedTo?: string[] };
 
 export type Seed = {
   name: string;
   // A root is a client or a project of the agency's own; below a client every node is a project, below a project a
   // subproject.
   kind?: "client" | "project";
+  // A color the person gave it, from the product's palette; its subprojects show it.
+  color?: string;
   children?: Seed[];
   items?: SeedItem[];
-  events?: Array<{ title: string; day: string }>;
+  events?: SeedEvent[];
   // The coding agent's tokens issued on this node: their label, and how many working minutes ago each was issued and last
   // used. Their hash is of bytes nobody holds, so none can be used.
   tokens?: SeedToken[];
+  // The sample accounts attached here.
+  accounts?: SeedAccount[];
 };
 
 export type SeedToken = { label: string; issued: number; lastUsed: number };
 
-const AGENT_LABEL = "laptop";
+const AGENT_LABEL = "Laptop";
 const AGENT = { source: "agent", agentLabel: AGENT_LABEL } as const;
 const CHAT = { source: "chat" } as const;
 
 const task = (input: Record<string, unknown>, extra: Omit<SeedItem, "tool" | "input">): SeedItem => ({ tool: "create_task", input, ...extra });
 const note = (text: string, ago: number): SeedItem => ({ tool: "add_note", input: { text }, ago });
 const decision = (title: string, rationale: string, ago: number): SeedItem => ({ tool: "add_decision", input: { decision: title, rationale }, ago });
-const link = (url: string, title: string, ago: number): SeedItem => ({ tool: "add_link", input: { url, title }, ago });
-const review = (input: Record<string, unknown>, extra: Omit<SeedItem, "tool" | "input">): SeedItem => ({ tool: "add_review", input, ...extra });
+// A link is a note whose text is the link: rich text the editor shows as a link, and a title that keeps it over its words.
+const linkNote = (url: string, words: string, ago: number): SeedItem => note(`<p><a href="${url}">${words}</a></p>`, ago);
 
-// Days are counted from the visitor's own calendar day, the one the Overview uses, not from the server's.
-export function demoSeedTree(today: string): Seed[] {
-  const day = (offset: number): string => {
+function dayCounter(today: string) {
+  return (offset: number): string => {
     const date = new Date(`${today}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() + offset);
     return date.toISOString().slice(0, 10);
   };
+}
+
+// The work that belongs to no client or project: general tasks, with and without a date, one at an hour, one with its
+// subtasks and a note; loose notes, the person's general notepad; and an event of no node, linked to a project.
+export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEvent[] } {
+  const day = dayCounter(today);
+  return {
+    items: [
+      task({ title: "Call the bank about the card limit", priority: 2, dueOn: day(0), dueTime: "11:30" }, { ago: 212 }),
+      task({ title: "Book the dentist appointment", priority: 3, dueOn: day(3) }, { ago: 1388 }),
+      task({ title: "Sell the Meta shares when the price reaches $275", priority: 3 }, { ago: 2954, rank: 1 }),
+      task({ title: "Check the flight prices to Lisbon", priority: 4 }, { ago: 1730, rank: 3 }),
+      task(
+        { title: "Plan the team offsite", priority: 3 },
+        {
+          ago: 3305,
+          rank: 5,
+          children: [
+            task({ title: "Pick three possible dates", priority: 3 }, { ago: 3301 }),
+            task({ title: "Ask the team about the budget", priority: 4 }, { ago: 3299 }),
+            note("<p>Somewhere reachable by train.</p>", 2780),
+          ],
+        },
+      ),
+      note("<p><strong>Ideas for the November newsletter</strong></p><ul><li>The Larkspur launch</li><li>Three tips for a faster site</li></ul>", 604),
+      note("<p>Ask the accountant whether the new laptop counts as an expense.</p>", 1975),
+    ],
+    events: [{ title: "Call with Studio Atlas", day: day(1), linkedTo: ["Studio Atlas / Brand refresh"] }],
+  };
+}
+
+// Days are counted from the visitor's own calendar day, the one the Overview uses, not from the server's.
+export function demoSeedTree(today: string): Seed[] {
+  const day = dayCounter(today);
   return [
     {
       name: "Larkspur Bakery",
       kind: "client",
+      color: "amber",
+      accounts: [
+        {
+          email: "hello@larkspur.example",
+          mail: [
+            {
+              from: { name: "Maya Chen", email: "maya@larkspur.example" },
+              subject: "New photos for the homepage",
+              snippet: "Here are the new product photos for the homepage: the croissants and the sourdough came out well.",
+              text: "Hi!\n\nHere are the new product photos for the homepage: the croissants and the sourdough came out well.\n\nMaya",
+              ago: 97,
+              unread: true,
+              important: true,
+            },
+            {
+              from: { name: "Maya Chen", email: "maya@larkspur.example" },
+              subject: "Re: Delivery date",
+              snippet: "We would like the site live before the holiday orders start.",
+              text: "We would like the site live before the holiday orders start.\n\nMaya",
+              ago: 1652,
+              unread: false,
+              important: false,
+            },
+          ],
+        },
+      ],
       children: [
         {
           name: "Website",
           tokens: [{ label: AGENT_LABEL, issued: 1400, lastUsed: 326 }],
           items: [
             task(
-              { title: "Send the homepage draft for review", notes: "<p>Use the <strong>approved</strong> photos only.</p>", priority: 1, dueOn: day(0) },
+              {
+                title: "Send the homepage draft for review",
+                notes: "<p>Use the <strong>approved</strong> photos only.</p>",
+                priority: 1,
+                dueOn: day(0),
+                dueTime: "16:00",
+              },
               {
                 ago: 2294,
                 children: [
@@ -82,7 +175,7 @@ export function demoSeedTree(today: string): Seed[] {
                   task({ title: "Pick the three featured products", priority: 3 }, { ago: 2291 }),
                   task({ title: "Compress the hero photos", priority: 3 }, { ago: 2289, doneAgo: 431 }),
                   note("<p>The client prefers a warm, plain tone.</p>", 1907),
-                  link("https://www.figma.com/design/q7RkLm2XvT9bWc4NsYp1Ha/Larkspur-homepage", "Homepage draft", 791),
+                  linkNote("https://www.figma.com/design/q7RkLm2XvT9bWc4NsYp1Ha/Larkspur-homepage", "Homepage draft", 791),
                 ],
               },
             ),
@@ -100,7 +193,7 @@ export function demoSeedTree(today: string): Seed[] {
             ),
             task({ title: "Set up the staging site", priority: 3 }, { ago: 3427, doneAgo: 1113 }),
             decision("Online orders go through the existing POS", "<p>Avoids a <strong>second inventory</strong>.</p>", 2671),
-            link("https://docs.google.com/document/d/1Kx9vRt-Qm3LpZ7wYc2NbH8sJf5Ud0GaEo4TiWq6Vr_M/edit", "Project brief", 3812),
+            linkNote("https://docs.google.com/document/d/1Kx9vRt-Qm3LpZ7wYc2NbH8sJf5Ud0GaEo4TiWq6Vr_M/edit", "Project brief", 3812),
             note('<p><strong>Kickoff notes</strong></p><ul><li>Launch before the holidays</li><li><span class="tc-red">Orders through the POS</span></li></ul>', 3818),
           ],
           events: [{ title: "Homepage review with the client", day: day(1) }],
@@ -109,7 +202,13 @@ export function demoSeedTree(today: string): Seed[] {
               name: "Ordering flow",
               items: [
                 task({ title: "Map the pickup time slots", priority: 3, dueOn: day(2) }, { ago: 1534 }),
-                review({ title: "Review the checkout pull request", url: "https://github.com/larkspur-bakery/website/pull/48" }, { ago: 326, by: AGENT }),
+                // What the coding agent asked to look at: a task of the day it asked, in its node.
+                {
+                  tool: "request_review",
+                  input: { title: "Review the checkout pull request", url: "https://github.com/larkspur-bakery/website/pull/48" },
+                  ago: 326,
+                  by: AGENT,
+                },
               ],
             },
           ],
@@ -118,7 +217,7 @@ export function demoSeedTree(today: string): Seed[] {
           name: "Social media",
           items: [
             task({ title: "Plan the November posts", priority: 3, dueOn: day(5) }, { ago: 1147 }),
-            task({ title: "Draft a posting guide", priority: 4 }, { ago: 4574 }),
+            task({ title: "Draft a posting guide", priority: 4 }, { ago: 4574, rank: 7 }),
           ],
         },
       ],
@@ -126,6 +225,23 @@ export function demoSeedTree(today: string): Seed[] {
     {
       name: "Studio Atlas",
       kind: "client",
+      color: "violet",
+      accounts: [
+        {
+          email: "atlas@harborline.example",
+          mail: [
+            {
+              from: { name: "Ana Ruiz", email: "ana@studioatlas.example" },
+              subject: "Survey results",
+              snippet: "The stakeholder survey closed yesterday: the results are in the attached summary.",
+              text: "Hello,\n\nThe stakeholder survey closed yesterday: the results are in the attached summary.\n\nAna",
+              ago: 301,
+              unread: true,
+              important: false,
+            },
+          ],
+        },
+      ],
       children: [
         {
           name: "Brand refresh",
@@ -133,7 +249,7 @@ export function demoSeedTree(today: string): Seed[] {
             task({ title: "Send the moodboard", priority: 2, dueOn: day(0) }, { ago: 1913 }),
             task({ title: "Book the photo session", priority: 3, dueOn: day(3) }, { ago: 1529 }),
             decision("Keep the current color palette", "<p>Printed stock is already ordered.</p>", 2283),
-            review({ title: "Read the stakeholder survey results" }, { ago: 742 }),
+            task({ title: "Read the stakeholder survey results", priority: 3, dueOn: day(1) }, { ago: 742 }),
             task({ title: "Present two logo directions", priority: 2, dueOn: day(0) }, { ago: 2301, was: "Present logo directions" }),
           ],
           events: [{ title: "Photo session", day: day(3) }],
@@ -143,6 +259,8 @@ export function demoSeedTree(today: string): Seed[] {
     {
       name: "Lumen Dental",
       kind: "client",
+      // An account with no mail at all.
+      accounts: [{ email: "lumen@harborline.example", mail: [] }],
       children: [
         {
           name: "Booking page",
@@ -158,7 +276,7 @@ export function demoSeedTree(today: string): Seed[] {
                 },
               },
             ),
-            review({ title: "Approve the booking form copy" }, { ago: 509 }),
+            task({ title: "Approve the booking form copy", priority: 3, dueOn: day(2) }, { ago: 509 }),
           ],
         },
       ],
@@ -166,6 +284,7 @@ export function demoSeedTree(today: string): Seed[] {
     {
       name: "Agency website",
       kind: "project",
+      color: "blue",
       items: [
         task(
           { title: "Write the Larkspur case study", priority: 3, dueOn: day(4) },
@@ -177,9 +296,9 @@ export function demoSeedTree(today: string): Seed[] {
             ],
           },
         ),
-        task({ title: "Update the portfolio page", priority: 4 }, { ago: 4763 }),
+        task({ title: "Update the portfolio page", priority: 4 }, { ago: 4763, rank: 4 }),
         decision("Show three case studies, not ten", "<p>Fewer projects, told in depth.</p>", 4127),
-        link("https://analytics.google.com/analytics/web/", "Site analytics", 6351),
+        linkNote("https://analytics.google.com/analytics/web/", "Site analytics", 6351),
         note("<p><strong>Ideas for the about page</strong></p><ul><li>How we work, in four steps</li><li>The team, with real photos</li></ul>", 1262),
       ],
       children: [{ name: "Blog", items: [task({ title: "Draft the post on pricing small sites", priority: 3, dueOn: day(6) }, { ago: 958 })] }],
@@ -187,8 +306,36 @@ export function demoSeedTree(today: string): Seed[] {
     {
       name: "Operations",
       kind: "project",
+      accounts: [
+        {
+          email: "ops@harborline.example",
+          mail: [
+            {
+              from: { name: "Developer Platform", email: "noreply@developers.example" },
+              subject: "Your app review was approved",
+              snippet: "Your app review was approved. Your app can now use the permissions it asked for.",
+              text: "Hello,\n\nYour app review was approved. Your app can now use the permissions it asked for.\n\nThe Developer Platform team",
+              ago: 182,
+              unread: true,
+              important: false,
+            },
+            {
+              from: { name: "Coworking Hub", email: "billing@coworkinghub.example" },
+              subject: "Your October invoice is ready",
+              snippet: "Your invoice for October is ready to download.",
+              text: "Your invoice for October is ready to download.\n\nCoworking Hub",
+              ago: 2205,
+              unread: false,
+              important: false,
+            },
+          ],
+        },
+      ],
       items: [
-        task({ title: "Send the October invoices", priority: 1, dueOn: day(-1) }, { ago: 3171 }),
+        task(
+          { title: "Send the October invoices", priority: 1, dueOn: day(-1) },
+          { ago: 3171, children: [note("<p>Larkspur pays by bank transfer, not by card.</p>", 2410)] },
+        ),
         task(
           { title: "Chase the Studio Atlas payment", priority: 2, dueOn: day(0) },
           {
@@ -203,10 +350,13 @@ export function demoSeedTree(today: string): Seed[] {
         ),
         task({ title: "Renew the agency's domain", priority: 2, dueOn: day(2) }, { ago: 2378 }),
         task({ title: "File the quarterly taxes", priority: 2, dueOn: day(9) }, { ago: 4769 }),
-        review(
-          { title: "Review the new contract template", url: "https://docs.google.com/document/d/1Zp4HwQe8TnB2xLv-Ka7RcM5yGs3Df9Uj0Nb6Wt_EoXi/edit" },
-          { ago: 437 },
+        task(
+          { title: inlineLink("Review the new contract template", "https://docs.google.com/document/d/1Zp4HwQe8TnB2xLv-Ka7RcM5yGs3Df9Uj0Nb6Wt_EoXi/edit"), priority: 3 },
+          { ago: 437, rank: 2 },
         ),
+        // Two tasks that wait for a message in the operations account: the approval already arrived, the transfer has not.
+        task({ title: "Wait for the app review approval", priority: 2 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", from: "Developer Platform" } }),
+        task({ title: "Wait for the bank transfer", priority: 2, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", from: "Bayside Bank" } }),
         note("<p><strong>Payment terms</strong></p><p>Half up front, half on delivery; invoices due in 15 days.</p>", 7942),
       ],
       events: [
@@ -221,9 +371,9 @@ export function demoSeedTree(today: string): Seed[] {
       items: [
         task({ title: "Add the contact form block", priority: 3, dueOn: day(3) }, { ago: 352, by: AGENT }),
         task({ title: "Update the library's dependencies", priority: 3 }, { ago: 503, doneAgo: 466, by: AGENT }),
-        task({ title: "Write the setup guide", priority: 4 }, { ago: 5402 }),
+        task({ title: "Write the setup guide", priority: 4 }, { ago: 5402, rank: 8 }),
         decision("Keep the library on the same stack as client sites", "<p>One stack to maintain and to debug.</p>", 5081),
-        link("https://github.com/harborline-studio/component-library", "Component library repository", 5243),
+        linkNote("https://github.com/harborline-studio/component-library", "Component library repository", 5243),
       ],
     },
   ];

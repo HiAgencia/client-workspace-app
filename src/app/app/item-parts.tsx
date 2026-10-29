@@ -11,7 +11,7 @@ export const PRIORITIES: SelectOption[] = [
   { value: "4", label: "Low", tone: "muted" },
 ];
 
-export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "Note", decision: "Decision", link: "Link", review: "To review" };
+export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "Note", decision: "Decision" };
 
 // A client's or a project's path, which breaks only between its places: a name never splits across lines, and a word of
 // it is never left alone on one. It is one run of text whatever holds it: inside a flex link or row each place would be a
@@ -33,6 +33,7 @@ export function PathText({ path }: { path: string }) {
 export function sourceName(source: Item["source"], agentLabel: string | null): string {
   if (source === "manual") return "By hand";
   if (source === "chat") return "By the chat";
+  if (source === "review") return "By the daily review";
   return agentLabel ? `By an agent · ${agentLabel}` : "By an agent";
 }
 

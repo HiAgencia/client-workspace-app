@@ -134,8 +134,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   function open(entry: Entry) {
     onClose();
     if (entry.kind === "node") go({ kind: "node", nodeId: entry.node.id });
-    else if (entry.kind === "item") go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type, done: entry.item.status === "done" });
-    else entry.run();
+    else if (entry.kind === "item") {
+      // The palette lists the items of the tree's nodes; one of no node has no page to land on.
+      if (entry.item.nodeId) go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type, done: entry.item.status === "done" });
+    } else entry.run();
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {

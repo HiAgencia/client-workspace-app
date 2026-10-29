@@ -1,3 +1,4 @@
+import { secondsToNextDay } from "@/lib/chat/usage";
 import { json } from "@/lib/http";
 import type { ToolError, ToolResult } from "@/lib/tools/result";
 
@@ -9,5 +10,6 @@ export function toolResponse(what: string, result: ToolResult<unknown> | ToolErr
     console.error(`${what}: ${result.code} ${result.message}`);
     return json({ ok: false, code: result.code, message: "the change could not be saved: try again" }, 500);
   }
+  if (result.code === "cap") return json(result, 429, { "Retry-After": String(secondsToNextDay()) });
   return json(result, 422);
 }

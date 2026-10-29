@@ -2,74 +2,104 @@
    Surfaces go in three levels: the CANVAS is the page, a CARD lifts off it with its rim and shadow, and what is touched
    inside a card goes back to the canvas tone (INTERIOR) and sinks one step deeper on hover instead of brightening. A
    FIELD sinks (its fill, a rim at 3:1 and an inner shadow), a CONTROL rises (its fill, a soft rim and an outer shadow),
-   and READ-only text carries neither. */
+   and READ-only text carries neither.
+   The palette: cold neutrals with a navy hue, and a sky-blue accent. The accent has two tones: a deep one for what is
+   read as text (a link, the focus ring) and a light one for what is filled (the main action, the mark), which carries
+   navy ink. */
 :root {
   color-scheme: light;
 
   /* Surfaces */
-  --canvas: #eff1ec;
+  --canvas: #f1f4f9;
   --card: #ffffff;
-  --card-rim: #dfe3dc;
-  --interior: #eff1ec;
-  --interior-hover: #e4e7e0;
-  --division: #e2e5df;
+  --card-rim: #dde3ec;
+  --interior: #eef2f7;
+  --interior-hover: #e2e8f0;
+  --division: #dfe5ee;
   /* A line that carries meaning (the tree's level guide): 3:1 against the card. */
-  --guide: #8d9389;
-  --read: #f6f7f4;
-  --field: #f2f4ef;
-  --field-hover: #e9ece6;
+  --guide: #8693a8;
+  --read: #f6f8fb;
+  --field: #f2f5f9;
+  --field-hover: #e8edf4;
   /* The rim is what identifies a field: 3:1 against the card around it and against its own fill. */
-  --field-rim: #7f857b;
-  --control: #e6e9e2;
-  --control-hover: #dce0d7;
-  --control-rim: #cbd0c6;
+  --field-rim: #717f96;
+  --control: #e6ebf2;
+  --control-hover: #d9e0ea;
+  --control-rim: #c7d0dd;
   /* The segmented rail sinks and its chosen piece rises. */
-  --rail: #e4e7e0;
+  --rail: #e3e8ef;
   --piece: #ffffff;
-  --piece-rim: #d9ddd5;
+  --piece-rim: #d5dce7;
   --scrim: color-mix(in srgb, var(--shadow-ink) 36%, transparent);
 
   /* Ink */
-  --ink: #161a15;
-  --ink-soft: #343a31;
-  /* Secondary text: 5.2:1 or more on every surface it sits on, the sunk hover included. */
-  --muted: #586054;
+  --ink: #0e1a2b;
+  --ink-soft: #2a3a52;
+  /* Secondary text: 4.7:1 or more on every surface it sits on, the sunk hover and the control's hover included. */
+  --muted: #526078;
 
-  /* Accent: a deep pine for links and the main action; its tint carries full ink. */
-  --accent: #1d6a54;
-  --accent-fill: #1d6a54;
-  --accent-fill-hover: #14503f;
-  --on-accent: #ffffff;
-  --accent-tint: #ddefe7;
-  --accent-tint-hover: #cce6da;
-  --accent-ink: #12503e;
+  /* Accent: the deep tone reads as text and as the focus; the light fill carries navy ink; its tint carries full ink. */
+  --accent: #0b67aa;
+  --accent-fill: #6fc2f3;
+  --accent-fill-hover: #4cb0ec;
+  --on-accent: #0a1c31;
+  --accent-tint: #ddf0fd;
+  --accent-tint-hover: #c8e6fb;
+  --accent-ink: #0a4c80;
 
   /* States, each one written as well as colored */
-  --alert: #b42318;
-  --alert-tint: #fbe8e6;
-  --alert-tint-hover: #f7d7d3;
-  --alert-ink: #8a1a12;
-  --alert-rim: #eeb4ad;
-  --warn-tint: #fbefd2;
-  --warn-ink: #674300;
-  --info-tint: #e3eaf7;
-  --info-ink: #23407a;
+  --alert: #c32a30;
+  --alert-tint: #fdeaea;
+  --alert-tint-hover: #f9d7d8;
+  --alert-ink: #8e1a20;
+  --alert-rim: #efb3b5;
+  --warn-tint: #fbefd0;
+  --warn-ink: #664300;
+  --info-tint: #dfedfb;
+  --info-ink: #1a4c84;
+
+  /* The colors a person gives a client or a project (src/lib/node-colors.ts): each reads at 4.5:1 or more on the card,
+     the canvas, the interior and its hover, and the current place's tint, so it marks a place and can be read as text. */
+  --node-red: #c22f36;
+  --node-orange: #ad4a0c;
+  --node-amber: #8a5d00;
+  --node-green: #2a7639;
+  --node-teal: #0e716a;
+  --node-blue: #1d60bf;
+  --node-indigo: #4a4cc0;
+  --node-violet: #7640b3;
+  --node-pink: #b02f74;
+  --node-gray: #5d697b;
+
+  /* What a task's state says, each with its word beside it: how near its date is, its priority's circle, and the mail it
+     waits for. */
+  --due-overdue: var(--node-red);
+  --due-today: var(--node-green);
+  --due-tomorrow: var(--node-amber);
+  --due-week: var(--node-violet);
+  --due-later: var(--muted);
+  --prio-urgent: var(--node-red);
+  --prio-high: var(--node-orange);
+  --prio-normal: var(--node-blue);
+  --prio-low: var(--node-gray);
+  --mail-waiting: var(--node-indigo);
+  --mail-arrived: var(--node-teal);
 
   /* The palette a person colors text with: each reads at 4.5:1 or more on the card and the field. */
-  --tone-red: #b42318;
-  --tone-amber: #8a5300;
-  --tone-green: #22703a;
-  --tone-blue: #2453a3;
-  --tone-violet: #6a3d9a;
+  --tone-red: var(--node-red);
+  --tone-amber: var(--node-amber);
+  --tone-green: var(--node-green);
+  --tone-blue: var(--node-blue);
+  --tone-violet: var(--node-violet);
 
   /* What the browser draws */
-  --focus: #1d6a54;
+  --focus: #0b67aa;
   --focus-halo: color-mix(in srgb, var(--accent) 24%, transparent);
-  --selection-bg: #c6e4d6;
-  --scroll-thumb: #b9bfb4;
+  --selection-bg: #c2e3fa;
+  --scroll-thumb: #b5c0d1;
 
   /* Shadows, composed from one ink so a theme changes them all */
-  --shadow-ink: #161a15;
+  --shadow-ink: #0e1a2b;
   --shadow-card: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 6%, transparent),
     0 10px 26px -12px color-mix(in srgb, var(--shadow-ink) 14%, transparent);
   --shadow-control: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 9%, transparent),
@@ -83,6 +113,9 @@
   --shadow-pop: 0 2px 6px color-mix(in srgb, var(--shadow-ink) 8%, transparent),
     0 22px 44px -14px color-mix(in srgb, var(--shadow-ink) 26%, transparent);
   --shadow-header: 0 1px 0 var(--division), 0 8px 18px -14px color-mix(in srgb, var(--shadow-ink) 22%, transparent);
+  /* The sidebar lifts off the page along its edge: a contact line in the shadow's ink and a soft fall, no rule. */
+  --shadow-sidebar: 1px 0 0 color-mix(in srgb, var(--shadow-ink) 7%, transparent),
+    8px 0 24px -16px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
 
   /* Type: four sizes; hierarchy goes by weight and role. Each grows with the screen and holds past the design width. */
   --text-meta: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem);
@@ -95,8 +128,13 @@
   --pad-card: clamp(1rem, 0.82rem + 0.55vw, 1.5rem);
   --gap-cards: clamp(0.875rem, 0.68rem + 0.55vw, 1.375rem);
   --gap-rows: 0.25rem;
-  --header-h: 3.75rem;
-  --sidebar-w: clamp(15.5rem, 12rem + 5vw, 19rem);
+  /* The phone's bar over the page; on a computer the sidebar holds what it holds. */
+  --header-h: 3.5rem;
+  --sidebar-w: clamp(15.5rem, 12rem + 5vw, 18.5rem);
+  /* A row of the sidebar, as dense as a list's own rows. */
+  --nav-row: 2.125rem;
+  /* The page's column: centered, with its widest measure. */
+  --content-w: 76rem;
   --chat-w: clamp(21rem, 15rem + 8vw, 27rem);
 
   /* Shape */
@@ -118,65 +156,83 @@
 
   /* Layers */
   --layer-header: 30;
+  --layer-float: 40;
   --layer-notice: 50;
 }
+/* Where a finger points, a sidebar row is a touch target tall. */
+@media (pointer: coarse) {
+  :root {
+    --nav-row: 2.75rem;
+  }
+}
+/* On a computer the sidebar holds the brand and the search, so nothing sits over the page's top. */
+@media (width >= 64rem) {
+  :root {
+    --header-h: 0rem;
+  }
+}
 
-/* Dark is designed, not inverted: the canvas is the deepest plane, the card lifts, what is inside sinks again, the rail
-   sinks below the card and the chosen piece rises well above it. */
+/* Dark is designed, not inverted: two close navy grays, the canvas the deepest plane and the card one step above it;
+   what is inside sinks again, the rail sinks below the card and the chosen piece rises well above it. */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --canvas: #111311;
-  --card: #1b1e1a;
-  --card-rim: #2c302b;
-  --interior: #141613;
-  --interior-hover: #0d0f0d;
-  --division: #2b2f2a;
-  --guide: #686e66;
-  --read: #171a16;
-  --field: #0f110f;
-  --field-hover: #0a0b0a;
-  --field-rim: #6c7369;
-  --control: #2b2f2a;
-  --control-hover: #353a34;
-  --control-rim: #454b43;
-  --rail: #0d0f0d;
-  --piece: #363b35;
-  --piece-rim: #4a5048;
+  --canvas: #0f141d;
+  --card: #171e2a;
+  --card-rim: #263041;
+  --interior: #121823;
+  --interior-hover: #0b1018;
+  --division: #253041;
+  --guide: #66738b;
+  --read: #141a25;
+  --field: #0d121a;
+  --field-hover: #090d13;
+  --field-rim: #687690;
+  --control: #253041;
+  --control-hover: #2e3a4d;
+  --control-rim: #3d4a60;
+  --rail: #0b1018;
+  --piece: #2e3a4e;
+  --piece-rim: #46546c;
   --scrim: color-mix(in srgb, var(--shadow-ink) 60%, transparent);
 
-  --ink: #eef0eb;
-  --ink-soft: #d3d8cf;
-  --muted: #a5ac9f;
+  --ink: #e8edf5;
+  --ink-soft: #cbd4e2;
+  --muted: #9aa6ba;
 
-  --accent: #74d3b0;
-  --accent-fill: #5cc29e;
-  --accent-fill-hover: #7ed8b7;
-  --on-accent: #06140f;
-  --accent-tint: #183428;
-  --accent-tint-hover: #204536;
-  --accent-ink: #a1e5ca;
+  --accent: #7cc6f5;
+  --accent-fill: #6cbcf1;
+  --accent-fill-hover: #8fd0f8;
+  --on-accent: #061729;
+  --accent-tint: #13304a;
+  --accent-tint-hover: #1a3e5d;
+  --accent-ink: #b6defb;
 
-  --alert: #ff8a7e;
-  --alert-tint: #3b1b18;
-  --alert-tint-hover: #4a221e;
-  --alert-ink: #ffb4aa;
-  --alert-rim: #6e2e28;
-  --warn-tint: #392e15;
-  --warn-ink: #f1cd7a;
-  --info-tint: #1a2539;
-  --info-ink: #a9c3f0;
+  --alert: #ff8c87;
+  --alert-tint: #3c1c21;
+  --alert-tint-hover: #4b2329;
+  --alert-ink: #ffb8b3;
+  --alert-rim: #6f2f36;
+  --warn-tint: #352b14;
+  --warn-ink: #efcc7b;
+  --info-tint: #142941;
+  --info-ink: #a8d1f5;
 
-  --tone-red: #ff8f84;
-  --tone-amber: #f1c46a;
-  --tone-green: #86d69a;
-  --tone-blue: #a3c1f5;
-  --tone-violet: #cdb2f3;
+  --node-red: #ff8f8f;
+  --node-orange: #ffa566;
+  --node-amber: #eec15c;
+  --node-green: #80d590;
+  --node-teal: #5ecfc3;
+  --node-blue: #8db9ff;
+  --node-indigo: #a7aaff;
+  --node-violet: #caa8f5;
+  --node-pink: #f59bc9;
+  --node-gray: #a8b3c4;
 
-  --focus: #74d3b0;
+  --focus: #7cc6f5;
   --focus-halo: color-mix(in srgb, var(--accent) 30%, transparent);
-  --selection-bg: #24574a;
-  --scroll-thumb: #464c44;
+  --selection-bg: #1f4a6e;
+  --scroll-thumb: #3a475c;
 
   /* In dark the ink is light: shadows go black and tighter, and the rim gives the edge. */
   --shadow-ink: #000000;
@@ -193,4 +249,5 @@
   --shadow-pop: 0 2px 6px color-mix(in srgb, var(--shadow-ink) 45%, transparent),
     0 24px 48px -14px color-mix(in srgb, var(--shadow-ink) 80%, transparent);
   --shadow-header: 0 1px 0 var(--division), 0 10px 20px -14px color-mix(in srgb, var(--shadow-ink) 80%, transparent);
+  --shadow-sidebar: 1px 0 0 var(--card-rim), 10px 0 26px -16px color-mix(in srgb, var(--shadow-ink) 80%, transparent);
 }

@@ -3,47 +3,151 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { usePiece } from "@/components/ui/use-piece";
 import { post, type TreeNode } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
+import { openQuickAdd } from "./quick-add-bus";
 import { useWorkspace } from "./workspace";
 
-// The sidebar: its options never change. Overview on top; Clients and Projects, each a group that folds, with its own
-// "New" always in view; each client and each project folds its own children; and at the foot Calendar, Trash and
-// Settings. The same content serves the wide sidebar and the phone's drawer, with ONE piece marking where the person is
-// in each part.
-export function SideNav() {
+// The sidebar: navigation only, the same on every screen. On top, «Add task» and «Search»; then Overview, Tasks, Calendar
+// and Mail; Clients and Projects, each a group that folds by its name, every client folding its projects, each place
+// with its number and its color; and at the foot Trash, Settings and who is signed in. A node's own actions live in its
+// page's «More», so nothing here changes from one page to another. The same content serves the computer's sidebar and
+// the phone's drawer, with ONE piece marking where the person is in each part.
+export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: boolean; onLeave?: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
+  const { taskCounts, mailUnread, openPalette, who } = useWorkspace();
+  const current = useCurrentNode();
+  const mac = useMac();
   const main = useRef<HTMLDivElement>(null);
   const foot = useRef<HTMLDivElement>(null);
   usePiece(main, '[aria-current="page"]');
   usePiece(foot, '[aria-current="page"]');
-  const here = (path: string) => (pathname === path ? "page" : undefined);
+  const here = (path: string) => (path === "/app" ? pathname === path : pathname === path || pathname.startsWith(`${path}/`)) ? "page" : undefined;
+  const due = taskCounts ? taskCounts.overdue + taskCounts.today : 0;
+  // The sidebar and the drawer are both in the page: each names its own parts.
+  const ids = inDrawer ? "drawer" : "side";
+
   return (
     <nav className="side-nav" aria-label="Workspace">
+      {!inDrawer && (
+        <div className="side-top">
+          <Link href="/app" className="brand side-brand" aria-label="Client Workspace, Overview">
+            <BrandMark className="brand-mark" />
+            <span className="brand-name">Client Workspace</span>
+          </Link>
+        </div>
+      )}
+      <div className="side-actions">
+        <button
+          type="button"
+          className="side-link side-action"
+          data-side-action="add-task"
+          aria-keyshortcuts="Q"
+          onClick={() => {
+            onLeave?.();
+            startTask(current);
+          }}
+        >
+          <span className="side-link-name">Add task</span>
+          <kbd className="kbd side-key" aria-hidden="true">
+            Q
+          </kbd>
+        </button>
+        <button
+          type="button"
+          className="side-link side-action"
+          data-side-action="search"
+          aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
+          onClick={() => {
+            onLeave?.();
+            openPalette();
+          }}
+        >
+          <span className="side-link-name">Search</span>
+          <kbd className="kbd side-key" aria-hidden="true">
+            {mac ? "⌘K" : "Ctrl K"}
+          </kbd>
+        </button>
+      </div>
       <div className="side-scroll">
         <div ref={main} className="side-main side-pieces">
-          <Link href="/app" className="side-link" aria-current={here("/app")}>
-            <span className="side-link-name">Overview</span>
-          </Link>
-          <NodeGroup kind="client" />
-          <NodeGroup kind="project" />
+          <ul className="side-list" aria-label="Views">
+            <li>
+              <Link href="/app" className="side-link" aria-current={here("/app")}>
+                <span className="side-link-name">Overview</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/app/tasks" className="side-link" aria-current={here("/app/tasks")}>
+                <span className="side-link-name">Tasks</span>
+                {due > 0 && <Count value={due} spoken={`${due} overdue or due today`} />}
+              </Link>
+            </li>
+            <li>
+              <Link href="/app/calendar" className="side-link" aria-current={here("/app/calendar")}>
+                <span className="side-link-name">Calendar</span>
+              </Link>
+            </li>
+            <li>
+              {/* Its number is the unread mail of every account in reach, the same the Mail page says. */}
+              <Link href="/app/mail" className="side-link" aria-current={here("/app/mail")}>
+                <span className="side-link-name">Mail</span>
+                {mailUnread !== null && mailUnread > 0 && <Count value={mailUnread} spoken={`${mailUnread} unread`} />}
+              </Link>
+            </li>
+          </ul>
+          <NodeGroup kind="client" current={current} ids={ids} />
+          <NodeGroup kind="project" current={current} ids={ids} />
         </div>
       </div>
       <div ref={foot} className="side-foot side-pieces">
-        <Link href="/app/calendar" className="side-link" aria-current={here("/app/calendar")}>
-          <span className="side-link-name">Calendar</span>
-        </Link>
-        <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
-          <span className="side-link-name">Trash</span>
-        </Link>
-        <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
-          <span className="side-link-name">Settings</span>
-        </Link>
+        <div className="side-foot-row">
+          <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
+            <span className="side-link-name">Trash</span>
+          </Link>
+          <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
+            <span className="side-link-name">Settings</span>
+          </Link>
+        </div>
+        <div className="side-account">
+          {/* A session without an email (the demo's) shows no name. */}
+          {who && <span className="t-meta side-who">{who}</span>}
+          <Button size="sm" variant="quiet" className="side-sign-out" onClick={onSignOut}>
+            Sign out
+          </Button>
+        </div>
       </div>
     </nav>
+  );
+}
+
+// «Add task» starts the task where the person is: in the open client or project, or where the dialog decides (General).
+export function startTask(nodeId: string | null): void {
+  openQuickAdd(nodeId ? { placeId: nodeId } : {});
+}
+
+export function useCurrentNode(): string | null {
+  return usePathname().match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1] ?? null;
+}
+
+const noSubscription = () => () => {};
+
+// Read once mounted: the server does not know the person's keyboard.
+export function useMac(): boolean {
+  return useSyncExternalStore(noSubscription, () => /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent), () => false);
+}
+
+// A place's number: what it counts is said in words to a screen reader, the figure alone to the eye.
+function Count({ value, spoken }: { value: number; spoken: string }) {
+  return (
+    <span className="side-count">
+      <span aria-hidden="true">{value}</span>
+      <span className="sr-only">, {spoken}</span>
+    </span>
   );
 }
 
@@ -81,20 +185,19 @@ function useOpenState(): Record<string, boolean> {
   return useMemo(() => readOpen(raw), [raw]);
 }
 
-function useCurrentNode(): string | null {
-  return usePathname().match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1] ?? null;
-}
+const GROUP = {
+  client: { title: "Clients", add: "Add client", empty: "No clients yet. A client holds its projects." },
+  project: { title: "Projects", add: "Add project", empty: "No projects of your own yet." },
+} as const;
 
-function NodeGroup({ kind }: { kind: "client" | "project" }) {
+function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current: string | null; ids: string }) {
   const { tree, treeError } = useWorkspace();
   const openState = useOpenState();
-  const current = useCurrentNode();
   const [adding, setAdding] = useState(false);
   const key = `group:${kind}`;
   const open = openState[key] ?? true;
   const roots = (tree ?? []).filter((node) => node.parentId === null && node.kind === kind);
-  const title = kind === "client" ? "Clients" : "Projects";
-  const add = kind === "client" ? "New client" : "New project";
+  const words = GROUP[kind];
 
   // Visiting a node opens the way to it, so where the person is always shows in the sidebar. Once per visit: a re-read of
   // the tree after a change does not reopen what the person folded meanwhile.
@@ -120,89 +223,76 @@ function NodeGroup({ kind }: { kind: "client" | "project" }) {
   }, [current, tree, kind, key]);
 
   return (
-    <section className="side-group" aria-labelledby={`side-${kind}`} data-side-group={kind}>
-      <div className="side-head">
-        <button
-          type="button"
-          id={`side-${kind}`}
-          className="side-toggle"
-          aria-expanded={open}
-          aria-controls={`side-${kind}-list`}
-          onClick={() => writeOpen({ [key]: !open })}
-        >
-          <span className="side-toggle-name">{title}</span>
-        </button>
-        <Button
-          variant="quiet"
-          size="sm"
-          className="tree-add"
-          data-side-add={kind}
-          onClick={() => {
-            if (!open) writeOpen({ [key]: true });
-            setAdding(true);
-          }}
-        >
-          {add}
-        </Button>
-      </div>
-      {adding && (
-        <div className="tree-new">
-          <NewNode kind={kind} onDone={() => setAdding(false)} />
+    <section className="side-group" aria-labelledby={`${ids}-${kind}`} data-side-group={kind}>
+      <button
+        type="button"
+        id={`${ids}-${kind}`}
+        className="side-toggle"
+        aria-expanded={open}
+        aria-controls={`${ids}-${kind}-list`}
+        onClick={() => writeOpen({ [key]: !open })}
+      >
+        <span className="side-toggle-name">{words.title}</span>
+      </button>
+      <Fold open={open} id={`${ids}-${kind}-list`}>
+        <div className="side-group-body">
+          {tree === null ? (
+            <TreeSkeleton failed={treeError} />
+          ) : (
+            <>
+              {roots.length > 0 ? (
+                <ul className="tree">
+                  {roots.map((node) => (
+                    <Branch key={node.id} node={node} tree={tree} openState={openState} current={current} ids={ids} />
+                  ))}
+                </ul>
+              ) : (
+                !adding && <p className="t-help side-empty">{words.empty}</p>
+              )}
+              {adding ? (
+                <div className="tree-new">
+                  <NewNode kind={kind} idPrefix={ids} onDone={() => setAdding(false)} />
+                </div>
+              ) : (
+                <button type="button" className="side-link side-add" data-side-add={kind} onClick={() => setAdding(true)}>
+                  <span className="side-link-name">{words.add}</span>
+                </button>
+              )}
+            </>
+          )}
+          {tree !== null && treeError && (
+            <p role="alert" className="inline-note" data-tone="alert">
+              The list could not be refreshed: {sentence(treeError)} What you see is the last one read.
+            </p>
+          )}
         </div>
-      )}
-      <Fold open={open} id={`side-${kind}-list`}>
-        {tree === null ? (
-          <TreeSkeleton failed={treeError} />
-        ) : roots.length === 0 ? (
-          !adding && (
-            <div className="side-empty">
-              <p className="t-help">{kind === "client" ? "No clients yet. A client holds its projects." : "No projects of your own yet."}</p>
-              <Button size="sm" onClick={() => setAdding(true)}>
-                {kind === "client" ? "Add the first client" : "Add the first project"}
-              </Button>
-            </div>
-          )
-        ) : (
-          <ul className="tree">
-            {roots.map((node) => (
-              <Branch key={node.id} node={node} tree={tree} openState={openState} current={current} />
-            ))}
-          </ul>
-        )}
-        {tree !== null && treeError && (
-          <p role="alert" className="inline-note" data-tone="alert">
-            The list could not be refreshed: {treeError}. What you see is the last one read.
-          </p>
-        )}
       </Fold>
     </section>
   );
 }
 
-const CHILD: Record<TreeNode["kind"], { one: string; many: string }> = {
-  client: { one: "project", many: "Projects" },
-  project: { one: "subproject", many: "Subprojects" },
-  subproject: { one: "subproject", many: "Subprojects" },
-};
+const CHILDREN: Record<TreeNode["kind"], string> = { client: "Projects", project: "Subprojects", subproject: "Subprojects" };
 
-// One client or project: its fold, its link with its open tasks —the same number its card and its page show—, and below
-// it its children and their "New".
-function Branch({ node, tree, openState, current, depth = 1 }: { node: TreeNode; tree: TreeNode[]; openState: Record<string, boolean>; current: string | null; depth?: number }) {
-  const [adding, setAdding] = useState(false);
+// One client or project: its link with its color and its open tasks —the same number its page shows—, and, when it holds
+// others, the control that folds them.
+function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: TreeNode; tree: TreeNode[]; openState: Record<string, boolean>; current: string | null; ids: string; depth?: number }) {
   const open = openState[node.id] ?? false;
   const children = tree.filter((child) => child.parentId === node.id);
-  const child = CHILD[node.kind];
   return (
     <li>
       <div className="tree-row" data-node={node.id}>
-        <button
-          type="button"
-          className="tree-toggle"
-          aria-expanded={open}
-          aria-controls={`branch-${node.id}`}
-          aria-label={`${child.many} of ${node.name}`}
-          onClick={() => writeOpen({ [node.id]: !open })}
-        />
+        {children.length > 0 ? (
+          <button
+            type="button"
+            className="tree-toggle"
+            aria-expanded={open}
+            aria-controls={`${ids}-branch-${node.id}`}
+            aria-label={`${CHILDREN[node.kind]} of ${node.name}`}
+            onClick={() => writeOpen({ [node.id]: !open })}
+          />
+        ) : (
+          <span className="tree-toggle-slot" aria-hidden="true" />
+        )}
         <Link
           href={`/app/node/${node.id}`}
           className="side-link"
@@ -212,34 +302,20 @@ function Branch({ node, tree, openState, current, depth = 1 }: { node: TreeNode;
           aria-current={node.id === current ? "page" : undefined}
           onClick={(event) => plainClick(event) && requestFocus({ kind: "node", nodeId: node.id })}
         >
+          <span className="side-mark" data-color={node.color ?? undefined} aria-hidden="true" />
           <span className="side-link-name">{node.name}</span>
-          {node.openTasks > 0 && (
-            <span className="count" aria-label={node.openTasks === 1 ? "1 open task" : `${node.openTasks} open tasks`} title={node.openTasks === 1 ? "1 open task" : `${node.openTasks} open tasks`}>
-              {node.openTasks}
-            </span>
-          )}
+          {node.openTasks > 0 && <Count value={node.openTasks} spoken={node.openTasks === 1 ? "1 open task" : `${node.openTasks} open tasks`} />}
         </Link>
       </div>
-      <Fold open={open} id={`branch-${node.id}`}>
-        <div className="tree-below">
-          {children.length > 0 && (
-            <ul className="tree">
-              {children.map((entry) => (
-                <Branch key={entry.id} node={entry} tree={tree} openState={openState} current={current} depth={depth + 1} />
-              ))}
-            </ul>
-          )}
-          {adding ? (
-            <div className="tree-new">
-              <NewNode parent={node} onDone={() => setAdding(false)} />
-            </div>
-          ) : (
-            <Button variant="quiet" size="sm" className="tree-add tree-add-child" onClick={() => setAdding(true)} aria-label={`New ${child.one} in ${node.name}`} data-tree-add-child={node.id}>
-              {`New ${child.one}`}
-            </Button>
-          )}
-        </div>
-      </Fold>
+      {children.length > 0 && (
+        <Fold open={open} id={`${ids}-branch-${node.id}`}>
+          <ul className="tree tree-below">
+            {children.map((entry) => (
+              <Branch key={entry.id} node={entry} tree={tree} openState={openState} current={current} ids={ids} depth={depth + 1} />
+            ))}
+          </ul>
+        </Fold>
+      )}
     </li>
   );
 }
@@ -267,29 +343,34 @@ export function Fold({ open, id, children }: { open: boolean; id: string; childr
   );
 }
 
+// A reason the server gave, closed as one sentence whether or not it brought its own period.
+function sentence(reason: string): string {
+  return /[.!?]$/.test(reason.trim()) ? reason.trim() : `${reason.trim()}.`;
+}
+
 function TreeSkeleton({ failed }: { failed: string | null }) {
   if (failed) {
     return (
       <p role="alert" className="inline-note" data-tone="alert">
-        The list could not be read: {failed}. Reload the page to try again.
+        The list could not be read: {sentence(failed)} Reload the page to try again.
       </p>
     );
   }
   return (
-    <div className="stack" role="status" aria-label="Loading the list" aria-busy="true">
+    <div className="stack side-skeleton" role="status" aria-label="Loading the list" aria-busy="true">
       {["62%", "48%", "54%"].map((width, index) => (
-        <span key={index} className="skeleton" style={{ width, marginLeft: index % 2 ? "1.4rem" : "0.6rem" }} />
+        <span key={index} className="skeleton" style={{ width }} />
       ))}
     </div>
   );
 }
 
 // Creating in place: Enter creates the node and opens it, Escape cancels, and the blur that follows does nothing more.
-export function NewNode({ parent, kind, onDone }: { parent?: TreeNode; kind?: "client" | "project"; onDone: () => void }) {
+export function NewNode({ parent, kind, idPrefix = "new-node", onDone }: { parent?: TreeNode; kind?: "client" | "project"; idPrefix?: string; onDone: () => void }) {
   const { saving } = useWorkspace();
   const router = useRouter();
   const [name, setName] = useState("");
-  const what = parent ? CHILD[parent.kind].one : (kind ?? "client");
+  const what = parent ? (parent.kind === "client" ? "project" : "subproject") : (kind ?? "client");
   const settled = useRef(false);
 
   async function create() {
@@ -326,7 +407,7 @@ export function NewNode({ parent, kind, onDone }: { parent?: TreeNode; kind?: "c
       )}
       <Field
         autoFocus
-        id={`new-node-${parent?.id ?? kind ?? "root"}`}
+        id={`${idPrefix}-${parent?.id ?? kind ?? "root"}`}
         name="node-name"
         aria-label={`New ${what} name`}
         placeholder={`New ${what} name`}

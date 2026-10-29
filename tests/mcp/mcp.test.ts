@@ -1,5 +1,6 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { tools as registry } from "@/lib/tools/registry";
+import { chatTools } from "@/lib/chat/tools";
+import { agentTools as registry, tools as everyTool } from "@/lib/tools/registry";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashAgentToken, newAgentToken } from "@/lib/agent-token";
 import { mcpEndpoint } from "@/lib/mcp/server";
@@ -77,6 +78,17 @@ describe("the MCP endpoint", () => {
     const readOnly = tools.filter((t) => t.annotations?.readOnlyHint).map((t) => t.name).sort();
     expect(readOnly).toEqual(registry.filter((t) => t.readOnly).map((t) => t.name).sort());
     expect(tools.find((t) => t.name === "create_task")?.annotations?.readOnlyHint).toBe(false);
+    await client.close();
+  });
+
+  it("does not publish the person's own daily review, which the chat does", async () => {
+    const client = await connect(token);
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name)).not.toContain("run_daily_review");
+    expect(everyTool.map((t) => t.name)).toContain("run_daily_review");
+    expect(Object.keys(chatTools({ db: user!.client, ownerId: user!.id, source: "chat" }))).toContain("run_daily_review");
+    // Nothing else the MCP publishes is the person's own.
+    expect(registry.filter((t) => t.personOnly)).toEqual([]);
     await client.close();
   });
 
@@ -163,5 +175,21 @@ describe("the MCP endpoint", () => {
     const next = parse(await client.callTool({ name: "get_updates_since", arguments: {} })) as { created: Array<{ title: string }> };
     expect(next.created.map((i) => i.title)).toEqual(["Written on screen after the read"]);
     await client.close();
+  });
+
+  it("a general task is out of the token's reach, by id, by its groups, and by General", async () => {
+    const { data, error } = await user!.client.from("items").insert({ node_id: null, type: "task", title: "General, not the agent's", due_on: "2026-10-28" }).select("id").single();
+    if (error) throw new Error(error.message);
+    const client = await connect(token);
+    const changed = await client.callTool({ name: "update_item", arguments: { id: data.id, title: "Reached" } });
+    expect(parse(changed)).toMatchObject({ ok: false, code: "not_found" });
+    const general = await client.callTool({ name: "get_tasks", arguments: { node: null, today: "2026-10-28" } });
+    expect(parse(general)).toMatchObject({ ok: false, code: "not_found" });
+    const own = parse(await client.callTool({ name: "get_tasks", arguments: { today: "2026-10-28" } })) as { ok: boolean; groups: { today: { tasks: Array<{ id: string }> } } };
+    expect(own.ok).toBe(true);
+    expect(own.groups.today.tasks.map((row) => row.id)).not.toContain(data.id);
+    await client.close();
+    const still = await user!.client.from("items").select("title").eq("id", data.id).single();
+    expect(still.data?.title).toBe("General, not the agent's");
   });
 });

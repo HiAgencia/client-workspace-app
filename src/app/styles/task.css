@@ -1,0 +1,1174 @@
+/* The pieces of a task —its row and its board card, its detail, the quick add— and the menu every piece's «More» opens.
+   Every value comes from a role in tokens.css; a hover lives inside `(hover: hover)`, and every property a state changes
+   is listed in the rest state's transition. */
+
+/* ---- The menu (src/components/ui/menu.tsx) ----------------------------------------------------------------------- */
+.menu-popup {
+  min-width: 12.5rem;
+  max-width: min(22rem, calc(100vw - 2 * var(--gutter)));
+}
+.menu-item {
+  justify-content: space-between;
+  padding-left: 0.75em;
+  cursor: pointer;
+
+  &[data-tone="danger"] {
+    color: var(--alert-ink);
+  }
+  &[data-disabled] {
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+  &[data-popup-open] {
+    background: var(--interior-hover);
+  }
+}
+[role="menuitemradio"].menu-item {
+  padding-left: 1.9em;
+  justify-content: flex-start;
+
+  &[data-checked] {
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  &[data-checked]::before {
+    content: "";
+    position: absolute;
+    left: 0.85em;
+    top: 50%;
+    width: 0.32em;
+    height: 0.6em;
+    margin-top: -0.38em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    rotate: 45deg;
+  }
+}
+.menu-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-item-detail {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+/* A submenu's entry draws the way it opens, as part of the entry, and answers with it. */
+.menu-sub::after {
+  content: "";
+  flex: none;
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.35em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--muted);
+  rotate: -45deg;
+  transition: color var(--dur-hover-out) var(--ease-hover-out), translate var(--dur-hover-out) var(--ease-hover-out);
+}
+.menu-sub:is([data-highlighted], [data-popup-open])::after {
+  color: var(--accent);
+  translate: 0.12em 0;
+  transition-duration: var(--dur-hover);
+}
+.menu-separator {
+  height: 1px;
+  margin: 0.3rem 0.35rem;
+  background: var(--division);
+}
+.menu-group-label {
+  padding: 0.5em 0.75em 0.2em;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  user-select: none;
+}
+.menu-trigger[data-popup-open] {
+  --btn-fill: var(--interior-hover);
+  --btn-rim: var(--division);
+  --btn-ink: var(--ink);
+}
+
+/* ---- Colors a task says with its word ------------------------------------------------------------------------------ */
+[data-priority="1"] {
+  --prio: var(--prio-urgent);
+}
+[data-priority="2"] {
+  --prio: var(--prio-high);
+}
+[data-priority="3"] {
+  --prio: var(--prio-normal);
+}
+[data-priority="4"] {
+  --prio: var(--prio-low);
+}
+[data-when="overdue"] {
+  --when: var(--due-overdue);
+}
+[data-when="today"] {
+  --when: var(--due-today);
+}
+[data-when="tomorrow"] {
+  --when: var(--due-tomorrow);
+}
+[data-when="week"] {
+  --when: var(--due-week);
+}
+[data-when="later"] {
+  --when: var(--due-later);
+}
+[data-color="red"] {
+  --place: var(--node-red);
+}
+[data-color="orange"] {
+  --place: var(--node-orange);
+}
+[data-color="amber"] {
+  --place: var(--node-amber);
+}
+[data-color="green"] {
+  --place: var(--node-green);
+}
+[data-color="teal"] {
+  --place: var(--node-teal);
+}
+[data-color="blue"] {
+  --place: var(--node-blue);
+}
+[data-color="indigo"] {
+  --place: var(--node-indigo);
+}
+[data-color="violet"] {
+  --place: var(--node-violet);
+}
+[data-color="pink"] {
+  --place: var(--node-pink);
+}
+[data-color="gray"] {
+  --place: var(--node-gray);
+}
+
+/* ---- The circle that completes a task: the color of its priority; on hover it fills a little and shows its mark. --- */
+.task-circle:not([data-priority]) {
+  --prio: var(--prio-low);
+}
+.task-circle {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: 2px solid var(--prio);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--prio) 9%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--prio) 22%, transparent);
+  transition-property: background-color, box-shadow, border-color;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  &::after {
+    content: "";
+    width: 0.24rem;
+    height: 0.46rem;
+    margin-top: -0.1rem;
+    border-right: 2px solid var(--prio);
+    border-bottom: 2px solid var(--prio);
+    rotate: 45deg;
+    opacity: 0;
+    transition: opacity var(--dur-hover-out) var(--ease-hover-out), border-color var(--dur) var(--ease-std);
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: color-mix(in srgb, var(--prio) 18%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--prio) 22%, transparent);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+    &:hover::after {
+      opacity: 1;
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[aria-checked="true"] {
+    background: var(--prio);
+  }
+  &[aria-checked="true"]::after {
+    opacity: 1;
+    border-color: var(--card);
+  }
+  /* A finger gets a whole target around the drawn circle. */
+  @media (pointer: coarse) {
+    &::before {
+      content: "";
+      position: absolute;
+      inset: -0.8rem;
+    }
+  }
+  @media (forced-colors: active) {
+    border-color: CanvasText;
+    &[aria-checked="true"] {
+      background: Highlight;
+    }
+  }
+}
+
+/* ---- A group's list and its rows -----------------------------------------------------------------------------------
+   The rows share their columns (a subgrid): the circle, the words, and the place at the right, in one column for every
+   row. The row opens on a press anywhere that is not one of its own controls; its words let the press through. */
+.task-group-body {
+  position: relative;
+  min-height: 0.5rem;
+}
+.task-list {
+  container: task-list / inline-size;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.task-item {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows var(--dur) var(--ease-in), opacity var(--dur) var(--ease-in);
+
+  &[data-leaving] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  &[data-dragging] {
+    opacity: 0.45;
+  }
+}
+.task {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;
+  min-height: 0;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--radius-control);
+  background: transparent;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), padding var(--dur) var(--ease-in);
+
+  & > :not(.task-open, .task-more) {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+  }
+  & :is(a, button, [role="checkbox"], .picker, .menu-trigger) {
+    pointer-events: auto;
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover .task-place {
+      color: var(--ink-soft);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[data-menu-open] {
+    background: var(--interior);
+  }
+}
+.task-item[data-leaving] > .task {
+  overflow: hidden;
+  padding-block: 0;
+}
+/* The press that opens the row: the whole row is its surface, and its focus ring is the row's. */
+.task-open {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  cursor: pointer;
+  transition: box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+  /* The row answers with its fill and a rim of its own. */
+  @media (hover: hover) {
+    &:hover {
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.task-check {
+  grid-column: 1;
+  grid-row: 1;
+  /* Centered on the title's first line. */
+  margin-top: calc((1lh - 1.2rem) / 2);
+}
+.task-title {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.task:not([data-place]) .task-title {
+  grid-column: 2 / -1;
+}
+.task-place {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  margin: 0;
+  padding-top: calc((var(--text-body) * 1.45 - var(--text-meta) * 1.4) / 2);
+  color: var(--muted);
+  text-align: right;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+.task-place-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  font-weight: 600;
+}
+/* The place's own color, when it has one, marks it beside its name. */
+.task-place-name[data-color]::before {
+  content: "";
+  flex: none;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--place);
+  translate: 0 -0.05em;
+}
+.task-desc {
+  grid-column: 2 / -1;
+  margin: 0.1rem 0 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.task-meta {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.8rem;
+  min-height: 0;
+  margin-top: 0.15rem;
+  /* Room for «More», which appears at the row's end. */
+  padding-right: 4.5rem;
+
+  &:empty {
+    display: none;
+  }
+}
+.task-priority {
+  color: var(--prio);
+  font-weight: 650;
+}
+.task-notes,
+.task-source {
+  color: var(--muted);
+}
+.task-mail[data-mail="waiting"] {
+  color: var(--mail-waiting);
+  font-weight: 650;
+}
+.task-mail[data-mail="arrived"] {
+  color: var(--mail-arrived);
+  font-weight: 650;
+}
+/* The date and the subtasks are controls of their own: quiet at rest, tinted in their state's color, filled on hover. */
+.task-when .picker,
+.task-subtasks-toggle {
+  min-height: 0;
+  padding: 0.15em 0.5em;
+  margin-left: -0.5em;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-control) * 0.7);
+  font-family: var(--font-text);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  line-height: 1.4;
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+}
+.task-when {
+  display: inline-flex;
+}
+.task-when:not([data-when]) {
+  --when: var(--due-later);
+}
+/* The tint stays light enough that its words keep 4.5:1 over the row's hover too; on hover the words deepen toward the
+   ink, so the tint can deepen without losing contrast. */
+.task-when .picker {
+  background: color-mix(in srgb, var(--when) 6%, transparent);
+  color: var(--when);
+  box-shadow: 0 1px 2px transparent, 0 1px 1px transparent;
+  transition-property: background-color, border-color, color, box-shadow;
+
+  &::after {
+    display: none;
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: color-mix(in srgb, var(--when) 10%, var(--card));
+      border-color: color-mix(in srgb, var(--when) 45%, transparent);
+      color: color-mix(in srgb, var(--when) 72%, var(--ink));
+      box-shadow: var(--shadow-control);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.task-subtasks-toggle {
+  margin-left: 0;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--division), 0 1px 2px transparent, 0 1px 1px transparent;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  transition-property: background-color, border-color, color, box-shadow;
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      border-color: var(--control-rim);
+      box-shadow: inset 0 0 0 1px var(--control-rim), var(--shadow-control);
+      color: var(--ink);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[aria-expanded="true"] {
+    background: var(--accent-tint);
+    color: var(--accent-ink);
+  }
+}
+.task-when .picker:focus-visible,
+.task-subtasks-toggle:focus-visible {
+  outline-offset: 1px;
+}
+/* «More» shows where the pointer is or the focus went, always at the row's end; a touch opens the detail instead. */
+.task-more {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.3rem;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--dur-hover-out) var(--ease-hover-out);
+
+  /* Over the row's sunk hover it rises with the card's own fill, so it never repeats what is under it. */
+  & .menu-trigger {
+    --btn-fill: var(--card);
+    --btn-rim: var(--division);
+    --btn-shadow: var(--shadow-control);
+    min-height: 1.9em;
+  }
+  @media (hover: hover) {
+    & .menu-trigger:hover {
+      --btn-shadow: var(--shadow-control-hover);
+    }
+  }
+}
+.task[data-layout="board"] .task-more .menu-trigger {
+  --btn-fill: var(--interior);
+  --btn-rim: transparent;
+  --btn-shadow: none;
+}
+.task-more .menu-trigger[data-popup-open] {
+  --btn-fill: var(--interior-hover);
+  --btn-rim: var(--division);
+}
+.task:is(:focus-within, [data-menu-open]) > .task-more {
+  opacity: 1;
+  transition-duration: var(--dur-hover);
+}
+@media (hover: hover) {
+  .task:hover > .task-more {
+    opacity: 1;
+    transition-duration: var(--dur-hover);
+  }
+}
+@media (hover: none) {
+  .task-more {
+    display: none;
+  }
+}
+.task-subtasks {
+  grid-column: 2 / -1;
+}
+.task-subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  margin: 0;
+  padding: 0.35rem 0.25rem 0.15rem;
+  list-style: none;
+
+  & .skeleton {
+    width: 60%;
+    margin-block: 0.45rem;
+  }
+}
+.task-subtask {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.1rem;
+}
+.task-subtask-title {
+  min-width: 0;
+  padding: 0.15em 0.35em;
+  margin-left: -0.35em;
+  border: 0;
+  border-radius: calc(var(--radius-control) * 0.7);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.22em;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), text-decoration-color var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      text-decoration-color: currentColor;
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.task-subtask[data-done] .task-subtask-title,
+.task[data-done] .task-title {
+  color: var(--muted);
+  text-decoration-line: line-through;
+  text-decoration-color: currentColor;
+}
+/* A done subtask is crossed out already: its hover answers with its fill, its ink, and a rim of its own. */
+.task-subtask-title {
+  box-shadow: inset 0 0 0 1px transparent;
+  transition-property: background-color, text-decoration-color, color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+}
+@media (hover: hover) {
+  .task-subtask-title:hover {
+    box-shadow: inset 0 0 0 1px var(--division);
+    transition-duration: var(--dur-hover);
+  }
+  .task-subtask[data-done] .task-subtask-title:hover {
+    color: var(--ink-soft);
+  }
+}
+.inline-link {
+  font-weight: inherit;
+}
+
+/* Where a drop lands, between two rows. */
+.task-drop-mark {
+  grid-column: 1 / -1;
+  height: 2px;
+  margin: -1px 0.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  pointer-events: none;
+}
+.task-group-body[data-drop] {
+  border-radius: var(--radius-control);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* A narrow list —a phone, a narrow column— puts the place under the data, as the board card does. */
+@container task-list (width < 30rem) {
+  .task[data-place] .task-title {
+    grid-column: 2 / -1;
+  }
+  .task-place {
+    grid-column: 2 / -1;
+    grid-row: auto;
+    order: 3;
+    justify-self: start;
+    padding-top: 0.15rem;
+    padding-right: 4.5rem;
+    text-align: left;
+  }
+  .task[data-place] .task-meta {
+    padding-right: 0;
+  }
+  .task-desc {
+    order: 1;
+  }
+  .task-meta {
+    order: 2;
+  }
+  .task-subtasks {
+    order: 4;
+  }
+}
+
+/* ---- The board: the same piece as a card, each group a column of cards ------------------------------------------ */
+.task-list[data-layout="board"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.task-list[data-layout="board"] > .task-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.task[data-layout="board"] {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.6rem;
+  padding: 0.7rem 0.75rem 0.65rem;
+  border: 1px solid var(--card-rim);
+  border-radius: calc(var(--radius-card) * 0.75);
+  background: var(--card);
+  box-shadow: var(--shadow-control);
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out),
+    border-color var(--dur-hover-out) var(--ease-hover-out), padding var(--dur) var(--ease-in);
+
+  & .task-title {
+    grid-column: 2;
+  }
+  & .task-place {
+    grid-column: 2;
+    grid-row: auto;
+    order: 3;
+    justify-self: start;
+    padding-top: 0.2rem;
+    text-align: left;
+  }
+  & .task-desc {
+    grid-column: 2;
+    order: 1;
+  }
+  & .task-meta {
+    grid-column: 2;
+    order: 2;
+  }
+  & .task-subtasks {
+    grid-column: 2;
+    order: 4;
+  }
+  /* «More» sits at the card's last line, the place's, which leaves it its room. */
+  &[data-place] .task-meta {
+    padding-right: 0;
+  }
+  &[data-place] .task-place {
+    padding-right: 4.5rem;
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--card);
+      border-color: color-mix(in srgb, var(--accent) 35%, var(--card-rim));
+      box-shadow: var(--shadow-control-hover);
+    }
+  }
+}
+
+/* ---- The adds at a list's foot and in the detail ----------------------------------------------------------------- */
+.task-add {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 2.15em;
+  padding: 0.3em 0.6em;
+  margin-left: -0.6em;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px transparent, 0 1px 1px transparent;
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      border-color: var(--division);
+      color: var(--accent-ink);
+      box-shadow: var(--shadow-control);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+}
+.task-add-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+
+  & .field {
+    flex: 1 1 14rem;
+  }
+}
+
+/* ---- The detail: a dialog at the center ---------------------------------------------------------------------------- */
+.task-detail {
+  width: min(58rem, calc(100vw - 2 * var(--gutter)));
+  max-width: none;
+  max-height: calc(100svh - 2 * var(--gutter));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.task-detail-in {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 18rem;
+  padding: 1rem var(--pad-card) var(--pad-card);
+}
+.task-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+.task-detail-path {
+  margin: 0;
+  min-width: 0;
+}
+.task-detail-kind {
+  color: var(--muted);
+}
+.task-detail-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.task-detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 17rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+.task-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.task-detail-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+
+  & .task-check {
+    margin-top: calc((var(--text-lead) * 1.25 + 0.7rem - 1.2rem) / 2);
+  }
+}
+.task-detail-title {
+  position: relative;
+  border-radius: var(--radius-control);
+}
+.task-detail-title-text {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  text-box: normal;
+
+  & a {
+    pointer-events: auto;
+  }
+}
+.task-detail-title-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  cursor: text;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.task-detail-title-field {
+  font-family: var(--font-display);
+  font-size: var(--text-lead);
+  font-weight: 700;
+  line-height: 1.25;
+  resize: none;
+  field-sizing: content;
+}
+.task-detail-desc .rich-field {
+  min-height: 4.5em;
+}
+/* The formatting bar opens while the description is being written, and folds away when it is only read. */
+.task-detail-desc .rich-bar {
+  max-height: 8rem;
+  opacity: 1;
+  visibility: visible;
+  transition: max-height var(--dur) var(--ease-std), opacity var(--dur) var(--ease-std), margin var(--dur) var(--ease-std), visibility 0s;
+}
+.task-detail-desc .rich:not(:focus-within) .rich-bar {
+  max-height: 0;
+  margin-bottom: -0.4rem;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition: max-height var(--dur) var(--ease-std), opacity var(--dur) var(--ease-std), margin var(--dur) var(--ease-std),
+    visibility 0s linear var(--dur);
+}
+.task-detail-status {
+  min-height: 1lh;
+  margin: 0.25rem 0 0;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-std);
+
+  &[data-shown] {
+    opacity: 1;
+  }
+}
+.task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--division);
+}
+.task-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+}
+.task-note-list,
+.task-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.task-note {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+  color: var(--ink);
+}
+.task-note-text {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+
+  & a {
+    pointer-events: auto;
+  }
+}
+/* A note reads as written; a click on its words (not on a link) edits it, like the title. */
+.task-note {
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 0.2rem 0;
+}
+.task-note-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  margin-left: -0.5rem;
+  border-radius: var(--radius-control);
+}
+.task-note-edit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  cursor: text;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.task-note-field {
+  flex: 1 1 auto;
+  resize: none;
+  field-sizing: content;
+}
+.task-note-more {
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--dur-hover-out) var(--ease-hover-out);
+}
+.task-note:is(:focus-within, :has([data-popup-open])) .task-note-more {
+  opacity: 1;
+  transition-duration: var(--dur-hover);
+}
+@media (hover: hover) {
+  .task-note:hover .task-note-more {
+    opacity: 1;
+    transition-duration: var(--dur-hover);
+  }
+}
+/* On a touch screen nothing appears on hover: the note's «More» is always in view. */
+@media (hover: none) {
+  .task-note-more {
+    opacity: 1;
+  }
+}
+.task-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+}
+.task-version-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.task-detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.9rem;
+  border-radius: calc(var(--radius-card) * 0.75);
+  background: var(--read);
+}
+.task-attrs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0;
+}
+.task-attr dd {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0;
+
+  & .picker {
+    width: 100%;
+  }
+}
+/* The event is a menu whose button reads as the attribute's field. */
+.task-attr-menu.btn {
+  --btn-fill: var(--field);
+  --btn-rim: var(--field-rim);
+  --btn-ink: var(--ink);
+  --btn-shadow: var(--shadow-field);
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 2.5em;
+  padding: 0.5em 0.8em;
+  font-family: var(--font-text);
+  font-weight: 400;
+  white-space: normal;
+  text-align: left;
+
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      --btn-fill: var(--field-hover);
+      --btn-rim: color-mix(in srgb, var(--accent) 55%, var(--field-rim));
+      --btn-shadow: var(--shadow-field-hover);
+    }
+  }
+}
+.task-detail-origin {
+  margin: 0;
+}
+.task-detail-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.task-detail-in[aria-busy="true"] .skeleton {
+  width: 70%;
+}
+@media (width < 48rem) {
+  .task-detail {
+    width: 100vw;
+    max-height: 100svh;
+    height: 100svh;
+    margin: 0;
+    border-radius: 0;
+  }
+  .task-detail-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- The quick add ------------------------------------------------------------------------------------------------ */
+.qa-dialog {
+  width: min(40rem, calc(100vw - 2 * var(--gutter)));
+  max-width: none;
+  margin-block: 14svh auto;
+  overflow: visible;
+}
+.qa {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1rem;
+}
+.qa-inline {
+  margin-top: 0.35rem;
+  border: 1px solid var(--card-rim);
+  border-radius: calc(var(--radius-card) * 0.75);
+  background: var(--card);
+  box-shadow: var(--shadow-control);
+
+  & .qa {
+    padding: 0.75rem;
+  }
+}
+/* The field and its mirror share one box: the mirror paints the words and marks what was read; the field above it
+   carries the caret and the selection, its own ink transparent. */
+.qa-box {
+  position: relative;
+  display: grid;
+  padding: 0;
+
+  &:focus-within {
+    border-color: var(--focus);
+    box-shadow: var(--shadow-field), 0 0 0 3px var(--focus-halo);
+  }
+  @media (hover: hover) {
+    &:focus-within:hover {
+      background: var(--field-hover);
+      border-color: var(--focus);
+      box-shadow: var(--shadow-field-hover), 0 0 0 4px var(--focus-halo);
+    }
+  }
+}
+.qa-mirror,
+.qa-input {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: 0.6em 0.8em;
+  border: 0;
+  font-family: var(--font-text);
+  font-size: var(--text-lead);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.qa-mirror {
+  color: var(--ink);
+  pointer-events: none;
+}
+.qa-input {
+  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  outline: none;
+
+  &::placeholder {
+    color: var(--muted);
+  }
+  &::selection {
+    color: var(--ink);
+    background: var(--selection-bg);
+  }
+}
+.qa-mark {
+  border-radius: 0.25em;
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent-ink);
+}
+.qa-suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: var(--layer-notice);
+  min-width: min(20rem, 100%);
+  margin: 0;
+  list-style: none;
+  transition-property: opacity, translate, display;
+  transition-behavior: allow-discrete;
+
+  @starting-style {
+    opacity: 0;
+    translate: 0 -0.35rem;
+  }
+}
+.qa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.qa-chip {
+  display: inline-flex;
+}
+.qa-chip:not([data-set]) .chip-picker {
+  color: var(--muted);
+}
+.qa-chip[data-read] .chip-picker {
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+.qa-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+.qa-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+.qa-note {
+  margin: 0;
+}

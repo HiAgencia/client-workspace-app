@@ -3,7 +3,7 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 
 // The chat without spend: a scripted model that reads the last request and calls the tool a real model would
-// (create a task, record a decision, look up what is pending), then says what it did. It lets the whole chat —
+// (create a task, record a decision, look up what is pending, review the day), then says what it did. It lets the whole chat —
 // tools, cards, undo, the cap— be built and tested without credits.
 
 const usage = {
@@ -26,6 +26,23 @@ function lastUserText(prompt: LanguageModelV4Prompt): string {
 // The system prompt says when no node is open: the conversation covers the whole workspace.
 function workspaceWide(prompt: LanguageModelV4Prompt): boolean {
   return prompt.some((message) => message.role === "system" && message.content.includes("No node is open"));
+}
+
+// The person's calendar day and zone, read from the system prompt's «(time zone …)», as a real model reads them there.
+function personDay(prompt: LanguageModelV4Prompt): { today: string; zone: string } {
+  const system = prompt.find((message) => message.role === "system");
+  const named = system?.role === "system" ? system.content.match(/\(time zone ([^)]+)\)/)?.[1] : undefined;
+  let zone = "UTC";
+  try {
+    if (named) {
+      new Intl.DateTimeFormat("en", { timeZone: named });
+      zone = named;
+    }
+  } catch {
+    zone = "UTC";
+  }
+  // The Canadian English short date is the calendar day as YYYY-MM-DD.
+  return { today: new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()), zone };
 }
 
 function hasImage(prompt: LanguageModelV4Prompt): boolean {
@@ -67,10 +84,28 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
       .map(({ toolName, output }) => {
         const value = (
           output as {
-            value?: { ok?: boolean; item?: { title?: string }; openTasks?: Array<{ title: string }>; items?: Array<{ title: string }>; message?: string };
+            value?: {
+              ok?: boolean;
+              item?: { title?: string };
+              openTasks?: Array<{ title: string }>;
+              items?: Array<{ title: string }>;
+              actions?: Array<{ kind: string }>;
+              message?: string;
+            };
           }
         ).value;
         if (value?.ok === false) return `I could not do that: ${value.message}`;
+        if (toolName === "run_daily_review") {
+          const actions = value?.actions ?? [];
+          const completed = actions.filter((action) => action.kind === "complete").length;
+          const states = actions.filter((action) => action.kind === "mail_status").length;
+          if (actions.length === 0) return "I reviewed your day: nothing needed a change.";
+          const parts = [
+            ...(completed ? [`completed ${completed === 1 ? "1 task" : `${completed} tasks`}`] : []),
+            ...(states ? [`wrote the mail's state of ${states === 1 ? "1 task" : `${states} tasks`}`] : []),
+          ];
+          return `I reviewed your day: I ${parts.join(" and ")}. Each change has its undo below.`;
+        }
         if (toolName === "get_overview" || toolName === "browse_items") {
           const open = (toolName === "get_overview" ? value?.openTasks : value?.items) ?? [];
           return open.length === 0
@@ -84,6 +119,10 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
   }
 
   const request = lastUserText(prompt);
+  // «Review my day», the chat's fixed suggestion, or the same asked in other words: the daily review, run on purpose.
+  if (/\breview (?:my|the|today'?s?) ?day\b|\bdaily review\b|\breview (?:my|the) (?:tasks|mail)\b/i.test(request)) {
+    return call("run_daily_review", personDay(prompt));
+  }
   // "Create a task in Larkspur Bakery / Website to call the printer" names where it goes; without it, the open node takes
   // it.
   const task = request.match(/(?:create|add|new) (?:a )?task(?: (?:in|for) (.+?) to[:\s]+| to[:\s]+|[:\s]+)(.+)/i);

@@ -56,6 +56,17 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
   return { id: created.data.user.id, email, client };
 }
 
+// A demo session: an anonymous user, the only one the demo's sample accounts and mail are planted for. Its email is a
+// label for the failure messages; deleting it works like any other user.
+export async function createAnonymousUser(label: string): Promise<DisposableUser> {
+  const client = publicClient();
+  const signedIn = await client.auth.signInAnonymously();
+  if (signedIn.error || !signedIn.data.user) {
+    throw new Error(`could not open a demo session for ${label}: ${signedIn.error?.message ?? "no user returned"}`);
+  }
+  return { id: signedIn.data.user.id, email: `demo session ${label}`, client };
+}
+
 // Deleting the user cascades to everything it owns.
 export async function deleteDisposableUsers(users: Array<DisposableUser | undefined>): Promise<void> {
   const admin = serviceClient();

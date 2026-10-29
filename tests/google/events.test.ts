@@ -153,6 +153,45 @@ describe("events from inherited accounts", () => {
     expect(data!.find((row) => row.id === ids.revoked)!.status).toBe("revoked");
   });
 
+  it("a sample account of the demo asks Google nothing and is no failure", async () => {
+    const service = serviceClient();
+    const { data: sample, error } = await service.from("google_accounts").insert({ owner_id: user!.id, email: "sample@demo.example", is_demo: true }).select("id").single();
+    if (error) throw new Error(error.message);
+    try {
+      await service.from("node_accounts").insert({ node_id: ids.leaf, account_id: sample.id });
+      await service.from("account_calendars").insert({ account_id: sample.id, calendar_id: "primary", summary: "Sample", selected: true });
+      calls.length = 0;
+      const { events, failures } = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: ids.leaf, ...window });
+      expect(failures.map((failure) => failure.accountEmail)).toEqual(["revoked@example.com"]);
+      expect(events.every((event) => event.accountId !== sample.id)).toBe(true);
+      // Only the three real accounts were asked; the sample one stays as it was, not marked revoked.
+      expect(calls.filter((call) => call.includes("/events")).length).toBe(2);
+      const after = await service.from("google_accounts").select("status").eq("id", sample.id).single();
+      expect(after.data?.status).toBe("active");
+    } finally {
+      await service.from("google_accounts").delete().eq("id", sample.id);
+    }
+  });
+
+  it("browse_events says which tasks live in a Google event", async () => {
+    const ctx = { db: user!.client, ownerId: user!.id, source: "manual" as const, events: googleEventsSource(deps) };
+    const task = (await callTool("create_task", ctx, { node: ids.leaf, title: "Prepare the standup" })) as { ok: boolean; item: { id: string } };
+    const other = (await callTool("create_task", ctx, { node: ids.leaf, title: "Not in an event" })) as { ok: boolean; item: { id: string } };
+    expect((await callTool("link_task_event", ctx, { task: task.item.id, account: ids.agency, calendar: "primary", googleEvent: "a1" })).ok).toBe(true);
+    const browsed = (await callTool("browse_events", ctx, { node: ids.leaf, ...window, fromDay: "2026-11-01", toDay: "2026-11-07" })) as {
+      ok: boolean;
+      events: Array<{ id: string; linkedTaskIds: string[] }>;
+    };
+    expect(browsed.ok).toBe(true);
+    expect(browsed.events.find((event) => event.id === "a1")?.linkedTaskIds).toEqual([task.item.id]);
+    expect(browsed.events.find((event) => event.id === "l1")?.linkedTaskIds).toEqual([]);
+    expect(browsed.events.flatMap((event) => event.linkedTaskIds)).not.toContain(other.item.id);
+    // A deleted task is no longer in it.
+    await callTool("delete_item", ctx, { id: task.item.id });
+    const after = (await callTool("browse_events", ctx, { node: ids.leaf, ...window, fromDay: "2026-11-01", toDay: "2026-11-07" })) as { ok: boolean; events: Array<{ id: string; linkedTaskIds: string[] }> };
+    expect(after.events.find((event) => event.id === "a1")?.linkedTaskIds).toEqual([]);
+  });
+
   it("list_events serves them through the tool layer, and another owner's id is not found", async () => {
     const ctx = { db: user!.client, ownerId: user!.id, source: "manual" as const, events: googleEventsSource(deps) };
     const result = (await callTool("list_events", ctx, { node: "Acme / Web / Landing", ...window })) as {

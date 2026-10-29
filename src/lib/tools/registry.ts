@@ -4,16 +4,24 @@ import type { Tool } from "./define";
 import { getBoard } from "./board";
 import { browseEvents, browseItems } from "./browse";
 import { listEvents } from "./events";
-import { addDecision, addLink, addNote, addReview, createTask, deleteItem, listItems, searchItems, updateItem } from "./items";
-import { createEvent, deleteEvent, linkTaskEvent, unlinkTaskEvent, updateEvent } from "./local-events";
+import { addDecision, addNote, createTask, deleteItem, listItems, searchItems, updateItem } from "./items";
+import { createEvent, deleteEvent, linkNodeEvent, linkTaskEvent, unlinkNodeEvent, unlinkTaskEvent, updateEvent } from "./local-events";
 import { createGoogleEvent, deleteGoogleEvent, updateGoogleEvent } from "./google-events";
 import { getOverview, listTree } from "./nodes";
+import { createTaskFromMail, getMail, linkMail, listMail, setTaskMail, unlinkMail } from "./mail";
+import { getItem } from "./item-detail";
+import { listNotes } from "./notes";
+import { runDailyReviewTool } from "./review";
 import { fail, type ToolError, type ToolResult } from "./result";
+import { getTasks, moveItem, reorderItems, requestReview, rescheduleOverdue } from "./tasks";
 import { getUpdatesSince } from "./updates";
 
-// The single list the chat and the MCP server publish, in the order a model reads them.
+// The single list the chat publishes, in the order a model reads them; the MCP server publishes `agentTools`.
 export const tools: Tool[] = [
   listTree,
+  getTasks,
+  listNotes,
+  getItem,
   getBoard,
   getOverview,
   browseItems,
@@ -22,12 +30,16 @@ export const tools: Tool[] = [
   getUpdatesSince,
   listEvents,
   browseEvents,
+  listMail,
+  getMail,
   createTask,
   addNote,
-  updateItem,
   addDecision,
-  addLink,
-  addReview,
+  updateItem,
+  moveItem,
+  reorderItems,
+  rescheduleOverdue,
+  requestReview,
   deleteItem,
   createEvent,
   updateEvent,
@@ -37,7 +49,17 @@ export const tools: Tool[] = [
   deleteGoogleEvent,
   linkTaskEvent,
   unlinkTaskEvent,
+  linkNodeEvent,
+  unlinkNodeEvent,
+  linkMail,
+  unlinkMail,
+  createTaskFromMail,
+  setTaskMail,
+  runDailyReviewTool,
 ];
+
+// What a coding agent's MCP publishes: every tool but the person's own.
+export const agentTools: Tool[] = tools.filter((tool) => !tool.personOnly);
 
 export function findTool(name: string): Tool | undefined {
   return tools.find((tool) => tool.name === name);

@@ -2,6 +2,7 @@
 @import "./styles/tokens.css";
 @import "./styles/system.css";
 @import "./styles/screens.css";
+@import "./styles/shell.css";
 
 /* Layout utilities only: Tailwind's spacing, flex, and grid. Text sizes, colors, and surfaces come from the roles in
    styles/tokens.css through the classes of styles/system.css; `scripts/check-system.mjs` counts what escapes them. */

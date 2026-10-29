@@ -1,494 +1,282 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
-import { firstWeekday, today, weekOf } from "@/lib/dates";
-import { Empty } from "./blocks";
-import { ChatToggle } from "./chat-panel";
-import { get, tool, type Board, type Item, type TreeNode } from "./client-api";
-import { ConnectBlockedNote, type ConnectBlocked } from "./connect-blocked";
-import { land, onFocusRequest, takeFocusRequest, type FocusTarget, type Landing } from "./focus-request";
-import { ItemList, ItemRow, QuickAdd } from "./items";
+import { Field } from "@/components/ui/field";
+import { Menu, type MenuEntry } from "@/components/ui/menu";
+import { firstWeekday, today } from "@/lib/dates";
+import { NODE_COLORS } from "@/lib/node-colors";
+import { get, post, type TreeNode } from "./client-api";
 import {
-  ActivitySection,
-  AgendaSection,
-  KIND_NAME,
-  NodeCards,
-  placesIn,
-  plural,
-  ReviewSection,
-  TasksSection,
-  tasksInput,
-  useAgenda,
-  useBoardState,
-  useRead,
-  type BoardState,
-  type Browse,
-  type Read,
-  type SetBoard,
-} from "./sections";
-import { NewNode } from "./side-nav";
-import { useWorkspace } from "./workspace";
+  CalendarBoxContent,
+  MailBoxContent,
+  NoDateBoxContent,
+  NotesBoxContent,
+  SubprojectsBoxContent,
+  TasksBoxContent,
+  tasksCount,
+  useMailRead,
+  useNotesRead,
+  useTasksRead,
+  type Place,
+} from "./box-kinds";
+import { BoxBoard, customizeEntries, savePreference, SPLIT, useBoardLayout, useBoxRead, type BoardLayout, type BoxSpec } from "./boxes";
+import type { ConnectBlocked } from "./connect-blocked";
+import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
+import { allTasks, BoardShell } from "./overview";
+import { PageHeader, type PageLayout } from "./page-header";
+import { useAddress } from "./page-filters";
+import { count } from "./task-row";
+import { useChatScope, useWorkspace } from "./workspace";
 
-// The latest notes, decisions, and links of the node and of everything below it, each with its path, and how many there
-// are in all.
-type Overview = {
-  node: { id: string; path: string; kind: TreeNode["kind"] };
-  children: Array<{ id: string; name: string }>;
-  notes: Item[];
-  decisions: Item[];
-  links: Item[];
-  totals: Record<"notes" | "decisions" | "links", number>;
-};
+// A client's or a project's boxes, in their first order: its tasks and what has no date on the left, its week, its mail,
+// its notes and what hangs from it on the right.
+export const NODE_BOXES = ["tasks", "no_date", SPLIT, "calendar", "mail", "notes", "subprojects"];
 
 type Account = { id: string; email: string; status: string; nodeIds: string[] };
-type Accounts = { list: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked };
+type Accounts = { accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked };
 
-function ancestorsOf(tree: TreeNode[] | null, nodeId: string): TreeNode[] {
+const COLOR_NAMES: Record<(typeof NODE_COLORS)[number], string> = {
+  red: "Red",
+  orange: "Orange",
+  amber: "Amber",
+  green: "Green",
+  teal: "Teal",
+  blue: "Blue",
+  indigo: "Indigo",
+  violet: "Violet",
+  pink: "Pink",
+  gray: "Gray",
+};
+
+function chainOf(tree: TreeNode[], id: string): TreeNode[] {
   const chain: TreeNode[] = [];
-  for (let cursor = tree?.find((n) => n.id === nodeId); cursor; cursor = tree?.find((n) => n.id === cursor!.parentId)) chain.unshift(cursor);
+  for (let cursor = tree.find((node) => node.id === id); cursor; cursor = tree.find((node) => node.id === cursor!.parentId)) chain.unshift(cursor);
   return chain;
 }
 
-// A client's page or a project's page, composed like the Overview over one node and what is below it, in its order: the
-// tasks and the agenda, its projects or subprojects where the Overview has its clients and projects, what waits for review
-// and what changed, and then what the node and those below it keep. Both read the node through the tool layer and repaint
-// in place when it is read again.
-export function NodeView({ nodeId, googleOutcome }: { nodeId: string; googleOutcome: string | null }) {
-  const { version, tree, notify } = useWorkspace();
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [accounts, setAccounts] = useState<Accounts | null>(null);
-  const [accountsError, setAccountsError] = useState<string | null>(null);
-  const [weekStart] = useState(() => firstWeekday());
-  const now = today();
-  const week = weekOf(now, weekStart);
-  const board = useRead<Board>("get_board", { node: nodeId, today: now, from: week.from, through: week.to });
-  const { state, set } = useBoardState("all");
-  // Tasks leads the page: its first list is read with the node, so the page enters whole instead of a placeholder that
-  // grows and pushes what is below. Read once per visit; the section reads again on its own afterwards.
-  const [firstTasks, setFirstTasks] = useState<{ read: Read<Browse> | null } | null>(null);
-  const firstInput = useRef(tasksInput(nodeId, state, now, weekStart));
+const noSubscription = () => () => {};
 
-  useEffect(() => {
-    let live = true;
-    const input = firstInput.current;
-    void tool<Browse>("browse_items", input).then((answer) => {
-      // A failed read leaves the section to read and say it.
-      if (live) setFirstTasks({ read: answer.ok ? { key: JSON.stringify(input), value: answer } : null });
-    });
-    return () => {
-      live = false;
-    };
-  }, [nodeId]);
+// The page of a client or a project: the Overview's logic over that node and what hangs from it, its boxes in the order
+// its person gave this page, its tasks as a list or a board.
+export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved: BoardLayout | null; savedLayout: PageLayout | null }) {
+  const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
+  const { tree, notify, saving, refreshTree } = useWorkspace();
+  const router = useRouter();
+  useChatScope(nodeId);
+  const page = `node:${nodeId}`;
+  const params = useSearchParams();
+  const { set } = useAddress();
+  const layoutParam = params.get("layout");
+  const layout: PageLayout = layoutParam === "board" || layoutParam === "list" ? layoutParam : (savedLayout ?? "list");
+  const board = useBoardLayout(page, NODE_BOXES, saved, layout === "board" ? "tasks" : null);
+  const [weekStart] = useState(() => (typeof window === "undefined" ? 1 : firstWeekday()));
+  const now = mounted ? today() : null;
+  const place: Place = { kind: "node", id: nodeId };
+  const tasks = useTasksRead(place, now, { upcomingDays: 3 });
+  const notes = useNotesRead(place);
+  const mail = useMailRead(place, null);
+  const accounts = useBoxRead<Accounts>(() => get<Accounts>("/api/accounts"), "accounts");
+  const [adding, setAdding] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const google = params.get("google");
 
-  useEffect(() => {
-    let live = true;
-    void Promise.all([
-      tool<Overview>("get_overview", { node: nodeId, withEvents: false }),
-      get<{ accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked }>("/api/accounts"),
-    ]).then(([answer, accountsAnswer]) => {
-      // An answer for a node the person already left does not paint here.
-      if (!live) return;
-      if (answer.ok) {
-        setOverview(answer);
-        setError(null);
-      } else if (answer.code === "not_found") setNotFound(true);
-      else setError(answer.message);
-      if (accountsAnswer.ok) {
-        setAccounts({ list: accountsAnswer.accounts, canConnect: accountsAnswer.canConnect, connectBlocked: accountsAnswer.connectBlocked });
-        setAccountsError(null);
-      } else setAccountsError(accountsAnswer.message);
-    });
-    return () => {
-      live = false;
-    };
-  }, [nodeId, version]);
+  const node = tree?.find((entry) => entry.id === nodeId);
+  const chain = tree && node ? chainOf(tree, nodeId) : [];
+  const children = (tree ?? []).filter((entry) => entry.parentId === nodeId);
+  const ready = Boolean(node) && tasks.settled;
 
-  // The palette, the sidebar, or a row's path may have asked to land somewhere in this node. A done task or a reviewed
-  // item lives behind its section's other tab, so that tab opens first. The place may belong to a section still reading:
-  // the landing waits for it to paint, and says the place is not on the page only once nothing on it is reading.
-  const setBoard = useRef(set);
-  useEffect(() => {
-    setBoard.current = set;
-  }, [set]);
-  // The page paints once its node, the tree, its figures, and its first Tasks list are read (below): the landing starts
-  // then, never over the placeholder, where it would find nothing and say the place is missing.
-  const ready = overview !== null && tree !== null && firstTasks !== null && (board.data !== null || board.error !== null);
+  // The palette, the sidebar or a row's path may have asked to land somewhere on this page: once it painted, the view
+  // goes there.
   useEffect(() => {
     if (!ready) return;
-    let watch: MutationObserver | null = null;
-    let deadline: ReturnType<typeof setTimeout> | undefined;
-    const stop = () => {
-      watch?.disconnect();
-      watch = null;
-      clearTimeout(deadline);
-    };
     const apply = () => {
       const request = takeFocusRequest(nodeId);
       if (!request) return;
-      stop();
-      const { target } = request;
-      // The tab a done item lives behind; the address changes a frame or two later, so the landing waits until that tab
-      // is the chosen one before it can say the place is missing.
-      const section = target.kind === "item" && target.done ? (target.type === "task" ? "tasks" : target.type === "review" ? "review" : null) : null;
-      if (section === "tasks") setBoard.current({ status: "done", tasks: null, priority: null });
-      if (section === "review") setBoard.current({ review: "done" });
-      const tab = section ? `[data-section='${section}'] [role='tab'][data-tab='done'][aria-selected='true']` : null;
-      const page = () => document.querySelector(`[data-node-view="${nodeId}"]`);
-      const attempt = (final: boolean): boolean => {
-        const landing = land(target, { acted: request.acted });
-        if (landing === "landed" || landing === "busy") return true;
-        const reading = page()?.querySelector("[aria-busy='true']") || (tab !== null && !document.querySelector(tab));
-        if (landing === "missing" && !final && reading) return false;
-        notify({ text: notLanded(target, landing), tone: "status" });
-        return true;
-      };
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          const root = page();
-          if (attempt(false) || !root) return;
-          watch = new MutationObserver(() => {
-            if (attempt(false)) stop();
-          });
-          watch.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-busy", "aria-selected"] });
-          deadline = setTimeout(() => {
-            stop();
-            attempt(true);
-          }, 15_000);
+          const landing = land(request.target, { acted: request.acted });
+          if (landing === "missing" && request.target.kind === "item") notify({ text: `“${request.target.title}” is not on this page.`, tone: "status" });
         }),
       );
     };
     apply();
-    const off = onFocusRequest(apply);
-    return () => {
-      off();
-      stop();
-    };
+    return onFocusRequest(apply);
   }, [ready, nodeId, notify]);
 
-  if (notFound) {
-    return (
-      <section className="card stack" aria-labelledby="missing">
-        <h1 id="missing" className="t-h1">
-          This client or project is not here
-        </h1>
-        <p className="t-help">It was deleted, or it belongs to another account. Pick one in the sidebar, or go back to the Overview.</p>
-        <div>
-          <Link className={buttonClass({ variant: "primary" })} href="/app">
-            <span className="btn-label">Go to the Overview</span>
-          </Link>
-        </div>
-      </section>
-    );
+  if (tree && !node) return <NotHere />;
+  if (!node || !now) return <BoardShell />;
+
+  const root = chain[0];
+  const trail = [{ label: root.kind === "client" ? "Clients" : "Projects" }, ...chain.slice(0, -1).map((entry) => ({ label: entry.name, href: `/app/node/${entry.id}` }))];
+  const ids = new Set(chain.map((entry) => entry.id));
+  const seen = (accounts.data?.accounts ?? []).filter((account) => account.nodeIds.some((id) => ids.has(id)));
+  const connectHref = accounts.data?.canConnect ? `/api/google/connect?node=${nodeId}` : "/app/settings#google-accounts";
+  const one = node.kind === "client" ? "project" : "subproject";
+  const childName = node.kind === "client" ? "Projects" : "Subprojects";
+  const names: Record<string, string> = { tasks: "Tasks", no_date: "No date", calendar: "Calendar", mail: "Mail", notes: "Notes", subprojects: childName };
+  // Inside its own page a task's place goes without saying; one of a project below says its path from here.
+  const view = tasks.data;
+  const tasksRead = tasks;
+
+  function chooseLayout(value: PageLayout) {
+    set({ layout: value });
+    void savePreference({ page, layout: value }).then((answer) => {
+      if (!answer.ok) notify({ text: `The layout could not be remembered: ${answer.message}`, tone: "error" });
+    });
   }
-  // The page enters whole: its path and its projects come from the tree, its header's and its cards' figures from the
-  // board, and its tasks lead it, so it waits for those reads instead of painting and then pushing what is below —a figure
-  // that arrives later adds words to the header, which takes another line on a phone. A board that failed lets it in.
-  if (!ready || !overview || tree === null || firstTasks === null) return <NodeSkeleton failed={error} />;
 
-  const chain = ancestorsOf(tree, nodeId);
-  const node = chain.at(-1);
-  const name = node?.name ?? overview.node.path.split(" / ").at(-1) ?? overview.node.path;
-  const children = tree.filter((entry) => entry.parentId === nodeId);
-  const figures = board.stale ? null : board.data;
+  async function setColor(color: string | null) {
+    if (await saving(post(`/api/nodes/${nodeId}`, { color }, "PATCH"))) void refreshTree();
+  }
+
+  async function remove() {
+    const answer = await post(`/api/nodes/${nodeId}`, { archived: true }, "PATCH");
+    if (!(await saving(Promise.resolve(answer)))) return;
+    router.push("/app");
+    notify({
+      text: `Deleted “${node!.name}”`,
+      tone: "status",
+      undo: () => void saving(post(`/api/nodes/${nodeId}`, { archived: false }, "PATCH")).then((ok) => ok && router.push(`/app/node/${nodeId}`)),
+    });
+  }
+
+  function addChild() {
+    if (board.layout.hidden.includes("subprojects")) board.show("subprojects", childName);
+    setAdding(true);
+    requestAnimationFrame(() => document.querySelector("[data-box='subprojects']")?.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" }));
+  }
+
+  const more: MenuEntry[] = [
+    { kind: "action", label: "Rename…", onSelect: () => setRenaming(true) },
+    { kind: "action", label: `New ${one}`, onSelect: addChild },
+    { kind: "action", label: "Agent token…", onSelect: () => router.push(`/app/settings?node=${nodeId}#agent-tokens`) },
+    {
+      kind: "submenu",
+      label: "Google accounts",
+      detail: seen.length ? String(seen.length) : undefined,
+      entries: [
+        ...seen.map((account): MenuEntry => ({ kind: "action", label: account.email, detail: account.nodeIds.includes(nodeId) ? "Connected here" : "From a place above", disabled: true, onSelect: () => {} })),
+        ...(seen.length ? [{ kind: "separator" } as const] : []),
+        accounts.data?.canConnect
+          ? { kind: "action", label: "Connect a Google account here", onSelect: () => window.location.assign(new URL(`/api/google/connect?node=${nodeId}`, window.location.origin).toString()) }
+          : { kind: "action", label: "Connect a Google account here", disabled: true, detail: accounts.data?.connectBlocked === "demo" ? "Needs a Google sign-in" : "Not set up on this server", onSelect: () => {} },
+        { kind: "action", label: "Manage them in Settings", onSelect: () => router.push("/app/settings#google-accounts") },
+      ],
+    },
+    {
+      kind: "choice",
+      label: "Color",
+      value: node.ownColor ?? "none",
+      options: [{ value: "none", label: node.color && !node.ownColor ? "None (the one above)" : "None" }, ...NODE_COLORS.map((color) => ({ value: color, label: COLOR_NAMES[color] }))],
+      onChoose: (value) => void setColor(value === "none" ? null : value),
+    },
+    ...customizeEntries(board, names),
+    { kind: "separator" },
+    { kind: "action", label: `Delete ${node.kind === "client" ? "this client" : `this ${node.kind}`}`, tone: "danger", onSelect: () => void remove() },
+  ];
+
+  const tasksBox: BoxSpec = {
+    id: "tasks",
+    title: "Tasks",
+    count: tasksCount(view),
+    content: <TasksBoxContent read={tasksRead} now={now} place={place} placeId={nodeId} showPlace pageNode={nodeId} layout={layout} allHref={`/app/tasks?place=${nodeId}`} />,
+  };
+  const boxes: Record<string, BoxSpec> = {
+    tasks: tasksBox,
+    no_date: { id: "no_date", title: "No date", count: view?.groups.noDate.count, content: <NoDateBoxContent read={tasksRead} placeId={nodeId} showPlace pageNode={nodeId} /> },
+    calendar: { id: "calendar", title: "Calendar", content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?scope=${nodeId}`} /> },
+    mail: { id: "mail", title: "Mail", count: mail.data ? `${mail.data.unread} unread` : undefined, content: <MailBoxContent read={mail} now={now} place={place} connectHref={connectHref} /> },
+    notes: { id: "notes", title: "Notes", count: notes.data?.total, content: <NotesBoxContent read={notes} place={place} /> },
+    subprojects: { id: "subprojects", title: childName, count: children.length, content: <SubprojectsBoxContent node={node} adding={adding} setAdding={setAdding} /> },
+  };
 
   return (
-    <article className="page board fade-enter" data-node-view={nodeId} data-node-kind={overview.node.kind}>
-      <NodeHeader overview={overview} name={name} ancestors={chain.slice(0, -1)} board={figures} below={children} node={node} googleOutcome={googleOutcome} error={error} />
-      <WorkRows nodeId={nodeId} tree={tree} state={state} set={set} now={now} weekStart={weekStart} firstTasks={firstTasks.read}>
-        <ChildrenSection parent={node} nodes={children} board={figures} failed={board.error !== null} />
-      </WorkRows>
-      <div className="board-row board-row-split">
-        <Section title="Notes" type="note" nodeId={nodeId} items={overview.notes} total={overview.totals.notes} empty="No notes here yet." />
-        <Section title="Decisions" type="decision" nodeId={nodeId} items={overview.decisions} total={overview.totals.decisions} empty="No decisions here yet." />
-      </div>
-      <div className="board-row board-row-split">
-        <Section title="Links" type="link" nodeId={nodeId} items={overview.links} total={overview.totals.links} empty="No links saved here yet." />
-        <AccountsCard nodeId={nodeId} accounts={accounts} failed={accountsError} chain={chain} />
-      </div>
-    </article>
-  );
-}
-
-// The node's work, in the Overview's own sections and order: the tasks and the agenda side by side, the node's projects or
-// subprojects (`children`) where the Overview has its clients and projects, then what waits for review and what changed.
-function WorkRows({
-  nodeId,
-  tree,
-  state,
-  set,
-  now,
-  weekStart,
-  firstTasks,
-  children,
-}: {
-  nodeId: string;
-  tree: TreeNode[];
-  state: BoardState;
-  set: SetBoard;
-  now: string;
-  weekStart: number;
-  firstTasks: Read<Browse> | null;
-  children: ReactNode;
-}) {
-  const agenda = useAgenda(nodeId, state.agenda, now, weekStart);
-  return (
-    <>
-      <div className="board-row board-row-wide">
-        <TasksSection scope={nodeId} state={state} set={set} now={now} weekStart={weekStart} places={placesIn(tree, nodeId)} defaultTasks="all" initial={firstTasks} />
-        <AgendaSection agenda={agenda} state={state} set={set} now={now} weekStart={weekStart} calendarHref={`/app/calendar?scope=${nodeId}`} />
-      </div>
-      {children}
-      <div className="board-row board-row-split">
-        <ReviewSection scope={nodeId} state={state} set={set} addTo={nodeId} />
-        <ActivitySection scope={nodeId} state={state} set={set} />
-      </div>
-    </>
-  );
-}
-
-function NodeHeader({
-  overview,
-  name,
-  ancestors,
-  board,
-  below,
-  node,
-  googleOutcome,
-  error,
-}: {
-  overview: Overview;
-  name: string;
-  ancestors: TreeNode[];
-  board: Board | null;
-  // Its projects or subprojects.
-  below: TreeNode[];
-  node: TreeNode | undefined;
-  googleOutcome: string | null;
-  error: string | null;
-}) {
-  const figures = board?.figures;
-  // The node's open tasks count its whole subtree, the same number the sidebar and its card show; a project says how
-  // many of them are in its subprojects, so the header and its own Tasks reconcile on sight.
-  const open = figures?.open ?? node?.openTasks;
-  const perNode = new Map((board?.nodes ?? []).map((entry) => [entry.id, entry.open]));
-  const busy = below.filter((child) => (perNode.get(child.id) ?? 0) > 0);
-  const inChildren = busy.reduce((sum, child) => sum + (perNode.get(child.id) ?? 0), 0);
-  const kind = overview.node.kind;
-  return (
-    <header className="card page-head">
-      <div className="page-head-row page-head-split">
-        <div className="stack page-head-text">
-          {ancestors.length > 0 ? (
-            <nav aria-label="Path" className="t-meta node-eyebrow">
-              <span>{KIND_NAME[kind]} of</span>
-              <ol className="crumbs">
-                {ancestors.map((entry) => (
-                  <li key={entry.id}>
-                    <Link className="link" href={`/app/node/${entry.id}`}>
-                      {entry.name}
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            </nav>
-          ) : (
-            <p className="t-meta">{kind === "client" ? "Client" : "Project of your own"}</p>
-          )}
-          <h1 className="t-h1" tabIndex={-1} data-node-title>
-            {name}
-          </h1>
-        </div>
-        <div className="page-actions">
-          <ChatToggle />
-          <Link className={buttonClass({ size: "sm" })} href={`/app/settings?node=${overview.node.id}#agent-tokens`}>
-            <span className="btn-label">Issue an agent token</span>
-          </Link>
-        </div>
-      </div>
-      <div className="facts t-meta" data-node-count={open}>
-        {kind === "client" && <span className="nowrap">{plural(below.length, "project", "projects")}</span>}
-        {open !== undefined && (
-          <span className="nowrap">
-            {plural(open, "open task", "open tasks")}
-            {kind !== "client" && inChildren > 0 && `, ${inChildren} in ${busy.length === 1 ? busy[0].name : "subprojects"}`}
+    <ViewTransition enter="page-in" exit="page-out" default="none">
+    <div className="page page-boxes" data-node-view={nodeId} data-node-kind={node.kind}>
+      <PageHeader
+        trail={trail}
+        title={node.name}
+        titleProps={{ "data-node-title": "" }}
+        count={
+          <span className="node-facts">
+            <span data-node-count={node.openTasks}>{node.openTasks === 0 ? "No open tasks" : count(node.openTasks, "open task", "open tasks")}</span>
+            {seen.map((account) => (
+              <span key={account.id} className="t-name node-account">
+                {account.email}
+              </span>
+            ))}
           </span>
-        )}
-        {figures && <span className="nowrap">{figures.late} late</span>}
-        {(figures || node) && <span className="nowrap">{plural(figures?.toReview ?? node!.openReviews, "item to review", "items to review")}</span>}
-      </div>
-      {googleOutcome && <GoogleOutcome outcome={googleOutcome} />}
-      {error && (
-        <p role="alert" className="inline-note" data-tone="alert">
-          It could not be refreshed: {error}. What you see is the last version read.
-        </p>
-      )}
-    </header>
+        }
+        layout={{ value: layout, onChange: chooseLayout }}
+        chat
+        more={<Menu label="More" about={`for ${node.name}`} entries={more} />}
+      />
+      {google && <GoogleOutcome outcome={google} />}
+      <BoxBoard board={board} boxes={boxes} label={`The boxes of ${node.name}`} wide={layout === "board" ? tasksBox : null} />
+      <RenameDialog open={renaming} name={node.name} nodeId={nodeId} onClose={() => setRenaming(false)} />
+    </div>
+    </ViewTransition>
   );
 }
 
-// A client's projects, or a project's subprojects: one card each, with its own "New".
-function ChildrenSection({ parent, nodes, board, failed }: { parent: TreeNode | undefined; nodes: TreeNode[]; board: Board | null; failed: boolean }) {
-  const { tree } = useWorkspace();
-  const [adding, setAdding] = useState(false);
-  if (!parent) return null;
-  const many = parent.kind === "client" ? "projects" : "subprojects";
-  const one = parent.kind === "client" ? "project" : "subproject";
+// Renaming: one field with the current name, Enter keeps the new one, Escape leaves it as it was.
+function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: string; nodeId: string; onClose: () => void }) {
+  const { saving } = useWorkspace();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [value, setValue] = useState(name);
+  useEffect(() => {
+    const element = dialog.current;
+    if (!element) return;
+    if (open && !element.open) {
+      setValue(name);
+      element.showModal();
+    }
+    if (!open && element.open) element.close();
+  }, [open, name]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const next = value.trim();
+    if (!next || next === name) return onClose();
+    if (await saving(post(`/api/nodes/${nodeId}`, { name: next[0].toUpperCase() + next.slice(1) }, "PATCH"))) onClose();
+  }
+
   return (
-    <section className="card board-section" aria-labelledby="children-title" id="children" data-section="children">
-      <div className="section-head">
-        <div className="section-title">
-          <h2 id="children-title" className="t-title" tabIndex={-1}>
-            {`${many[0].toUpperCase()}${many.slice(1)} of ${parent.name}`}
-          </h2>
-          <span className="t-meta">{nodes.length}</span>
-        </div>
-        <div className="section-filters">
-          <Button size="sm" onClick={() => setAdding(true)} data-add-child>
-            {`New ${one}`}
+    <dialog ref={dialog} className="dialog rename-dialog" aria-labelledby="rename-title" onClose={onClose}>
+      <form className="rename-form" onSubmit={(event) => void submit(event)}>
+        <h2 id="rename-title" className="t-title">
+          Rename
+        </h2>
+        <Field autoFocus aria-label="Name" value={value} onChange={(event) => setValue(event.target.value)} />
+        <div className="rename-actions">
+          <Button size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" variant="primary" type="submit" disabled={!value.trim()}>
+            Rename
           </Button>
         </div>
-      </div>
-      {adding && (
-        <div className="tree-new section-new">
-          <NewNode parent={parent} onDone={() => setAdding(false)} />
-        </div>
-      )}
-      <NodeCards nodes={nodes} tree={tree ?? []} board={board} failed={failed} empty={!adding && <Empty text={`No ${many} in ${parent.name} yet.`} />} />
-    </section>
+      </form>
+    </dialog>
   );
 }
 
-function AccountsCard({ nodeId, accounts, failed, chain }: { nodeId: string; accounts: Accounts | null; failed: string | null; chain: TreeNode[] }) {
-  const { tree } = useWorkspace();
-  const visible = (accounts?.list ?? [])
-    .map((account) => ({ account, from: chain.map((n) => n.id).reverse().find((id) => account.nodeIds.includes(id)) }))
-    .filter((entry) => entry.from);
-  const node = chain.at(-1);
-  const above = chain.slice(0, -1);
+function NotHere() {
   return (
-    <section className="card board-section" aria-labelledby="accounts">
-      <div className="section-head">
-        <div className="section-title">
-          <h2 id="accounts" className="t-title">
-            Google accounts
-          </h2>
-        </div>
+    <section className="card not-here" aria-labelledby="missing">
+      <h1 id="missing" className="t-h1" tabIndex={-1} data-page-title>
+        This client or project is not here
+      </h1>
+      <p className="t-help">It was deleted, or it belongs to another account. Pick one in the sidebar, or go back to the Overview.</p>
+      <div>
+        <Link className={buttonClass({ variant: "primary" })} href="/app">
+          <span className="btn-label">Go to the Overview</span>
+        </Link>
       </div>
-      {accounts === null ? (
-        failed ? (
-          <p role="alert" className="inline-note" data-tone="alert">
-            The Google accounts could not be read: {failed}. Reload the page to try again.
-          </p>
-        ) : (
-          <div className="stack" role="status" aria-label="Loading accounts" aria-busy="true">
-            <span className="skeleton" style={{ width: "70%" }} />
-            <span className="skeleton" style={{ width: "45%" }} />
-          </div>
-        )
-      ) : (
-        <div className="stack">
-          {visible.length === 0 ? (
-            <p className="t-help">
-              {`No Google account connected yet. An account connected here${above.length > 0 ? `, or to ${above.map((n) => n.name).join(" or ")},` : ""} shows its calendars on this page${node?.kind === "client" ? " and on its projects" : ""}.`}
-            </p>
-          ) : (
-            <ul className="plain-list stack">
-              {visible.map(({ account, from }) => (
-                <li key={account.id} className="account-line">
-                  <span className="t-name">{account.email}</span>
-                  <span className="pill" data-tone={from === nodeId ? "accent" : undefined}>
-                    {from === nodeId ? "Connected here" : `Connected to ${tree?.find((n) => n.id === from)?.name ?? "a parent"}`}
-                  </span>
-                  {account.status !== "active" && (
-                    <span className="pill" data-tone="alert">
-                      {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {failed && (
-            <p role="alert" className="inline-note" data-tone="alert">
-              The Google accounts could not be refreshed: {failed}.
-            </p>
-          )}
-          {accounts.canConnect ? (
-            <div>
-              <a className={buttonClass({ size: "sm" })} href={`/api/google/connect?node=${nodeId}`}>
-                <span className="btn-label">Connect a Google account here</span>
-              </a>
-            </div>
-          ) : (
-            <ConnectBlockedNote reason={accounts.connectBlocked} />
-          )}
-        </div>
-      )}
     </section>
-  );
-}
-
-// What the node and those below it keep: each row says where it lives when that is not the page's own node. The section
-// lists the latest ones and says how many there are in all; search finds the rest.
-function Section({ title, type, nodeId, items, total, empty }: { title: string; type: Item["type"]; nodeId: string; items: Item[]; total: number; empty: string }) {
-  const id = `section-${type}`;
-  const more = total > items.length;
-  return (
-    <section className="card board-section" aria-labelledby={id} data-section={type}>
-      <div className="section-head">
-        <div className="section-title">
-          <h2 id={id} className="t-title">
-            {title}
-          </h2>
-          {items.length > 0 && <span className="t-meta">{more ? `${items.length} of ${total}` : items.length}</span>}
-        </div>
-      </div>
-      <QuickAdd nodeId={nodeId} type={type} />
-      {items.length === 0 ? (
-        <Empty text={empty} />
-      ) : (
-        <ItemList items={items}>{(item) => <ItemRow item={item} showPath={item.nodeId !== nodeId} />}</ItemList>
-      )}
-      {more && <p className="t-meta">{`Showing the latest ${items.length} of ${total}. Search finds the others.`}</p>}
-    </section>
-  );
-}
-
-function notLanded(target: FocusTarget, landing: Landing): string {
-  if (landing === "hidden") return "That place is there, but something on top of it holds the focus: close it and try again.";
-  if (target.kind !== "item") return "That place is not on this page.";
-  if (target.type === "note" || target.type === "decision" || target.type === "link") return `“${target.title}” is not on this page: it lists the latest ${target.type}s.`;
-  return `“${target.title}” is not on this page anymore.`;
-}
-
-function NodeSkeleton({ failed }: { failed: string | null }) {
-  if (failed) {
-    return (
-      <section className="card stack" role="alert">
-        <h1 className="t-title">This page could not be read</h1>
-        <p className="t-help">{failed}. Reload the page to try again.</p>
-      </section>
-    );
-  }
-  return (
-    <div className="page" role="status" aria-label="Loading" aria-busy="true">
-      <div className="card stack">
-        <span className="skeleton" style={{ width: "18%" }} />
-        <span className="skeleton skeleton-title" style={{ width: "42%", height: "1.9rem" }} />
-        <span className="skeleton" style={{ width: "30%" }} />
-      </div>
-      <div className="card stack">
-        <span className="skeleton skeleton-title" style={{ width: "16%" }} />
-        <span className="skeleton" style={{ width: "100%", height: "2.5rem" }} />
-        {["72%", "58%", "64%"].map((width) => (
-          <span key={width} className="skeleton" style={{ width }} />
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -504,7 +292,7 @@ export function GoogleOutcome({ outcome }: { outcome: string }) {
   const text = outcomes[outcome];
   if (!text) return null;
   return (
-    <p role={outcome === "connected" ? "status" : "alert"} className="inline-note" data-tone={outcome === "connected" ? "accent" : "alert"}>
+    <p role={outcome === "connected" ? "status" : "alert"} className="inline-note page-note" data-tone={outcome === "connected" ? "accent" : "alert"}>
       {text}
     </p>
   );

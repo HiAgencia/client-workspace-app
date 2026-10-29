@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
 import { BROWSER_BAR, MANIFEST_BACKGROUND } from "@/lib/theme";
 import manifest from "./manifest";
 
@@ -9,7 +10,11 @@ describe("the web manifest", () => {
   const value = manifest();
 
   it("names the site, where it starts, and the theme's colors", () => {
-    expect(value.name).toBe("client-workspace");
+    // The brand as it is written everywhere, the document's title included, until the final name is chosen.
+    expect(PRODUCT_NAME).toBe("Client Workspace");
+    expect(value.name).toBe(PRODUCT_NAME);
+    expect(value.short_name).toBe(PRODUCT_NAME);
+    expect(value.description).toBe(PRODUCT_DESCRIPTION);
     expect(value.start_url).toBe("/");
     expect(value.background_color).toBe(MANIFEST_BACKGROUND);
     expect(value.theme_color).toBe(BROWSER_BAR.light);

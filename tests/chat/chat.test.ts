@@ -118,6 +118,19 @@ describe("the workspace's own chat, with no node open", () => {
     expect(answer).toContain("call the printer");
   });
 
+  it("«Review my day» runs the daily review through its tool, on purpose, for the person's day", async () => {
+    const zone = "America/Argentina/Buenos_Aires";
+    const { message } = await drain(await runChat({ ctx: wide(), model: simulatedModel(), messages: ask("Review my day"), timeZone: zone }));
+    const toolPart = message?.parts.find((part) => part.type === "tool-run_daily_review") as
+      | { input: { today: string; zone: string }; output: { ok: boolean; ran: boolean; review: { requested: boolean; day: string } } }
+      | undefined;
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    expect(toolPart?.input).toEqual({ today, zone });
+    expect(toolPart?.output).toMatchObject({ ok: true, ran: true, review: { requested: true, day: today } });
+    const answer = message?.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
+    expect(answer).toContain("I reviewed your day");
+  });
+
   it("keeps its conversation apart from each node's", async () => {
     const rows = ["workspace one", "workspace two"].map((text, i) => ({ node_id: null, role: i === 0 ? "user" : "assistant", parts: [{ type: "text", text }] }));
     const { error } = await user!.client.from("chat_messages").insert(rows);

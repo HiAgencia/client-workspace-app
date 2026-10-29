@@ -16,6 +16,7 @@ import {
   type Day,
 } from "@/lib/dates";
 import { cx } from "@/lib/utils";
+import { usePopupContainer } from "./popup-layer";
 
 type DatePickerProps = {
   value: Day | null;
@@ -23,26 +24,30 @@ type DatePickerProps = {
   label: string;
   look?: "field" | "chip";
   className?: string;
+  // What the trigger says instead of the day in words, such as the day with its hour.
+  display?: string;
 };
 
 // The product's date field: a trigger with the day in words, and a calendar the system draws. Arrows move a day or a
 // week, Page Up and Page Down a month, Home and End the week's ends, Enter picks, Escape closes; "Today", "Tomorrow"
 // and "No date" are one press away.
-export function DatePicker({ value, onChange, label, look = "field", className }: DatePickerProps) {
+export function DatePicker({ value, onChange, label, look = "field", className, display }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const now = today();
+  const container = usePopupContainer();
+  const shown = display ?? dueLabel(value, now);
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         // The name carries the visible words, and the full day goes as its description.
-        aria-label={`${label}: ${dueLabel(value, now)}`}
+        aria-label={`${label}: ${shown}`}
         aria-description={value ? longDay(value) : undefined}
         className={cx("picker", look === "field" ? "field" : "chip-picker", className)}
         data-tone={look === "chip" ? dueTone(value, now) : undefined}
       >
-        <span className={cx("picker-value", !value && "picker-placeholder")}>{dueLabel(value, now)}</span>
+        <span className={cx("picker-value", !value && "picker-placeholder")}>{shown}</span>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={container}>
         <Popover.Positioner className="positioner" sideOffset={6} align="start">
           <Popover.Popup
             className="popup calendar"

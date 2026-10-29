@@ -1,0 +1,743 @@
+/* The boxes a page holds and what goes inside them: the Overview's, a client's or a project's, and the groups of tasks
+   the Tasks page shows whole. Every value comes from a role in tokens.css; a hover lives inside `(hover: hover)`, and
+   every property a state changes is listed in the rest state's transition. */
+
+/* ---- The page: its header, then its boxes ---------------------------------------------------------------------- */
+.page-boxes,
+.page-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+}
+/* The count's line while the browser has not said its day yet: the same height, so nothing below moves. */
+.page-count-wait {
+  display: inline-block;
+  width: 12rem;
+  height: 1em;
+}
+.page-note {
+  margin: 0;
+}
+
+/* ---- The board: two columns side by side where they fit, one column in the same order where they do not ----------- */
+.boxes {
+  container: boxes / inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+}
+.boxes-cols {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+}
+.boxes-col {
+  display: contents;
+}
+.boxes-end {
+  display: none;
+}
+@container boxes (width >= 46rem) {
+  .boxes-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .boxes-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-cards);
+    min-width: 0;
+  }
+  /* The end of a column takes a box dropped there, also when the column holds none. */
+  .boxes-end {
+    display: block;
+    min-height: 3rem;
+    margin-top: calc(var(--gap-cards) * -1);
+    border-radius: var(--radius-card);
+    box-shadow: inset 0 0 0 2px transparent;
+    transition: box-shadow var(--dur-fast) var(--ease-std);
+
+    &[data-drop] {
+      box-shadow: inset 0 0 0 2px var(--accent);
+    }
+  }
+}
+
+/* A box waits out of sight until it and the boxes above it in its column read, so none pushes another while the page
+   arrives; then it enters. A box that shows takes the pointer at once, also while it reads again. What the board reads
+   is said meanwhile, where the boxes will be, without taking room or the pointer. */
+.box:not([data-shown]) {
+  visibility: hidden;
+}
+.box[data-shown] {
+  animation: rise-in var(--dur-slow) var(--ease-out) var(--enter-delay, 0s) backwards;
+}
+.boxes-wait {
+  position: absolute;
+  inset: 0 0 auto;
+  margin: 0;
+  padding: var(--pad-card);
+  pointer-events: none;
+}
+.boxes:not(:has(.box)) {
+  min-height: 24rem;
+}
+
+/* ---- A box: a surface with its title and its count; its «More» shows with the pointer or the focus --------------- */
+.box {
+  position: relative;
+  min-width: 0;
+  padding: var(--pad-card);
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+
+  &[data-dragging] {
+    opacity: 0.5;
+  }
+  /* Where a dragged box lands: a line above the box it goes before. */
+  &[data-drop-before]::before {
+    content: "";
+    position: absolute;
+    inset: calc(var(--gap-cards) / -2 - 1px) 0.5rem auto;
+    height: 2px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+  }
+}
+.box-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.15rem;
+  margin: calc(var(--pad-card) * -0.35) 0 0.65rem;
+}
+/* What can be dragged says so to the pointer: the head is where a box is taken. */
+.box-head-drag {
+  cursor: grab;
+}
+.box-head-drag:active {
+  cursor: grabbing;
+}
+.box-title {
+  min-width: 0;
+}
+.box-count {
+  color: var(--muted);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@supports (text-box: trim-both cap alphabetic) {
+  .box-count {
+    text-box: trim-both cap alphabetic;
+  }
+}
+.box-more {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--dur-hover-out) var(--ease-hover-out);
+}
+.box:is(:focus-within, [data-menu-open]) .box-more {
+  opacity: 1;
+  transition-duration: var(--dur-hover);
+}
+@media (hover: hover) {
+  .box:hover .box-more {
+    opacity: 1;
+    transition-duration: var(--dur-hover);
+  }
+}
+/* A touch screen has no pointer to pass over the box: its «More» is always in view. */
+@media (hover: none) {
+  .box-more {
+    opacity: 1;
+  }
+}
+.box-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+/* ---- A box's states ------------------------------------------------------------------------------------------- */
+.box-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-block: 0.25rem;
+
+  & p {
+    margin: 0;
+  }
+}
+.box-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+
+  & p {
+    margin: 0;
+  }
+}
+.box-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+
+  & .inline-note {
+    flex: 1 1 16rem;
+    margin: 0;
+  }
+}
+.box-read {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  transition: opacity var(--dur) var(--ease-std);
+
+  /* What is on screen belongs to the previous request while the new one reads. */
+  &[data-stale] {
+    opacity: 0.55;
+  }
+}
+.box-foot-link {
+  align-self: flex-start;
+}
+
+/* ---- The groups of tasks: Overdue, Today, Upcoming day by day, No date --------------------------------------------- */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.15rem;
+  padding-inline: 0.6rem;
+}
+.group-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 700;
+  line-height: 1.3;
+
+  /* A state's color goes with its word: Overdue in red, Today in green. */
+  &[data-when="overdue"],
+  &[data-when="today"] {
+    color: var(--when);
+  }
+}
+.group-count {
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@supports (text-box: trim-both cap alphabetic) {
+  .group-title,
+  .group-count,
+  .group-day-title {
+    text-box: trim-both cap alphabetic;
+  }
+}
+.group-action {
+  margin-left: auto;
+}
+.group-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.35rem;
+}
+.group-day-title {
+  margin: 0;
+  padding: 0.2rem 0.6rem 0.1rem;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  line-height: 1.3;
+
+  &[data-when="tomorrow"],
+  &[data-when="week"] {
+    color: var(--when);
+  }
+}
+.group-empty {
+  margin: 0;
+  padding: 0.1rem 0.6rem 0.3rem;
+}
+.group .task-add,
+.box-read > .task-add {
+  margin-left: 0;
+}
+.group-more {
+  align-self: flex-start;
+  margin: 0.25rem 0.6rem 0;
+}
+/* «Reschedule» is the group's own action: a control of the bar's skin, beside the group's name. */
+.reschedule.chip-picker {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* The board: each group a column of cards, side by side, sliding sideways when they do not fit. */
+.groups[data-layout="board"] {
+  display: grid;
+  grid-auto-columns: minmax(15.5rem, 1fr);
+  grid-auto-flow: column;
+  align-items: start;
+  gap: var(--gap-cards);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 0.35rem;
+  scrollbar-width: thin;
+
+  & .group {
+    gap: 0.5rem;
+    padding: 0.6rem;
+    border-radius: var(--radius-card);
+    background: var(--interior);
+  }
+  & .group-head,
+  & .group-day-title,
+  & .group-empty {
+    padding-inline: 0.25rem;
+  }
+  & .task-add {
+    margin-left: 0;
+  }
+}
+
+/* ---- Tasks, the page: the groups whole on one surface ------------------------------------------------------------ */
+.tasks-page {
+  min-width: 0;
+}
+.page-tasks[data-layout="board"] .tasks-page {
+  padding: var(--pad-card) 0 var(--pad-card) var(--pad-card);
+
+  & .groups {
+    padding-right: var(--pad-card);
+  }
+}
+
+/* ---- Calendar: the week, and the chosen day below ------------------------------------------------------------- */
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+.week-day {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  min-height: 3.6rem;
+  padding: 0.4rem 0.15rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  box-shadow: 0 1px 2px transparent, 0 0 0 0 transparent;
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      border-color: var(--division);
+      color: var(--ink);
+      box-shadow: var(--shadow-control), 0 0 0 0 transparent;
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+  &[aria-pressed="true"] {
+    background: var(--accent-tint);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent-ink);
+  }
+  @media (hover: hover) {
+    &[aria-pressed="true"]:hover {
+      background: var(--accent-tint-hover);
+      color: var(--accent-ink);
+    }
+  }
+  /* A task dragged over a day: the day takes it. */
+  &[data-over] {
+    box-shadow: var(--shadow-control), 0 0 0 2px var(--accent);
+  }
+  @media (forced-colors: active) {
+    &[aria-pressed="true"] {
+      border-color: Highlight;
+    }
+  }
+}
+.week-name {
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+.week-number {
+  font-size: var(--text-body);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.week-day[aria-current="date"] .week-number {
+  color: var(--due-today);
+}
+.week-day[aria-current="date"][aria-pressed="true"] .week-number {
+  color: var(--accent-ink);
+}
+/* A day with events carries a mark under its number; its count is said to the screen reader in the day's name. */
+.week-mark {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: transparent;
+
+  &[data-some] {
+    background: currentColor;
+  }
+}
+.day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  & > .group-title {
+    padding-inline: 0.1rem;
+  }
+}
+.event-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 1rem;
+  row-gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.event-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+.event-when {
+  color: var(--ink-soft);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.event-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.event-title {
+  color: var(--ink);
+  font-weight: 500;
+}
+.event-where {
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+/* ---- Mail: the rows that open the message ---------------------------------------------------------------------- */
+.box .mail-list,
+.note-list,
+.activity-list,
+.child-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.box .mail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: 0 0 0 0 transparent;
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      box-shadow: 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+    &:hover .mail-subject {
+      color: var(--accent-ink);
+    }
+  }
+}
+.box .mail-from {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.box .mail-side {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.box .mail-when {
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.box .mail-important {
+  font-size: var(--text-meta);
+}
+.box .mail-subject {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+.box .mail-row[data-unread] .mail-subject {
+  color: var(--ink);
+  font-weight: 600;
+}
+.box .mail-for {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+/* ---- Notes: a row that opens its note ---------------------------------------------------------------------------- */
+.note-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-control);
+  box-shadow: 0 0 0 0 transparent;
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  & > :not(.note-open) {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+  }
+  & a {
+    pointer-events: auto;
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      box-shadow: 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+    &:hover .note-title {
+      color: var(--accent-ink);
+    }
+  }
+}
+.note-open {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+.note-title {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+.note-decision {
+  font-size: var(--text-meta);
+}
+.note-where {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+.note-add {
+  margin-top: 0.15rem;
+}
+
+/* ---- Activity: what the review, the chat and an agent did, each with its undo -------------------------------------- */
+.activity-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  row-gap: 0.1rem;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-control);
+}
+.activity-what {
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 650;
+}
+.activity-undo,
+.activity-undone {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+.activity-undone {
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+.activity-title {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0.2em;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 500;
+  text-align: left;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: transparent;
+  transition-property: color, text-decoration-color;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--accent-ink);
+      text-decoration-color: currentColor;
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+}
+.activity-title-gone {
+  text-decoration: none;
+}
+.activity-detail {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+/* ---- Subprojects: one row each, to its page ---------------------------------------------------------------------- */
+.child-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: 0 0 0 0 transparent;
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior);
+      box-shadow: 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+    &:hover .child-name {
+      color: var(--accent-ink);
+    }
+  }
+}
+.child-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+.child-count {
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.child-new {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* ---- A client's or a project's header and its dialogs ------------------------------------------------------------ */
+.node-facts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+}
+.node-account {
+  color: var(--ink-soft);
+}
+.rename-dialog {
+  width: min(26rem, calc(100vw - 2 * var(--gutter)));
+}
+.rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: var(--pad-card);
+}
+.rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.not-here {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.calendar-failed-who {
+  display: block;
+  font-size: var(--text-meta);
+}

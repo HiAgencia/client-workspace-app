@@ -1,0 +1,80 @@
+/* The landing's picture of the demo: a small Overview drawn with the workspace's own pieces (the box, the task's row, the
+   week, the mail's rows, the notice), on a plane of the page's own canvas so it reads as the screen it shows. Every
+   value comes from a role in tokens.css. */
+.preview-frame {
+  container: preview / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+  padding: clamp(0.9rem, 2.2vw, 1.4rem);
+  border: 1px solid var(--card-rim);
+  border-radius: calc(var(--radius-card) * 1.25);
+  background: var(--canvas);
+  box-shadow: var(--shadow-pop);
+  user-select: none;
+}
+.preview-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-inline: 0.2rem;
+
+  & p {
+    margin: 0;
+  }
+}
+.preview-day {
+  min-height: 1.4em;
+}
+.preview-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+}
+.preview-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+  min-width: 0;
+}
+/* Beside the words the picture takes the wider half, so its boxes stand side by side as the Overview's do. */
+@media (width >= 60rem) {
+  .landing {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+@container preview (width >= 36rem) {
+  .preview-boxes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+/* The week's numbers are the visitor's own, read once the page runs: they fade in where the space was held. */
+.preview-frame .week-number {
+  min-width: 1.2em;
+  text-align: center;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease-std);
+
+  &[data-known] {
+    opacity: 1;
+  }
+}
+.preview-frame .week-day {
+  cursor: default;
+}
+/* The daily review's notice, where the workspace shows it: at the foot, at the end. It arrives last. */
+.preview-notice {
+  align-self: flex-end;
+  max-width: 100%;
+  animation: rise-in var(--dur-slow) var(--ease-out) 520ms backwards;
+}
+.preview-undo {
+  flex: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-notice {
+    animation: none;
+  }
+}

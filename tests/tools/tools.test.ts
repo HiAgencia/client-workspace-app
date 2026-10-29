@@ -53,7 +53,7 @@ async function refuse(name: string, ctx: ToolContext, input: unknown): Promise<T
   return result as ToolError;
 }
 
-type ItemOut = { id: string; nodeId: string; nodePath: string; type: string; title: string; status: string; source: string; agentLabel: string | null; priority: number | null; completedAt: string | null; deletedAt: string | null; body: string | null; url: string | null; dueOn: string | null; updatedAt: string };
+type ItemOut = { id: string; nodeId: string | null; nodePath: string | null; type: string; title: string; status: string; source: string; agentLabel: string | null; priority: number | null; completedAt: string | null; deletedAt: string | null; body: string | null; dueOn: string | null; updatedAt: string };
 
 beforeAll(async () => {
   a = await createDisposableUser("tools-a");
@@ -83,25 +83,39 @@ describe("the registry", () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(
       [
         "add_decision",
-        "add_link",
         "add_note",
-        "add_review",
         "browse_events",
         "browse_items",
         "create_event",
         "create_google_event",
         "create_task",
+        "create_task_from_mail",
         "delete_event",
         "delete_google_event",
         "delete_item",
         "get_board",
+        "get_item",
+        "get_mail",
         "get_overview",
+        "get_tasks",
         "get_updates_since",
+        "link_mail",
+        "link_node_event",
         "link_task_event",
         "list_events",
         "list_items",
+        "list_mail",
+        "list_notes",
         "list_tree",
+        "move_item",
+        "reorder_items",
+        "request_review",
+        "reschedule_overdue",
+        "run_daily_review",
         "search_items",
+        "set_task_mail",
+        "unlink_mail",
+        "unlink_node_event",
         "unlink_task_event",
         "update_event",
         "update_google_event",
@@ -110,7 +124,22 @@ describe("the registry", () => {
     );
     for (const tool of tools) expect(tool.description.length).toBeGreaterThan(40);
     expect(tools.filter((tool) => tool.readOnly).map((tool) => tool.name).sort()).toEqual(
-      ["browse_events", "browse_items", "get_board", "get_overview", "get_updates_since", "list_events", "list_items", "list_tree", "search_items"].sort(),
+      [
+        "browse_events",
+        "browse_items",
+        "get_board",
+        "get_item",
+        "get_mail",
+        "get_overview",
+        "get_tasks",
+        "get_updates_since",
+        "list_events",
+        "list_items",
+        "list_mail",
+        "list_notes",
+        "list_tree",
+        "search_items",
+      ].sort(),
     );
   });
 
@@ -146,8 +175,13 @@ describe("nodes by id or readable path", () => {
     expect((await refuse("get_overview", service, { node: bClient })).code).toBe("not_found");
   });
 
-  it("without a node and without a scope, a write asks which node", async () => {
-    expect((await refuse("create_task", userCtx(a), { title: "Nowhere" })).code).toBe("node_required");
+  it("without a node and without a scope, a task goes to General; a scoped access is asked which node it means", async () => {
+    const general = await run<{ item: ItemOut }>("create_task", userCtx(a), { title: "Nowhere in particular" });
+    expect(general.item).toMatchObject({ nodeId: null, nodePath: null });
+    // A scoped access without a node writes in its own node, and cannot name General.
+    const scoped = await run<{ item: ItemOut }>("create_task", agentCtx(treeA.web), { title: "In the token's node" });
+    expect(scoped.item.nodeId).toBe(treeA.web);
+    expect((await refuse("create_task", agentCtx(treeA.web), { node: null, title: "Into General" })).code).toBe("not_found");
   });
 });
 
@@ -171,26 +205,21 @@ describe("writes", () => {
     );
   });
 
-  it("add_decision, add_link, and add_review store their own shapes", async () => {
+  it("add_decision stores a decision, and the retired kinds have no tool", async () => {
     const decision = await run<{ item: ItemOut }>("add_decision", userCtx(a), {
       node: treeA.web,
       decision: "Use Workers",
       rationale: "One deploy target",
     });
     expect(decision.item).toMatchObject({ type: "decision", title: "Use Workers", body: "<p>One deploy target</p>", priority: null });
-    const link = await run<{ item: ItemOut }>("add_link", userCtx(a), { node: treeA.web, url: "https://example.com/spec" });
-    expect(link.item).toMatchObject({ type: "link", title: "https://example.com/spec", url: "https://example.com/spec" });
-    const review = await run<{ item: ItemOut }>("add_review", userCtx(a), { node: treeA.web, title: "Check the mockups" });
-    expect(review.item).toMatchObject({ type: "review", status: "open", url: null });
+    expect((await refuse("add_link", userCtx(a), { node: treeA.web, url: "https://example.com/spec" })).code).toBe("not_found");
+    expect((await refuse("add_review", userCtx(a), { node: treeA.web, title: "Check the mockups" })).code).toBe("not_found");
+    expect((await refuse("list_items", userCtx(a), { node: treeA.web, type: "link" })).code).toBe("invalid_input");
   });
 
-  it("a link must be http or https", async () => {
-    expect((await refuse("add_link", userCtx(a), { node: treeA.web, url: "javascript:alert(1)" })).code).toBe(
-      "invalid_input",
-    );
-    expect((await refuse("add_link", userCtx(a), { node: treeA.web, url: "ftp://example.com" })).code).toBe(
-      "invalid_input",
-    );
+  it("a review's address must be http or https", async () => {
+    expect((await refuse("request_review", agentCtx(treeA.web), { title: "Look", url: "javascript:alert(1)" })).code).toBe("invalid_input");
+    expect((await refuse("request_review", agentCtx(treeA.web), { title: "Look", url: "ftp://example.com" })).code).toBe("invalid_input");
   });
 
   it("update_item completes, reopens, and returns what it replaced", async () => {
@@ -290,7 +319,7 @@ describe("reads", () => {
       ],
       failures: [],
     });
-    const overview = await run<{ openTasks: ItemOut[]; decisions: ItemOut[]; links: ItemOut[]; toReview: ItemOut[]; children: Array<{ id: string }>; events: Array<{ title: string }> }>(
+    const overview = await run<{ openTasks: ItemOut[]; decisions: ItemOut[]; children: Array<{ id: string }>; events: Array<{ title: string }> } & Record<string, unknown>>(
       "get_overview",
       userCtx(a, { events }),
       { node: "Acme / Web" },
@@ -298,8 +327,9 @@ describe("reads", () => {
     expect(overview.openTasks.length).toBeGreaterThan(0);
     expect(overview.openTasks.every((i) => i.type === "task" && i.status === "open")).toBe(true);
     expect(overview.decisions.length).toBeGreaterThan(0);
-    expect(overview.links.length).toBeGreaterThan(0);
-    expect(overview.toReview.length).toBeGreaterThan(0);
+    // The retired kinds are not read anymore.
+    expect(overview.links).toBeUndefined();
+    expect(overview.toReview).toBeUndefined();
     expect(overview.children.map((c) => c.id)).toEqual([treeA.webLanding]);
     expect(overview.events.map((e) => e.title)).toEqual(["Kickoff"]);
   });
@@ -490,7 +520,7 @@ describe("the root holds clients and projects of one's own", () => {
 });
 
 describe("the board", () => {
-  it("counts what is open, late, due today and in a stretch of days, undated and to review, in total and per node with its subtree", async () => {
+  it("counts what is open, late, due today and in a stretch of days, and undated, in total and per node with its subtree", async () => {
     const c: DisposableUser = await createDisposableUser("board");
     try {
       const ctx: ToolContext = { db: c.client, ownerId: c.id, source: "manual" };
@@ -502,16 +532,15 @@ describe("the board", () => {
       await run("create_task", ctx, { node: own, title: "This week", dueOn: "2026-11-01" });
       await run("create_task", ctx, { node: own, title: "Later", dueOn: "2026-11-20" });
       await run("create_task", ctx, { node: own, title: "Whenever" });
-      await run("add_review", ctx, { node: client, title: "Look at this" });
       const { item: finished } = await run<{ item: ItemOut }>("create_task", ctx, { node: site, title: "Finished", dueOn: "2026-10-27" });
       await run("update_item", ctx, { id: finished.id, status: "done" });
 
       type Board = { figures: Record<string, number>; nodes: Array<{ id: string } & Record<string, number>> };
       const board = await run<Board>("get_board", ctx, { today: "2026-10-28", through: "2026-11-01" });
-      expect(board.figures).toEqual({ open: 5, late: 1, dueToday: 1, dueInRange: 2, undated: 1, toReview: 1 });
+      expect(board.figures).toEqual({ open: 5, late: 1, dueToday: 1, dueInRange: 2, undated: 1 });
       const byId = new Map(board.nodes.map((entry) => [entry.id, entry]));
-      expect(byId.get(client)).toMatchObject({ open: 2, late: 1, dueToday: 1, toReview: 1 });
-      expect(byId.get(site)).toMatchObject({ open: 2, late: 1, toReview: 0 });
+      expect(byId.get(client)).toMatchObject({ open: 2, late: 1, dueToday: 1 });
+      expect(byId.get(site)).toMatchObject({ open: 2, late: 1 });
       expect(byId.get(own)).toMatchObject({ open: 3, late: 0, dueInRange: 1, undated: 1 });
       // The whole week, its first days included, is the stretch the Tasks section of the same week lists.
       const week = await run<Board>("get_board", ctx, { today: "2026-10-28", from: "2026-10-26", through: "2026-11-01" });
@@ -541,7 +570,7 @@ describe("strict input", () => {
     const parent = await refuse("create_task", userCtx(a), { node: treeA.web, title: "With a parent", assignee: "Ana" });
     expect(parent.code).toBe("invalid_input");
     expect(parent.message).toMatch(/assignee/);
-    const item = await refuse("add_link", userCtx(a), { node: treeA.web, url: "https://example.com", item: "x" });
+    const item = await refuse("add_note", userCtx(a), { node: treeA.web, text: "With a stray field", item: "x" });
     expect(item.code).toBe("invalid_input");
     expect(item.message).toMatch(/item/);
     // Nothing was written by the refused calls.
@@ -577,13 +606,13 @@ describe("notes, subtasks, links, and branches", () => {
     expect(gone.item.deletedAt).not.toBeNull();
   });
 
-  it("a task keeps subtasks, notes, and links; deleting it takes the branch and undo brings the whole branch back", async () => {
+  it("a task keeps subtasks and notes; deleting it takes the branch and undo brings the whole branch back", async () => {
     const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "Parent task" });
     const { item: sub } = await run<{ item: ItemOut & { parentId: string } }>("create_task", userCtx(a), { parent: task.id, title: "Child" });
     const { item: grand } = await run<{ item: ItemOut & { parentId: string } }>("create_task", userCtx(a), { parent: sub.id, title: "Grandchild" });
     const { item: note } = await run<{ item: ItemOut & { parentId: string } }>("add_note", userCtx(a), { parent: task.id, text: "On the task" });
-    const { item: link } = await run<{ item: ItemOut & { parentId: string } }>("add_link", userCtx(a), { parent: task.id, url: "https://example.com/a" });
-    await run("add_link", userCtx(a), { parent: task.id, url: "https://example.com/b" });
+    const { item: link } = await run<{ item: ItemOut & { parentId: string } }>("add_note", userCtx(a), { parent: task.id, text: "[The spec](https://example.com/a)" });
+    await run("add_note", userCtx(a), { parent: task.id, text: "[The board](https://example.com/b)" });
     expect(sub.parentId).toBe(task.id);
     expect(sub.nodeId).toBe(treeA.mobileLanding);
     expect(note.parentId).toBe(task.id);
@@ -625,31 +654,22 @@ describe("notes, subtasks, links, and branches", () => {
     expect(taskToNote.error?.code).toBe("23514");
   });
 
-  it("a node's number is what is pending in its subtree, subtasks included", async () => {
-    const { nodes: before } = await run<{ nodes: Array<{ id: string; openTasks: number; openReviews: number }> }>("list_tree", userCtx(a), {});
+  it("a node's number is what its groups show in its subtree: a subtask counts only with a day", async () => {
+    const { nodes: before } = await run<{ nodes: Array<{ id: string; openTasks: number }> }>("list_tree", userCtx(a), {});
     const count = (nodes: typeof before, id: string) => nodes.find((n) => n.id === id)!;
     const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Counted" });
-    await run("create_task", userCtx(a), { parent: task.id, title: "Counted child" });
-    await run("add_review", userCtx(a), { node: treeA.webLanding, title: "Counted review" });
+    // A subtask without a day lives inside its task's row; one with a day is a row of its own.
+    await run("create_task", userCtx(a), { parent: task.id, title: "Not counted: undated child" });
+    await run("create_task", userCtx(a), { parent: task.id, title: "Counted child", dueOn: "2026-11-02" });
+    await run("add_note", userCtx(a), { node: treeA.webLanding, text: "Not counted: a note" });
     const { nodes: after } = await run<{ nodes: typeof before }>("list_tree", userCtx(a), {});
     for (const id of [treeA.webLanding, treeA.web, treeA.acme]) {
       expect(count(after, id).openTasks - count(before, id).openTasks).toBe(2);
-      expect(count(after, id).openReviews - count(before, id).openReviews).toBe(1);
     }
     expect(count(after, treeA.mobile).openTasks).toBe(count(before, treeA.mobile).openTasks);
-    // The client sums its projects: its number equals the sum over its subtree's own items.
-    const direct = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.acme, includeSubprojects: true });
-    const reviews = direct.items.filter((i) => i.type === "review").length;
-    const tasks = direct.items.filter((i) => i.type === "task").length;
-    expect(count(after, treeA.acme).openTasks).toBe(tasks);
-    expect(count(after, treeA.acme).openReviews).toBe(reviews);
-  });
-
-  it("a client finds the links of its projects and their tasks", async () => {
-    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Task with a link" });
-    const { item: link } = await run<{ item: ItemOut }>("add_link", userCtx(a), { parent: task.id, url: "https://example.com/deep", title: "Deep link" });
-    const overview = await run<{ links: ItemOut[] }>("get_overview", userCtx(a), { node: treeA.acme });
-    expect(overview.links.some((l) => l.id === link.id && l.nodePath === "Acme / Web / Landing")).toBe(true);
+    // The client sums its projects: its number equals its subtree's open tasks that are rows.
+    const direct = await run<{ items: Array<ItemOut & { parentId: string | null }> }>("list_items", userCtx(a), { node: treeA.acme, includeSubprojects: true });
+    expect(count(after, treeA.acme).openTasks).toBe(direct.items.filter((i) => i.type === "task" && (i.parentId === null || i.dueOn !== null)).length);
   });
 
   it("a client finds the notes and decisions of its projects, and a task's note stays with its task", async () => {
@@ -826,8 +846,12 @@ describe("events of the workspace's own", () => {
     // A decision does not live in an event.
     const { item: decision } = await run<{ item: ItemOut }>("add_decision", ctx, { node: treeA.web, decision: "Not in an event" });
     expect((await refuse("link_task_event", ctx, { task: decision.id, event: event.id })).code).toBe("invalid_input");
-    const unlinked = await run<{ removed: boolean }>("unlink_task_event", ctx, { task: task.id });
+    const unlinked = await run<{ removed: boolean; link: { itemId: string; eventId: string | null } | null }>("unlink_task_event", ctx, { task: task.id });
     expect(unlinked.removed).toBe(true);
+    // It gives back the link it took away, so the chat's «Undo» puts the task back in that same event.
+    expect(unlinked.link).toMatchObject({ itemId: task.id, eventId: event.id });
+    const again = await run<{ removed: boolean; link: unknown }>("unlink_task_event", ctx, { task: task.id });
+    expect(again).toMatchObject({ removed: false, link: null });
 
     await run("delete_event", ctx, { id: event.id });
     const gone = await run<{ events: Array<{ localId: string | null }> }>("browse_events", ctx, { from: "2026-11-01T00:00:00Z", to: "2026-11-08T00:00:00Z", fromDay: "2026-11-01", toDay: "2026-11-07" });

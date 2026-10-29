@@ -2,6 +2,7 @@
 
 import { Select as Base } from "@base-ui/react/select";
 import { cx } from "@/lib/utils";
+import { usePopupContainer } from "./popup-layer";
 
 type Tone = "neutral" | "accent" | "alert" | "warn" | "muted";
 export type SelectOption = { value: string; label: string; tone?: Tone };
@@ -24,6 +25,7 @@ type SelectProps = {
 // option are two states and both show.
 export function Select({ value, onChange, options, label, placeholder = "Chooseâ€¦", look = "field", id }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
+  const container = usePopupContainer();
   return (
     <Base.Root
       value={value}
@@ -42,7 +44,7 @@ export function Select({ value, onChange, options, label, placeholder = "Chooseâ
       >
         <Base.Value className="picker-value" placeholder={placeholder} />
       </Base.Trigger>
-      <Base.Portal>
+      <Base.Portal container={container}>
         <Base.Positioner className="positioner" sideOffset={6} align="start" alignItemWithTrigger={false}>
           <Base.Popup className="popup">
             <Base.List>

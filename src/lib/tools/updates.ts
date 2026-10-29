@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineTool } from "./define";
 import { fail, isError, ok } from "./result";
 import { itemSchema, selectAllItems, toItem, type Item } from "./rows";
-import { loadScope, resolveNode, subtree } from "./tree";
+import { loadScope, reachOf, resolveNode, type ReadPlace } from "./tree";
 
 // Each changed item lands in exactly one list, by the latest thing that happened to it since the moment.
 // The database writes microseconds and an offset, the caller milliseconds and a Z: compared as instants, not text.
@@ -20,8 +20,8 @@ function classify(item: Item, since: number): "deleted" | "completed" | "created
 export const getUpdatesSince = defineTool({
   name: "get_updates_since",
   description:
-    "What happened in a node and everything below it since a moment: new nodes, and items created, changed, " +
-    "completed, or deleted. Without a moment, an agent's access reads since its previous read (the first time, " +
+    "What happened in a node and everything below it (or everything in reach, General included) since a moment: new " +
+    "nodes, and items created, changed, completed, or deleted. Without a moment, an agent's access reads since its previous read (the first time, " +
     "everything in reach). Call it first when starting work to learn what is new in the project.",
   readOnly: true,
   input: z.strictObject({
@@ -47,13 +47,15 @@ export const getUpdatesSince = defineTool({
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
     const { scope } = loaded;
-    let ids = [...scope.reachable];
+    let place: ReadPlace = { kind: "all" };
     if (input.node !== undefined || scope.root) {
       const resolved = resolveNode(scope, input.node);
       if (isError(resolved)) return resolved;
-      ids = [...subtree(scope.all, resolved.node.id)].filter((id) => scope.reachable.has(id));
+      place = { kind: "node", node: resolved.node };
     }
-    const read = await selectAllItems(ctx, ids, (query) => query.gt("updated_at", since), "reading what changed");
+    const reach = reachOf(scope, place);
+    const ids = reach.nodeIds;
+    const read = await selectAllItems(ctx, reach, (query) => query.gt("updated_at", since), "reading what changed");
     if (isError(read)) return read;
     const lists = { created: [] as Item[], changed: [] as Item[], completed: [] as Item[], deleted: [] as Item[] };
     const items = read.rows.map((row) => toItem(row, scope)).sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : 1));

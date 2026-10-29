@@ -3,15 +3,16 @@ import { richTextToPlain } from "@/lib/rich-text";
 import { defineTool } from "./define";
 import { eventsForNode } from "./events";
 import { calendarEventSchema, eventsFailureSchema, type CalendarEvent, type EventsFailure } from "./events-source";
-import { localEventsIn, type LocalEvent } from "./local-events";
-import { fail, isError, ok } from "./result";
+import { localEventsIn, nodeEventLinks, type LocalEvent } from "./local-events";
+import type { ToolContext } from "./context";
+import { dbFail, fail, isError, ok } from "./result";
 import { byPriorityThenDue, itemSchema, itemTypes, newestFirst, selectAllItems, toItem, type Item } from "./rows";
-import { loadScope, resolveNode, subtree, type Scope, type TreeNode } from "./tree";
+import { describePlace, loadScope, reachOf, reaches, resolveReadPlace, type ReadPlace, type Scope, type TreeNode } from "./tree";
 
 // The reading the board's sections, the calendar, the chat, and the MCP share: items by node and subtree with every
 // filter and its count, and the events of a range from the Google accounts and the workspace's own, deduplicated.
 
-const sources = ["manual", "chat", "agent"] as const;
+const sources = ["manual", "chat", "agent", "review"] as const;
 const day = z.iso.date();
 
 const facetCounts = z.object({
@@ -81,23 +82,22 @@ export function browseInMemory(items: Item[], filters: Filters) {
   return { matched, counts };
 }
 
-function scopeNodes(scope: Scope, node: TreeNode | null, withSubtree: boolean): string[] {
-  if (!node) return [...scope.reachable];
-  if (!withSubtree) return [node.id];
-  return [...subtree(scope.all, node.id)].filter((id) => scope.reachable.has(id));
-}
-
 export const browseItems = defineTool({
   name: "browse_items",
   description:
-    "Browse items with filters, in one node and everything below it (or everything reachable): type, status, " +
+    "Browse items with filters, in one node and everything below it, in General (node null), or everything reachable: type, status, " +
     "priority, origin (manual, chat, agent), text, a range of due dates (from, to), only undated, or what hangs from " +
     "a task (parent). Returns the matches in order (tasks by priority then date, the rest newest first; or by due " +
     "date, or newest) and, for each filter, how many each value would show. An item without a due date never falls " +
     "due: it is outside every date range.",
   readOnly: true,
   input: z.strictObject({
-    node: z.string().min(1).optional().describe("The node's id or path. Omit it for the current node, or for everything when there is none."),
+    node: z
+      .string()
+      .min(1)
+      .nullable()
+      .optional()
+      .describe("The node's id or path, or null for General. Omit it for the current node, or for everything when there is none."),
     subtree: z.boolean().default(true).describe("Include every node below (default) or only the node itself."),
     type: z.array(z.enum(itemTypes)).min(1).optional(),
     status: z.enum(["open", "done", "all"]).default("open"),
@@ -113,7 +113,7 @@ export const browseItems = defineTool({
     limit: z.number().int().min(1).max(500).default(200),
   }),
   output: z.object({
-    scope: z.object({ id: z.string().nullable(), path: z.string() }),
+    scope: z.object({ kind: z.enum(["all", "general", "node"]), id: z.string().nullable(), path: z.string().nullable() }),
     // A task with subtasks says how many are open and done, whatever the filters let through.
     items: z.array(itemSchema.extend({ subtasks: z.object({ open: z.number(), done: z.number() }).optional() })),
     total: z.number(),
@@ -125,13 +125,10 @@ export const browseItems = defineTool({
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
     const { scope } = loaded;
-    let node: TreeNode | null = null;
-    if (input.node !== undefined || scope.root) {
-      const resolved = resolveNode(scope, input.node);
-      if (isError(resolved)) return resolved;
-      node = resolved.node;
-    }
-    const read = await selectAllItems(ctx, scopeNodes(scope, node, input.subtree), (query) => query.is("deleted_at", null), "browsing the items");
+    const resolved = resolveReadPlace(scope, input.node);
+    if (isError(resolved)) return resolved;
+    const place = resolved.place;
+    const read = await selectAllItems(ctx, reachOf(scope, place, input.subtree), (query) => query.is("deleted_at", null), "browsing the items");
     if (isError(read)) return read;
     const { matched, counts } = browseInMemory(
       read.rows.map((row) => toItem(row, scope)),
@@ -152,7 +149,7 @@ export const browseItems = defineTool({
       subtasks.set(row.parent_item_id, count);
     }
     return ok({
-      scope: { id: node?.id ?? null, path: node?.path ?? "Everything" },
+      scope: describePlace(place),
       items: ordered.slice(0, input.limit).map((item) => (subtasks.has(item.id) ? { ...item, subtasks: subtasks.get(item.id) } : item)),
       total: ordered.length,
       counts,
@@ -163,16 +160,19 @@ export const browseItems = defineTool({
 // An event of either origin, in the one shape the screens and the models read.
 export const browsedEventSchema = calendarEventSchema.extend({
   origin: z.enum(["google", "local"]),
-  // For an event of the workspace's own: its id and the node it hangs from.
+  // For an event of the workspace's own: its id and the node it hangs from (null for an event of no node).
   localId: z.string().nullable(),
   nodeId: z.string().nullable(),
   nodePath: z.string().nullable(),
+  // The clients and projects in reach linked to it, and the tasks in reach that live in it.
+  linkedNodeIds: z.array(z.string()),
+  linkedTaskIds: z.array(z.string()),
 });
 
 export type BrowsedEvent = z.infer<typeof browsedEventSchema>;
 
 function fromGoogle(event: CalendarEvent): BrowsedEvent {
-  return { ...event, origin: "google", localId: null, nodeId: null, nodePath: null };
+  return { ...event, origin: "google", localId: null, nodeId: null, nodePath: null, linkedNodeIds: [], linkedTaskIds: [] };
 }
 
 export function fromLocal(event: LocalEvent): BrowsedEvent {
@@ -185,16 +185,52 @@ export function fromLocal(event: LocalEvent): BrowsedEvent {
     location: null,
     link: null,
     calendarId: "workspace",
-    calendarName: event.nodePath,
+    calendarName: event.nodePath ?? "Workspace",
     color: null,
     accountId: "",
     accountEmail: "",
-    fromNodeId: event.nodeId,
+    fromNodeId: event.nodeId ?? "",
     origin: "local",
     localId: event.id,
     nodeId: event.nodeId,
     nodePath: event.nodePath,
+    linkedNodeIds: [],
+    linkedTaskIds: [],
   };
+}
+
+// The live tasks in reach that live in some events, by the event's key: `l:<id>` for the workspace's own, and
+// `g:<account>:<calendar>:<id>` for Google's.
+async function tasksInEvents(ctx: ToolContext, scope: Scope, events: BrowsedEvent[]) {
+  const byEvent = new Map<string, string[]>();
+  const own = events.flatMap((event) => (event.localId ? [event.localId] : []));
+  const accounts = [...new Set(events.filter((event) => event.origin === "google").map((event) => event.accountId))];
+  const columns = "item_id, event_id, account_id, calendar_id, google_event_id";
+  const [byOwn, byGoogle] = await Promise.all([
+    own.length ? ctx.db.from("item_events").select(columns).in("event_id", own) : Promise.resolve({ data: [], error: null }),
+    accounts.length ? ctx.db.from("item_events").select(columns).in("account_id", accounts) : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (byOwn.error) return dbFail("reading the tasks in the events", byOwn.error);
+  if (byGoogle.error) return dbFail("reading the tasks in the events", byGoogle.error);
+  const links = [...(byOwn.data ?? []), ...(byGoogle.data ?? [])];
+  if (links.length === 0) return ok({ byEvent });
+  // Only the owner's live tasks the caller reaches: the server's key reads every row of the table.
+  const { data: items, error } = await ctx.db
+    .from("items")
+    .select("id, node_id, owner_id")
+    .eq("owner_id", ctx.ownerId)
+    .is("deleted_at", null)
+    .in("id", [...new Set(links.map((link) => link.item_id))]);
+  if (error) return dbFail("reading the tasks in the events", error);
+  const reached = new Set(items.filter((item) => reaches(scope, ctx.ownerId, item)).map((item) => item.id));
+  for (const link of links) {
+    if (!reached.has(link.item_id)) continue;
+    const key = link.event_id ? `l:${link.event_id}` : `g:${link.account_id}:${link.calendar_id}:${link.google_event_id}`;
+    const list = byEvent.get(key) ?? [];
+    if (!list.includes(link.item_id)) list.push(link.item_id);
+    byEvent.set(key, list);
+  }
+  return ok({ byEvent });
 }
 
 const startOf = (event: BrowsedEvent) => (event.allDay ? Date.parse(`${event.start}T00:00:00`) : Date.parse(event.start));
@@ -202,9 +238,10 @@ const startOf = (event: BrowsedEvent) => (event.allDay ? Date.parse(`${event.sta
 export const browseEvents = defineTool({
   name: "browse_events",
   description:
-    "The events between two moments: those of the Google accounts visible from a node (its own and inherited) and " +
-    "the workspace's own events of that node and everything below it; without a node, every account and every own " +
-    "event, each event once. Each says its origin (google or local).",
+    "The events between two moments: those of the Google accounts visible from a node (its own and inherited), the " +
+    "workspace's own events of that node and everything below it, and those linked to them; without a node, every " +
+    "account and every own event, those of no node included, each event once. Each says its origin (google or local) " +
+    "and the clients and projects linked to it and the tasks that live in it.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it for the current node, or for everything."),
@@ -222,10 +259,15 @@ export const browseEvents = defineTool({
     const { scope } = loaded;
     let node: TreeNode | null = null;
     if (input.node !== undefined || scope.root) {
-      const resolved = resolveNode(scope, input.node);
+      const resolved = resolveReadPlace(scope, input.node);
       if (isError(resolved)) return resolved;
-      node = resolved.node;
+      if (resolved.place.kind === "node") node = resolved.place.node;
     }
+    const place: ReadPlace = node ? { kind: "node", node } : { kind: "all" };
+    const reach = reachOf(scope, place);
+    // Which events the nodes in reach are linked to: the own ones join the read, and every event says its nodes.
+    const linked = await nodeEventLinks(ctx, reach.nodeIds);
+    if (isError(linked)) return linked;
     // A node reads its visible accounts; everything reads each client root and each node an account hangs from below a
     // root, once each, in parallel. The workspace's own events come in the same round.
     let anchors: TreeNode[] = node ? [node] : [...scope.all.values()].filter((n) => n.parentId === null && scope.reachable.has(n.id));
@@ -241,7 +283,15 @@ export const browseEvents = defineTool({
     }
     const [google, local] = await Promise.all([
       Promise.all(anchors.map((anchor) => eventsForNode(ctx, anchor, input.from, input.to))),
-      localEventsIn(ctx, scope, scopeNodes(scope, node, true), input.fromDay, input.toDay, { from: input.from, to: input.to }),
+      localEventsIn(
+        ctx,
+        scope,
+        reach,
+        input.fromDay,
+        input.toDay,
+        { from: input.from, to: input.to },
+        linked.links.flatMap((link) => (link.eventId ? [link.eventId] : [])),
+      ),
     ]);
     if (isError(local)) return local;
     const events = new Map<string, BrowsedEvent>();
@@ -250,6 +300,14 @@ export const browseEvents = defineTool({
       for (const failure of answer.failures) failures.set(failure.accountId, failure);
     }
     for (const event of local.events) events.set(`l:${event.id}`, fromLocal(event));
+    for (const link of linked.links) {
+      const key = link.eventId ? `l:${link.eventId}` : `g:${link.accountId}:${link.calendarId}:${link.googleEventId}`;
+      const event = events.get(key);
+      if (event && !event.linkedNodeIds.includes(link.nodeId)) event.linkedNodeIds.push(link.nodeId);
+    }
+    const tasks = await tasksInEvents(ctx, scope, [...events.values()]);
+    if (isError(tasks)) return tasks;
+    for (const [key, ids] of tasks.byEvent) events.get(key)?.linkedTaskIds.push(...ids);
     return ok({ events: [...events.values()].sort((a, b) => startOf(a) - startOf(b)), failures: [...failures.values()] });
   },
 });

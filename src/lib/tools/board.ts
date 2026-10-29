@@ -2,14 +2,15 @@ import { z } from "zod";
 import { defineTool } from "./define";
 import { fail, isError, ok } from "./result";
 import { countInSubtrees, selectAllItems } from "./rows";
-import { loadScope, resolveNode, subtree, type TreeNode } from "./tree";
+import { shownAsRow } from "./tasks";
+import { loadScope, reachOf, resolveNode, type TreeNode } from "./tree";
 
 const day = z.iso.date();
 
-const FIGURES = ["open", "late", "dueToday", "dueInRange", "undated", "toReview"] as const;
+const FIGURES = ["open", "late", "dueToday", "dueInRange", "undated"] as const;
 
 const figuresSchema = z.object({
-  // Open tasks, subtasks included.
+  // Open tasks as the groups of get_tasks show them: those that hang from no task, and subtasks with a day.
   open: z.number(),
   // Open tasks whose due day passed.
   late: z.number(),
@@ -18,20 +19,17 @@ const figuresSchema = z.object({
   dueInRange: z.number(),
   // Open tasks without a due date: they never fall due.
   undated: z.number(),
-  // Open items to review.
-  toReview: z.number(),
 });
 
-// The board: what is open, late, and due across everything in reach or below one node, for the person's calendar day,
-// and the same figures for each node, each counting its whole subtree. Every open item is read, page by page, so the
-// figures are the whole universe and never the rows a list showed.
+// The board: what is open, late, and due across everything in reach (General included) or below one node, for the
+// person's calendar day, and the same figures for each node, each counting its whole subtree. Every open task is read,
+// page by page, so the figures are the whole universe and never the rows a list showed.
 export const getBoard = defineTool({
   name: "get_board",
   description:
     "The figures of everything in reach, or of one node and everything below it, for the person's calendar day: open " +
-    "tasks, late ones, those due today and in a stretch of days (such as this week), those without a date, and items to " +
-    "review; and the same figures for each node, each counting its whole subtree. Use it to see at once where work is " +
-    "late or piling up.",
+    "tasks, late ones, those due today and in a stretch of days (such as this week), and those without a date; and the " +
+    "same figures for each node, each counting its whole subtree. Use it to see at once where work is late or piling up.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it for the current node, or for everything when there is none."),
@@ -57,16 +55,17 @@ export const getBoard = defineTool({
       if (isError(resolved)) return resolved;
       node = resolved.node;
     }
-    const ids = node ? [...subtree(scope.all, node.id)].filter((id) => scope.reachable.has(id)) : [...scope.reachable];
+    const reach = reachOf(scope, node ? { kind: "node", node } : { kind: "all" });
     const read = await selectAllItems(
       ctx,
-      ids,
-      (query) => query.is("deleted_at", null).eq("status", "open").in("type", ["task", "review"]),
+      reach,
+      (query) => query.is("deleted_at", null).eq("status", "open").eq("type", "task"),
       "reading the board",
     );
     if (isError(read)) return read;
-    const { total, perNode } = countInSubtrees(read.rows, scope, new Set(ids), FIGURES, (row) => {
-      if (row.type === "review") return ["toReview"];
+    // What the groups of get_tasks show: a subtask without a day counts inside its task's row, not here.
+    const { total, perNode } = countInSubtrees(read.rows, scope, new Set(reach.nodeIds), FIGURES, (row) => {
+      if (!shownAsRow(row)) return [];
       if (row.due_on === null) return ["open", "undated"];
       const counted: Array<(typeof FIGURES)[number]> = ["open"];
       if (row.due_on < input.today) counted.push("late");

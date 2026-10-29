@@ -1,0 +1,766 @@
+/* The frame every page shares: the sidebar, fixed at the left and as tall as the window; the page's column, centered
+   with its widest measure; the one form of a page's header; and on a phone the bar with «Menu», the drawer it opens,
+   and «Add task» at hand. It composes the primitives of system.css; a value it needs enters tokens.css as a role. */
+
+/* ---- The shell ---------------------------------------------------------------------------------------------------- */
+.skip-link {
+  position: fixed;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: calc(var(--layer-notice) + 1);
+  translate: 0 -200%;
+  /* Its own entrance joins the button's transitions instead of replacing them. */
+  transition: translate var(--dur) var(--ease-out), background-color var(--dur-hover-out) var(--ease-hover-out),
+    border-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out),
+    color var(--dur-hover-out) var(--ease-hover-out);
+
+  &:focus {
+    translate: 0 0;
+  }
+}
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--header-h) auto;
+  min-height: 100svh;
+}
+/* The phone's bar: «Menu» and the brand. On a computer the sidebar holds both. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--layer-header);
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: var(--header-h);
+  padding-inline: max(var(--gutter), env(safe-area-inset-left)) max(var(--gutter), env(safe-area-inset-right));
+  background: var(--card);
+  box-shadow: var(--shadow-header);
+  animation: fade-in var(--dur-slow) var(--ease-out) backwards;
+}
+/* «Saving… / Saved»: one piece, at the end of the phone's bar or of the sidebar's brand row. It takes no room while it is
+   invisible, and no pointer. */
+.save-status {
+  position: fixed;
+  z-index: calc(var(--layer-header) + 1);
+  top: calc(var(--header-h) / 2);
+  right: max(var(--gutter), env(safe-area-inset-right));
+  translate: 0 -50%;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity var(--dur) var(--ease-std);
+
+  &[data-shown] {
+    opacity: 1;
+  }
+}
+.sidebar {
+  display: none;
+}
+.main {
+  min-width: 0;
+  padding: var(--gutter);
+  /* The phone's «Add task» floats over the page's end: the last block ends above it. */
+  padding-bottom: calc(var(--gutter) + 4.5rem + env(safe-area-inset-bottom));
+}
+/* The page's column: centered, as wide as its measure lets it. */
+.main > * {
+  max-width: var(--content-w);
+  margin-inline: auto;
+}
+
+/* On a phone «Add task» stays at hand at the bottom right, clear of the unsafe edges; a notice rises above it. */
+.add-task-float {
+  position: fixed;
+  z-index: var(--layer-float);
+  right: max(var(--gutter), env(safe-area-inset-right));
+  bottom: max(var(--gutter), env(safe-area-inset-bottom));
+  min-height: 3rem;
+  padding-inline: 1.25em;
+  --btn-shadow: var(--shadow-pop);
+  animation: rise-in var(--dur-slow) var(--ease-out) 120ms backwards;
+
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      --btn-shadow: var(--shadow-pop), 0 0 0 3px var(--focus-halo);
+    }
+  }
+}
+@media (width < 64rem) {
+  .notices {
+    bottom: calc(max(var(--gutter), env(safe-area-inset-bottom)) + 3.75rem);
+  }
+}
+
+@media (width >= 64rem) {
+  .shell {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+  .topbar,
+  .add-task-float {
+    display: none;
+  }
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    align-self: start;
+    height: 100svh;
+    background: var(--card);
+    box-shadow: var(--shadow-sidebar);
+    animation: fade-in var(--dur-slow) var(--ease-out) backwards;
+  }
+  .main {
+    grid-row: 1;
+    padding: calc(var(--gutter) * 1.4) calc(var(--gutter) * 1.4) calc(var(--gutter) * 2);
+  }
+  /* Beside the brand, at the end of its row. */
+  .save-status {
+    top: calc(0.75rem + var(--nav-row) / 2);
+    right: auto;
+    left: calc(var(--sidebar-w) - 0.9rem);
+    translate: -100% -50%;
+  }
+}
+/* The chat opened beside the page docks as a third column where the window holds the three; narrower, it is a sheet. */
+.chat-dock {
+  display: none;
+}
+@media (width >= 80rem) {
+  .shell[data-chat="open"] {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--chat-w);
+  }
+  .shell[data-chat="open"] .main {
+    padding-right: var(--gap-cards);
+  }
+  .chat-dock {
+    display: block;
+    position: sticky;
+    top: var(--gutter);
+    grid-row: 1;
+    align-self: start;
+    margin: var(--gutter) var(--gutter) var(--gutter) 0;
+    animation: rise-in var(--dur) var(--ease-out) backwards;
+  }
+}
+
+/* ---- The sidebar -------------------------------------------------------------------------------------------------
+   The brand, «Add task» and «Search» on top; the views and the two groups scroll inside it when they outgrow the window,
+   while Trash, Settings and who is signed in stay at its foot. Its rows are as dense as a list's; in each part the
+   current place is ONE piece that travels between rows. */
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.side-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: var(--nav-row);
+  /* The save status takes the end of this row: the brand leaves it room. */
+  padding: 0.75rem 4.5rem 0.25rem 0.75rem;
+}
+.side-brand {
+  gap: 0.55rem;
+  min-height: var(--nav-row);
+  padding-inline: 0.4rem 0.55rem;
+
+  & .brand-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  & .brand-name {
+    font-size: var(--text-body);
+  }
+}
+.side-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0.5rem 0.75rem 0.35rem;
+}
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.5rem 0.75rem 1rem;
+  scrollbar-width: thin;
+}
+.side-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.side-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem max(0.75rem, env(safe-area-inset-bottom));
+  box-shadow: 0 -1px 0 var(--division);
+}
+.side-foot-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+}
+.side-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: var(--nav-row);
+  padding-left: 0.55rem;
+}
+.side-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-sign-out {
+  margin-left: auto;
+}
+.side-pieces {
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    width: var(--piece-w, 0);
+    height: var(--piece-h, 0);
+    translate: var(--piece-x, 0) var(--piece-y, 0);
+    opacity: var(--piece-on, 0);
+    border-radius: var(--radius-control);
+    background: var(--accent-tint);
+    pointer-events: none;
+    transition: background-color var(--dur-hover-out) var(--ease-hover-out);
+  }
+  &[data-piece-ready]::before {
+    transition: translate var(--dur) var(--ease-std), width var(--dur) var(--ease-std), height var(--dur) var(--ease-std),
+      opacity var(--dur) var(--ease-std), background-color var(--dur-hover-out) var(--ease-hover-out);
+  }
+}
+/* The current place has its hover too: its ink takes the accent and the piece under it deepens. */
+@media (hover: hover) {
+  .side-pieces:has(.side-link[aria-current="page"]:hover)::before {
+    background: var(--accent-tint-hover);
+  }
+}
+
+/* A row: a view, a place, an action. It tints and darkens its ink on hover, with a soft rim. */
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: var(--nav-row);
+  padding: 0.25rem 0.55rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 550;
+  line-height: 1.3;
+  text-align: left;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px transparent;
+  user-select: none;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover:not([aria-current="page"]) {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      color: var(--ink);
+      transition-duration: var(--dur-hover);
+    }
+    &[aria-current="page"]:hover {
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+      transition-duration: var(--dur-hover);
+    }
+  }
+  &[aria-current="page"] {
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+}
+/* A name wraps between its words rather than losing its end, and a word is split only when it alone is wider than the
+   sidebar: the tree is where a project is recognized. */
+.side-link-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+/* A place's number, read in a column at the row's end. */
+.side-count {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+.side-link:where([aria-current="page"]) .side-count {
+  color: var(--accent-ink);
+}
+@media (hover: hover) {
+  .side-link:hover .side-count {
+    color: var(--ink-soft);
+    transition-duration: var(--dur-hover);
+  }
+  .side-link[aria-current="page"]:hover .side-count {
+    color: var(--accent);
+  }
+}
+/* «Add task» leads: the accent's ink, and on hover the accent's tint. Its key and Search's are hints, not controls. */
+.side-action[data-side-action="add-task"] {
+  color: var(--accent);
+  font-weight: 700;
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--accent-tint);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+      color: var(--accent-ink);
+    }
+  }
+}
+.side-key {
+  flex: none;
+  min-width: 1.75em;
+  justify-content: center;
+}
+/* A key is a hint for a keyboard; where a finger points it says nothing. */
+@media (pointer: coarse) {
+  .side-key {
+    display: none;
+  }
+}
+
+/* A group's head: its name folds the group. The chevron is drawn as part of the control, the same one the dropdowns
+   carry; it turns down when open. */
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.side-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 1px;
+}
+.side-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.5em;
+  min-height: var(--nav-row);
+  padding: 0.2em 0.55rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px transparent;
+  user-select: none;
+  transition: color var(--dur-hover-out) var(--ease-hover-out), background-color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  &::after {
+    content: "";
+    flex: none;
+    width: 0.42em;
+    height: 0.42em;
+    margin-top: -0.15em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    color: var(--muted);
+    rotate: -45deg;
+    transition: rotate var(--dur) var(--ease-std), color var(--dur-hover-out) var(--ease-hover-out);
+  }
+  &[aria-expanded="true"]::after {
+    rotate: 45deg;
+  }
+  @media (hover: hover) {
+    &:hover {
+      color: var(--ink);
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover::after {
+      color: var(--accent);
+      transition-duration: var(--dur), var(--dur-hover);
+    }
+  }
+}
+.side-empty {
+  padding: 0.25rem 0.55rem 0.25rem calc(0.55rem + var(--fold-w));
+}
+.side-skeleton {
+  padding: 0.5rem 0.55rem 0.5rem calc(0.55rem + var(--fold-w));
+}
+/* «Add client» and «Add project» start where the names start, in the help's ink until the pointer reaches them. */
+.side-link.side-add {
+  padding-left: calc(0.55rem + var(--fold-w));
+  color: var(--muted);
+}
+
+/* The tree: a place that holds others folds them, and each level steps in; the client leads, the project follows, the
+   subproject steps back. */
+.side-nav {
+  --fold-w: 1.25rem;
+}
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+
+  & > .side-link {
+    flex: 1;
+    min-width: 0;
+  }
+}
+/* A row's fold: as tall as its row, its chevron turning down when open. */
+.tree-toggle,
+.tree-toggle-slot {
+  flex: none;
+  width: var(--fold-w);
+  height: var(--nav-row);
+}
+.tree-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
+    box-shadow var(--dur-hover-out) var(--ease-hover-out);
+
+  &::before {
+    content: "";
+    width: 0.4em;
+    height: 0.4em;
+    margin-left: -0.15em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    rotate: -45deg;
+    transition: rotate var(--dur) var(--ease-std), margin var(--dur) var(--ease-std);
+  }
+  &[aria-expanded="true"]::before {
+    margin-left: 0;
+    margin-top: -0.2em;
+    rotate: 45deg;
+  }
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      color: var(--accent);
+      transition-duration: var(--dur-hover);
+    }
+  }
+}
+.tree-below {
+  padding: 1px 0 0 0.85rem;
+}
+/* The person's color for a place: a disc before its name. A place without one keeps the disc's room, so names align. */
+.side-mark {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--mark, transparent);
+}
+.side-mark[data-color="red"] {
+  --mark: var(--node-red);
+}
+.side-mark[data-color="orange"] {
+  --mark: var(--node-orange);
+}
+.side-mark[data-color="amber"] {
+  --mark: var(--node-amber);
+}
+.side-mark[data-color="green"] {
+  --mark: var(--node-green);
+}
+.side-mark[data-color="teal"] {
+  --mark: var(--node-teal);
+}
+.side-mark[data-color="blue"] {
+  --mark: var(--node-blue);
+}
+.side-mark[data-color="indigo"] {
+  --mark: var(--node-indigo);
+}
+.side-mark[data-color="violet"] {
+  --mark: var(--node-violet);
+}
+.side-mark[data-color="pink"] {
+  --mark: var(--node-pink);
+}
+.side-mark[data-color="gray"] {
+  --mark: var(--node-gray);
+}
+@media (forced-colors: active) {
+  .side-mark[data-color] {
+    background: CanvasText;
+  }
+}
+.side-link[data-depth="1"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.side-link[data-depth="2"] {
+  color: var(--ink-soft);
+  font-weight: 550;
+}
+.side-link[data-depth="3"] {
+  color: var(--muted);
+  font-weight: 550;
+}
+.side-link[data-kind]:where([aria-current="page"]) {
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.tree-new {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.25rem 0 0.4rem calc(0.15rem + var(--fold-w));
+}
+.tree-new-where {
+  color: var(--muted);
+}
+
+/* The phone's menu: the sidebar's content in a drawer from the left. */
+.drawer {
+  margin: 0 auto 0 0;
+  width: min(22rem, calc(100vw - 2.5rem));
+  height: 100svh;
+  max-height: none;
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  translate: -1.5rem 0;
+  overflow: hidden;
+
+  &[open] {
+    translate: 0 0;
+  }
+}
+@starting-style {
+  .drawer[open] {
+    translate: -1.5rem 0;
+  }
+}
+.drawer-in {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.drawer-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: max(var(--pad-card), env(safe-area-inset-top)) var(--pad-card) 0 calc(0.75rem + 0.55rem);
+}
+
+/* ---- A page's header: one form on every page --------------------------------------------------------------------
+   On the left where the page lives, its title and its count; on the right its controls, always in the same order and
+   with one skin: raised off the page like a card, sinking one step on hover. */
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.9rem 1.5rem;
+  padding-bottom: 0.35rem;
+}
+.page-header-text {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.page-title {
+  overflow-wrap: break-word;
+}
+.page-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+/* The separator belongs to the place after it, so a wrapped line never ends with one. */
+.page-trail li + li::before {
+  content: "/";
+  margin-right: 0.4rem;
+  color: var(--muted);
+}
+.page-trail-link {
+  border-radius: 0.2em;
+  color: var(--muted);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: transparent;
+  transition-property: color, text-decoration-color;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      color: var(--accent);
+      text-decoration-color: currentColor;
+      transition-duration: var(--dur-hover);
+      transition-timing-function: var(--ease-hover);
+    }
+  }
+}
+.page-trail-here {
+  color: var(--ink-soft);
+}
+.page-count {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+@supports (text-box: trim-both cap alphabetic) {
+  .page-trail,
+  .page-count {
+    text-box: trim-both cap alphabetic;
+  }
+}
+.page-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+/* The filters sit among the other controls; on a phone the controls go under the title, from its start, the filters
+   on a row of their own and the page's actions on the next, so no control is left alone on a line. */
+.page-filters {
+  display: contents;
+}
+@media (width < 40rem) {
+  .page-tools {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+  .page-filters {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+/* One skin for the bar's controls: a filter's trigger, a button and the layout's rail measure the same height, and the
+   pieces that rise take the card's fill over the page, with the control's rim and shadow. */
+.page-tools .btn {
+  --btn-fill: var(--card);
+  --btn-rim: var(--control-rim);
+  --btn-ink: var(--ink);
+  --btn-shadow: var(--shadow-control);
+}
+@media (hover: hover) {
+  .page-tools .btn:hover:not(:disabled, [aria-disabled="true"]) {
+    --btn-fill: var(--interior-hover);
+    --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
+    --btn-ink: var(--ink);
+    --btn-shadow: var(--shadow-control-hover);
+  }
+}
+.page-tools .btn:active:not(:disabled, [aria-disabled="true"]) {
+  --btn-shadow: var(--shadow-field);
+}
+.page-tools .btn[aria-expanded="true"] {
+  --btn-fill: var(--accent-tint);
+  --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
+  --btn-ink: var(--accent-ink);
+}
+.page-tools .picker {
+  min-height: 2.15em;
+  padding: 0.3em 0.75em;
+  border-color: var(--control-rim);
+  background: var(--card);
+  box-shadow: var(--shadow-control), 0 0 0 3px transparent;
+  font-family: var(--font-display);
+  font-weight: 600;
+
+  @media (hover: hover) {
+    &:hover:not(:focus, :disabled, [data-popup-open]) {
+      background: var(--interior-hover);
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
+      box-shadow: var(--shadow-control-hover), 0 0 0 3px transparent;
+    }
+  }
+}
+/* A rim snaps to whole device pixels, so the rail takes the buttons' height as its own minimum instead of adding it up. */
+.page-tools .seg {
+  min-height: 2.15em;
+  padding: 2px;
+  font-size: var(--text-body);
+}
+/* The rail's two pixels of air and its rim on each side, plus its option, make the buttons' height exactly. */
+.page-tools .seg-option {
+  min-height: calc(2.15em - 6px);
+  padding-block: 0;
+  line-height: 1.2;
+}

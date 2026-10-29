@@ -15,7 +15,7 @@ import { chatTools } from "./tools";
 // A turn may call several tools in a row (look up, then write, then answer); the loop ends at this bound.
 const MAX_STEPS = 6;
 
-type TreeRow = { id: string; path: string; openTasks: number; openReviews: number };
+type TreeRow = { id: string; path: string; openTasks: number };
 
 // What the model knows before reading anything: when and where the person is, the open node, and the tree around it.
 export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new Date()): Promise<string> {
@@ -28,17 +28,19 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
   }).format(now);
   const summary = nodes
     .slice(0, 80)
-    .map((node) => `- ${node.path} (${node.openTasks} open tasks, ${node.openReviews} to review)`)
+    .map((node) => `- ${node.path} (${node.openTasks} open tasks)`)
     .join("\n");
   return [
-    "You work inside a task manager where each client, project, and subproject keeps its tasks, decisions, links,",
-    "and items to review; clients and the person's own projects stand at the root. You act on it with your tools:",
-    "create tasks, record decisions, save links and items to review, update and complete items, look up what is",
-    "pending and what changed, read the calendars, and advise on what to do next from what you read. Act when asked",
-    "to act; do not ask for confirmation of a write, since every write can be undone from the screen.",
+    "You work inside a task manager where every task has an optional place —a client, a project, a subproject, or",
+    "none, which is General— and an optional due day, sometimes with an hour; notes hang from a place, from a task, or",
+    "from nothing, and a decision is a note marked as one. Clients and the person's own projects stand at the root. You",
+    "act on it with your tools: create, move, reschedule, and complete tasks, write notes and decisions, look up what is",
+    "overdue, due today, upcoming, and what changed, read the calendars, and advise on what to do next from what you",
+    "read. A link goes over its words: [words](https://address). Act when asked to act; do not ask for confirmation of a",
+    "write, since every write can be undone from the screen.",
     ctx.scopeNodeId
       ? "Prefer the open node when the person does not name another."
-      : "No node is open: this conversation covers every client and project. Write where the request says; when it names no client or project and none fits, ask where it goes.",
+      : "No node is open: this conversation covers every client and project, and General. Write where the request says; a task that names no client or project and fits none goes to General.",
     "A screenshot or image the person sends may hold requests from a client: turn each request into a task.",
     "Answer briefly, in the person's language. Never invent items, dates, or links you did not read.",
     "",

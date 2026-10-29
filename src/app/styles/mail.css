@@ -1,0 +1,433 @@
+/* The mail page: the list in its three groups, the viewer beside it on a computer and over it on a phone, and the frame
+   that paints a real message. Every value comes from a role in tokens.css. */
+
+.mail-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-cards);
+}
+.mail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+
+  & h2,
+  & p {
+    margin: 0;
+  }
+}
+
+/* The list keeps its width, the viewer takes the rest; the viewer stays in view while the list scrolls, and scrolls
+   itself when the message is longer than the window. */
+.mail-layout {
+  display: grid;
+  grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr);
+  gap: var(--gap-cards);
+  align-items: start;
+}
+@media (width < 64rem) {
+  .mail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.mail-page .mail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.6rem;
+}
+.mail-none,
+.mail-view-none {
+  margin: 0;
+  padding: 0.6rem;
+}
+.mail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.mail-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0.65rem 0.2rem;
+}
+.mail-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-rows);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mail-page .mail-row {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  color: var(--ink);
+  text-align: left;
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover .mail-row-from {
+      color: var(--accent-ink);
+    }
+  }
+  &[aria-current="true"] {
+    background: var(--accent-tint);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  @media (hover: hover) {
+    &[aria-current="true"]:hover {
+      background: var(--accent-tint-hover);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+  }
+}
+.mail-row-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.mail-row-from {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+.mail-row-time {
+  flex: none;
+  white-space: nowrap;
+}
+.mail-row-subject {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mail-page .mail-row[data-unread] .mail-row-subject {
+  color: var(--ink);
+  font-weight: 650;
+}
+.mail-row-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mail-row-for {
+  color: var(--mail-waiting);
+  font-weight: 650;
+}
+.mail-list-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 0.6rem;
+}
+.mail-row-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mail-view {
+  position: sticky;
+  top: calc(var(--header-h) + var(--gutter));
+  max-height: calc(100svh - var(--header-h) - 2 * var(--gutter));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* ---- The viewer ------------------------------------------------------------------------------------------------------ */
+.mail-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.mail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  & p {
+    margin: 0;
+  }
+}
+.mail-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.3rem;
+}
+.mail-subject {
+  flex: 1 1 16rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.mail-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.mail-mode .seg-option {
+  min-height: 2em;
+}
+.mail-from-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+}
+.mail-address {
+  overflow-wrap: anywhere;
+}
+.mail-place-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+.mail-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.mail-images {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-control);
+  background: var(--info-tint);
+
+  & .t-help {
+    flex: 1 1 16rem;
+    margin: 0;
+    color: var(--info-ink);
+  }
+}
+.mail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.mail-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.btn.mail-link-menu {
+  --btn-fill: var(--control);
+  --btn-rim: var(--control-rim);
+  --btn-ink: var(--ink);
+  --btn-shadow: var(--shadow-control);
+}
+.mail-why {
+  margin: 0;
+}
+.mail-linked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.4rem;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+  list-style: none;
+}
+.mail-linked-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.mail-linked-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: calc(var(--radius-control) * 0.8);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover .t-value {
+      color: var(--accent-ink);
+    }
+  }
+}
+
+/* ---- The frame --------------------------------------------------------------------------------------------------------
+   The message sits on its own paper. A message without colors of its own for a dark screen keeps its colors, and on a
+   dark screen its paper sits inset in the card's deep tone, so it does not glare. Another message, mode or set of images
+   fades out before the next one fades in. */
+.mail-frame {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  border-radius: var(--radius-control);
+  opacity: 1;
+  transition: opacity var(--dur) var(--ease-out), background-color var(--dur) var(--ease-std);
+
+  &[data-mode="dark"]:not([data-adapts]) {
+    padding: 0.75rem;
+    background: var(--interior);
+    box-shadow: inset 0 0 0 1px var(--division);
+  }
+  &[data-loading],
+  &[data-leaving] {
+    opacity: 0;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-in);
+  }
+}
+.mail-paper {
+  position: relative;
+  overflow: hidden;
+  border-radius: calc(var(--radius-control) * 0.8);
+  box-shadow: inset 0 0 0 1px var(--division);
+}
+.mail-iframe {
+  display: block;
+  width: 100%;
+  height: 12rem;
+  border: 0;
+  transform-origin: 0 0;
+  background: transparent;
+}
+.mail-frame-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: var(--radius-control);
+  background: var(--interior);
+}
+
+/* ---- On a phone: the message over the list, the whole screen ------------------------------------------------------- */
+.mail-sheet {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100svh;
+  max-height: 100svh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.mail-sheet-in {
+  padding: calc(var(--gutter) + env(safe-area-inset-top)) var(--gutter) calc(var(--gutter) + env(safe-area-inset-bottom));
+}
+
+/* ---- The Mail attribute of a task's detail ---------------------------------------------------------------------------- */
+.task-mail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+
+  & p {
+    margin: 0;
+  }
+  & .picker {
+    width: 100%;
+  }
+}
+.task-mail-from {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.task-mail-state {
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 650;
+  color: var(--mail-arrived);
+
+  &[data-state="waiting"] {
+    color: var(--mail-waiting);
+  }
+}
+.task-mail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.task-mail-link {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0.5rem;
+  border-radius: calc(var(--radius-control) * 0.8);
+  background: var(--interior);
+  box-shadow: inset 0 0 0 1px transparent;
+  text-decoration: none;
+  transition-property: background-color, box-shadow;
+  transition-duration: var(--dur-hover-out);
+  transition-timing-function: var(--ease-hover-out);
+
+  @media (hover: hover) {
+    &:hover {
+      background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--division);
+      transition-duration: var(--dur-hover);
+    }
+    &:hover .t-value {
+      color: var(--accent-ink);
+    }
+  }
+}
+/* «Link to…» rises like the actions beside it, and its hover is theirs. */
+@media (hover: hover) {
+  .btn.mail-link-menu:hover:not(:disabled, [aria-disabled="true"]) {
+    --btn-fill: var(--control-hover);
+    --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
+    --btn-ink: var(--ink);
+    --btn-shadow: var(--shadow-control-hover);
+  }
+}

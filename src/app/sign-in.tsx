@@ -6,6 +6,7 @@ import type { PublicConfig } from "@/lib/env";
 import { dayOf } from "@/lib/dates";
 import { browserClient } from "@/lib/supabase/browser";
 import type { SessionUser } from "@/lib/supabase/server";
+import { forgetLayout } from "./app/client-api";
 
 type State = { kind: "loading" } | { kind: "out" } | { kind: "in"; user: SessionUser };
 
@@ -81,6 +82,7 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
 
   async function signOut() {
     setBusy("out");
+    await forgetLayout();
     await browserClient(config).auth.signOut();
     setBusy(null);
     setState({ kind: "out" });

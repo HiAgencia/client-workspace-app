@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Wix_Madefor_Display, Wix_Madefor_Text } from "next/font/google";
+import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
 import { BROWSER_BAR, THEME_KEY } from "@/lib/theme";
 import "./globals.css";
 
@@ -9,8 +10,8 @@ const display = Wix_Madefor_Display({ variable: "--font-madefor-display", subset
 const text = Wix_Madefor_Text({ variable: "--font-madefor-text", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "client-workspace",
-  description: "Work organized by project: tasks, decisions, links, and calendars in one tree, with a chat and your coding agent on the same place.",
+  title: PRODUCT_NAME,
+  description: PRODUCT_DESCRIPTION,
 };
 
 // The browser bar's color is not declared here: it follows the chosen theme, which only the script below knows.

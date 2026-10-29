@@ -4,7 +4,7 @@ import { toolResponse } from "@/lib/tool-response";
 import { taskEventLinks } from "@/lib/tools/local-events";
 import { isError } from "@/lib/tools/result";
 import { selectAllItems, toItem } from "@/lib/tools/rows";
-import { loadScope, isUuid } from "@/lib/tools/tree";
+import { loadScope, isUuid, reachOf } from "@/lib/tools/tree";
 
 // The tasks that live inside an event of the workspace's own.
 export async function GET(_request: Request, { params }: RouteContext<"/api/events/[id]/tasks">) {
@@ -18,7 +18,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/even
   if (isError(loaded)) return toolResponse("event tasks", loaded);
   const ids = links.links.map((link) => link.itemId);
   if (ids.length === 0) return json({ ok: true, items: [] });
-  const read = await selectAllItems(session.ctx, [...loaded.scope.reachable], (query) => query.in("id", ids).is("deleted_at", null), "reading the event's tasks");
+  const read = await selectAllItems(session.ctx, reachOf(loaded.scope, { kind: "all" }), (query) => query.in("id", ids).is("deleted_at", null), "reading the event's tasks");
   if (isError(read)) return toolResponse("event tasks", read);
   return json({ ok: true, items: read.rows.map((row) => toItem(row, loaded.scope)) });
 }

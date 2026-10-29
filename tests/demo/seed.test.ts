@@ -1,31 +1,35 @@
 import { validateUIMessages } from "ai";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadHistory } from "@/lib/chat/history";
-import { demoSeedTree, settleDemoTokens, type SeedChat, type SeedItem, type SeedToken } from "@/lib/demo-seed";
-import { firstLine } from "@/lib/rich-text";
+import { demoGeneral, demoSeedTree, settleDemoTokens, type SeedAccount, type SeedChat, type SeedEvent, type SeedItem, type SeedToken } from "@/lib/demo-seed";
+import { sanitizeMailHtml } from "@/lib/mail/sanitize";
+import { inlineLink } from "@/lib/inline-links";
+import { firstLine, noteTitle } from "@/lib/rich-text";
 import { sanitizeRichText } from "@/lib/rich-text";
 import { isWorkingTime, workingMinutesBetween } from "@/lib/working-time";
-import { createDisposableUser, deleteDisposableUsers, publicClient, serviceClient, type Db, type DisposableUser } from "../support/supabase";
+import { createAnonymousUser, deleteDisposableUsers, publicClient, serviceClient, type Db, type DisposableUser } from "../support/supabase";
 
-// The demo seed is one database call; this test keeps its result identical to the TypeScript tree, its moments in the
-// visitor's working time, its tokens and its conversations as the tree declares them, and keeps a second call from
-// planting anything.
+// The demo seed is one database call; this test keeps its result identical to the TypeScript tree and its general work,
+// its moments in the visitor's working time, its manual order, its linked event, its tokens and its conversations as the
+// mirror declares them, and keeps a second call from planting anything.
 
 const TODAY = "2026-10-27";
 const ZONE = "America/Argentina/Buenos_Aires";
 // The database's clock and this machine's differ by the round trip; a moment within these working minutes is on time.
 const TOLERANCE = 2;
 type Tree = ReturnType<typeof demoSeedTree>;
-type ExpectedNode = { path: string; kind: string; position: number };
+type ExpectedNode = { path: string; kind: string; position: number; color: string | null };
+// What lives in no node reads under this place.
+const GENERAL = "General";
 type ExpectedItem = {
   path: string;
   parent: string | null;
   type: string;
   title: string;
   body: string | null;
-  url: string | null;
   priority: number | null;
   dueOn: string | null;
+  dueTime: string | null;
   status: string;
   source: string;
   agentLabel: string | null;
@@ -38,7 +42,7 @@ function expectedNodes(): ExpectedNode[] {
     nodes.forEach((node, position) => {
       const path = parent ? `${parent} / ${node.name}` : node.name;
       const kind = parentKind === null ? (node.kind ?? "client") : parentKind === "client" ? "project" : "subproject";
-      rows.push({ path, kind, position });
+      rows.push({ path, kind, position, color: node.color ?? null });
       walk(node.children ?? [], path, kind);
     });
   };
@@ -56,9 +60,9 @@ function expectedItems(): ExpectedItem[] {
       type: "",
       title: "",
       body: null,
-      url: null,
       priority: null,
       dueOn: null,
+      dueTime: null,
       status: item.doneAgo === undefined ? "open" : "done",
       source: item.by?.source ?? "manual",
       agentLabel: item.by?.source === "agent" ? item.by.agentLabel : null,
@@ -69,22 +73,22 @@ function expectedItems(): ExpectedItem[] {
       row.body = input.notes ? String(input.notes) : null;
       row.priority = input.priority ? Number(input.priority) : 4;
       row.dueOn = input.dueOn ? String(input.dueOn) : null;
+      row.dueTime = input.dueTime ? String(input.dueTime) : null;
     } else if (tool === "add_note") {
       row.type = "note";
       row.body = String(input.text);
-      row.title = firstLine(row.body);
+      // A note's title keeps the links of its first line over their words.
+      row.title = noteTitle(row.body);
     } else if (tool === "add_decision") {
       row.type = "decision";
       row.title = String(input.decision);
       row.body = input.rationale ? String(input.rationale) : null;
-    } else if (tool === "add_link") {
-      row.type = "link";
-      row.title = String(input.title ?? input.url);
-      row.url = String(input.url);
-    } else if (tool === "add_review") {
-      row.type = "review";
-      row.title = String(input.title);
-      row.url = input.url ? String(input.url) : null;
+    } else if (tool === "request_review") {
+      // A review an agent asks for is a task of the day it asked, with the address over its words.
+      row.type = "task";
+      row.title = input.url ? inlineLink(String(input.title), String(input.url)) : String(input.title);
+      row.priority = 4;
+      row.dueOn = TODAY;
     }
     rows.push(row);
     for (const child of item.children ?? []) add(path, child, row.title);
@@ -97,19 +101,38 @@ function expectedItems(): ExpectedItem[] {
     }
   };
   walk(demoSeedTree(TODAY), "");
+  for (const item of demoGeneral(TODAY).items) add(GENERAL, item, null);
   return rows;
 }
 
-function expectedEvents(): Array<{ path: string; title: string; day: string }> {
-  const rows: Array<{ path: string; title: string; day: string }> = [];
+// Every item of the mirror, with its place: the nodes' and General's.
+function everyItem(): SeedItem[] {
+  const list: SeedItem[] = [];
+  const collect = (items: SeedItem[]) => items.forEach((item) => (list.push(item), collect(item.children ?? [])));
+  const walk = (nodes: Tree) => nodes.forEach((node) => (collect(node.items ?? []), walk(node.children ?? [])));
+  walk(demoSeedTree(TODAY));
+  collect(demoGeneral(TODAY).items);
+  return list;
+}
+
+function titleOf(item: SeedItem): string {
+  if (item.tool === "add_note") return noteTitle(String(item.input.text));
+  if (item.tool === "request_review" && item.input.url) return inlineLink(String(item.input.title), String(item.input.url));
+  return String(item.input.title ?? item.input.decision);
+}
+
+function expectedEvents(): Array<{ path: string; title: string; day: string; linkedTo: string[] }> {
+  const rows: Array<{ path: string; title: string; day: string; linkedTo: string[] }> = [];
+  const push = (path: string, event: SeedEvent) => rows.push({ path, title: event.title, day: event.day, linkedTo: event.linkedTo ?? [] });
   const walk = (nodes: Tree, parent: string) => {
     for (const node of nodes) {
       const path = parent ? `${parent} / ${node.name}` : node.name;
-      for (const event of node.events ?? []) rows.push({ path, title: event.title, day: event.day });
+      for (const event of node.events ?? []) push(path, event);
       walk(node.children ?? [], path);
     }
   };
   walk(demoSeedTree(TODAY), "");
+  for (const event of demoGeneral(TODAY).events) push(GENERAL, event);
   return rows;
 }
 
@@ -126,6 +149,20 @@ function expectedChats(): Array<{ path: string; title: string; chat: SeedChat }>
     for (const node of nodes) {
       const path = parent ? `${parent} / ${node.name}` : node.name;
       collect(path, node.items ?? []);
+      walk(node.children ?? [], path);
+    }
+  };
+  walk(demoSeedTree(TODAY), "");
+  return rows;
+}
+
+// The sample accounts the mirror declares, by the path of their node.
+function expectedAccounts(): Array<{ path: string; account: SeedAccount }> {
+  const rows: Array<{ path: string; account: SeedAccount }> = [];
+  const walk = (nodes: Tree, parent: string) => {
+    for (const node of nodes) {
+      const path = parent ? `${parent} / ${node.name}` : node.name;
+      for (const account of node.accounts ?? []) rows.push({ path, account });
       walk(node.children ?? [], path);
     }
   };
@@ -173,16 +210,7 @@ async function expectWorkingMoments(db: Db, zone: string) {
   ];
   for (const [what, stamp] of stamps) expect(isWorkingTime(stamp, zone), `${what} at ${stamp} in ${zone}`).toBe(true);
 
-  const when = new Map<string, { ago: number; doneAgo?: number }>();
-  const collect = (list: SeedItem[]) => {
-    for (const item of list) {
-      const title = item.tool === "add_note" ? firstLine(String(item.input.text)) : String(item.input.title ?? item.input.decision ?? item.input.url);
-      when.set(title, { ago: item.ago, doneAgo: item.doneAgo });
-      collect(item.children ?? []);
-    }
-  };
-  const walkWhen = (list: Tree) => list.forEach((node) => (collect(node.items ?? []), walkWhen(node.children ?? [])));
-  walkWhen(demoSeedTree(TODAY));
+  const when = new Map(everyItem().map((item) => [titleOf(item), { ago: item.ago, doneAgo: item.doneAgo }]));
   for (const row of items.data ?? []) {
     const expected = when.get(row.title);
     expect(expected, row.title).toBeDefined();
@@ -192,7 +220,11 @@ async function expectWorkingMoments(db: Db, zone: string) {
   }
 }
 
-type NodeRow = { id: string; parent_id: string | null; kind: string; name: string; position: number };
+type NodeRow = { id: string; parent_id: string | null; kind: string; name: string; position: number; color: string | null };
+
+function placeOf(nodeId: string | null, byId: Map<string, NodeRow>): string {
+  return nodeId === null ? GENERAL : pathOf(byId.get(nodeId)!, byId);
+}
 
 function pathOf(row: NodeRow, byId: Map<string, NodeRow>): string {
   const names: string[] = [];
@@ -209,7 +241,7 @@ const key = (row: { path: string; title?: string; type?: string }) => `${row.pat
 let user: DisposableUser | undefined;
 
 beforeAll(async () => {
-  user = await createDisposableUser("demo-seed");
+  user = await createAnonymousUser("demo-seed");
 }, 60_000);
 
 afterAll(async () => {
@@ -223,26 +255,26 @@ describe("the demo seed", () => {
     expect(first.error).toBeNull();
     expect(first.data).toBe(true);
 
-    const nodes = await user.client.from("nodes").select("id, parent_id, kind, name, position");
+    const nodes = await user.client.from("nodes").select("id, parent_id, kind, name, position, color");
     expect(nodes.error).toBeNull();
     const nodeRows = (nodes.data ?? []) as NodeRow[];
     const byId = new Map(nodeRows.map((row) => [row.id, row]));
-    const actualNodes = nodeRows.map((row) => ({ path: pathOf(row, byId), kind: row.kind, position: row.position }));
+    const actualNodes = nodeRows.map((row) => ({ path: pathOf(row, byId), kind: row.kind, position: row.position, color: row.color }));
 
     const items = await user.client
       .from("items")
-      .select("id, node_id, parent_item_id, type, title, body, url, priority, due_on, status, source, agent_label, created_at, completed_at");
+      .select("id, node_id, parent_item_id, type, title, body, priority, due_on, due_time, position, status, source, agent_label, created_at, completed_at");
     expect(items.error).toBeNull();
     const titles = new Map((items.data ?? []).map((row) => [row.id, row.title]));
     const actualItems = (items.data ?? []).map((row) => ({
-      path: pathOf(byId.get(row.node_id)!, byId),
+      path: placeOf(row.node_id, byId),
       parent: row.parent_item_id ? (titles.get(row.parent_item_id) ?? "?") : null,
       type: row.type,
       title: row.title,
       body: row.body,
-      url: row.url,
       priority: row.priority,
       dueOn: row.due_on,
+      dueTime: row.due_time === null ? null : row.due_time.slice(0, 5),
       status: row.status,
       source: row.source,
       agentLabel: row.agent_label,
@@ -256,6 +288,25 @@ describe("the demo seed", () => {
     expect(actualItems).toHaveLength(expectedItems().length);
     // Every body is the closed list's HTML, as the tool layer would have written it.
     for (const row of actualItems) if (row.body) expect(sanitizeRichText(row.body)).toBe(row.body);
+    // A note's link is rich text in its body, never the brackets the editor would show as they are; its title keeps them.
+    const notes = actualItems.filter((row) => row.type === "note");
+    expect(notes.filter((row) => /\[[^\]]+\]\(https?:/.test(row.body ?? ""))).toEqual([]);
+    const linked = notes.filter((row) => (row.body ?? "").includes("<a href="));
+    expect(linked.length).toBeGreaterThan(0);
+    for (const row of linked) expect(row.title, row.title).toMatch(/^\[[^\]]+\]\(https:\/\/[^)]+\)$/);
+    expect(firstLine(linked[0].body)).not.toContain("](");
+
+    // The tasks without a date read in the order the mirror sets by hand.
+    const undated = (items.data ?? [])
+      .filter((row) => row.type === "task" && row.status === "open" && row.due_on === null && row.parent_item_id === null)
+      .sort((x, y) => Number(x.position) - Number(y.position))
+      .map((row) => row.title);
+    const ranked = everyItem()
+      .filter((item) => item.rank !== undefined)
+      .sort((x, y) => x.rank! - y.rank!)
+      .map(titleOf);
+    expect(ranked.length).toBeGreaterThan(1);
+    expect(undated).toEqual(ranked);
 
     // Each item was written the working minutes ago the tree says, in the visitor's zone, and a finished task was
     // completed when it says: the activity reads a week of working days in progress, not one instant or a night.
@@ -264,6 +315,10 @@ describe("the demo seed", () => {
     // The coding agent that wrote items has its tokens, unusable and unrevoked, on the nodes the tree names.
     const tokens = await user.client.from("agent_tokens").select("node_id, label, revoked_at");
     expect(tokens.error).toBeNull();
+    // A name a person writes starts with its capital: the tokens' labels and the agent's name on what it wrote.
+    const labels = [...(tokens.data ?? []).map((row) => row.label), ...actualItems.flatMap((row) => (row.agentLabel ? [row.agentLabel] : []))];
+    expect(labels.length).toBeGreaterThan(2);
+    for (const label of labels) expect(label, label).toMatch(/^\p{Lu}/u);
     expect(
       (tokens.data ?? []).map((row) => ({ path: pathOf(byId.get(row.node_id)!, byId), label: row.label, revoked: row.revoked_at })).sort((x, y) => x.path.localeCompare(y.path)),
     ).toEqual(expectedTokens().map((row) => ({ ...row, revoked: null })).sort((x, y) => x.path.localeCompare(y.path)));
@@ -312,15 +367,77 @@ describe("the demo seed", () => {
       expect(workingMinutesBetween(ask.created_at, answer.created_at, ZONE)).toBeCloseTo(1, 3);
     }
 
-    const events = await user.client.from("events").select("node_id, title, all_day, starts_on, ends_on");
-    const actualEvents = (events.data ?? []).map((row) => ({ path: pathOf(byId.get(row.node_id)!, byId), title: row.title, day: row.starts_on! }));
+    const events = await user.client.from("events").select("id, node_id, title, all_day, starts_on, ends_on");
+    const links = await user.client.from("node_events").select("node_id, event_id");
+    expect(links.error).toBeNull();
+    const actualEvents = (events.data ?? []).map((row) => ({
+      path: placeOf(row.node_id, byId),
+      title: row.title,
+      day: row.starts_on!,
+      linkedTo: (links.data ?? []).filter((link) => link.event_id === row.id).map((link) => placeOf(link.node_id, byId)),
+    }));
     expect(actualEvents.sort((a, b) => a.title.localeCompare(b.title))).toEqual(expectedEvents().sort((a, b) => a.title.localeCompare(b.title)));
+    expect(expectedEvents().some((event) => event.linkedTo.length > 0)).toBe(true);
     expect((events.data ?? []).every((row) => row.all_day && row.starts_on === row.ends_on)).toBe(true);
 
     // The item with a first title left that title as a version.
     const changed = (items.data ?? []).find((row) => row.title === "Present two logo directions")!;
     const versions = await user.client.from("revisions").select("snapshot").eq("item_id", changed.id);
     expect(versions.data?.map((row) => (row.snapshot as { title: string }).title)).toEqual(["Present logo directions"]);
+
+    // The sample accounts on the nodes the mirror names, their messages, and what the tasks wait for.
+    const accounts = await user.client.from("google_accounts").select("id, email, is_demo");
+    const attached = await user.client.from("node_accounts").select("node_id, account_id");
+    const emailOf = new Map((accounts.data ?? []).map((row) => [row.id, row.email]));
+    expect((accounts.data ?? []).every((row) => row.is_demo)).toBe(true);
+    expect((attached.data ?? []).map((row) => ({ path: placeOf(row.node_id, byId), email: emailOf.get(row.account_id) })).sort((x, y) => x.email!.localeCompare(y.email!))).toEqual(
+      expectedAccounts().map(({ path, account }) => ({ path, email: account.email })).sort((x, y) => x.email.localeCompare(y.email)),
+    );
+    const mail = await user.client.from("demo_mail").select("account_id, from_name, from_email, subject, snippet, text_body, html, unread, important, received_at");
+    expect(mail.error).toBeNull();
+    const now = Date.now();
+    const actualMail = (mail.data ?? []).map((row) => ({
+      account: emailOf.get(row.account_id),
+      from: { name: row.from_name, email: row.from_email },
+      subject: row.subject,
+      snippet: row.snippet,
+      text: row.text_body,
+      unread: row.unread,
+      important: row.important,
+    }));
+    const declaredMail = expectedAccounts().flatMap(({ account }) =>
+      account.mail.map((message) => ({
+        account: account.email,
+        from: message.from,
+        subject: message.subject,
+        snippet: message.snippet,
+        text: message.text,
+        unread: message.unread,
+        important: message.important,
+      })),
+    );
+    expect(actualMail.sort((x, y) => x.subject.localeCompare(y.subject))).toEqual(declaredMail.sort((x, y) => x.subject.localeCompare(y.subject)));
+    expect(expectedAccounts().some(({ account }) => account.mail.length === 0)).toBe(true);
+    expect(declaredMail.some((message) => message.important) && declaredMail.some((message) => message.unread)).toBe(true);
+    for (const row of mail.data ?? []) {
+      const declared = expectedAccounts().flatMap(({ account }) => account.mail).find((message) => message.subject === row.subject)!;
+      expect(isWorkingTime(row.received_at, ZONE), row.subject).toBe(true);
+      expect(Math.abs(workingMinutesBetween(row.received_at, now, ZONE) - declared.ago), row.subject).toBeLessThanOrEqual(TOLERANCE);
+      // Every sample is plain design: the sanitizer takes nothing out of it.
+      expect(sanitizeMailHtml(row.html).removed).toEqual({ elements: 0, handlers: 0, links: 0, styles: 0 });
+    }
+    const waits = await user.client.from("task_mail").select("item_id, account_id, expect_from, status");
+    expect((waits.data ?? []).map((row) => ({
+      title: (items.data ?? []).find((item) => item.id === row.item_id)!.title,
+      account: emailOf.get(row.account_id!),
+      from: row.expect_from,
+      status: row.status,
+    })).sort((x, y) => x.title.localeCompare(y.title))).toEqual(
+      everyItem()
+        .filter((item) => item.waitsFor)
+        .map((item) => ({ title: titleOf(item), account: item.waitsFor!.account, from: item.waitsFor!.from, status: "waiting" }))
+        .sort((x, y) => x.title.localeCompare(y.title)),
+    );
 
     const second = await user.client.rpc("seed_demo", { p_today: TODAY });
     expect(second.error).toBeNull();
@@ -330,7 +447,7 @@ describe("the demo seed", () => {
   });
 
   it("two calls at once plant one tree", async () => {
-    const race = await createDisposableUser("demo-seed-race");
+    const race = await createAnonymousUser("demo-seed-race");
     try {
       const [first, second] = await Promise.all([
         race.client.rpc("seed_demo", { p_today: TODAY }),
@@ -349,7 +466,7 @@ describe("the demo seed", () => {
   it("cannot run without a session, and each owner sees only its own tree", async () => {
     if (!user) throw new Error("the test user was not created");
     await user.client.rpc("seed_demo", { p_today: TODAY });
-    const other = await createDisposableUser("demo-seed-other");
+    const other = await createAnonymousUser("demo-seed-other");
     try {
       const anonymous = await publicClient().rpc("seed_demo", { p_today: TODAY });
       expect(anonymous.error?.code).toBe("42501");
