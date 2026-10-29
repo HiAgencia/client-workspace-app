@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withInitialCapital, withInitialCapitalHtml } from "@/lib/initial-capital";
 import type { Database } from "@/lib/db/types";
 import { inlineToHtml, writtenBody } from "@/lib/inline-links";
 import { noteTitle } from "@/lib/rich-text";
@@ -86,10 +87,14 @@ export async function insertItem(
   if (isError(placed)) return placed;
   const mark = origin(ctx);
   if (!mark) return fail("internal", "an agent write needs its token's label");
+  // A title someone writes keeps its initial capital, and so does a note's text, whose first line is its title.
+  const note = fields.type === "note" && fields.body;
   const { data, error } = await ctx.db
     .from("items")
     .insert({
       ...fields,
+      title: withInitialCapital(fields.title),
+      ...(note ? { body: withInitialCapitalHtml(fields.body!) } : {}),
       ...mark,
       changed_source: mark.source,
       changed_agent_label: mark.agent_label,
@@ -242,9 +247,10 @@ export const updateItem = defineTool({
         if (noteTitle(row.body) !== row.title) patch.body = `<p>${inlineToHtml(row.title)}</p>${row.body ?? ""}`;
       }
     }
-    if (input.title !== undefined) patch.title = input.title;
+    if (input.title !== undefined) patch.title = withInitialCapital(input.title);
     if (input.notes !== undefined) patch.body = writtenBody(input.notes);
     if (type === "note" && patch.body !== undefined) {
+      if (patch.body) patch.body = withInitialCapitalHtml(patch.body);
       const title = noteTitle(patch.body);
       if (!title) return fail("invalid_input", "a note needs some text");
       patch.title = title;

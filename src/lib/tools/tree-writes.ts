@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withInitialCapital } from "@/lib/initial-capital";
 import { NODE_COLORS } from "@/lib/node-colors";
 import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
@@ -41,7 +42,7 @@ export async function createNode(
   if (positionError) return dbFail("placing the node", positionError);
   const { data, error } = await ctx.db
     .from("nodes")
-    .insert({ owner_id: ctx.ownerId, parent_id: parentId, kind, name: input.name, position: (last?.position ?? -1) + 1 })
+    .insert({ owner_id: ctx.ownerId, parent_id: parentId, kind, name: withInitialCapital(input.name), position: (last?.position ?? -1) + 1 })
     .select("id, name, kind, parent_id")
     .single();
   if (error) return dbFail("creating the node", error);
@@ -71,7 +72,7 @@ export async function changeNode(
     if (isError(resolved)) return resolved;
   }
   const patch: { name?: string; archived_at?: string | null; color?: string | null } = {};
-  if (input.name !== undefined) patch.name = input.name;
+  if (input.name !== undefined) patch.name = withInitialCapital(input.name);
   if (input.color !== undefined) patch.color = input.color;
   if (input.archived !== undefined) patch.archived_at = input.archived ? new Date().toISOString() : null;
   const { data, error } = await ctx.db

@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
+import { withInitialCapital } from "@/lib/initial-capital";
 import { hashAgentToken, mcpJson, newAgentToken, TOKEN_ENV } from "@/lib/agent-token";
 import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     const token = newAgentToken();
     const { data, error } = await db
       .from("agent_tokens")
-      .insert({ node_id: value.nodeId, label: value.label, token_hash: await hashAgentToken(token) })
+      .insert({ node_id: value.nodeId, label: withInitialCapital(value.label), token_hash: await hashAgentToken(token) })
       .select("id")
       .single();
     if (error) {

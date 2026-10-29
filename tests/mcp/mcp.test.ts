@@ -127,6 +127,22 @@ describe("the MCP endpoint", () => {
     await client.close();
   });
 
+  it("what an agent writes in lowercase is kept with its initial capital, and only that letter changes", async () => {
+    const client = await connect(token);
+    const created = parse(await client.callTool({ name: "create_task", arguments: { title: "fix the hero on iOS Safari" } })) as { item: { id: string; title: string } };
+    expect(created.item.title).toBe("Fix the hero on iOS Safari");
+    const renamed = parse(await client.callTool({ name: "update_item", arguments: { id: created.item.id, title: "fix the footer on iOS Safari" } })) as { item: { title: string } };
+    expect(renamed.item.title).toBe("Fix the footer on iOS Safari");
+    const note = parse(await client.callTool({ name: "add_note", arguments: { text: "the client wants the CTA in green" } })) as { item: { id: string; title: string; body: string } };
+    expect(note.item.title).toBe("The client wants the CTA in green");
+    expect(note.item.body).toContain("The client wants the CTA in green");
+    const event = parse(await client.callTool({ name: "create_event", arguments: { title: "review call with Acme", startsOn: "2026-11-02" } })) as { event: { title: string } };
+    expect(event.event.title).toBe("Review call with Acme");
+    const { data } = await user!.client.from("items").select("title").in("id", [created.item.id, note.item.id]);
+    expect(data!.map((row) => row.title).sort()).toEqual(["Fix the footer on iOS Safari", "The client wants the CTA in green"]);
+    await client.close();
+  });
+
   it("a failing token lookup refuses rather than lets through", async () => {
     // The database answering an error must make the verdict stricter: 401, never a pass.
     const broken = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "boom" } }) }) }) }) };

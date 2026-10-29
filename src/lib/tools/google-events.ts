@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { withInitialCapital } from "@/lib/initial-capital";
 import { GoogleError, type GoogleEvent, type GoogleEventInput } from "@/lib/google/api";
 import { isRichHtml, richTextToPlain } from "@/lib/rich-text";
 import type { ToolContext } from "./context";
@@ -116,7 +117,7 @@ export const createGoogleEvent = defineTool({
         ownerId: ctx.ownerId,
         accountId: input.account,
         calendarId: input.calendar,
-        event: { summary: input.title, ...(input.notes ? { description: description(input.notes) } : {}), ...at },
+        event: { summary: withInitialCapital(input.title), ...(input.notes ? { description: description(input.notes) } : {}), ...at },
       });
       return ok({ event: shape(event, input.account, input.calendar) });
     } catch (error) {
@@ -139,7 +140,7 @@ export const updateGoogleEvent = defineTool({
     const at = moment(input);
     if (at && "ok" in at) return at;
     const patch: GoogleEventInput = { ...(at ?? {}) };
-    if (input.title !== undefined) patch.summary = input.title;
+    if (input.title !== undefined) patch.summary = withInitialCapital(input.title);
     if (input.notes !== undefined) patch.description = input.notes === null ? null : description(input.notes);
     try {
       const event = await ctx.calendar!.update({ ownerId: ctx.ownerId, accountId: input.account, calendarId: input.calendar, eventId: input.event, event: patch });
