@@ -5,8 +5,9 @@
 // «x86Pro»— and stays as it was written.
 
 const ADDRESS = /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+)/i;
-// The first word: up to a space, a tag, or an entity, so a body's next paragraph is never read as part of it.
-const FIRST_WORD = /^[^\s<&]*/u;
+// The first word: up to a space, a tag, an entity, or a link's brackets and parentheses, so neither a body's next
+// paragraph nor a link's address is read as part of it.
+const FIRST_WORD = /^[^\s<&[\]()]*/u;
 
 function capitalAt(text: string, index: number): string {
   const rest = text.slice(index);

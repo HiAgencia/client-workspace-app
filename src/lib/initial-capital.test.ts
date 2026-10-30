@@ -39,6 +39,9 @@ describe("the initial capital", () => {
     // In a body the first word ends at its tag or its entity: what follows is another word.
     expect(withInitialCapitalHtml("<p>met</p><p>Notes</p>")).toBe("<p>Met</p><p>Notes</p>");
     expect(withInitialCapitalHtml("<p>met&nbsp;Ana</p>")).toBe("<p>Met&nbsp;Ana</p>");
+    // A link's title ends at its bracket: the capitals of its address are not the title's.
+    expect(withInitialCapital("[docs](https://example.com/Guide)")).toBe("[Docs](https://example.com/Guide)");
+    expect(withInitialCapital("[spec](https://code.example/PR)")).toBe("[Spec](https://code.example/PR)");
   });
 
   it("in a body, the first letter of its text, past its tags and its entities", () => {
