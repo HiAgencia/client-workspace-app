@@ -536,6 +536,37 @@ describe("the demo seed", () => {
     }
   });
 
+  it("starting over empties only the calling demo's workspace: another demo and a person keep theirs", async () => {
+    if (!user) throw new Error("the test user was not created");
+    await user.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
+    const other = await createAnonymousUser("demo-reset-other");
+    const person = await createDisposableUser("demo-reset-person");
+    try {
+      const seeded = await other.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
+      expect(seeded.error).toBeNull();
+      const own = await person.client.from("nodes").insert({ owner_id: person.id, kind: "client", name: "Kept client" }).select("id").single();
+      expect(own.error).toBeNull();
+      const count = async (db: Db, table: "nodes" | "items" | "demo_mail") => {
+        const { count, error } = await db.from(table).select("id", { count: "exact", head: true });
+        expect(error, table).toBeNull();
+        return count;
+      };
+      const before = { nodes: await count(other.client, "nodes"), items: await count(other.client, "items"), mail: await count(other.client, "demo_mail") };
+      expect(before.nodes).toBe(expectedNodes().length);
+      expect(before.items).toBeGreaterThan(0);
+
+      const reset = await user.client.rpc("reset_demo");
+      expect(reset.error).toBeNull();
+      expect(await count(user.client, "nodes")).toBe(0);
+      // The control: the reset did empty the caller's workspace, and only that one.
+      expect({ nodes: await count(other.client, "nodes"), items: await count(other.client, "items"), mail: await count(other.client, "demo_mail") }).toEqual(before);
+      const kept = await person.client.from("nodes").select("id, name");
+      expect(kept.data).toEqual([{ id: own.data!.id, name: "Kept client" }]);
+    } finally {
+      await deleteDisposableUsers([other, person]);
+    }
+  });
+
   it("starting over keeps the demo's usage, and only the service role refills it", async () => {
     if (!user) throw new Error("the test user was not created");
     const service = serviceClient();
