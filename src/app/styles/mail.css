@@ -1,5 +1,6 @@
-/* The mail page: the list in its three groups, the viewer beside it on a computer and over it on a phone, and the frame
-   that paints a real message. Every value comes from a role in tokens.css. */
+/* The mail page: the list in its three groups —the first one headed by each task that waits for mail—, the viewer beside
+   it on a computer and over it on a phone, and the frame that paints a real message. Every value comes from a role in
+   tokens.css. */
 
 .mail-page {
   display: flex;
@@ -61,6 +62,25 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+/* A task that waits for mail heads its possible replies: what they are for, and the way to the task, where it is decided. */
+.mail-task {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.mail-task-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.65rem 0;
+}
+.mail-task-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .mail-page .mail-row {
   display: grid;
@@ -247,7 +267,8 @@
   align-items: center;
   gap: 0.4rem;
 }
-.btn.mail-link-menu {
+.btn.mail-link-menu,
+.btn.mail-answers-menu {
   --btn-fill: var(--control);
   --btn-rim: var(--control-rim);
   --btn-ink: var(--ink);
@@ -376,19 +397,54 @@
     width: 100%;
   }
 }
-.task-mail-from {
+/* What it waits for: the field with its name above and its help below. */
+.task-mail-words {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-}
-.task-mail-state {
-  font-family: var(--font-display);
-  font-size: var(--text-body);
-  font-weight: 650;
-  color: var(--mail-arrived);
+  gap: 0.25rem;
+  align-items: flex-start;
 
-  &[data-state="waiting"] {
-    color: var(--mail-waiting);
+  & .field {
+    width: 100%;
+  }
+}
+/* Its possible replies: each one with what the person decides about it beside it. */
+.task-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--division);
+}
+.task-reply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.task-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.task-reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.task-reply-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+  padding: 0.5rem;
+  border-radius: calc(var(--radius-control) * 0.8);
+  background: var(--interior);
+
+  & .field {
+    width: 100%;
   }
 }
 .task-mail-list {
@@ -422,9 +478,10 @@
     }
   }
 }
-/* «Link to…» rises like the actions beside it, and its hover is theirs. */
+/* «Link to…» and «Answers a task…» rise like the actions beside them, and their hover is theirs. */
 @media (hover: hover) {
-  .btn.mail-link-menu:hover:not(:disabled, [aria-disabled="true"]) {
+  .btn.mail-link-menu:hover:not(:disabled, [aria-disabled="true"]),
+  .btn.mail-answers-menu:hover:not(:disabled, [aria-disabled="true"]) {
     --btn-fill: var(--control-hover);
     --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
     --btn-ink: var(--ink);

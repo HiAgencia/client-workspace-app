@@ -7,9 +7,10 @@ import { usePopupContainer } from "./popup-layer";
 import "@/app/styles/task.css";
 
 // One entry of a menu. An action runs and closes the menu; a choice is a set of radio options (one is the current one);
-// a submenu opens beside its entry; a group carries its label; a separator parts what does different things.
+// a submenu opens beside its entry; a group carries its label; a separator parts what does different things. An action
+// whose label may repeat in its list —two tasks with one title— carries the id of what it acts on.
 export type MenuEntry =
-  | { kind: "action"; label: string; onSelect: () => void; disabled?: boolean; tone?: "danger"; detail?: string }
+  | { kind: "action"; label: string; onSelect: () => void; disabled?: boolean; tone?: "danger"; detail?: string; id?: string }
   | { kind: "choice"; label: string; value: string | null; options: Array<{ value: string; label: string }>; onChoose: (value: string) => void }
   | { kind: "submenu"; label: string; detail?: string; entries: MenuEntry[] }
   | { kind: "group"; label: string; entries: MenuEntry[] }
@@ -52,7 +53,7 @@ export function Menu({ label, about, name, entries, className, onOpenChange, fin
 
 function Entries({ entries, container }: { entries: MenuEntry[]; container: ReturnType<typeof usePopupContainer> }): ReactNode {
   return entries.map((entry, index) => {
-    const key = `${entry.kind}-${"label" in entry ? entry.label : index}`;
+    const key = `${entry.kind}-${entry.kind === "action" && entry.id ? entry.id : "label" in entry ? entry.label : index}`;
     switch (entry.kind) {
       case "separator":
         return <Base.Separator key={key} className="menu-separator" />;

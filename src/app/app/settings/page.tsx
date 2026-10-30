@@ -1,11 +1,11 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { createContext, Suspense, useCallback, useContext, useEffect, useRef, useState, ViewTransition, type CSSProperties, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useState, ViewTransition, type CSSProperties, type ReactNode } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
-import { Field, TextArea } from "@/components/ui/field";
+import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { LOCALE } from "@/lib/dates";
@@ -17,11 +17,11 @@ import { PageHeader } from "../page-header";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 
-// Settings: the theme, the daily review with its instruction, the Google accounts with what each shows of its calendars
-// and its mail, and the tokens coding agents use. Each part is a box of the workspace's own skin, in the page's column.
-// The boxes enter together once each read its data —or failed—, or at the latest after a short wait: meanwhile they keep
-// their place out of sight and the page says what it reads, so a box that grows with its data never pushes one in view.
-const PARTS = ["theme-settings", "daily-review", "accounts-settings", "agent-tokens"] as const;
+// Settings: the theme, the Google accounts with what each shows of its calendars and its mail, and the tokens coding agents
+// use. Each part is a box of the workspace's own skin, in the page's column. The boxes enter together once each read its
+// data —or failed—, or at the latest after a short wait: meanwhile they keep their place out of sight and the page says
+// what it reads, so a box that grows with its data never pushes one in view.
+const PARTS = ["theme-settings", "accounts-settings", "agent-tokens"] as const;
 const ENTRY_CAP_MS = 6000;
 
 const SettledContext = createContext<{ ready: boolean; report: (id: string, settled: boolean) => void }>({ ready: true, report: () => undefined });
@@ -46,7 +46,6 @@ export default function SettingsPage() {
           <SettledContext.Provider value={{ ready: entered, report }}>
             <div className="settings-boxes" data-ready={entered || undefined} aria-busy={!entered || undefined}>
               <ThemeSection />
-              <DailyReviewSection />
               <AccountsSection />
               <AgentTokensSection />
               {!entered && (
@@ -102,139 +101,6 @@ function ThemeSection() {
   );
 }
 
-type Preferences = { dailyReview: boolean; dailyReviewInstruction: string };
-
-// How long typing has to stop before the instruction is saved.
-const SAVE_AFTER_MS = 800;
-
-// The daily review: on or off, and the instruction it follows. Both save as they change, with no button of their own.
-function DailyReviewSection() {
-  const { saving, notify } = useWorkspace();
-  const [prefs, setPrefs] = useState<Preferences | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [round, setRound] = useState(0);
-  const [instruction, setInstruction] = useState("");
-  const [empty, setEmpty] = useState(false);
-  const saved = useRef("");
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // What waits to be saved, so leaving the page saves it instead of dropping it.
-  const pending = useRef<string | null>(null);
-
-  useSettled("daily-review", prefs !== null || error !== null);
-
-  useEffect(() => {
-    let live = true;
-    void get<{ preferences: Preferences }>("/api/preferences").then((answer) => {
-      if (!live) return;
-      if (answer.ok) {
-        setPrefs(answer.preferences);
-        setInstruction(answer.preferences.dailyReviewInstruction);
-        saved.current = answer.preferences.dailyReviewInstruction;
-        setError(null);
-      } else setError(answer.message);
-    });
-    return () => {
-      live = false;
-    };
-  }, [round]);
-
-  // A pending instruction is saved when the page is left.
-  useEffect(
-    () => () => {
-      clearTimeout(timer.current);
-      const text = pending.current?.trim();
-      if (text && text !== saved.current) void post("/api/preferences", { dailyReviewInstruction: text });
-    },
-    [],
-  );
-
-  async function toggle() {
-    if (!prefs) return;
-    const next = !prefs.dailyReview;
-    setPrefs({ ...prefs, dailyReview: next });
-    const ok = await saving(post("/api/preferences", { dailyReview: next }));
-    if (!ok) setPrefs((value) => (value ? { ...value, dailyReview: !next } : value));
-  }
-
-  function saveInstruction(text: string) {
-    clearTimeout(timer.current);
-    pending.current = null;
-    const clean = text.trim();
-    if (!clean) return setEmpty(true);
-    setEmpty(false);
-    if (clean === saved.current) return;
-    void saving(post("/api/preferences", { dailyReviewInstruction: clean })).then((ok) => {
-      if (ok) saved.current = clean;
-      else notify({ text: "The instruction could not be saved. What you wrote is still in the field.", tone: "error" });
-    });
-  }
-
-  return (
-    <SettingsBox id="daily-review" title="Daily review" order={1}>
-      {!prefs ? (
-        error ? (
-          <BoxFailed what="The daily review's settings" message={error} kept={false} onRetry={() => setRound((n) => n + 1)} />
-        ) : (
-          <BoxWait what="Reading the daily review's settings…" rows={2} />
-        )
-      ) : (
-        <div className="stack fade-enter">
-          <div className="settings-line">
-            <p className="t-help">
-              The first time you open the workspace each day, it reads your overdue tasks, today&apos;s, and those that wait for a message,
-              with the mail that arrived for them. It writes what the mail says in each task and completes the ones whose message did
-              what they wait for. Each change has its Undo, in the notice and in Activity. You can also ask for it in the chat.
-            </p>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={prefs.dailyReview}
-              // The name says what it switches on; its state is `aria-checked`, and the word beside it says it too.
-              aria-label="Daily review"
-              className="switch settings-switch"
-              data-review-switch
-              onClick={() => void toggle()}
-            >
-              <span className="switch-rail" aria-hidden="true">
-                <span className="switch-thumb" />
-              </span>
-              <span className="switch-text">{prefs.dailyReview ? "On" : "Off"}</span>
-            </button>
-          </div>
-          <div className="stack settings-field">
-            <h3 className="t-label" id="review-instruction-label">
-              What the review follows
-            </h3>
-            <TextArea
-              id="review-instruction"
-              name="review-instruction"
-              rows={2}
-              value={instruction}
-              aria-labelledby="review-instruction-label"
-              aria-describedby="review-instruction-help"
-              aria-invalid={empty || undefined}
-              onChange={(event) => {
-                const text = event.target.value;
-                setInstruction(text);
-                pending.current = text;
-                clearTimeout(timer.current);
-                timer.current = setTimeout(() => saveInstruction(text), SAVE_AFTER_MS);
-              }}
-              onBlur={() => saveInstruction(instruction)}
-            />
-            <p id="review-instruction-help" className={empty ? "inline-note" : "t-help"} data-tone={empty ? "alert" : undefined}>
-              {empty
-                ? "Write what the review should do: an empty instruction is not saved, and the last one stays."
-                : prefs.dailyReview
-                  ? "It saves as you write, and the next review follows it."
-                  : "It saves as you write. While the review is off it runs only when you ask for it in the chat."}
-            </p>
-          </div>
-        </div>
-      )}
-    </SettingsBox>
-  );
-}
 
 type Calendar = { id: string; name: string; color: string | null; selected: boolean };
 type Account = { id: string; email: string; status: string; isDemo: boolean; nodeIds: string[]; calendars: Calendar[] };
@@ -299,7 +165,7 @@ function AccountsSection() {
   }
 
   return (
-    <SettingsBox id="accounts-settings" title="Google accounts" order={2} count={accounts && accounts.length > 0 ? accounts.length : undefined}>
+    <SettingsBox id="accounts-settings" title="Google accounts" order={1} count={accounts && accounts.length > 0 ? accounts.length : undefined}>
       <p className="t-help">
         Connect an account to a client or a project to see its calendars and its mail there, and in its projects and subprojects.
       </p>
@@ -494,7 +360,7 @@ function AgentTokensSection() {
   const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A place no longer listed";
   const live = data?.tokens.filter((token) => !token.revokedAt).length;
   return (
-    <SettingsBox id="agent-tokens" title="Agent tokens" order={3} count={live ? `${live} in use` : undefined}>
+    <SettingsBox id="agent-tokens" title="Agent tokens" order={2} count={live ? `${live} in use` : undefined}>
       <p className="t-help">
         A token lets a coding agent read and update one client or project, its projects or subprojects included: its tasks, its notes,
         its decisions, and what changed. Each token is shown once; revoke it when the agent no longer needs it.

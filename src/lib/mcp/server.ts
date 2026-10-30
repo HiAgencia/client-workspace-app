@@ -2,13 +2,13 @@ import { createMcpHandler, McpServer, type AuthInfo } from "@modelcontextprotoco
 import type { Db } from "@/lib/db/client";
 import { demoMailSource, type MailSource } from "@/lib/mail/source";
 import type { CalendarWriter, EventsSource, ToolContext } from "@/lib/tools/context";
-import { agentTools, callTool } from "@/lib/tools/registry";
+import { callTool, tools } from "@/lib/tools/registry";
 import { authenticateAgent, type AgentAccess } from "./auth";
 
 type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter; mail?: MailSource };
 
 // The tools that call Google: the calendar's, and those that read the accounts' mail —its list and count, a message, a
-// search, and the mail of a task—.
+// search, the mail of a task, its possible replies, and the reply that closes it—.
 const OPEN_WORLD = new Set([
   "list_events",
   "browse_events",
@@ -22,6 +22,8 @@ const OPEN_WORLD = new Set([
   "search_items",
   "get_item",
   "list_tree",
+  "list_task_replies",
+  "complete_task",
 ]);
 
 function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
@@ -46,12 +48,13 @@ async function markRead(deps: Dependencies, access: AgentAccess, until: string):
   if (error) console.error("mcp: moving the token's read mark failed", error.message);
 }
 
-// One server per request, built for the token that made it: the registry's tools but the chat's own, run with the service client but
-// filtered to the token's owner and node subtree by the tools themselves, writing as the agent with the token's label.
+// One server per request, built for the token that made it: every tool of the registry, the same the chat and the screens
+// use, run with the service client but filtered to the token's owner and node subtree by the tools themselves, writing as
+// the agent with the token's label.
 function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
   const server = new McpServer({ name: "client-workspace", version: "1.0.0" });
   const ctx = contextFor(access, deps);
-  for (const definition of agentTools) {
+  for (const definition of tools) {
     server.registerTool(
       definition.name,
       {

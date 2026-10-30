@@ -6,10 +6,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExter
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
-import { get, post } from "./client-api";
+import { get } from "./client-api";
 import { onFocusRequest } from "./focus-request";
-import { quoted, WRITES, type WriteOutput } from "./chat-cards";
-import { asSentence, reviewNotes, type ReviewAction } from "./review-notice";
+import { WRITES, type WriteOutput } from "./chat-cards";
 import { useWorkspace } from "./workspace";
 import "../styles/chat.css";
 
@@ -76,19 +75,6 @@ function ChatSheet({ onClose, children }: { onClose: () => void; children: React
 }
 
 const MAX_IMAGE = 4 * 1024 * 1024;
-
-type ReviewOutput = {
-  ok: boolean;
-  code?: string;
-  message?: string;
-  skipped?: "already_ran" | "running" | "off" | null;
-  actions?: ReviewAction[];
-  failures?: string[];
-};
-
-// The chat's fixed suggestion over the whole workspace: the daily review, asked for now. A client's or a project's chat
-// does not offer it, because the review reads everything and runs only in the workspace's own conversation.
-const REVIEW_MY_DAY = "Review my day";
 
 // The chat of the open place —a node, or the whole workspace on the Overview—: one card the height of the window. It loads
 // the stored conversation first, then hands it to the live chat; the conversation scrolls inside the card and the message
@@ -179,14 +165,6 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
     setImage(null);
   }
 
-  // A suggestion is sent as the person's own words, so the conversation reads what was asked.
-  function suggest(text: string) {
-    if (busy) return;
-    clearError();
-    setNotice(null);
-    void sendMessage({ role: "user", parts: [{ type: "text", text }] });
-  }
-
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
     // Enter sends; Shift+Enter starts a new line.
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -210,7 +188,7 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
         {messages.length === 0 && (
           <li className="inline-note">
             {nodeId === null
-              ? "Ask what is pending across every client and project, to add a task to one of them by its name, or to review your day against the mail your tasks wait for. Attach an image of a message and it turns it into tasks."
+              ? "Ask what is pending across every client and project, to add a task to one of them by its name, or what arrived for the tasks that wait for mail. Attach an image of a message and it turns it into tasks."
               : "Ask it to add a task, record a decision, or tell you what is pending here. Attach an image of a message and it turns it into tasks."}
           </li>
         )}
@@ -235,9 +213,6 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
                     Image: {part.filename ?? "attached"}
                   </p>
                 );
-              }
-              if (part.type === "tool-run_daily_review" && "state" in part && part.state === "output-available") {
-                return <ReviewCards key={index} output={part.output as ReviewOutput} />;
               }
               if (part.type.startsWith("tool-") && "state" in part && part.state === "output-available") {
                 return <ActionCard key={index} toolName={part.type.slice(5)} output={part.output as WriteOutput} />;
@@ -277,13 +252,6 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
               Remove
             </Button>
           </p>
-        )}
-        {nodeId === null && (
-          <div className="chat-suggestions" role="group" aria-label="Suggestions">
-            <Button size="sm" className="chat-suggestion"disabled={busy} onClick={() => suggest(REVIEW_MY_DAY)} data-chat-suggestion="review">
-              {REVIEW_MY_DAY}
-            </Button>
-          </div>
         )}
         <div className="compose-line">
           <TextArea
@@ -359,73 +327,6 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
   );
 }
 
-// What «Review my day» did: one card per task it touched, named by the task each action carries, with the line that
-// decided it and its undo —what it completed opens again first, then the mail's state goes back, through the review's
-// own route—. A run that could not do everything, that is still running, or that hit the day's limit says so.
-function ReviewCards({ output }: { output: ReviewOutput }) {
-  const { saving } = useWorkspace();
-  const [undone, setUndone] = useState<Record<string, boolean>>({});
-  if (!output?.ok) {
-    return (
-      <p className="action-card t-help" data-card="failed">
-        {output?.code === "cap"
-          ? asSentence(output.message || "The daily review reached its limit for today")
-          : output?.code === "internal"
-            ? "The daily review stopped before it finished. Ask again to run it."
-            : `The daily review did not run. ${asSentence(output?.message || "The server refused it")}`}
-      </p>
-    );
-  }
-  const actions = output.actions ?? [];
-  const tasks = [...new Map(actions.map((action) => [action.taskId, action.task])).entries()];
-  const notes = reviewNotes(output);
-
-  return (
-    <>
-      {tasks.map(([taskId, task]) => {
-        const own = actions.filter((action) => action.taskId === taskId);
-        const completed = own.some((action) => action.kind === "complete");
-        // A task the run touched that no longer reads (deleted since) is said as such, without opening anything.
-        // A card stored before actions carried their task names none.
-        const named = task ? quoted(task.title) : task === null ? "a task that is no longer there" : "a task";
-        const what = `${completed ? "Completed" : "Wrote the mail's state of"} ${named}`;
-        const sentence = own.map((action) => action.after.sentence).find((value): value is string => typeof value === "string");
-        const done = undone[taskId] || own.every((action) => action.undoneAt);
-        async function undo() {
-          const open = own.filter((action) => !action.undoneAt).sort((a, b) => Number(b.kind === "complete") - Number(a.kind === "complete"));
-          const request = (async () => {
-            for (const action of open) {
-              const answer = await post(`/api/review/actions/${action.id}/undo`, {});
-              if (!answer.ok) return answer;
-            }
-            return { ok: true };
-          })();
-          if (await saving(request)) setUndone((known) => ({ ...known, [taskId]: true }));
-        }
-        return (
-          <div key={taskId} className="action-card action-card-review" data-card="run_daily_review">
-            <span className="stack action-text">
-              <span className="t-value">{what}</span>
-              {sentence && <span className="t-meta action-sentence">{sentence}</span>}
-            </span>
-            {done ? (
-              <span className="pill">Undone</span>
-            ) : (
-              <Button size="sm" onClick={() => void undo()} aria-label={`Undo: ${what}`}>
-                Undo
-              </Button>
-            )}
-          </div>
-        );
-      })}
-      {notes.map((note) => (
-        <p key={note} className="action-card t-help" data-card="run_daily_review_note">
-          {note}
-        </p>
-      ))}
-    </>
-  );
-}
 
 // Push to talk: the browser records, the note becomes 24 kHz mono 16-bit WAV, and the transcript lands in the box
 // to be reviewed before sending. The microphone shows only when the server can transcribe.

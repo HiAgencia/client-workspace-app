@@ -8,12 +8,12 @@ import "./styles/boxes.css";
 import "./styles/task.css";
 
 // The landing's picture of the demo, drawn with the workspace's own pieces and sheets —a box with its title and count, the
-// task's row with its circle, its data and its place, the week, the mail's rows, the notice of the daily review—. It is a
-// picture, not controls: inert and out of the accessibility tree, its caption says what it shows. It does not import the
-// workspace's components, so the landing does not load them. Its figures are the planted demo's own, counted from the
-// seed (`demoOverview`); its rows, its event and its messages are a few of the demo's, drawn on a working morning at the
-// moment the daily review completes a task, so the hours of the mail and the completed row still in the list are that
-// moment's. The week is the visitor's own, read once mounted; the server paints the same week without its numbers.
+// task's row with its circle, its data and its place, the week, the mail's rows with the possible replies of a task that
+// waits for mail first—. It is a picture, not controls: inert and out of the accessibility tree, its caption says what it
+// shows. It does not import the workspace's components, so the landing does not load them. Its figures are the planted
+// demo's own, counted from the seed (`demoOverview`); its rows, its event and its messages are a few of the demo's, drawn
+// on a working morning, so the hours of the mail are that moment's. The week is the visitor's own, read once mounted; the
+// server paints the same week without its numbers.
 
 type Row = {
   title: string;
@@ -21,17 +21,15 @@ type Row = {
   when?: { label: string; tone: "overdue" | "today" | "tomorrow" | "week" };
   place: { path: string; color: string | null };
   data?: string[];
-  mail?: "waiting" | "arrived";
-  by?: string;
-  done?: boolean;
+  waiting?: boolean;
 };
 
 const OVERDUE: Row[] = [{ title: "Send the October invoices", priority: 1, when: { label: "Yesterday", tone: "overdue" }, place: { path: "Operations", color: null }, data: ["Urgent"] }];
 
 const TODAY: Row[] = [
   { title: "Send the homepage draft for review", priority: 1, when: { label: "4:00 PM", tone: "today" }, place: { path: "Larkspur Bakery / Website", color: "amber" }, data: ["1/3", "Urgent"] },
-  { title: "Wait for the bank transfer", priority: 2, place: { path: "Operations", color: null }, mail: "waiting" },
-  { title: "Wait for the app review approval", priority: 2, place: { path: "Operations", color: null }, mail: "arrived", by: "By the daily review", done: true },
+  { title: "Wait for the bank transfer", priority: 2, place: { path: "Operations", color: null }, waiting: true },
+  { title: "Present two logo directions", priority: 2, place: { path: "Studio Atlas / Brand refresh", color: "violet" } },
 ];
 
 const noSubscription = () => () => {};
@@ -48,8 +46,8 @@ function PlaceName({ path, color }: { path: string; color: string | null }) {
 function PreviewRow({ row }: { row: Row }) {
   return (
     <li className="task-item">
-      <div className="task" data-layout="list" data-place="" data-done={row.done || undefined}>
-        <span className="task-circle task-check" role="checkbox" aria-checked={Boolean(row.done)} data-priority={row.priority} />
+      <div className="task" data-layout="list" data-place="">
+        <span className="task-circle task-check" role="checkbox" aria-checked={false} data-priority={row.priority} />
         <p className="task-title t-value">{row.title}</p>
         <p className="task-place t-meta">
           <PlaceName path={row.place.path} color={row.place.color} />
@@ -71,12 +69,11 @@ function PreviewRow({ row }: { row: Row }) {
               </span>
             ),
           )}
-          {row.mail && (
-            <span className="task-mail" data-mail={row.mail}>
-              {row.mail === "arrived" ? "Mail arrived" : "Waiting for mail"}
+          {row.waiting && (
+            <span className="task-mail" data-mail="waiting">
+              Waiting for mail
             </span>
           )}
-          {row.by && <span className="task-source">{row.by}</span>}
         </div>
       </div>
     </li>
@@ -185,7 +182,7 @@ export function LandingPreview({ figures }: { figures: DemoOverview }) {
                         <span className="mail-when">9:05 AM</span>
                       </span>
                       <span className="mail-subject">Your app review was approved</span>
-                      <span className="mail-for">For: Wait for the app review approval</span>
+                      <span className="mail-for">2 possible replies for “Wait for the app review approval”</span>
                     </span>
                   </li>
                   <li>
@@ -206,15 +203,9 @@ export function LandingPreview({ figures }: { figures: DemoOverview }) {
             </section>
           </div>
         </div>
-        <div className="notice preview-notice" data-tone="status">
-          <span className="t-value notice-text">The daily review completed “Wait for the app review approval”: Developer Platform wrote “Your app review was approved”.</span>
-          <span className="btn btn-primary btn-sm preview-undo">
-            <span className="btn-label">Undo</span>
-          </span>
-        </div>
       </div>
       <figcaption id="preview-caption" className="t-meta">
-        The demo&apos;s Overview: the day&apos;s tasks with their places, the week, the mail a task waits for, and a task the daily review completed when its message arrived.
+        The demo&apos;s Overview: the day&apos;s tasks with their places, the week, and the mail, first the messages that may answer a task that waits for one.
       </figcaption>
     </figure>
   );

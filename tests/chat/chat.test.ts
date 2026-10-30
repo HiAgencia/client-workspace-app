@@ -5,13 +5,17 @@ import { runChat, systemPrompt } from "@/lib/chat/run";
 import { simulatedModel } from "@/lib/chat/simulated";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { dailyCap, takeUsage, takeUsageFor } from "@/lib/chat/usage";
+import { encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
+import { demoMailSource, holdsEveryWord, type MailMessage, type MailSource } from "@/lib/mail/source";
 import type { ToolContext } from "@/lib/tools/context";
+import { callTool } from "@/lib/tools/registry";
 import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
 // The chat against the scripted model and the real database: what a request does lands in the node with source
 // "chat", the daily cap stops at its limit, and a provider failure arrives as a readable error in the stream.
 
 let user: DisposableUser | undefined;
+let clientId: string;
 let nodeId: string;
 
 beforeAll(async () => {
@@ -22,6 +26,7 @@ beforeAll(async () => {
     .select("id")
     .single();
   if (client.error) throw new Error(client.error.message);
+  clientId = client.data.id;
   const project = await user.client
     .from("nodes")
     .insert({ owner_id: user.id, kind: "project", name: "Web", parent_id: client.data.id })
@@ -118,17 +123,69 @@ describe("the workspace's own chat, with no node open", () => {
     expect(answer).toContain("Call the printer");
   });
 
-  it("«Review my day» runs the daily review through its tool, on purpose, for the person's day", async () => {
-    const zone = "America/Argentina/Buenos_Aires";
-    const { message } = await drain(await runChat({ ctx: wide(), model: simulatedModel(), messages: ask("Review my day"), timeZone: zone }));
-    const toolPart = message?.parts.find((part) => part.type === "tool-run_daily_review") as
-      | { input: { today: string; zone: string }; output: { ok: boolean; ran: boolean; review: { requested: boolean; day: string } } }
-      | undefined;
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    expect(toolPart?.input).toEqual({ today, zone });
-    expect(toolPart?.output).toMatchObject({ ok: true, ran: true, review: { requested: true, day: today } });
+  it("«Did anything arrive for my tasks?» reads the possible replies of the tasks that wait for mail, and closes none", async () => {
+    // An account of Acme, which Web sees, and a mail source that holds what the bank sent after the wait began.
+    const key = await importKey(newKeyBase64());
+    const service = serviceClient();
+    const account = await service
+      .from("google_accounts")
+      .insert({
+        owner_id: user!.id,
+        email: "studio@example.com",
+        refresh_token: await encrypt(key, "refresh"),
+        access_token: await encrypt(key, "access"),
+        access_token_expires_at: "2099-01-01T00:00:00Z",
+        scopes: ["openid", "email"],
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (account.error) throw new Error(account.error.message);
+    const attached = await service.from("node_accounts").insert({ node_id: clientId, account_id: account.data.id });
+    if (attached.error) throw new Error(attached.error.message);
+    const transfer: MailMessage = {
+      id: "transfer",
+      threadId: "transfer",
+      accountId: account.data.id,
+      accountEmail: "studio@example.com",
+      from: { name: "Bayside Bank", email: "alerts@bayside.example" },
+      to: ["studio@example.com"],
+      subject: "Transfer received",
+      snippet: "The transfer arrived.",
+      receivedAt: new Date(Date.now() + 60_000).toISOString(),
+      unread: true,
+      important: false,
+    };
+    const mail: MailSource = { ...demoMailSource(), candidates: async ({ words }) => ({ messages: holdsEveryWord(transfer, words) ? [transfer] : [], failures: [], nextPageToken: null }) };
+    const withMail: ToolContext = { ...wide(), mail };
+    const task = (await callTool("create_task", withMail, { node: nodeId, title: "Wait for the transfer" })) as unknown as { ok: boolean; item: { id: string } };
+    expect(task.ok).toBe(true);
+    expect((await callTool("set_task_mail", withMail, { task: task.item.id, words: "Bayside Bank" })).ok).toBe(true);
+
+    const { message } = await drain(await runChat({ ctx: withMail, model: simulatedModel(), messages: ask("Did anything arrive for my tasks?"), timeZone: "UTC" }));
+    const read = message?.parts.find((part) => part.type === "tool-list_task_replies") as { output: { ok: boolean; replies: Array<{ id: string }> } } | undefined;
+    expect(read?.output).toMatchObject({ ok: true, replies: [{ id: "transfer" }] });
     const answer = message?.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
-    expect(answer).toContain("I reviewed your day");
+    expect(answer).toContain('"Wait for the transfer": 1 possible reply, the latest "Transfer received" from Bayside Bank.');
+    // The chat reads; the person decides which message answers the task.
+    const after = await user!.client.from("items").select("status").eq("id", task.item.id).single();
+    expect(after.data?.status).toBe("open");
+  });
+
+  it("closes the task the person names with the result they say, and nothing they did not name", async () => {
+    const named = (await callTool("create_task", ctx(), { title: "Wait for the signed contract" })) as unknown as { ok: boolean; item: { id: string } };
+    const other = (await callTool("create_task", ctx(), { title: "Wait for the signed invoice" })) as unknown as { ok: boolean; item: { id: string } };
+    expect(named.ok && other.ok).toBe(true);
+    const status = async (id: string) => (await user!.client.from("items").select("status").eq("id", id).single()).data?.status;
+
+    // A title that names no open task closes nothing.
+    await drain(await runChat({ ctx: ctx(), model: simulatedModel(), messages: ask('Close "Wait for the signed lease" as approved'), timeZone: "UTC" }));
+    expect([await status(named.item.id), await status(other.item.id)]).toEqual(["open", "open"]);
+
+    const { message } = await drain(await runChat({ ctx: ctx(), model: simulatedModel(), messages: ask('Close "Wait for the signed contract" as approved'), timeZone: "UTC" }));
+    const closed = message?.parts.find((part) => part.type === "tool-complete_task") as { output: { ok: boolean; decision: { title: string } } } | undefined;
+    expect(closed?.output).toMatchObject({ ok: true, decision: { title: "Approved" } });
+    expect([await status(named.item.id), await status(other.item.id)]).toEqual(["done", "open"]);
   });
 
   it("keeps its conversation apart from each node's", async () => {

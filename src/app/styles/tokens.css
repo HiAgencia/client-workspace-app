@@ -83,7 +83,6 @@
   --prio-normal: var(--node-blue);
   --prio-low: var(--node-gray);
   --mail-waiting: var(--node-indigo);
-  --mail-arrived: var(--node-teal);
 
   /* The palette a person colors text with: each reads at 4.5:1 or more on the card and the field. */
   --tone-red: var(--node-red);

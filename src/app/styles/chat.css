@@ -1,30 +1,5 @@
-/* The chat's own pieces beyond its card (screens.css, §Chat): its fixed suggestion and what the daily review did. Every
-   value comes from a role in tokens.css. */
-.chat-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-/* What the daily review did: what it did, and under it the line of the message that decided it. */
-.action-card-review {
-  align-items: flex-start;
-
-  & .action-text {
-    gap: 0.2rem;
-    min-width: 0;
-  }
-  & .btn {
-    flex: none;
-  }
-}
-/* Where the task's title goes while it is read: a line of its size, so nothing moves when it arrives. */
-.action-title-wait {
-  display: inline-block;
-  width: 9em;
-  height: 0.9em;
-  vertical-align: -0.1em;
-}
-/* The line that decided it is meta, in meta's own ink. */
+/* The chat's own pieces beyond its card (screens.css, §Chat). Every value comes from a role in tokens.css. */
+/* Why a card has no undo is meta, in meta's own ink, and a long word breaks inside the card. */
 .action-sentence {
   overflow-wrap: anywhere;
 }

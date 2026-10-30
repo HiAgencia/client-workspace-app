@@ -28,8 +28,8 @@ export const mailMessageSchema = z.object({
 
 export type MailMessage = z.infer<typeof mailMessageSchema>;
 
-// A whole message, for the viewer and the daily review: the HTML as the source gave it (the tools sanitize it before it
-// leaves the server), the plain text, and the language its `Content-Language` declares when the source reads headers.
+// A whole message, for the viewer: the HTML as the source gave it (the tools sanitize it before it leaves the server), the
+// plain text, and the language its `Content-Language` declares when the source reads headers.
 export type MailContent = MailMessage & { html: string | null; text: string | null; contentLanguage?: string | null };
 
 export type MailAccount = { id: string; email: string; isDemo: boolean; status: string; scopes: string[] };
@@ -45,9 +45,18 @@ export type MailSource = {
   get(args: { db: Db; ownerId: string; account: MailAccount; id: string }): Promise<MailContent | null>;
   // Some messages of one account, without their body, in one read; one the account no longer holds is left out.
   many(args: { db: Db; ownerId: string; account: MailAccount; ids: string[] }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
-  // The latest messages whole that arrived since a moment, at most `limit` of each account —only those of some senders
-  // when `from` names them—, for the daily review to read. `more` names the accounts that hold more than were read.
-  read(args: { db: Db; ownerId: string; accounts: MailAccount[]; since: string; limit?: number; from?: string[] }): Promise<{ messages: MailContent[]; failures: MailFailure[]; more: string[] }>;
+  // The possible replies to what a task waits for, in one account: what arrived since a moment —never what was sent,
+  // drafted, chatted, or sits in spam or the trash— whose sender's name or address or whose subject holds every word,
+  // newest first, at most `limit`. `nextPageToken` reads the next ones.
+  candidates(args: {
+    db: Db;
+    ownerId: string;
+    account: MailAccount;
+    since: string;
+    words: string[];
+    limit: number;
+    pageToken?: string;
+  }): Promise<{ messages: MailMessage[]; failures: MailFailure[]; nextPageToken: string | null }>;
   // The latest messages of the inbox that hold some words, at most `limit` of each account.
   search(args: { db: Db; ownerId: string; accounts: MailAccount[]; words: string; limit: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
   // Every message the accounts hold unread in Gmail, whatever a list shows: what the unread count reads. An account
@@ -55,11 +64,26 @@ export type MailSource = {
   unread(args: { db: Db; ownerId: string; accounts: MailAccount[] }): Promise<{ messages: Array<{ accountId: string; id: string }>; failures: MailFailure[] }>;
 };
 
-// Whether a sender is the one some words name: words of their name or of their address, as a task says who it waits for.
-export function senderMatches(from: { name: string | null; email: string }, words: string): boolean {
-  const wanted = words.trim().toLowerCase();
-  if (!wanted) return false;
-  return (from.name ?? "").toLowerCase().includes(wanted) || from.email.toLowerCase().includes(wanted);
+// A text without accents or capitals, as the words a task waits for are compared.
+export function folded(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+// The words of what a task waits for, each cleaned to letters, figures and `@._-` so none of them works as a search
+// operator; a word left with no letter or figure is dropped.
+export function waitWords(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}@._-]/gu, "").replace(/^[-@._]+|[-@._]+$/g, ""))
+    .filter((word) => /[\p{L}\p{N}]/u.test(word));
+}
+
+// Whether a message is a possible reply to what a task waits for: every word in its sender's name or address or in its
+// subject, without accents or capitals. No word, no reply: a wait with nothing to look for would take every message.
+export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, words: string[]): boolean {
+  if (words.length === 0) return false;
+  const fields = folded([message.from.name ?? "", message.from.email, message.subject].join("\n"));
+  return words.every((word) => fields.includes(folded(word)));
 }
 
 // Whether a message holds some words in its sender, subject, or text, as a search reads the sample accounts.
@@ -163,9 +187,17 @@ export function demoMailSource(): MailSource {
       const { messages, failures } = await rows(db, ownerId, accounts, { since, limit, whole: false });
       return { messages: messages.map(withoutBody), failures };
     },
-    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT, from }) {
-      const keep = from ? (message: MailContent) => from.some((words) => senderMatches(message.from, words)) : undefined;
-      return rows(db, ownerId, accounts, { since, limit, whole: true, keep });
+    async candidates({ db, ownerId, account, since, words, limit, pageToken }) {
+      if (!account.isDemo) return { messages: [], failures: [notConnected(account)], nextPageToken: null };
+      if (words.length === 0) return { messages: [], failures: [], nextPageToken: null };
+      const { messages, failures } = await rows(db, ownerId, [account], { since, limit: Number.MAX_SAFE_INTEGER, whole: false, keep: (message) => holdsEveryWord(message, words) });
+      // The token is where the next page starts among what the words keep.
+      const start = Math.max(0, Math.trunc(Number(pageToken ?? 0)) || 0);
+      return {
+        messages: messages.slice(start, start + limit).map(withoutBody),
+        failures,
+        nextPageToken: start + limit < messages.length ? String(start + limit) : null,
+      };
     },
     async search({ db, ownerId, accounts, words, limit }) {
       const { messages, failures } = await rows(db, ownerId, accounts, { limit, whole: false, keep: (message) => holdsWords(message, words) });

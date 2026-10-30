@@ -73,8 +73,6 @@ describe("a preferences change", () => {
     expect(preferencesChange.safeParse({ page: "tasks", layout: "board" }).success).toBe(true);
     expect(preferencesChange.safeParse({ page: NODE, board: { order: ["tasks"] } }).success).toBe(true);
     expect(preferencesChange.safeParse({ page: "settings", layout: "board" }).success).toBe(false);
-    expect(preferencesChange.safeParse({ dailyReview: false }).success).toBe(true);
-    expect(preferencesChange.safeParse({ dailyReviewInstruction: "   " }).success).toBe(false);
     expect(preferencesChange.safeParse({ page: "tasks", layout: "board", extra: 1 }).success).toBe(false);
   });
 });

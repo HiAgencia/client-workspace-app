@@ -29,6 +29,7 @@ import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
 import { allTasks, BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
+import { useTaskReplies } from "./task-replies";
 import { useChatScope, useWorkspace } from "./workspace";
 
 // A client's or a project's boxes, in their first order: its tasks and what has no date on the left, its week, its mail,
@@ -78,6 +79,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const tasks = useTasksRead(place, now, { upcomingDays: 3 });
   const notes = useNotesRead(place);
   const mail = useMailRead(place, null);
+  const replies = useTaskReplies({ node: nodeId }, now, tree, 5);
   const accounts = useBoxRead<Accounts>(() => get<Accounts>("/api/accounts"), "accounts");
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -188,7 +190,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     tasks: tasksBox,
     no_date: { id: "no_date", title: "No date", count: view?.groups.noDate.count, content: <NoDateBoxContent read={tasksRead} placeId={nodeId} showPlace pageNode={nodeId} /> },
     calendar: { id: "calendar", title: "Calendar", content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?scope=${nodeId}`} /> },
-    mail: { id: "mail", title: "Mail", count: mail.data ? `${mail.data.unread} unread` : undefined, content: <MailBoxContent read={mail} now={now} place={place} connectHref={connectHref} /> },
+    mail: { id: "mail", title: "Mail", count: mail.data ? `${mail.data.unread} unread` : undefined, content: <MailBoxContent read={mail} replies={replies} account={null} now={now} place={place} connectHref={connectHref} /> },
     notes: { id: "notes", title: "Notes", count: notes.data?.total, content: <NotesBoxContent read={notes} place={place} /> },
     subprojects: { id: "subprojects", title: childName, count: children.length, content: <SubprojectsBoxContent node={node} adding={adding} setAdding={setAdding} /> },
   };

@@ -6,8 +6,9 @@ import { firstLine } from "@/lib/rich-text";
 import { defineTool } from "./define";
 import { dueOn, titleText } from "./fields";
 import { insertItem, origin, reachableItem } from "./items";
-import { accountMap, taskMailOf } from "./mail";
+import { accountMap } from "./mail";
 import { taskMailSchema, type TaskMail } from "./mail-schema";
+import { taskMailOf } from "./waits";
 import { dbFail, fail, isError, ok } from "./result";
 import { hourOf, ITEM_COLUMNS, itemSchema, selectAllItems, toItem } from "./rows";
 import { describePlace, loadScope, reachOf, resolveReadPlace, resolveWritePlace, type Scope } from "./tree";
@@ -50,7 +51,7 @@ export const taskRowSchema = z.object({
   position: z.number(),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
-  // The mail it waits for and what the daily review wrote about it; null when it waits for none.
+  // What mail it waits for; null when it waits for none.
   mail: taskMailSchema.nullable(),
 });
 
@@ -302,7 +303,8 @@ export const moveItem = defineTool({
 });
 
 // A task that waits for mail in one account and moves to a place that does not see it waits in every account of its new
-// place: an account the place does not see would be read for a task that no longer belongs to it.
+// place: an account the place does not see would be read for a task that no longer belongs to it. What was ruled out
+// there goes with it.
 async function keepWaitsInSight(ctx: Parameters<typeof taskMailOf>[0], scope: Scope, rows: ItemRow[]) {
   const tasks = rows.filter((entry) => entry.type === "task");
   const waits = await taskMailOf(ctx, tasks.map((entry) => entry.id));
@@ -315,7 +317,7 @@ async function keepWaitsInSight(ctx: Parameters<typeof taskMailOf>[0], scope: Sc
   if (lost.length === 0) return ok({});
   const { error } = await ctx.db
     .from("task_mail")
-    .update({ account_id: null, status: "waiting", sentence: null, decided_account_id: null, decided_message_id: null, checked_at: null })
+    .update({ account_id: null, dismissed: [] })
     .eq("owner_id", ctx.ownerId)
     .in("item_id", lost);
   if (error) return dbFail("the item moved, but letting go of the account its new place does not see failed", error);

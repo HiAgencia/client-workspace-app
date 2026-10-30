@@ -43,4 +43,22 @@ describe("the demo's Overview figures", () => {
     expect(figures.scheduled).toBeGreaterThan(0);
     expect(figures.unread).toBeGreaterThan(0);
   });
+
+  it("show the two possible replies the picture names for the app review, and leave the task open", async () => {
+    if (!user) throw new Error("the test user was not created");
+    // Planting is a no-op on a workspace already planted, so this reads the same demo whether it runs alone or after.
+    expect((await user.client.rpc("seed_demo", { p_today: TODAY })).error).toBeNull();
+    const ctx: ToolContext = { db: user.client, ownerId: user.id, source: "manual" };
+    const view = (await callTool("get_tasks", ctx, { today: TODAY })) as unknown as TasksView;
+    const { groups } = view;
+    const rows = [...groups.overdue.tasks, ...groups.today.tasks, ...groups.upcoming.days.flatMap((day) => day.tasks), ...groups.noDate.tasks];
+    const task = rows.find((row) => row.title === "Wait for the app review approval");
+    expect(task?.mail).toMatchObject({ waitsFor: "Developer Platform", dismissed: [] });
+    const read = (await callTool("list_task_replies", ctx, { task: task!.id })) as unknown as { ok: boolean; replies: Array<{ subject: string }> };
+    expect(read.ok).toBe(true);
+    // Newest first: the approval, then a notice from the same sender that is not it.
+    expect(read.replies.map((reply) => reply.subject)).toEqual(["Your app review was approved", "API changes coming in November"]);
+    const after = await user.client.from("items").select("status").eq("id", task!.id).single();
+    expect(after.data?.status).toBe("open");
+  });
 });

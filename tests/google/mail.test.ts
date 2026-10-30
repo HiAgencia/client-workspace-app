@@ -6,12 +6,11 @@ import { CALENDAR_LIST_SCOPE, EVENTS_SCOPE, GMAIL_READ_SCOPE, type Fetch, type G
 import { decrypt, encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
 import type { GoogleDeps } from "@/lib/google/events";
 import { gmailMailSource } from "@/lib/google/gmail";
-import type { MailAccount } from "@/lib/mail/source";
+import type { MailAccount, MailSource } from "@/lib/mail/source";
 import { authenticateAgent } from "@/lib/mcp/auth";
-import type { ReviewJudge } from "@/lib/review/judge";
-import { runDailyReview, type ReviewTask } from "@/lib/review/run";
 import { currentUser } from "@/lib/supabase/server";
 import type { ToolContext } from "@/lib/tools/context";
+import type { MailRow } from "@/lib/tools/mail-schema";
 import { callTool } from "@/lib/tools/registry";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
@@ -77,7 +76,7 @@ const mailbox: Stored[] = [
     payload: { mimeType: "text/plain", headers: headers('"Ana Ruiz" <ana@studioatlas.example>', "=?UTF-8?B?Q2Fmw6k=?= meeting"), body: { data: encode("Can we move it to Friday?") } },
   },
   {
-    // Archived by a filter: not in the inbox, but it arrived, and the daily review reads it.
+    // Archived by a filter: not in the inbox, but it arrived, and a task that waits for it finds it.
     id: "m3",
     threadId: "t3",
     labelIds: ["CATEGORY_UPDATES"],
@@ -108,13 +107,18 @@ const mailbox: Stored[] = [
 const fromOf = (message: Stored) => (message.payload.headers ?? []).find((header) => header.name === "From")?.value ?? "";
 const subjectOf = (message: Stored) => (message.payload.headers ?? []).find((header) => header.name === "Subject")?.value ?? "";
 
-// Gmail's search, as far as the source uses it: the inbox, unread, what was sent, a moment, senders (`from:(words)`, one
-// group or several in `{…}`), and loose words, alone or in one group, in the sender, subject, or snippet.
+// A word of a wait: `(from:w OR subject:w …)`, one of its forms in the sender or in the subject.
+const WAIT_GROUP = /\(((?:from|subject):[^\s()]+(?: OR (?:from|subject):[^\s()]+)*)\)/g;
+
+// Gmail's search, as far as the source uses it: the inbox, unread, what arrived —never sent, in spam or in the trash—, a
+// moment, the words of a wait, and loose words, alone or in one group, in the sender, subject, or snippet.
 function search(q: string): Stored[] {
   const after = /after:(\d+)/.exec(q);
-  const senders = [...q.matchAll(/from:\(([^)]*)\)/g)].map(([, words]) => words.toLowerCase().split(/\s+/).filter(Boolean));
+  const waits = [...q.matchAll(WAIT_GROUP)].map(([, inner]) =>
+    inner.split(" OR ").map((term) => ({ field: term.slice(0, term.indexOf(":")), value: term.slice(term.indexOf(":") + 1).toLowerCase() })),
+  );
   const loose = q
-    .replace(/from:\([^)]*\)/g, " ")
+    .replace(WAIT_GROUP, " ")
     .replace(/[{}()]/g, " ")
     .split(/\s+/)
     .filter((word) => word && !/^-?(in|is|after):/.test(word))
@@ -125,10 +129,13 @@ function search(q: string): Stored[] {
       if (q.includes("in:inbox") && !labels.has("INBOX")) return false;
       if (q.includes("is:unread") && !labels.has("UNREAD")) return false;
       if (q.includes("-in:sent") && labels.has("SENT") && !trouble.leakSent) return false;
+      if (q.includes("-in:spam") && labels.has("SPAM")) return false;
+      if (q.includes("-in:trash") && labels.has("TRASH")) return false;
       if (after && Number(message.internalDate) / 1000 <= Number(after[1])) return false;
       const from = fromOf(message).toLowerCase();
-      if (senders.length > 0 && !senders.some((words) => words.every((word) => from.includes(word)))) return false;
-      const text = `${from} ${subjectOf(message)} ${message.snippet}`.toLowerCase();
+      const subject = subjectOf(message).toLowerCase();
+      if (!waits.every((forms) => forms.some(({ field, value }) => (field === "from" ? from : subject).includes(value)))) return false;
+      const text = `${from} ${subject} ${message.snippet}`.toLowerCase();
       return loose.every((word) => text.includes(word));
     })
     .sort((a, b) => Number(b.internalDate) - Number(a.internalDate));
@@ -308,14 +315,21 @@ describe("the Gmail source", () => {
     expect(messages).toEqual([{ accountId: ids.mail, id: "m1" }]);
   });
 
-  it("reads whole what arrived since a moment, archived included, and never what the account sent", async () => {
-    const { messages, failures, more } = await gmailMailSource(deps).read({ db: user!.client, ownerId: user!.id, accounts: [mailAccount()], since: "2026-10-29T00:00:00Z" });
-    expect(failures).toEqual([]);
-    expect(more).toEqual([]);
-    expect(messages.map((message) => message.id)).toEqual(["m1", "m3"]);
-    expect(messages[0].text).toBe("Your app review was approved.");
-    expect(messages[0].html).toContain("<b>approved</b>");
-    expect(messages[1]).toMatchObject({ html: "<p>Transfer received</p>", text: null });
+  it("looks for a wait's possible replies in what arrived since it began, archived included, and never in what the account sent", async () => {
+    const since = "2026-10-29T00:00:00Z";
+    const candidates = (words: string[]) => gmailMailSource(deps).candidates({ db: user!.client, ownerId: user!.id, account: mailAccount(), since, words, limit: 10 });
+    forget();
+    const archived = await candidates(["Transfer"]);
+    expect(archived).toEqual({ messages: [expect.objectContaining({ id: "m3", subject: "Transfer received" })], failures: [], nextPageToken: null });
+    expect(searches).toEqual([`-in:sent -in:draft -in:chats -in:spam -in:trash (from:transfer OR subject:transfer) after:${Date.parse(since) / 1000}`]);
+    expect(batchFormats).toEqual(["metadata"]);
+    // What the account sent is left out by its labels too, when a search brings it.
+    trouble.leakSent = true;
+    try {
+      expect((await candidates(["approved"])).messages.map((message) => message.id)).toEqual(["m1"]);
+    } finally {
+      clearTrouble();
+    }
   });
 
   it("reads one message whole, and answers nothing for one the account does not hold", async () => {
@@ -369,27 +383,6 @@ describe("the Gmail source", () => {
     } finally {
       spy.mockRestore();
       clearTrouble();
-    }
-  });
-
-  it("counts a message whose content cannot be decoded apart, and still reads the rest whole", async () => {
-    const broken: Stored = {
-      id: "m6",
-      threadId: "t6",
-      labelIds: ["INBOX"],
-      internalDate: at("2026-10-29T17:00:00Z"),
-      snippet: "Broken",
-      payload: { mimeType: "text/plain", headers: headers("Broken <broken@example.com>", "Broken"), body: { data: "@@@" } },
-    };
-    mailbox.push(broken);
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      const { messages, failures } = await gmailMailSource(deps).read({ db: user!.client, ownerId: user!.id, accounts: [mailAccount()], since: "2026-10-29T00:00:00Z" });
-      expect(messages.map((message) => message.id)).toEqual(["m1", "m3"]);
-      expect(failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 3 messages could not be read" }]);
-    } finally {
-      spy.mockRestore();
-      mailbox.splice(mailbox.indexOf(broken), 1);
     }
   });
 
@@ -546,79 +539,241 @@ describe("the tools over Gmail", () => {
   });
 });
 
-describe("the daily review over a busy inbox", () => {
-  // What the review hands its judge, kept to look at; it decides nothing.
-  let seen: ReviewTask[] = [];
-  const watcher: ReviewJudge = {
-    provider: "simulated",
-    async review(tasks) {
-      seen = tasks;
-      return { failures: [] };
-    },
-  };
+describe("what a task waits for, over a busy inbox", () => {
+  // Each task here waits for «Bayside Bank» in the account that reads mail, as the person sets it. The bank wrote once
+  // before any of these waits began; after, it writes twice —the transfer, and new card terms—, a newsletter sends more
+  // mail than one read brings, and a third message from the bank lands in spam. They sit an hour from now each way, so
+  // every task the tests start waits between them. Each control reads the piece it is handed; its twin, a broken version
+  // of that piece, fails it with the control's own words.
+  const HOUR = 3_600_000;
+  type Replies = { ok: boolean; replies: MailRow[]; more: string[]; failures: unknown[] };
+  type Reply = { account: string; id: string };
   const planted: Stored[] = [];
-  let waiting = "";
+  let start = 0;
 
-  beforeAll(async () => {
-    const { data, error } = await user!.client.from("items").insert({ owner_id: user!.id, node_id: ids.client, type: "task", title: "Wait for the transfer" }).select("id, created_at").single();
-    if (error) throw new Error(error.message);
-    waiting = data.id;
-    const waits = await user!.client.from("task_mail").insert({ item_id: data.id, owner_id: user!.id, account_id: ids.mail, expect_from: "Bayside Bank" });
-    if (waits.error) throw new Error(waits.error.message);
-    // After the task began to wait: its answer first, then more mail than one read brings.
-    const start = Date.parse(data.created_at) + 60_000;
-    planted.push({
-      id: "answer",
-      threadId: "answer",
-      labelIds: ["INBOX", "UNREAD"],
-      internalDate: String(start),
-      snippet: "The transfer arrived",
-      payload: { mimeType: "text/plain", headers: headers("Bayside Bank <alerts@bayside.example>", "Transfer received"), body: { data: encode("The transfer arrived.") } },
-    });
-    for (let index = 0; index < 60; index++) {
-      planted.push({
-        id: `news-${index}`,
-        threadId: `news-${index}`,
-        labelIds: ["INBOX"],
-        internalDate: String(start + 1000 * (index + 1)),
-        snippet: "This week",
-        payload: { mimeType: "text/plain", headers: headers("Newsletter <news@example.com>", `Issue ${index}`), body: { data: encode("This week.") } },
-      });
-    }
+  const message = (id: string, from: string, subject: string, offset: number, labelIds: string[]): Stored => ({
+    id,
+    threadId: id,
+    labelIds,
+    internalDate: String(start + offset),
+    snippet: subject,
+    payload: { mimeType: "text/plain", headers: headers(from, subject), body: { data: encode(subject) } },
+  });
+
+  beforeAll(() => {
+    start = Date.now();
+    const bank = "Bayside Bank <alerts@bayside.example>";
+    planted.push(
+      message("bank-before", bank, "Your monthly statement", -HOUR, ["INBOX"]),
+      message("bank-transfer", bank, "Transfer received", HOUR, ["INBOX", "UNREAD"]),
+      message("bank-card", bank, "New card terms", HOUR + 60_000, ["INBOX"]),
+      message("bank-spam", bank, "You won a prize", HOUR + 120_000, ["SPAM"]),
+    );
+    for (let index = 0; index < 60; index++) planted.push(message(`news-${index}`, "Newsletter <news@example.com>", `Issue ${index}`, HOUR + 1000 * (index + 1), ["INBOX"]));
     mailbox.push(...planted);
   });
 
   afterAll(() => {
-    for (const message of planted) mailbox.splice(mailbox.indexOf(message), 1);
+    for (const each of planted) mailbox.splice(mailbox.indexOf(each), 1);
   });
 
-  const today = () => new Date().toISOString().slice(0, 10);
+  // A task of the client that waits for the bank in the account that reads mail.
+  async function waitingTask(): Promise<string> {
+    const created = (await callTool("create_task", context(), { node: ids.client, title: "Wait for the transfer" })) as unknown as { ok: boolean; item: { id: string } };
+    expect(created.ok).toBe(true);
+    const waits = await callTool("set_task_mail", context(), { task: created.item.id, account: ids.mail, words: "Bayside Bank" });
+    expect(waits.ok).toBe(true);
+    return created.item.id;
+  }
+  const replies = (task: string, ctx = context()) => callTool("list_task_replies", ctx, { task, account: ids.mail }) as unknown as Promise<Replies>;
+  const idsOf = (read: Replies) => read.replies.map((reply) => reply.id);
 
-  it("finds the answer a task waits for under more mail than one read brings", async () => {
-    const run = await runDailyReview(context(), { today: today(), requested: true, judge: watcher });
-    if (!run.ok) throw new Error(run.message);
-    const task = seen.find((entry) => entry.id === waiting)!;
-    expect(task.messages.map((message) => message.id)).toEqual(["answer"]);
-    expect(run.failures).toEqual([]);
-    // The second read asked only for the sender the task waits for.
-    expect(searches.some((q) => q.includes("from:(Bayside Bank)"))).toBe(true);
-  });
-
-  it("says when a task that waits for any sender may have its answer past what was read", async () => {
-    const { data, error } = await user!.client.from("items").insert({ owner_id: user!.id, node_id: ids.client, type: "task", title: "Wait for any reply" }).select("id").single();
-    if (error) throw new Error(error.message);
-    const waits = await user!.client.from("task_mail").insert({ item_id: data.id, owner_id: user!.id, account_id: ids.mail });
-    if (waits.error) throw new Error(waits.error.message);
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+  async function failsWith(control: () => Promise<void>, phrase: string) {
+    let failure: unknown = null;
     try {
-      const run = await runDailyReview(context(), { today: today(), requested: true, judge: watcher });
-      if (!run.ok) throw new Error(run.message);
-      expect(run.failures).toEqual([expect.stringMatching(/^reading the mail of studio@example\.com for a task that waits for any sender: only the latest 50 messages/)]);
-      expect(run.review!.failures).toBe(1);
-    } finally {
-      spy.mockRestore();
-      await user!.client.from("task_mail").delete().eq("item_id", data.id);
+      await control();
+    } catch (error) {
+      failure = error;
     }
+    expect(String((failure as Error | null)?.message), `the twin fails «${phrase}»`).toContain(phrase);
+  }
+
+  // ---- The possible replies: every message of the sender since the wait began, and reading them decides nothing ----
+  type List = (task: string) => Promise<Replies>;
+
+  async function everyReplyOfTheSender(list: List) {
+    const read = await list(await waitingTask());
+    expect(idsOf(read), "every message of the bank since the wait began is a possible reply").toEqual(["bank-card", "bank-transfer"]);
+  }
+
+  async function readingDecidesNothing(list: List) {
+    const task = await waitingTask();
+    expect((await list(task)).replies.length).toBeGreaterThan(0);
+    const [item, under, links] = await Promise.all([
+      user!.client.from("items").select("status").eq("id", task).single(),
+      user!.client.from("items").select("id").eq("parent_item_id", task),
+      user!.client.from("mail_links").select("id").eq("item_id", task),
+    ]);
+    expect({ status: item.data?.status, under: under.data?.length, links: links.data?.length }, "reading the possible replies decides nothing: the task stays open").toEqual({
+      status: "open",
+      under: 0,
+      links: 0,
+    });
+  }
+
+  it("shows every message of the sender since the wait began as a possible reply, under a busy inbox, and decides nothing", async () => {
+    forget();
+    await everyReplyOfTheSender(replies);
+    // One search of the bank's words, which no newsletter holds, and never spam.
+    expect(searches.filter((q) => q.includes("(from:bayside OR subject:bayside) (from:bank OR subject:bank)") && q.includes("-in:spam"))).toHaveLength(1);
+    await readingDecidesNothing(replies);
+  });
+
+  it("its twins: a read that keeps one reply, or that closes the task once a reply arrives, fails its control", async () => {
+    const newestOnly: List = async (task) => {
+      const read = await replies(task);
+      return { ...read, replies: read.replies.slice(0, 1) };
+    };
+    await failsWith(() => everyReplyOfTheSender(newestOnly), "every message of the bank since the wait began is a possible reply");
+    const closesOnReply: List = async (task) => {
+      const read = await replies(task);
+      if (read.replies.length > 0) await callTool("update_item", context(), { id: task, status: "done" });
+      return read;
+    };
+    await failsWith(() => readingDecidesNothing(closesOnReply), "reading the possible replies decides nothing");
+  });
+
+  // ---- What arrived before the wait began ----
+  async function onlySinceTheWait(source: MailSource) {
+    const read = await replies(await waitingTask(), { ...context(), mail: source });
+    expect(read.ok).toBe(true);
+    expect(idsOf(read), "what arrived before the wait began is no possible reply").not.toContain("bank-before");
+  }
+
+  it("leaves out what arrived before the wait began", async () => {
+    await onlySinceTheWait(gmailMailSource(deps));
+  });
+
+  it("its twin: a source that reads from before the wait fails it", async () => {
+    const real = gmailMailSource(deps);
+    const fromAlways: MailSource = { ...real, candidates: (args) => real.candidates({ ...args, since: "2000-01-01T00:00:00Z" }) };
+    await failsWith(() => onlySinceTheWait(fromAlways), "what arrived before the wait began is no possible reply");
+  });
+
+  // ---- Page after page: however many replies arrived, every one is reached ----
+  type Page = (task: string, pageToken?: string) => Promise<Replies & { next: Record<string, string> }>;
+  const page: Page = (task, pageToken) =>
+    callTool("list_task_replies", context(), { task, account: ids.mail, limit: 1, ...(pageToken ? { pageToken } : {}) }) as unknown as ReturnType<Page>;
+
+  async function everyPageOnce(reader: Page) {
+    const task = await waitingTask();
+    const read: string[] = [];
+    let token: string | undefined;
+    // A reader that never ends would loop for ever: a few more pages than there are replies is enough to see it.
+    for (let pages = 0; pages < 4; pages++) {
+      const answer = await reader(task, token);
+      read.push(...idsOf(answer));
+      token = answer.next[ids.mail];
+      if (!token) break;
+    }
+    expect(read, "page after page brings every possible reply, each once").toEqual(["bank-card", "bank-transfer"]);
+  }
+
+  it("reads the possible replies page after page, one account at a time", async () => {
+    await everyPageOnce(page);
+    const task = await waitingTask();
+    expect(await callTool("list_task_replies", context(), { task, pageToken: "1" })).toMatchObject({ ok: false, code: "invalid_input" });
+  });
+
+  it("its twin: a reader that ignores where the next page starts fails it", async () => {
+    await failsWith(() => everyPageOnce((task) => page(task)), "page after page brings every possible reply, each once");
+  });
+
+  // ---- Ruling a reply out, taking it back, and other words ----
+  type Rule = (task: string, id: string, dismissed: boolean) => Promise<unknown>;
+  const rule: Rule = (task, id, dismissed) => callTool("dismiss_reply", context(), { task, account: ids.mail, id, dismissed });
+
+  async function ruledOutAndBack(ruling: Rule) {
+    const task = await waitingTask();
+    await ruling(task, "bank-card", true);
+    expect(idsOf(await replies(task)), "a reply ruled out leaves the possible ones").toEqual(["bank-transfer"]);
+    await ruling(task, "bank-card", false);
+    expect(idsOf(await replies(task)), "taking the ruling back returns it").toEqual(["bank-card", "bank-transfer"]);
+  }
+
+  type Reword = (task: string, words: string) => Promise<unknown>;
+  const reword: Reword = (task, words) => callTool("set_task_mail", context(), { task, words });
+
+  async function otherWordsStartOver(rewording: Reword) {
+    const task = await waitingTask();
+    await rule(task, "bank-card", true);
+    await rewording(task, "Bayside");
+    expect(idsOf(await replies(task)), "other words are another wait: what was ruled out for the old ones shows again").toEqual(["bank-card", "bank-transfer"]);
+  }
+
+  it("rules a reply out and takes the ruling back, and other words start the wait over", async () => {
+    await ruledOutAndBack(rule);
+    await otherWordsStartOver(reword);
+  });
+
+  it("its twins: a ruling or a taking back that writes nothing, and other words that keep the old rulings, fail their step", async () => {
+    await failsWith(() => ruledOutAndBack(async () => ({ ok: true })), "a reply ruled out leaves the possible ones");
+    await failsWith(() => ruledOutAndBack((task, id, dismissed) => (dismissed ? rule(task, id, true) : Promise.resolve({ ok: true }))), "taking the ruling back returns it");
+    const keepsRulings: Reword = async (task, words) => {
+      const before = await user!.client.from("task_mail").select("dismissed").eq("item_id", task).single();
+      await reword(task, words);
+      await user!.client.from("task_mail").update({ dismissed: before.data!.dismissed }).eq("item_id", task);
+    };
+    await failsWith(() => otherWordsStartOver(keepsRulings), "other words are another wait");
+  });
+
+  // ---- Closing a task with its result ----
+  type Close = (task: string, outcome: string, reply: Reply) => Promise<unknown>;
+  const close: Close = (task, outcome, reply) => callTool("complete_task", context(), { task, outcome, reply });
+
+  async function closedWithItsResult(closing: Close) {
+    const task = await waitingTask();
+    await closing(task, "Approved", { account: ids.mail, id: "bank-transfer" });
+    const item = await user!.client.from("items").select("status").eq("id", task).single();
+    expect(item.data?.status, "the task is done").toBe("done");
+    const under = await user!.client.from("items").select("type, title").eq("parent_item_id", task).is("deleted_at", null);
+    expect(under.data, "its result hangs from it as a decision").toEqual([{ type: "decision", title: "Approved" }]);
+    const links = await user!.client.from("mail_links").select("account_id, message_id").eq("item_id", task);
+    expect(links.data, "the message that answered it stays linked to it").toEqual([{ account_id: ids.mail, message_id: "bank-transfer" }]);
+  }
+
+  it("closes a task with the result the person gives and the message that answered it", async () => {
+    await closedWithItsResult(close);
+  });
+
+  it("its twins: a closing that skips one of its three parts fails that part", async () => {
+    const markDone = (task: string) => callTool("update_item", context(), { id: task, status: "done" });
+    const decide = (task: string, outcome: string) => user!.client.from("items").insert({ owner_id: user!.id, node_id: ids.client, parent_item_id: task, type: "decision", title: outcome });
+    const link = (task: string, reply: Reply) => callTool("link_mail", context(), { account: reply.account, id: reply.id, task });
+    await failsWith(
+      () =>
+        closedWithItsResult(async (task, outcome, reply) => {
+          await decide(task, outcome);
+          await link(task, reply);
+        }),
+      "the task is done",
+    );
+    await failsWith(
+      () =>
+        closedWithItsResult(async (task, _outcome, reply) => {
+          await markDone(task);
+          await link(task, reply);
+        }),
+      "its result hangs from it as a decision",
+    );
+    await failsWith(
+      () =>
+        closedWithItsResult(async (task, outcome) => {
+          await markDone(task);
+          await decide(task, outcome);
+        }),
+      "the message that answered it stays linked to it",
+    );
   });
 });
 
@@ -632,7 +787,9 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
   const BUDGET = 50;
   let owner: DisposableUser | undefined;
   let place = "";
+  let waiting = "";
   let readers = 0;
+  let firstReader = "";
   const ownerContext = (): ToolContext => ({ db: owner!.client, ownerId: owner!.id, source: "manual", mail: gmailMailSource(deps) });
   const today = () => new Date().toISOString().slice(0, 10);
   // A context per call, as each request of the screens builds its own: nothing one call read serves the next.
@@ -674,7 +831,10 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
 
   // Accounts that read mail, hanging from the workspace's client, up to `count`.
   async function withReaders(count: number) {
-    for (; readers < count; readers++) await insertAccount(`reader-${readers + 1}@example.com`, "refresh-mail", ALL, { owner: owner!, node: place });
+    for (; readers < count; readers++) {
+      const id = await insertAccount(`reader-${readers + 1}@example.com`, "refresh-mail", ALL, { owner: owner!, node: place });
+      firstReader ||= id;
+    }
   }
 
   const cutCount = { accountId: expect.any(String), accountEmail: expect.any(String), reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/) };
@@ -684,10 +844,12 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     const node = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "client", name: "Northwind" }).select("id").single();
     if (node.error) throw new Error(node.error.message);
     place = node.data.id;
-    // A task that waits for a message in every account of its place, as in a workspace in use: the list reads its task.
+    // A task that waits for a message in every account of its place, as in a workspace in use: its possible replies are
+    // read one account at a time.
     const task = await owner.client.from("items").insert({ owner_id: owner.id, node_id: place, type: "task", title: "Wait for the signed contract" }).select("id").single();
     if (task.error) throw new Error(task.error.message);
-    const waits = await owner.client.from("task_mail").insert({ item_id: task.data.id, owner_id: owner.id, expect_from: "Northwind" });
+    waiting = task.data.id;
+    const waits = await owner.client.from("task_mail").insert({ item_id: task.data.id, owner_id: owner.id, waits_for: "Northwind" });
     if (waits.error) throw new Error(waits.error.message);
   }, 60_000);
 
@@ -695,7 +857,7 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     if (owner) await deleteDisposableUsers([owner]);
   }, 60_000);
 
-  it("costs each account its renewal and its storing, a search, a batch, and its unread count, so a place fits seven in the list", async () => {
+  it("costs each account its renewal and its storing, a search, a batch, and its unread count, so a place fits eight in the list", async () => {
     const measured: Array<{ accounts: number; page: Cost; sidebar: Cost }> = [];
     for (let accounts = 1; accounts <= 3; accounts++) {
       await withReaders(accounts);
@@ -709,22 +871,51 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
       measured.push({ accounts, page: page.cost, sidebar: side.cost });
     }
     expect(measured).toEqual([
-      { accounts: 1, page: { gmail: 3, token: 1, supabase: 12, total: 16 }, sidebar: { gmail: 1, token: 1, supabase: 8, total: 10 } },
-      { accounts: 2, page: { gmail: 6, token: 2, supabase: 13, total: 21 }, sidebar: { gmail: 2, token: 2, supabase: 9, total: 13 } },
-      { accounts: 3, page: { gmail: 9, token: 3, supabase: 14, total: 26 }, sidebar: { gmail: 3, token: 3, supabase: 10, total: 16 } },
+      { accounts: 1, page: { gmail: 3, token: 1, supabase: 8, total: 12 }, sidebar: { gmail: 1, token: 1, supabase: 8, total: 10 } },
+      { accounts: 2, page: { gmail: 6, token: 2, supabase: 9, total: 17 }, sidebar: { gmail: 2, token: 2, supabase: 9, total: 13 } },
+      { accounts: 3, page: { gmail: 9, token: 3, supabase: 10, total: 22 }, sidebar: { gmail: 3, token: 3, supabase: 10, total: 16 } },
     ]);
     // The count sees the renewals: with every token valid, each account asks Google for no token and stores none.
     await tokens("valid");
-    expect((await costOf(mailPage)).cost).toEqual({ gmail: 9, token: 0, supabase: 11, total: 20 });
+    expect((await costOf(mailPage)).cost).toEqual({ gmail: 9, token: 0, supabase: 7, total: 16 });
     expect((await costOf(sidebar)).cost).toEqual({ gmail: 3, token: 0, supabase: 7, total: 10 });
     // What each account adds, and what the call asks whatever its accounts, read from the counts; the screens' route adds
     // who is signed in (below).
     const per = (kind: "page" | "sidebar") => measured[2][kind].total - measured[1][kind].total;
     const fixed = (kind: "page" | "sidebar") => measured[0][kind].total - per(kind);
-    expect({ page: fits(1 + fixed("page"), per("page")), sidebar: fits(1 + fixed("sidebar"), per("sidebar")) }).toEqual({ page: 7, sidebar: 14 });
+    expect({ page: fits(1 + fixed("page"), per("page")), sidebar: fits(1 + fixed("sidebar"), per("sidebar")) }).toEqual({ page: 8, sidebar: 14 });
   });
 
-  it("costs an account whose unread count runs to its last page three searches more, so a place fits four in the list", async () => {
+  it("reads a task's possible replies one account per request, so a request costs the same however many accounts its place holds", async () => {
+    // An answer filed away from the inbox, so the list and its count above read what they read.
+    const contract: Stored = {
+      id: "contract",
+      threadId: "contract",
+      labelIds: [],
+      internalDate: String(Date.now() + 3_600_000),
+      snippet: "Signed contract",
+      payload: { mimeType: "text/plain", headers: headers("Northwind <legal@northwind.example>", "Signed contract"), body: { data: encode("Signed.") } },
+    };
+    mailbox.push(contract);
+    try {
+      const measured: Cost[] = [];
+      for (let accounts = 1; accounts <= 3; accounts++) {
+        await withReaders(accounts);
+        await tokens("expired");
+        const read = await costOf(() => callTool("list_task_replies", ownerContext(), { task: waiting, account: firstReader }));
+        expect(read.result).toMatchObject({ ok: true, replies: [expect.objectContaining({ id: "contract" })], failures: [] });
+        measured.push(read.cost);
+      }
+      // One account's renewal and its storing, its search and its batch, and the task's own reads, whatever else the place
+      // holds.
+      expect(measured).toEqual([measured[0], measured[0], measured[0]]);
+      expect(measured[0]).toEqual({ gmail: 2, token: 1, supabase: 9, total: 12 });
+    } finally {
+      mailbox.splice(mailbox.indexOf(contract), 1);
+    }
+  });
+
+  it("costs an account whose unread count runs to its last page three searches more, so a place fits five in the list", async () => {
     await withReaders(3);
     trouble.endlessUnread = true;
     try {
@@ -735,13 +926,13 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
       const side = await costOf(sidebar);
       expect(side.result).toMatchObject({ ok: true, mail: { failures: [cutCount, cutCount, cutCount] } });
       expect({ page: page.cost, sidebar: side.cost }).toEqual({
-        page: { gmail: 18, token: 3, supabase: 14, total: 35 },
+        page: { gmail: 18, token: 3, supabase: 10, total: 31 },
         sidebar: { gmail: 12, token: 3, supabase: 10, total: 25 },
       });
-      // What the call asks whatever its accounts stays a single page's (11 and 7, above); each account asks the rest.
-      const perAccount = { page: (page.cost.total - 11) / 3, sidebar: (side.cost.total - 7) / 3 };
+      // What the call asks whatever its accounts stays a single page's (7 and 7, above); each account asks the rest.
+      const perAccount = { page: (page.cost.total - 7) / 3, sidebar: (side.cost.total - 7) / 3 };
       expect(perAccount).toEqual({ page: 8, sidebar: 6 });
-      expect({ page: fits(1 + 11, perAccount.page), sidebar: fits(1 + 7, perAccount.sidebar) }).toEqual({ page: 4, sidebar: 7 });
+      expect({ page: fits(1 + 7, perAccount.page), sidebar: fits(1 + 7, perAccount.sidebar) }).toEqual({ page: 5, sidebar: 7 });
     } finally {
       clearTrouble();
     }
@@ -768,20 +959,20 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     await tokens("expired");
     const nominal = await costOf(turn);
     expect(nominal.result).toMatchObject({ ok: true, failures: [] });
-    expect(nominal.cost).toEqual({ gmail: 9, token: 3, supabase: 19, total: 31 });
+    expect(nominal.cost).toEqual({ gmail: 9, token: 3, supabase: 15, total: 27 });
     trouble.endlessUnread = true;
     try {
       await tokens("expired");
       const full = await costOf(turn);
       expect(full.result).toMatchObject({ ok: true, failures: [cutCount, cutCount, cutCount] });
-      expect(full.cost).toEqual({ gmail: 18, token: 3, supabase: 19, total: 40 });
+      expect(full.cost).toEqual({ gmail: 18, token: 3, supabase: 15, total: 36 });
     } finally {
       clearTrouble();
     }
     // The turn's own requests: what is left of its three accounts at 5 each (above), its model's steps, and its storing.
     const own = nominal.cost.total - 3 * 5 + MAX_STEPS + 1;
-    expect(own).toBe(23);
-    // A turn that reads the mail once fits five accounts, and three whose unread count runs to its last page.
-    expect({ nominal: fits(own, 5), full: fits(own, 8) }).toEqual({ nominal: 5, full: 3 });
+    expect(own).toBe(19);
+    // A turn that reads the mail once fits six accounts, and three whose unread count runs to its last page.
+    expect({ nominal: fits(own, 5), full: fits(own, 8) }).toEqual({ nominal: 6, full: 3 });
   });
 });

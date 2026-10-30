@@ -36,35 +36,6 @@
     margin: 0;
   }
 }
-.settings-field {
-  gap: 0.4rem;
-  max-width: 44rem;
-
-  & p {
-    margin: 0;
-  }
-}
-/* The daily review's switch: its thumb follows its own state, whatever the theme. */
-.switch.settings-switch[aria-checked] .switch-thumb {
-  translate: 0 -50%;
-}
-.switch.settings-switch[aria-checked="true"] .switch-thumb {
-  translate: calc(2.75em - 1.5em) -50%;
-}
-.switch.settings-switch[aria-checked] .switch-thumb::after {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px var(--muted);
-}
-.switch.settings-switch[aria-checked="true"] .switch-thumb::after {
-  background: var(--accent);
-  box-shadow: inset 0 0 0 0 var(--accent);
-}
-.switch.settings-switch[aria-checked="true"] .switch-rail {
-  background: var(--accent-tint);
-}
-.settings-switch .switch-text {
-  min-width: 1.75em;
-}
 
 /* A form in one line where it fits: where it goes, its name, and its action. */
 .settings-form {

@@ -432,21 +432,21 @@ describe("events, the task inside an event, versions, a node's events, and prefe
   });
 
   it("preferences are their owner's row", async () => {
-    const own = await userA().from("preferences").insert({ boards: { overview: { order: ["tasks"], hidden: [] } } }).select("owner_id, daily_review").single();
+    const own = await userA().from("preferences").insert({ boards: { overview: { order: ["tasks"], hidden: [] } } }).select("owner_id, layouts").single();
     expect(own.error).toBeNull();
-    expect(own.data).toEqual({ owner_id: a!.id, daily_review: true });
+    expect(own.data).toEqual({ owner_id: a!.id, layouts: {} });
     const forged = await userA().from("preferences").insert({ owner_id: b!.id });
     expect(forged.error?.code).toBe("42501");
-    must(await b!.client.from("preferences").insert({ daily_review: false }).select("owner_id").single(), "B's preferences");
+    must(await b!.client.from("preferences").insert({ layouts: { tasks: "board" } }).select("owner_id").single(), "B's preferences");
     const read = await userA().from("preferences").select("owner_id");
     expect(read.data).toEqual([{ owner_id: a!.id }]);
-    const changed = await userA().from("preferences").update({ daily_review: true }).eq("owner_id", b!.id).select("owner_id");
+    const changed = await userA().from("preferences").update({ layouts: { tasks: "list" } }).eq("owner_id", b!.id).select("owner_id");
     expect(changed.error).toBeNull();
     expect(changed.data).toEqual([]);
     const deleted = await userA().from("preferences").delete().eq("owner_id", b!.id).select("owner_id");
     expect(deleted.data).toEqual([]);
-    const still = must(await serviceClient().from("preferences").select("daily_review").eq("owner_id", b!.id).single(), "read B's preferences");
-    expect(still.daily_review).toBe(false);
+    const still = must(await serviceClient().from("preferences").select("layouts").eq("owner_id", b!.id).single(), "read B's preferences");
+    expect(still.layouts).toEqual({ tasks: "board" });
     // Neither map is anything but an object.
     const shape = await userA().from("preferences").update({ layouts: [] }).eq("owner_id", a!.id);
     expect(shape.error?.code).toBe("23514");
@@ -460,7 +460,7 @@ describe("events, the task inside an event, versions, a node's events, and prefe
   });
 });
 
-describe("the mail tables and the daily review", () => {
+describe("the mail tables", () => {
   it("a sample message is read by its owner only and written by no person", async () => {
     const theirs = must(
       await serviceClient().from("demo_mail").insert({ owner_id: b!.id, account_id: treeB.account, from_email: "x@sender.example", subject: "B's", received_at: new Date().toISOString() }).select("id").single(),
@@ -511,47 +511,27 @@ describe("the mail tables and the daily review", () => {
   });
 
   it("what a task waits for is written on one's own task, in one's own account, and A changes none of B's", async () => {
-    const own = await userA().from("task_mail").insert({ item_id: treeA.item, account_id: treeA.account, expect_from: "Sender" }).select("status").single();
+    const own = await userA().from("task_mail").insert({ item_id: treeA.item, account_id: treeA.account, waits_for: "Sender" }).select("waits_for, dismissed").single();
     expect(own.error).toBeNull();
-    expect(own.data?.status).toBe("waiting");
-    expect((await userA().from("task_mail").insert({ item_id: treeB.item })).error?.code).toBe("42501");
+    expect(own.data).toEqual({ waits_for: "Sender", dismissed: [] });
+    expect((await userA().from("task_mail").insert({ item_id: treeB.item, waits_for: "Sender" })).error?.code).toBe("42501");
     const withForeignAccount = await userA().from("task_mail").update({ account_id: treeB.account }).eq("item_id", treeA.item);
     expect(withForeignAccount.error?.code).toBe("42501");
-    const badState = await userA().from("task_mail").update({ status: "finished" }).eq("item_id", treeA.item);
-    expect(badState.error?.code).toBe("23514");
+    const noWords = await userA().from("task_mail").update({ waits_for: "   " }).eq("item_id", treeA.item);
+    expect(noWords.error?.code).toBe("23514");
     const takeOver = await userA().from("task_mail").update({ owner_id: b!.id }).eq("item_id", treeA.item);
     expect(takeOver.error?.code).toBe("42501");
-    must(await b!.client.from("task_mail").insert({ item_id: treeB.item }).select("item_id").single(), "B's wait");
-    const changed = await userA().from("task_mail").update({ status: "met" }).eq("item_id", treeB.item).select("item_id");
+    must(await b!.client.from("task_mail").insert({ item_id: treeB.item, waits_for: "Sender" }).select("item_id").single(), "B's wait");
+    const changed = await userA().from("task_mail").update({ waits_for: "Forged" }).eq("item_id", treeB.item).select("item_id");
     expect(changed.error).toBeNull();
     expect(changed.data).toEqual([]);
-    expect((await serviceClient().from("task_mail").select("status").eq("item_id", treeB.item).single()).data?.status).toBe("waiting");
+    // Ruling out one of B's replies through the function reaches no row either: it runs as A.
+    const ruled = await userA().rpc("dismiss_task_reply", { p_owner: b!.id, p_item: treeB.item, p_reply: `${treeB.account}:m-b`, p_dismissed: true });
+    expect(ruled.error).toBeNull();
+    expect(ruled.data).toBeNull();
+    expect((await serviceClient().from("task_mail").select("waits_for, dismissed").eq("item_id", treeB.item).single()).data).toEqual({ waits_for: "Sender", dismissed: [] });
     const deleted = await userA().from("task_mail").delete().eq("item_id", treeB.item).select("item_id");
     expect(deleted.data).toEqual([]);
-  });
-
-  it("a review and its actions are their owner's; an action is only ever marked undone", async () => {
-    const own = must(await userA().from("daily_reviews").insert({ day: "2026-11-02", instruction: "Review.", provider: "simulated" }).select("id").single(), "A's review");
-    expect((await userA().from("daily_reviews").insert({ owner_id: b!.id, day: "2026-11-02", instruction: "Forged.", provider: "simulated" })).error?.code).toBe("42501");
-    const theirs = must(await b!.client.from("daily_reviews").insert({ day: "2026-11-02", instruction: "Review.", provider: "simulated" }).select("id").single(), "B's review");
-    expect((await userA().from("daily_reviews").select("id").eq("id", theirs.id)).data).toEqual([]);
-    const action = must(
-      await userA().from("review_actions").insert({ review_id: own.id, item_id: treeA.item, kind: "complete", before: {}, after: {} }).select("id").single(),
-      "A's action",
-    );
-    expect((await userA().from("review_actions").insert({ review_id: theirs.id, item_id: treeA.item, kind: "complete", before: {}, after: {} })).error?.code).toBe("42501");
-    expect((await userA().from("review_actions").insert({ review_id: own.id, item_id: treeB.item, kind: "complete", before: {}, after: {} })).error?.code).toBe("42501");
-    expect((await userA().from("review_actions").update({ kind: "mail_status" }).eq("id", action.id)).error?.code).toBe("42501");
-    expect((await userA().from("review_actions").update({ undone_at: new Date().toISOString() }).eq("id", action.id).select("id")).data).toHaveLength(1);
-    const bAction = must(
-      await b!.client.from("review_actions").insert({ review_id: theirs.id, item_id: treeB.item, kind: "complete", before: {}, after: {} }).select("id").single(),
-      "B's action",
-    );
-    const undone = await userA().from("review_actions").update({ undone_at: new Date().toISOString() }).eq("id", bAction.id).select("id");
-    expect(undone.error).toBeNull();
-    expect(undone.data).toEqual([]);
-    expect((await serviceClient().from("review_actions").select("undone_at").eq("id", bAction.id).single()).data?.undone_at).toBeNull();
-    expect((await userA().from("review_actions").delete().eq("id", action.id)).error?.code).toBe("42501");
   });
 
   it("the demo's sample accounts are planted only for a demo session, on its own nodes", async () => {
@@ -572,7 +552,7 @@ describe("the mail tables and the daily review", () => {
   });
 
   it("a visitor without a session reads none of them", async () => {
-    for (const table of ["demo_mail", "mail_links", "mail_opened", "task_mail", "daily_reviews", "review_actions"] as const) {
+    for (const table of ["demo_mail", "mail_links", "mail_opened", "task_mail"] as const) {
       const { error } = await publicClient().from(table).select("*").limit(1);
       expect(error?.code, table).toBe("42501");
     }

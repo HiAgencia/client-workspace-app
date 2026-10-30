@@ -821,12 +821,14 @@ export type Database = {
           created_at: string
           decided_account_id: string | null
           decided_message_id: string | null
+          dismissed: string[]
           expect_from: string | null
           item_id: string
           owner_id: string
           sentence: string | null
           status: string
           updated_at: string
+          waits_for: string | null
         }
         Insert: {
           account_id?: string | null
@@ -834,12 +836,14 @@ export type Database = {
           created_at?: string
           decided_account_id?: string | null
           decided_message_id?: string | null
+          dismissed?: string[]
           expect_from?: string | null
           item_id: string
           owner_id?: string
           sentence?: string | null
           status?: string
           updated_at?: string
+          waits_for?: string | null
         }
         Update: {
           account_id?: string | null
@@ -847,12 +851,14 @@ export type Database = {
           created_at?: string
           decided_account_id?: string | null
           decided_message_id?: string | null
+          dismissed?: string[]
           expect_from?: string | null
           item_id?: string
           owner_id?: string
           sentence?: string | null
           status?: string
           updated_at?: string
+          waits_for?: string | null
         }
         Relationships: [
           {
@@ -942,6 +948,15 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      dismiss_task_reply: {
+        Args: {
+          p_dismissed: boolean
+          p_item: string
+          p_owner: string
+          p_reply: string
+        }
+        Returns: string[]
       }
       move_item_branch: {
         Args: {

@@ -19,22 +19,14 @@ describe("preferences", () => {
   it("start as the defaults, keep each change beside the others in one row, and forget a page on null", async () => {
     const db = user!.client;
     expect(await readPreferences(db, user!.id)).toEqual({ ok: true, preferences: DEFAULT_PREFERENCES });
-    expect(DEFAULT_PREFERENCES.dailyReview).toBe(true);
 
     const boxes = await savePreferences(db, user!.id, { page: "overview", board: { order: ["tasks", "calendar"], hidden: ["activity"] } });
     expect(boxes.ok && boxes.preferences.boards.overview).toEqual({ order: ["tasks", "calendar"], hidden: ["activity"] });
     const layout = await savePreferences(db, user!.id, { page: "tasks", layout: "board" });
-    const review = await savePreferences(db, user!.id, { dailyReview: false, dailyReviewInstruction: "Look at what is late first." });
-    expect(review).toEqual({
+    expect(layout).toEqual({
       ok: true,
-      preferences: {
-        boards: { overview: { order: ["tasks", "calendar"], hidden: ["activity"] } },
-        layouts: { tasks: "board" },
-        dailyReview: false,
-        dailyReviewInstruction: "Look at what is late first.",
-      },
+      preferences: { boards: { overview: { order: ["tasks", "calendar"], hidden: ["activity"] } }, layouts: { tasks: "board" } },
     });
-    expect(layout.ok).toBe(true);
 
     const forgotten = await savePreferences(db, user!.id, { page: "overview", board: null });
     expect(forgotten.ok && forgotten.preferences.boards).toEqual({});

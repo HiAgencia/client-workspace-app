@@ -6,21 +6,25 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExt
 import { Button, buttonClass } from "@/components/ui/button";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
+import { count } from "@/lib/count";
 import { LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { get, post, tool, type Item, type TreeNode } from "../client-api";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, lineOf, MESSAGES, PlaceFilter, placeFromUrl } from "../place-filters";
+import { TaskOutcome, useCompleteTask } from "../task-outcome";
+import { useTaskReplies, type TaskReplies } from "../task-replies";
 import { openTaskDetail, PlaceName, type TaskData } from "../task-row";
 import { useChatScope, useWorkspace } from "../workspace";
 import { MailViewer } from "./mail-viewer";
 import { subjectOf } from "./subject";
 import "../../styles/mail.css";
 
-// The mail beside the work: what a task waits for first, then what is unread, then the rest, each message with its
-// place or the task that waits for it; the message opens beside the list on a computer and over it on a phone. Gmail
-// stays where mail is answered: this page correlates.
+// The mail beside the work: first what arrived for the tasks that wait for mail —each task with its possible replies— and
+// the messages linked to an open task, then what is unread, then the rest, each message with its place or its task; the
+// message opens beside the list on a computer and over it on a phone. Gmail stays where mail is answered: this page
+// correlates, and the person decides which message answers a task.
 
 type Group = { count: number; messages: MailRow[] };
 type MailAnswer = {
@@ -38,7 +42,22 @@ const GROUPS = [
   { key: "earlier", label: "Earlier" },
 ] as const;
 
+// How many possible replies each account brings for each task; the task's detail shows more.
+const REPLIES = 20;
+
 const keyOf = (row: Pick<MailRow, "accountId" | "id">) => `${row.accountId}:${row.id}`;
+
+// Each message once, in the order it first comes.
+function once(rows: MailRow[]): MailRow[] {
+  const seen = new Set<string>();
+  const kept: MailRow[] = [];
+  for (const row of rows) {
+    if (seen.has(keyOf(row))) continue;
+    seen.add(keyOf(row));
+    kept.push(row);
+  }
+  return kept;
+}
 
 export default function MailPage() {
   return (
@@ -78,6 +97,9 @@ function Mail() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskData[]>([]);
+  // What arrived for the tasks that wait for mail, read task by task and account by account; the filters choose among it
+  // as among the rest.
+  const replies = useTaskReplies({}, mounted ? today() : null, tree, REPLIES);
   // What was opened here since the last read: it reads as read at once and stays where it was until the next read.
   const [opened, setOpened] = useState<Set<string>>(new Set());
   // The open message is `message=<account>:<id>`. A box elsewhere opens one with `account=<id>&message=<id>`: there the
@@ -130,29 +152,58 @@ function Mail() {
 
   // A message is in a place when its account hangs from the place or above it (the place sees it), or when it is linked
   // to the place's branch. No account hangs from General.
-  const inPlace = useMemo(() => {
+  const { inPlace, seenFrom } = useMemo(() => {
     const byId = new Map((accounts ?? []).map((account) => [account.id, account]));
     const branches = new Map((tree ?? []).map((node) => [node.id, branchOf(tree, node.id)]));
     const lines = new Map((tree ?? []).map((node) => [node.id, lineOf(tree, node.id)]));
-    return (row: MailRow, where: string) => {
+    // Whether a place sees an account: it hangs from the place or above it.
+    const seen = (accountId: string, where: string, fallback: string[] = []) => {
       if (where === ALL) return true;
       const line = lines.get(where);
-      const branch = branches.get(where);
-      if (!line || !branch) return false;
-      if (row.nodes.some((node) => branch.has(node.id))) return true;
-      const nodeIds = byId.get(row.accountId)?.nodeIds ?? (row.place ? [row.place.nodeId] : []);
-      return nodeIds.some((id) => line.has(id));
+      return Boolean(line) && (byId.get(accountId)?.nodeIds ?? fallback).some((id) => line!.has(id));
+    };
+    return {
+      inPlace: (row: MailRow, where: string) => {
+        if (where === ALL) return true;
+        const branch = branches.get(where);
+        if (branch && row.nodes.some((node) => branch.has(node.id))) return true;
+        return seen(row.accountId, where, row.place ? [row.place.nodeId] : []);
+      },
+      seenFrom: seen,
     };
   }, [accounts, tree]);
 
-  const all = useMemo(() => (mail ? [...mail.groups.forTasks.messages, ...mail.groups.unread.messages, ...mail.groups.earlier.messages] : []), [mail]);
+  const all = useMemo(
+    () =>
+      once([
+        ...(replies.data?.tasks ?? []).flatMap((entry) => entry.replies),
+        ...(mail ? [...mail.groups.forTasks.messages, ...mail.groups.unread.messages, ...mail.groups.earlier.messages] : []),
+      ]),
+    [mail, replies.data],
+  );
   const accountParam = boxAccount ? null : params.get("account");
   const account = accountParam && mail?.accounts.some((entry) => entry.id === accountParam) ? accountParam : ALL;
   const keep = (row: MailRow) => inPlace(row, place) && (account === ALL || row.accountId === account);
-  const groups = GROUPS.map((group) => ({ ...group, messages: (mail?.groups[group.key].messages ?? []).filter(keep) }));
-  const shown = groups.flatMap((group) => group.messages);
+  // Each task that waits for mail with what arrived for it in the chosen place and account; a message shows under its task
+  // and not again among the unread or the earlier ones.
+  const waiting = (replies.data?.tasks ?? [])
+    .map((entry) => ({
+      ...entry,
+      replies: entry.replies.filter(keep),
+      more: entry.more.filter((id) => (account === ALL || id === account) && seenFrom(id, place)),
+    }))
+    .filter((entry) => entry.replies.length > 0);
+  const possible = new Set(waiting.flatMap((entry) => entry.replies.map(keyOf)));
+  const groups = GROUPS.map((group) => ({ ...group, messages: (mail?.groups[group.key].messages ?? []).filter((row) => keep(row) && !possible.has(keyOf(row))) }));
+  const shown = once([...waiting.flatMap((entry) => entry.replies), ...groups.flatMap((group) => group.messages)]);
+  const linkedToTasks = groups.find((group) => group.key === "forTasks")?.messages ?? [];
+  const forTasks = once([...waiting.flatMap((entry) => entry.replies), ...linkedToTasks]).length;
   const isUnread = (row: MailRow) => row.unread && !opened.has(keyOf(row));
   const unread = shown.filter(isUnread).length;
+  // An account that could not be read says so once, whichever read met it.
+  const failures = [...(mail?.failures ?? []), ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures)].filter(
+    (failure, index, list) => list.findIndex((other) => other.accountId === failure.accountId) === index,
+  );
 
   const placeCounts = new Map<string, number>([[ALL, all.filter((row) => account === ALL || row.accountId === account).length]]);
   for (const node of tree ?? []) placeCounts.set(node.id, all.filter((row) => inPlace(row, node.id) && (account === ALL || row.accountId === account)).length);
@@ -184,13 +235,26 @@ function Mail() {
 
   if (!mounted) return null;
   const noAccounts = mail !== null && mail.accounts.length === 0;
+  const listed = (message: MailRow) => (
+    <li key={keyOf(message)}>
+      <MailRowView row={message} unread={isUnread(message)} current={current ? keyOf(current) === keyOf(message) : false} onOpen={() => open(message)} />
+    </li>
+  );
   const viewer = current && (
     <MailViewer
       row={{ ...current, unread: isUnread(current) }}
       onPrevious={index > 0 ? () => open(shown[index - 1]) : null}
       onNext={index >= 0 && index < shown.length - 1 ? () => open(shown[index + 1]) : null}
       onClose={narrow ? () => set({ message: null }) : undefined}
-      actions={<MailActions row={current} tree={tree} tasks={tasks} isDemo={Boolean(mail?.accounts.find((entry) => entry.id === current.accountId)?.isDemo)} />}
+      actions={
+        <MailActions
+          row={current}
+          tree={tree}
+          tasks={tasks}
+          replies={replies.data?.tasks ?? null}
+          isDemo={Boolean(mail?.accounts.find((entry) => entry.id === current.accountId)?.isDemo)}
+        />
+      }
     />
   );
 
@@ -216,7 +280,12 @@ function Mail() {
             The mail could not be read{mail ? " again" : ""}: {readError}.{mail ? " What shows is from the last read." : ""}
           </p>
         )}
-        {mail?.failures.map((failure) => (
+        {replies.error && (
+          <p role="alert" className="inline-note" data-tone="alert">
+            The possible replies of the tasks could not be read{replies.data ? " again" : ""}: {replies.error}.{replies.data ? " What shows is from the last read." : ""}
+          </p>
+        )}
+        {failures.map((failure) => (
           <p key={failure.accountId} role="alert" className="inline-note" data-tone="alert" data-mail-failure>
             The mail of {failure.accountEmail} could not be read: {failure.reason}
           </p>
@@ -250,20 +319,15 @@ function Mail() {
                 </p>
               ) : (
                 groups
-                  .filter((group) => group.messages.length > 0)
+                  .filter((group) => group.messages.length > 0 || (group.key === "forTasks" && waiting.length > 0))
                   .map((group) => (
                     <div key={group.key} className="mail-group" role="group" aria-labelledby={`mail-group-${group.key}`}>
                       <h2 id={`mail-group-${group.key}`} className="mail-group-head">
                         <span className="t-label">{group.label}</span>
-                        <span className="t-meta">{group.messages.length}</span>
+                        <span className="t-meta">{group.key === "forTasks" ? forTasks : group.messages.length}</span>
                       </h2>
-                      <ul className="mail-rows">
-                        {group.messages.map((row) => (
-                          <li key={keyOf(row)}>
-                            <MailRowView row={row} unread={isUnread(row)} current={current ? keyOf(current) === keyOf(row) : false} onOpen={() => open(row)} />
-                          </li>
-                        ))}
-                      </ul>
+                      {group.key === "forTasks" && waiting.map((entry) => <TaskRepliesGroup key={entry.task.id} entry={entry} listed={listed} />)}
+                      {group.messages.length > 0 && <ul className="mail-rows">{group.messages.map(listed)}</ul>}
                     </div>
                   ))
               )}
@@ -283,9 +347,30 @@ function Mail() {
   );
 }
 
-// A message in the list: who sent it, its subject, its time, and its place or the task that waits for it.
+// A task that waits for mail heads its possible replies; which one answers it, and how it ended, the person says in the
+// task or in the open message.
+function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (message: MailRow) => ReactNode }) {
+  const title = inlinePlain(entry.task.title);
+  const headId = `mail-task-${entry.task.id}`;
+  return (
+    <div className="mail-task" role="group" aria-labelledby={headId}>
+      <div className="mail-task-head">
+        <h3 id={headId} className="mail-task-title">
+          <span className="t-meta">{`${count(entry.replies.length, "possible reply", "possible replies")}${entry.more.length > 0 ? " and more" : ""} for`}</span>
+          <span className="t-value">{title}</span>
+        </h3>
+        <Button size="sm" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
+          Open the task
+        </Button>
+      </div>
+      <ul className="mail-rows">{entry.replies.map(listed)}</ul>
+    </div>
+  );
+}
+
+// A message in the list: who sent it, its subject, its time, and its place or the open task it is linked to.
 function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: boolean; current: boolean; onOpen: () => void }) {
-  const waiting = row.tasks.find((task) => task.status === "open");
+  const linked = row.tasks.find((task) => task.status === "open");
   return (
     <button type="button" className="mail-row" data-unread={unread ? "" : undefined} aria-current={current ? "true" : undefined} onClick={onOpen} data-mail-row={keyOf(row)}>
       <span className="mail-row-top">
@@ -302,8 +387,8 @@ function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: b
         {subjectOf(row)}
       </span>
       <span className="t-meta mail-row-where">
-        {waiting ? (
-          <span className="mail-row-for">For: {inlinePlain(waiting.title)}</span>
+        {linked ? (
+          <span className="mail-row-for">For: {inlinePlain(linked.title)}</span>
         ) : row.place ? (
           <PlaceName path={row.place.path} color={row.place.color} />
         ) : (
@@ -314,11 +399,18 @@ function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: b
   );
 }
 
-// The actions on a message: a task that carries it, a link to a task or a place, and Gmail, where it is answered.
-function MailActions({ row, tree, tasks, isDemo }: { row: MailRow; tree: TreeNode[] | null; tasks: TaskData[]; isDemo: boolean }) {
+// The actions on a message: a task that carries it, a link to a task or a place, the waiting task it answers, and Gmail,
+// where it is answered.
+function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree: TreeNode[] | null; tasks: TaskData[]; replies: TaskReplies[] | null; isDemo: boolean }) {
   const { notify, touch, saving } = useWorkspace();
-  const linkedTasks = row.tasks.filter((task) => !task.waits);
-  const waits = row.tasks.filter((task) => task.waits);
+  const closeTask = useCompleteTask();
+  // The task this message answers while the person says how it ended; it belongs to the message it was chosen on.
+  const [answering, setAnswering] = useState<{ message: string; task: { id: string; title: string } } | null>(null);
+  const actions = useRef<HTMLDivElement>(null);
+  const outcome = useRef<HTMLDivElement>(null);
+  // A task picked in «Answers a task…» takes the focus to its result; a menu closed without one gives it back to its button.
+  const picked = useRef(false);
+  const chosen = answering?.message === keyOf(row) ? answering.task : null;
   const candidates = tasks.filter((task) => task.status === "open" && !row.tasks.some((linked) => linked.id === task.id));
   const nodes = (tree ?? []).filter((node) => !row.nodes.some((linked) => linked.id === node.id));
   const ref = { account: row.accountId, id: row.id };
@@ -342,13 +434,23 @@ function MailActions({ row, tree, tasks, isDemo }: { row: MailRow; tree: TreeNod
     touch();
     notify({ text: `Took the message off ${name}`, tone: "status", undo: () => void saving(tool("link_mail", { ...ref, ...target })) });
   }
+  async function answer(task: { id: string; title: string }, result: string) {
+    if (await closeTask(task, row, result)) setAnswering(null);
+  }
+  // Leaving the choice puts the focus back on «Answers a task…».
+  function stopAnswering() {
+    setAnswering(null);
+    requestAnimationFrame(() => actions.current?.querySelector<HTMLElement>(".mail-answers-menu")?.focus());
+  }
 
   const entries: MenuEntry[] = [
     {
       kind: "submenu",
       label: "A task",
       entries: candidates.length
-        ? candidates.slice(0, 40).map((task): MenuEntry => ({ kind: "action", label: inlinePlain(task.title), detail: task.path ?? "General", onSelect: () => void link({ task: task.id }, `“${inlinePlain(task.title)}”`) }))
+        ? candidates
+            .slice(0, 40)
+            .map((task): MenuEntry => ({ kind: "action", id: task.id, label: inlinePlain(task.title), detail: task.path ?? "General", onSelect: () => void link({ task: task.id }, `“${inlinePlain(task.title)}”`) }))
         : [{ kind: "action", label: "No open task to link", disabled: true, onSelect: () => undefined }],
     },
     {
@@ -359,15 +461,48 @@ function MailActions({ row, tree, tasks, isDemo }: { row: MailRow; tree: TreeNod
         : [{ kind: "action", label: "Linked to every client and project", disabled: true, onSelect: () => undefined }],
     },
   ];
+  // The open tasks that wait for mail, first those this message is a possible reply of.
+  const waiting = tasks.filter((task) => task.status === "open" && task.mail);
+  const replyOf = new Set((replies ?? []).filter((entry) => entry.replies.some((reply) => keyOf(reply) === keyOf(row))).map((entry) => entry.task.id));
+  const answerEntry = (task: TaskData): MenuEntry => ({
+    kind: "action",
+    id: task.id,
+    label: inlinePlain(task.title),
+    detail: task.path ?? "General",
+    onSelect: () => {
+      picked.current = true;
+      setAnswering({ message: keyOf(row), task: { id: task.id, title: task.title } });
+    },
+  });
+  const first = waiting.filter((task) => replyOf.has(task.id));
+  const rest = waiting.filter((task) => !replyOf.has(task.id));
+  const answers: MenuEntry[] =
+    waiting.length === 0
+      ? [{ kind: "action", label: "No task waits for mail: set it in a task's detail", disabled: true, onSelect: () => undefined }]
+      : [
+          ...(first.length > 0 ? [{ kind: "group" as const, label: "This message is a possible reply of", entries: first.map(answerEntry) }] : []),
+          ...(rest.length > 0 ? [{ kind: "group" as const, label: first.length > 0 ? "Other tasks that wait for mail" : "Tasks that wait for mail", entries: rest.map(answerEntry) }] : []),
+        ];
   const gmail = `https://mail.google.com/mail/?authuser=${encodeURIComponent(row.accountEmail)}#all/${encodeURIComponent(row.threadId || row.id)}`;
 
   return (
     <>
-      <div className="mail-action-row">
+      <div ref={actions} className="mail-action-row">
         <Button size="sm" variant="primary" onClick={() => void createTask()}>
           Create task
         </Button>
         <Menu label="Link to…" name={`Link to… “${row.subject}”`} entries={entries} className="mail-link-menu" />
+        <Menu
+          label="Answers a task…"
+          name={`Answers a task… “${row.subject}”`}
+          entries={answers}
+          className="mail-answers-menu"
+          finalFocus={() => {
+            const target = picked.current ? outcome.current?.querySelector<HTMLElement>("button") : null;
+            picked.current = false;
+            return target;
+          }}
+        />
         {isDemo ? (
           <Button size="sm" disabled aria-describedby="mail-gmail-why">
             Open in Gmail
@@ -383,17 +518,20 @@ function MailActions({ row, tree, tasks, isDemo }: { row: MailRow; tree: TreeNod
           A sample account has no Gmail to open: its messages live only in this demo.
         </p>
       )}
-      {(waits.length > 0 || linkedTasks.length > 0 || row.nodes.length > 0) && (
+      {chosen && (
+        <div ref={outcome}>
+          <TaskOutcome
+            key={chosen.id}
+            question={`How did “${inlinePlain(chosen.title)}” end?`}
+            title={chosen.title}
+            onClose={(result) => void answer(chosen, result)}
+            onCancel={stopAnswering}
+          />
+        </div>
+      )}
+      {(row.tasks.length > 0 || row.nodes.length > 0) && (
         <ul className="mail-linked" aria-label="What the message is linked to">
-          {waits.map((task) => (
-            <li key={`wait-${task.id}`} className="mail-linked-row">
-              <button type="button" className="mail-linked-open" onClick={() => openTaskDetail({ id: task.id })}>
-                <span className="t-meta">A task waits for it</span>
-                <span className="t-value">{inlinePlain(task.title)}</span>
-              </button>
-            </li>
-          ))}
-          {linkedTasks.map((task) => (
+          {row.tasks.map((task) => (
             <li key={`task-${task.id}`} className="mail-linked-row">
               <button type="button" className="mail-linked-open" onClick={() => openTaskDetail({ id: task.id })}>
                 <span className="t-meta">Linked to the task</span>

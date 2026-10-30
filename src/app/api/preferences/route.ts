@@ -3,9 +3,9 @@ import { LAYOUT_COOKIE, layoutCookie, preferencesChange, readPreferences, savePr
 import { readInput } from "@/lib/route-input";
 import { currentUser, userClient } from "@/lib/supabase/server";
 
-// A person's preferences: the order of the boxes and list or board on each page, and the daily review. Everything runs
-// as the signed-in person under row-level security. A write also sets the layout cookie the server reads, so the next
-// load of a page enters in its order.
+// A person's preferences: the order of the boxes and list or board on each page. Everything runs as the signed-in person
+// under row-level security. A write also sets the layout cookie the server reads, so the next load of a page enters in
+// its order.
 export async function GET() {
   const db = await userClient();
   const user = await currentUser(db);

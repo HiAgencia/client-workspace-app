@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { Db } from "@/lib/db/client";
 
-// A person's preferences, one row each: the order of the boxes on each page and the ones hidden, list or board on each
-// page, and the daily review with its instruction. Not offered to models: the screens read and write them through their
-// own route. The server also keeps the page layout in a cookie it reads, so a page enters already in its order.
+// A person's preferences, one row each: the order of the boxes on each page and the ones hidden, and list or board on each
+// page. Not offered to models: the screens read and write them through their own route. The server also keeps the page
+// layout in a cookie it reads, so a page enters already in its order.
 
 // A page: the Overview, Tasks, or one client's or project's page.
 export const pageKey = z.string().regex(/^(overview|tasks|node:[0-9a-f-]{36})$/, "a page is overview, tasks, or node:<id>");
@@ -17,33 +17,24 @@ export const boardSchema = z.strictObject({
 
 export const layoutSchema = z.enum(["list", "board"]);
 
-const DEFAULT_INSTRUCTION = "Review my tasks for today and the mail they wait for.";
-
 export const preferencesSchema = z.object({
   boards: z.record(pageKey, boardSchema),
   layouts: z.record(pageKey, layoutSchema),
-  dailyReview: z.boolean(),
-  dailyReviewInstruction: z.string(),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;
 
-// What a write changes: one page's boxes or layout, or the daily review. Sending null for a page's boxes or layout forgets
-// it, so the page goes back to its default.
+// What a write changes: one page's boxes or its layout. Sending null for either forgets it, so the page goes back to its
+// default.
 export const preferencesChange = z
   .strictObject({
-    page: pageKey.optional(),
+    page: pageKey,
     board: boardSchema.nullable().optional(),
     layout: layoutSchema.nullable().optional(),
-    dailyReview: z.boolean().optional(),
-    dailyReviewInstruction: z.string().trim().min(1).max(2000).optional(),
   })
-  .refine((value) => (value.board === undefined && value.layout === undefined) || value.page !== undefined, {
-    message: "say which page the boxes or the layout belong to",
-  })
-  .refine((value) => Object.keys(value).some((key) => key !== "page"), { message: "nothing to change" });
+  .refine((value) => value.board !== undefined || value.layout !== undefined, { message: "nothing to change" });
 
-export const DEFAULT_PREFERENCES: Preferences = { boards: {}, layouts: {}, dailyReview: true, dailyReviewInstruction: DEFAULT_INSTRUCTION };
+export const DEFAULT_PREFERENCES: Preferences = { boards: {}, layouts: {} };
 
 // A stored map that no longer reads (a page or a box the schema left) keeps what still does.
 function readMap<T>(value: unknown, entry: z.ZodType<T>): Record<string, T> {
@@ -56,19 +47,14 @@ function readMap<T>(value: unknown, entry: z.ZodType<T>): Record<string, T> {
   return out;
 }
 
-type Row = { boards: unknown; layouts: unknown; daily_review: boolean; daily_review_instruction: string };
+type Row = { boards: unknown; layouts: unknown };
 
 function fromRow(row: Row | null): Preferences {
   if (!row) return DEFAULT_PREFERENCES;
-  return {
-    boards: readMap(row.boards, boardSchema),
-    layouts: readMap(row.layouts, layoutSchema),
-    dailyReview: row.daily_review,
-    dailyReviewInstruction: row.daily_review_instruction,
-  };
+  return { boards: readMap(row.boards, boardSchema), layouts: readMap(row.layouts, layoutSchema) };
 }
 
-const COLUMNS = "boards, layouts, daily_review, daily_review_instruction";
+const COLUMNS = "boards, layouts";
 
 export async function readPreferences(db: Db, ownerId: string): Promise<{ ok: true; preferences: Preferences } | { ok: false; message: string }> {
   const { data, error } = await db.from("preferences").select(COLUMNS).eq("owner_id", ownerId).maybeSingle();
@@ -77,8 +63,8 @@ export async function readPreferences(db: Db, ownerId: string): Promise<{ ok: tr
 }
 
 // One write, key by key in the database: the row is created with the change on its first save, and after that only the
-// page's boxes, its layout, or the daily review it names change, so two changes at once both stay. It runs as the
-// signed-in person, whose row it writes.
+// page's boxes or its layout change, so two changes at once both stay. It runs as the signed-in person, whose row it
+// writes.
 export async function savePreferences(
   db: Db,
   _ownerId: string,
@@ -88,13 +74,14 @@ export async function savePreferences(
   const none = null as unknown as string;
   const { data, error } = await db
     .rpc("save_preferences", {
-      p_page: change.page ?? none,
+      p_page: change.page,
       p_board: (change.board ?? null) as never,
       p_board_clear: change.board === null,
       p_layout: change.layout ?? none,
       p_layout_clear: change.layout === null,
-      p_daily_review: (change.dailyReview ?? null) as unknown as boolean,
-      p_instruction: change.dailyReviewInstruction ?? none,
+      // The function still takes the daily review's two arguments until its columns leave; nothing sends them.
+      p_daily_review: null as unknown as boolean,
+      p_instruction: none,
     })
     .single();
   if (error) return { ok: false, message: error.message };

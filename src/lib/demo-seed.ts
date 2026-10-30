@@ -35,8 +35,9 @@ export type SeedItem = {
   chat?: SeedChat;
   // Its place in the manual order of the tasks without a date, 1 first.
   rank?: number;
-  // The message it waits for: the account it arrives in, and words of the sender.
-  waitsFor?: { account: string; from: string };
+  // The mail it waits for: the account it arrives in, and the person's words for it, looked for in the sender and the
+  // subject of what arrives.
+  waitsFor?: { account: string; words: string };
 };
 
 // A sample message of a demo account: who sent it, what it says, and how many working minutes ago it arrived.
@@ -320,6 +321,15 @@ export function demoSeedTree(today: string): Seed[] {
               important: false,
             },
             {
+              from: { name: "Developer Platform", email: "noreply@developers.example" },
+              subject: "API changes coming in November",
+              snippet: "Two endpoints change on November 15. See what moves before your next release.",
+              text: "Hello,\n\nTwo endpoints change on November 15. See what moves before your next release.\n\nThe Developer Platform team",
+              ago: 1210,
+              unread: false,
+              important: false,
+            },
+            {
               from: { name: "Coworking Hub", email: "billing@coworkinghub.example" },
               subject: "Your October invoice is ready",
               snippet: "Your invoice for October is ready to download.",
@@ -354,9 +364,10 @@ export function demoSeedTree(today: string): Seed[] {
           { title: inlineLink("Review the new contract template", "https://docs.google.com/document/d/1Zp4HwQe8TnB2xLv-Ka7RcM5yGs3Df9Uj0Nb6Wt_EoXi/edit"), priority: 3 },
           { ago: 437, rank: 2 },
         ),
-        // Two tasks that wait for a message in the operations account: the approval already arrived, the transfer has not.
-        task({ title: "Wait for the app review approval", priority: 2 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", from: "Developer Platform" } }),
-        task({ title: "Wait for the bank transfer", priority: 2, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", from: "Bayside Bank" } }),
+        // Two tasks that wait for mail in the operations account: two messages from Developer Platform arrived for the first
+        // —the approval answers it, the API notice does not—, and nothing from the bank has arrived for the second.
+        task({ title: "Wait for the app review approval", priority: 2 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", words: "Developer Platform" } }),
+        task({ title: "Wait for the bank transfer", priority: 2, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", words: "Bayside Bank" } }),
         note("<p><strong>Payment terms</strong></p><p>Half up front, half on delivery; invoices due in 15 days.</p>", 7942),
       ],
       events: [

@@ -26,7 +26,7 @@ and the screens. When the code changes a decision described here, this document 
 | Table | Holds | Key columns |
 |---|---|---|
 | `nodes` | The tree: clients and the person's own projects at the root, a client's projects, subprojects below a project | `id`, `owner_id`, `parent_id` (null at the root), `kind` (`client` · `project` · `subproject`), `name`, `position`, `color` (optional, from the product's palette), `archived_at` |
-| `items` | Tasks and subtasks, notes, and decisions, each with an optional place | `id`, `owner_id`, `node_id` (null for General: a general task, a loose note), `parent_item_id` (null when it hangs from its place), `type` (`task` · `note` · `decision`), `title`, `body` (rich text), `status` (`open` · `done`), `priority` (1–4, tasks only), `due_on` and `due_time` (tasks only; the hour only with its day), `position` (the manual order), `source` and `agent_label` (who created it), `changed_source` and `changed_agent_label` (who made the last change; `review` for the daily review), `created_at`, `updated_at`, `completed_at`, `deleted_at` |
+| `items` | Tasks and subtasks, notes, and decisions, each with an optional place | `id`, `owner_id`, `node_id` (null for General: a general task, a loose note), `parent_item_id` (null when it hangs from its place), `type` (`task` · `note` · `decision`), `title`, `body` (rich text), `status` (`open` · `done`), `priority` (1–4, tasks only), `due_on` and `due_time` (tasks only; the hour only with its day), `position` (the manual order), `source` and `agent_label` (who created it), `changed_source` and `changed_agent_label` (who made the last change; `review` is only in what the removed daily review left, read until a later migration rewrites it), `created_at`, `updated_at`, `completed_at`, `deleted_at` |
 | `events` | The workspace's own events, apart from Google's | `id`, `owner_id`, `node_id` (null for an event of no node), `title`, `body`, `all_day`, `starts_on`/`ends_on` (a whole day, the last included) or `starts_at`/`ends_at`, `source`, `agent_label`, `changed_source`, `changed_agent_label`, `created_at`, `updated_at`, `deleted_at` |
 | `item_events` | The event a task lives in | `item_id` (the key: one event per task), and either `event_id` (the workspace's own) or `account_id` + `calendar_id` + `google_event_id` |
 | `node_events` | The events a client or a project is linked to | `id`, `node_id`, and either `event_id` or `account_id` + `calendar_id` + `google_event_id`; each pair once |
@@ -34,16 +34,15 @@ and the screens. When the code changes a decision described here, this document 
 | `demo_mail` | The demo's sample messages, apart from every real datum; written only by the seed | `owner_id`, `account_id` (a sample account), `gmail_id`, `thread_id`, `from_name`, `from_email`, `to_emails`, `subject`, `snippet`, `html`, `text_body`, `received_at`, `unread`, `important` |
 | `mail_links` | A message linked to a task, or to a client or project | `owner_id`, `account_id`, `message_id`, and either `item_id` or `node_id`; each pair once |
 | `mail_opened` | What the person opened here (Gmail is read only and keeps its own state) | `owner_id`, `account_id`, `message_id`, `opened_at` |
-| `task_mail` | The mail a task waits for and what the daily review wrote | `item_id` (the key), `owner_id`, `account_id` (null for every account of its place), `expect_from` (words of the sender), `status` (`waiting` · `met` · `not_met`), `sentence`, `decided_account_id` + `decided_message_id`, `checked_at` |
-| `daily_reviews` | Each run of the daily review | `owner_id`, `day`, `instruction`, `requested` (asked for on purpose; the day's own run is once per person and day), `task_ids`, `provider` (`simulated` · `meta`), `finished_at` (null while it runs or after it stopped), `failures` (the steps that failed, a stop included), `attempt_started_at` (when the attempt under way started) and `heartbeat_at` (its last beat; both cleared by a stop, and the next call decides with the beat) |
-| `review_actions` | Each thing a run did, for its undo | `review_id`, `owner_id`, `item_id`, `kind` (`mail_status` · `complete`), `before`, `after`, `undone_at` (the only column a person changes) |
-| `preferences` | One row per person | `owner_id`, `boards` (per page —`overview`, `tasks`, `node:<id>`— the order of its boxes and the hidden ones), `layouts` (per page, `list` or `board`), `daily_review` (on by default), `daily_review_instruction` |
+| `task_mail` | What a task waits for, in the person's words, and the possible replies they ruled out | `item_id` (the key), `owner_id`, `account_id` (null for every account of its place), `waits_for` (the person's words, 1–200 characters), `dismissed` (each reply ruled out as `<account id>:<message id>`), `created_at` (when the wait began: what arrived before is no reply). The columns the daily review wrote (`expect_from`, `status`, `sentence`, `decided_account_id`, `decided_message_id`, `checked_at`) stay unread until a later migration drops them |
+| `daily_reviews`, `review_actions` | What the removed daily review left: nothing reads or writes them, and a later migration drops them | — |
+| `preferences` | One row per person | `owner_id`, `boards` (per page —`overview`, `tasks`, `node:<id>`— the order of its boxes and the hidden ones), `layouts` (per page, `list` or `board`); the daily review's `daily_review` and `daily_review_instruction` stay unread until a later migration drops them |
 | `google_accounts` | Each connected Google account | `id`, `owner_id`, `email`, encrypted `refresh_token`, encrypted `access_token` and its expiry, `scopes`, `status`, `is_demo` |
 | `node_accounts` | Which node an account hangs from | `node_id`, `account_id` |
 | `account_calendars` | Which calendars of each account are shown | `account_id`, `calendar_id`, `summary`, `color`, `selected` |
 | `agent_tokens` | A coding agent's access to a node | `id`, `node_id`, `token_hash`, `label`, `created_at`, `last_used_at`, `revoked_at` |
 | `chat_messages` | The chat conversations: one per node, and the whole workspace's own | `id`, `seq` (insertion order), `owner_id` (the signed-in person by default), `node_id` (null for the workspace's conversation), `role`, `parts` (jsonb), `created_at` |
-| `usage_counters` | The daily cap on chat messages, transcriptions, and daily reviews read by Meta's model | `owner_id`, `day`, `kind`, `count` |
+| `usage_counters` | The daily cap on chat messages and transcriptions read by Meta's models | `owner_id`, `day`, `kind`, `count` |
 
 - **The tree's shape**: a root is a client or a project of the person's own, so someone without clients keeps their
   projects at the root and an agency keeps its own projects beside its clients; a client is always a root, a client's
@@ -108,8 +107,9 @@ and the screens. When the code changes a decision described here, this document 
   notes in nodes, in tasks, and loose, links over the words of a note, decisions, a review a coding agent asked for as a
   task of the day, events of its own, one of no node linked to a project, an item with a version, four sample mail
   accounts on the nodes they serve with their messages (some unread, one important, one account with none), a task
-  waiting for an approval that already arrived —the daily review completes it when the demo opens— and one waiting for
-  a message that has not, and items written by hand, by the chat (each with the conversation that wrote it), and by a
+  waiting for an app review approval with two possible replies from the same sender —the approval and a notice that is
+  not it, for the person to tell apart— and one waiting for a message that has not arrived, and items written by hand,
+  by the chat (each with the conversation that wrote it), and by a
   coding agent whose two tokens, labeled `Laptop`, Settings lists; with a real workspace's gaps (a client with one
   project, a project with no notes, tasks without a description)— in one security-invoker function
   called through `POST /api/demo` with the visitor's calendar day (required) and zone, so a new session gets its copy in
@@ -126,53 +126,43 @@ and the screens. When the code changes a decision described here, this document 
   below in §Google accounts); without Google configured on the server, a real account answers as a failure that says
   so. A place's accounts are those visible from its node, inherited included, every account over
   everything, and none for General. A list reads the latest messages of each account (`MAIL_LIMIT` by default), so an
-  account with much mail leaves the others their share. A message is "for your tasks" when an open task is linked to it
-  or waits for it: in its own account, or in every account its place sees (General's tasks, in every account of the
-  owner), its sender holding the task's `expect_from`, arrived after the task existed. "Unread" is unread in Gmail and
-  not opened here, and its count (`list_mail.unread`, `list_tree` with `withMail`) is every unread message of the
+  account with much mail leaves the others their share. A message of the list is "for your tasks" when an open task is
+  linked to it; the possible replies of a task that waits for mail are read apart (below, §What a task waits for).
+  "Unread" is unread in Gmail and not opened here, and its count (`list_mail.unread`, `list_tree` with `withMail`) is every unread message of the
   accounts, listed or not; an account whose count failed or stopped short is a failure beside it (`list_mail.failures`,
   one per account, and `list_tree`'s `mail.failures`), and is left out of `unreadByAccount` when nothing of it was
   counted, never read as a zero. A search (`search_items`) asks each account's own search for the words —Gmail's for a
   real account; a sample account looks in its sender, subject, and text— and shows at most 20 messages with the accounts
   it could not search; the mail of a task (`get_item`) is read once per account. An access scoped to a node reads in a
   message only the tasks and the nodes it reaches.
-  Waiting for another account or another sender starts the wait over (`waiting`, the deciding message forgotten), and a
-  task moved to a place that does not see its account waits in every account of its new place. The HTML that leaves the server is sanitized (`src/lib/mail/sanitize.ts`): no scripts, forms and their
+  Waiting in another account or for other words starts the wait over (the replies ruled out are forgotten), and a task
+  moved to a place that does not see its account waits in every account of its new place. The HTML that leaves the server is sanitized (`src/lib/mail/sanitize.ts`): no scripts, forms and their
   controls, frames, embedded objects, handlers, active links, or style rules that load or run something; remote images
   are counted so the viewer loads them only when asked; a style is tested as the browser reads it, its CSS escapes
   decoded and its comments out. The demo's sample accounts and their messages are planted by
   `public.plant_demo_accounts` and `public.plant_demo_mail`, only for a demo (anonymous) session and on its own nodes,
   accounts marked as the demo's without tokens, once.
-- **The daily review** (`src/lib/review/`) walks the person's overdue tasks, today's, and every open task that waits for
-  a message whatever its date; for each that waits, it reads what arrived in its accounts since the task exists (each
-  account read once, from the oldest wait that reads it, and once more for the senders its tasks wait for when it holds
-  more than one read brings), and only from its sender when it names one (`fromExpected`). What it could not read —an
-  account that failed, or a task waiting for any sender in an account with more mail than was read— is one of the run's
-  failures, said in its answer.
-  A judge decides with two tools only, bound to the tasks of the run: write the state of a task's mail (with a sentence
-  that quotes the deciding line and, for `met` and `not_met`, the message that decides it: one that arrived for that
-  task, from its sender, or about it when it names none), and complete a task this run wrote as `met`. Each writes
-  its action in the same statement (`public.review_write_mail_status`, `public.review_complete_task`), and neither
-  throws: a failure is counted in the run's `failures` and said in the answer. A run counts as the day's once it
-  finishes. A run under way writes its heartbeat (`heartbeat_at`) as the judge takes each task and on each step of the
-  model, and the next call decides with it: a run whose last beat is older than the floor —one task's read with room to
-  spare— is taken over in one statement, as a worker that died, and one that keeps beating is another call's, however
-  long its attempt has been going (`attempt_started_at` is when that attempt began). So of two calls at once one resumes
-  it and the other answers `skipped: "running"`; a stop clears both marks, so the next call picks it up at once, and a
-  stop that cannot be recorded is logged and said in the answer. Each beat and the attempt's end move `heartbeat_at`
-  from the attempt's own last beat in one statement, one beat at a time: an attempt whose run another call took over
-  finds a beat that is not its own, and from then on its tools refuse, its end is not written over the other call's,
-  and it answers `skipped: "running"`. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
-  it does not run. The
-  simulated judge follows fixed rules —the sender, and the words of the subject and the text: a refusal first, then an
-  approval—; Meta's judge (`MODEL_PROVIDER=meta`) reads the same data with a prompt that fences the messages as data. A
-  change that is already the state is no action, so running again repeats nothing; every action is a row with what was
-  there before, and undoing writes it back, unless the person changed the state after the review: then the undo is
-  refused and their state stays. Each action carries its task (`title`, `nodeId`, `path`, `status`), read once.
+- **What a task waits for** (`src/lib/tools/waits.ts`): the person says in their own words what a task waits for —who
+  sends it or what it is about: «Meta», «app review»— and where: one account, or every account its place sees
+  (`set_task_mail`). Its possible replies are the messages that arrived in those accounts since the wait began, archived
+  included, never what the account sent, drafted, or chatted, nor spam or the trash, whose sender's name or address or
+  whose subject holds every word, accents and capitals aside (`holdsEveryWord`). Gmail is asked with each word in a group
+  of its own of the sender and the subject, cleaned of anything its search would read as an operator
+  (`candidatesSearch`), and what it brings is kept only where every word holds, as the sample accounts compare them.
+  Nothing decides which message answers the task: the person does, in the task's detail or in the open message. Closing
+  it (`complete_task`) takes the result the person gives —«Approved», «Rejected», or their own words—: the task is
+  marked done, the result hangs from it as a decision that names the message, and the message stays linked to it; a
+  reply that is not it is ruled out (`dismiss_reply`, one statement through `public.dismiss_task_reply`, so two at once
+  each keep theirs) and leaves the possible ones. Each has its undo, and no model is read for any of it: the chat or an
+  agent reads the possible replies and closes a task only when the person asks.
+  **One account per request**: the screens read a task's possible replies one task and one account at a time
+  (`list_task_replies` with `account`), all at once, so a request does one account's work however many accounts and
+  tasks a place holds; an account that holds more than was read says where its next replies start (`next`, read back
+  with `pageToken`), and the task's detail brings them page after page, as many as there are.
 
 ## The tool layer (`src/lib/tools/`)
 
-Each tool is a function over a context `{ db, ownerId, scopeNodeId?, source, agentLabel?, updatesSince?, events?, calendar?, mail?, reviewJudge?, reviewQuota? }`,
+Each tool is a function over a context `{ db, ownerId, scopeNodeId?, source, agentLabel?, updatesSince?, events?, calendar?, mail? }`,
 with zod input and output schemas —strict: a field a tool does not know comes back as an error, never dropped—, a
 description, and a read-only flag. `updatesSince` is where "what's new" starts when the caller gives no moment (an MCP
 token's previous read); `events` is the source the event reads use and `calendar` where writes to Google go, both
@@ -181,15 +171,16 @@ a route), and shaping the tree forgets that read. `db` is the signed-in user's S
 for the screens and the chat, and the service client for the MCP server; either way the tools filter by owner and by
 the scope's subtree in code. A context without a scope reaches General too; one scoped to a node —an agent's token, a
 node's chat— reaches only that node and what is below it, never General. One registry exports them and `callTool` validates the input; two adapters publish them,
-one for the AI SDK (the chat) and one for the MCP server, which leaves out the tools marked `chatOnly` (`agentTools`); `/api/tools/<name>` leaves them out too.
+one for the AI SDK (the chat) and one for the MCP server, and `/api/tools/<name>` dispatches the same list: what a
+person does by hand, the chat and an agent do with the same tools.
 The screens call the same functions through their routes.
 A failure comes back as data (`{ ok: false, code, message }`), never as an exception, so a model can correct itself.
 
 | Tool | Read-only | What it does |
 |---|---|---|
 | `list_tree` | yes | The tree visible from the scope, each node with its open tasks counting its subtree, the color it shows and the one given to it; with the person's day, how many tasks are overdue and due today over everything in reach; with `withMail`, the unread mail of the accounts in reach; with `withContent` (a week), the nodes that have something to show besides their tasks —mail of an account they see, notes below them, the week's events— and whether General has |
-| `get_tasks` | yes | For the person's day, the tasks of everything in reach, of General (`node: null`), or of a node and its subtree, in four groups —`overdue`, `today`, `upcoming` day by day (optionally the nearest days only), `noDate` in the manual order—, each with its count; optionally the finished ones; sorted by date, priority, or by hand. Each row: its title as written, the first line of its notes, day and hour, priority, its place's path and color (null for General), its subtasks done and in all, how many notes it has, who wrote it, its position, and `mail`: what it waits for and the state the daily review wrote, or null. A task is in a group when it has a day or hangs from no task |
-| `get_item` | yes | One item by id with what its detail shows: the item with its place, path, and color; its parent; its subtasks as `get_tasks` rows; its notes with their decision mark; the event it is in (the workspace's own with its moment, or a Google one by its ids); the mail it waits for; and the messages linked to it, the one that decided its mail included. A general item is reached only without a scope |
+| `get_tasks` | yes | For the person's day, the tasks of everything in reach, of General (`node: null`), or of a node and its subtree, in four groups —`overdue`, `today`, `upcoming` day by day (optionally the nearest days only), `noDate` in the manual order—, each with its count; optionally the finished ones; sorted by date, priority, or by hand. Each row: its title as written, the first line of its notes, day and hour, priority, its place's path and color (null for General), its subtasks done and in all, how many notes it has, who wrote it, its position, and `mail`: what it waits for —its account, its words, when it began, and the replies ruled out—, or null. A task is in a group when it has a day or hangs from no task |
+| `get_item` | yes | One item by id with what its detail shows: the item with its place, path, and color; its parent; its subtasks as `get_tasks` rows; its notes with their decision mark; the event it is in (the workspace's own with its moment, or a Google one by its ids); the mail it waits for; and the messages linked to it. A general item is reached only without a scope |
 | `list_notes` | yes | The notes of a node and its subtree, the loose ones of General, or a task's, newest first, each saying whether it is a decision; a note of a task reads with its task |
 | `get_board` | yes | For the person's day, what is open, late, due today and in a stretch of days (`from`–`through`), and undated, in everything in reach or below one node, and the same figures per node, each counting its subtree |
 | `get_overview` | yes | A node: open tasks by priority; the latest notes and decisions of the node and its subtree, each with its path, and how many there are in all; what the nodes below hold; and (unless asked without them) the next seven days of events from its accounts and the workspace's own |
@@ -216,17 +207,19 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 | `link_node_event`, `unlink_node_event` | no | Links a client or a project to an event of the workspace or of Google, or takes it off |
 | `link_mail`, `unlink_mail` | no | Links a message to a task or to a client or project, or takes it off |
 | `create_task_from_mail` | no | A task from a message, where the message's account hangs, with the message linked |
-| `set_task_mail` | no | Says that a task waits for a message —in one account or every account of its place, from a sender— or for none |
-| `run_daily_review` | no | The chat's "Review my day": the daily review asked for on purpose, over everything; an access scoped to a node does not run it, and neither the MCP server nor the screens' tool route dispatches it (`chatOnly`); its day is checked like `POST /api/review`'s |
+| `set_task_mail` | no | Says that a task waits for mail —in one account or every account of its place, in the person's words— or for none, and returns what it replaced; other words or another account start the wait over |
+| `list_task_replies` | yes | A task's possible replies: what arrived since its wait began in the accounts it waits in —or only the one asked for— whose sender or subject holds every word, newest first, without the ones ruled out, and the accounts that hold more with where their next replies start (`more`, `next`; `pageToken` reads one account's next page); none of them is the answer until the person says so |
+| `dismiss_reply` | no | Rules a possible reply out, or takes that back |
+| `complete_task` | no | Closes a task with the result the person gives and, when a message answered it, that message: done, the result as a decision hanging from it, and the message linked; used only when the person says how it ended |
 
 - A node is addressed by id or by its readable path ("Acme / Web / Landing", or its last segments, "Web / Landing"),
   ignoring case and accents; a whole path wins, an ambiguous one returns the candidates instead of picking one, and
   one outside the scope is not found. `null` names General. Without a node, a write lands in the scope's node (the open
   node in the chat, the token's node in the MCP server) or, with nothing scoped, in General; a read covers the scope's
   node or, with nothing scoped, everything in reach.
-- The screens read `get_tasks`, `list_notes`, `list_tree`, `list_mail`, `get_item`, `get_updates_since`, and
-  `browse_events`; no screen reads `get_board`, `get_overview`, or `browse_items` anymore (the chat and the MCP still
-  offer them).
+- The screens read `get_tasks`, `list_notes`, `list_tree`, `list_mail`, `list_task_replies`, `get_item`,
+  `get_updates_since`, and `browse_events`; no screen reads `get_board`, `get_overview`, or `browse_items` anymore (the
+  chat and the MCP still offer them).
 - Undoing a deletion (`restoreItem`, `restoreEvent`), the versions (`listRevisions`, `restoreRevision`), and the trash
   (`listTrash`) are not offered to models: the screens and the chat's undo button call them.
   `update_item` returns the values it replaced, so undoing a change writes them back.
@@ -252,37 +245,37 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   transcription can run.
 - Every write the chat makes shows as a card saying what it did, with an undo button: a creation is deleted, a
   change gets back the values `update_item` returned as replaced, a move goes back to where `move_item` said it was, a
-  reschedule gives each task its previous day, a deletion is restored, and what the daily review did is one card per
-  task, with the line that decided it, undone through the review's own route.
+  reschedule gives each task its previous day, a deletion is restored, what a task waits for goes back to what
+  `set_task_mail` replaced, a reply ruled out comes back, and a task closed with its result opens again, its result
+  deleted and the reply taken off when the closing linked it. The task's detail and the mail viewer undo a closing with
+  the same card (`WRITES.complete_task`, `src/app/app/chat-cards.ts`).
 - The conversation is stored per node, and the workspace's own without a node, in `chat_messages` (the person's message
   and the answer, with their parts, encrypted reasoning included, ordered by `seq`) when the answer ends whole; a turn
   cut short is not stored. The
   browser sends only the new message, with at most one image; the server rebuilds the recent turns from what it
   stored, and an image travels to the model only in the turn it arrives (later turns carry a note), so one large
   image never makes the next messages too large.
-- **The cap**: `usage_counters` limits messages, transcriptions, and daily reviews read by Meta's model per person and day (cut in UTC), on the server,
+- **The cap**: `usage_counters` limits messages and transcriptions read by Meta's models per person and day (cut in UTC), on the server,
   taken before the model is called by `public.take_usage`, one statement that refuses past the cap, so two requests
   at once never both pass the last unit; the answer is 429 with `Retry-After` and a sentence the panel shows. A demo
   session has a smaller cap of its own, and all demo sessions together share a daily total (`public.anonymous_usage`),
   because a new demo session is one click away. Defaults (overridable): 60 messages and 20 notes a day per person
   (`CHAT_DAILY_CAP`, `TRANSCRIPTION_DAILY_CAP`), 20 and 5 per demo session (`DEMO_CHAT_DAILY_CAP`,
   `DEMO_TRANSCRIPTION_DAILY_CAP`), 400 and 60 for all demo sessions (`DEMO_TOTAL_CHAT_DAILY_CAP`,
-  `DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP`); daily reviews, 5 per person (`DAILY_REVIEW_DAILY_CAP`), 2 per demo session
-  (`DEMO_DAILY_REVIEW_DAILY_CAP`), and 100 for all demo sessions (`DEMO_TOTAL_DAILY_REVIEW_DAILY_CAP`). A tool or a
-  route that reaches a cap answers `code: "cap"`, 429 with `Retry-After`. Meta Model API has no hard spend cap of its own.
+  `DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP`). A route that reaches a cap answers 429 with `Retry-After`. Meta Model API has
+  no hard spend cap of its own.
 - **The simulator**: with `MODEL_PROVIDER=simulated` a scripted model (`src/lib/chat/simulated.ts`) calls the tool
   a real model would for a request (create a task —in the node a request names, "in Operations to…"—, record a decision,
-  read what is pending in the open node or across everything, and "Review my day" runs `run_daily_review` with the
-  person's day and zone read from the system prompt) and transcription returns a fixed sentence, so the whole chat runs
-  and is tested without spend.
+  read what is pending in the open node or across everything, and "Did anything arrive for my tasks?" reads the
+  person's tasks of the day —read from the system prompt— and then the possible replies of each that waits for mail,
+  closing none) and transcription returns a fixed sentence, so the whole chat runs and is tested without spend.
 
 ## The MCP server (`/api/mcp`)
 
 - Stateless SDK server with its `Request`/`Response` handler mounted on a Next route; Streamable HTTP transport.
 - **Authentication**: `Authorization: Bearer <token>`. The server stores only the hash, and the token defines the
   reachable node (that node and its descendants). Missing or revoked token: 401. The `Origin` header is validated.
-- It publishes every tool but the chat's own (`chatOnly`): the daily review is asked for from the app or the chat,
-  and its writes record their owner from the signed-in session, which the service client does not have.
+- It publishes every tool of the registry, the same the chat and the screens use.
 - Read tools carry `readOnlyHint`, so the agent does not ask for approval to read.
 - **Each code repository declares it in its `.mcp.json`** with the token in an environment variable (Claude Code
   and Muse Code expand `${VAR}`); Settings issues the token once, for the client or project chosen, and shows the block
@@ -330,9 +323,10 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   with its rate limit or a server error, or leaves out of a batch, is asked once more, all of them in one batch and after
   a pause when it was the rate limit; a message deleted between the search and the read is no failure; one still lost,
   or whose content cannot be decoded, is counted in its account's failure, its statuses in the log, and the rest still
-  show. The daily review reads whole what arrived since its oldest wait, archived included, because a filter may file
-  away the mail a task waits for: at most 50 messages, and when the account holds more, once more only those of the
-  senders its tasks wait for (`from:`). The unread count is
+  show. A task's possible replies are searched in everything that arrived since its wait began, archived included
+  —a filter may file away the mail a task waits for—, never in spam or the trash, each word of the wait in a group of its
+  own (`from:` or `subject:`, lowercase, with and without its accents), reading the metadata of as many as were asked
+  for in one batch. The unread count is
   the inbox's, the same search as the list's, read in pages of 500 ids up to four; past them it says it stopped. A search
   passes its words to Gmail's own search of the inbox as one group: the words' own groups stay when their parentheses and
   braces pair and nest, and otherwise those and a quote left open are read as spaces, so no operator among them reaches
@@ -346,14 +340,16 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 - **What a request fits**: a Worker on Cloudflare's free plan makes at most 50 requests of its own for each request it
   serves —to Google and to Supabase alike— and that request fails whole past them (10,000 on the paid plan). Counted
   with every token expired, for a workspace whose task waits for a message (`tests/google/mail.test.ts`): the Mail page's
-  list (`list_mail` over every account, 50 messages each) asks 11 requests whatever its accounts and 5 per account —the
+  list (`list_mail` over every account, 50 messages each) asks 7 requests whatever its accounts and 5 per account —the
   token's renewal and its storing, a search, a batch, and the first page of its unread count—, and the sidebar's count
   (`list_tree` with `withMail`) 7 and 3 per account; a valid token saves 2 of each account's, and an unread count that
   reads all its pages asks 3 more. The route adds one: who is signed in, or a coding agent's token. So, with the person's
-  session valid, the list fits 7 accounts and the count 14 —4 and 7 when their unread counts read all their pages—, and
+  session valid, the list fits 8 accounts and the count 14 —5 and 7 when their unread counts read all their pages—, and
   renewing the session first takes one request more, one account less in the count. A chat turn over everything that
-  reads the mail once asks 16 requests of its own, up to 6 to the model, and 1 to store the turn: it fits 5 accounts, 3
+  reads the mail once asks 12 requests of its own, up to 6 to the model, and 1 to store the turn: it fits 6 accounts, 3
   when their counts read all their pages, and each other tool that reads mail in the same turn takes from the same 50.
+  A task's possible replies, read one task and one account per request, ask 12 —the account's renewal, a search and a
+  batch, and 9 to Supabase— whatever else the place holds, so no number of accounts or tasks makes one request larger.
 - The Google Cloud app is published without verification: users see Google's unverified-app screen, and
   authorizations do not expire after seven days as they do in testing mode.
 
@@ -389,19 +385,15 @@ The screens read and write in the browser through the app's routes, which check 
 `/api/tools/<name>` runs a tool with source `manual`; shaping the tree (create, rename, color, archive a node), undoing
 a deletion, accounts and calendars, agent tokens, the preferences (`/api/preferences`, which also writes the
 `cw_layout` cookie the server reads to paint a page in its order; the cookie names its owner, a page reads it only for
-that person, and `DELETE /api/preferences` clears it on signing out), the daily review (`POST /api/review` runs the
-day's own, once per day, for a day some time zone is living —the UTC day, the one before, or the one after—; a review
-asked for on purpose is the chat's tool `run_daily_review`, which `/api/tools/<name>` does not dispatch, checks the same
-living day, and takes a unit of the day when Meta's model reads it; `GET /api/review` lists the last days' runs with their actions;
-`POST /api/review/actions/<id>/undo` undoes one), and marking a message opened (`POST /api/mail/opened`) have their own
-routes, because they are not offered to models.
+that person, and `DELETE /api/preferences` clears it on signing out), and marking a message opened
+(`POST /api/mail/opened`) have their own routes, because they are not offered to models.
 Every writing route demands this site's `Origin` and a bounded JSON body. The demo's own are `/api/demo`: the `POST` plants
 the visitor's copy, and the `DELETE` empties it so the next read plants it again.
 
 1. **Landing**: the brand, a title and a line, "Try the demo" and "Sign in with Google", and what the demo holds; beside
    them a picture of the demo's Overview drawn with the workspace's own pieces (`src/app/landing-preview.tsx`, styled by
-   `src/app/styles/landing.css`): the Tasks box with a task the daily review completed, the week —the visitor's own,
-   read once the page runs—, the Mail box, and the review's notice. Its figures are the planted demo's, counted from the
+   `src/app/styles/landing.css`): the Tasks box with a task that waits for mail, the week —the visitor's own, read once
+   the page runs—, and the Mail box, first the possible replies of a task. Its figures are the planted demo's, counted from the
    seed (`demoOverview` in `src/lib/demo-seed.ts`), and `tests/demo/overview.test.ts` reads them back from the tools. The
    product's name and its one-line description come from `src/lib/product.ts`, which the brand, the document's title and
    the web manifest read too. Each screen of the workspace declares its title as route metadata («Tasks · Client
@@ -440,11 +432,13 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    `src/app/app/box-kinds.tsx`: **Tasks** (Overdue with «Reschedule», Today, and the nearest days of Upcoming with «Show
    all upcoming»; «Add task» at a group's foot adds with that group's day, and a task dragged to another group, or to a
    day of the Calendar box, takes that group's day), **Calendar** (the week, the chosen day's events below, today by
-   default), **Mail** (what a task waits for first, then what is unread, «Important» where Gmail says so, «Show all
-   mail»; with no account, «Connect Google account»), **No date** (in the order the person drags them into),
-   **Activity** (what the daily review, the chat, and an agent did in the last seven days, each with its «Undo»: a review's
-   actions are undone through their route, an addition is deleted, a completion opens again, a deletion is restored, a
-   change takes back the version it replaced), **Notes** (the loose ones on the Overview, a node's on its page, with
+   default), **Mail** (first the newest possible reply of each task that waits for mail, saying how many arrived for it
+   —read task by task and account by account (`src/app/app/task-replies.ts`)—, then what is linked to an open task, then
+   what is unread, each message once, «Important» where Gmail says so, «Show all mail»; with no account, «Connect Google
+   account»; its account filter counts each option from the same rows, `mailBoxRows`), **No date** (in the order the
+   person drags them into), **Activity** (what the chat and an agent did in the last seven days, each with its «Undo»: an
+   addition is deleted, a completion opens again, a deletion is restored, a change takes back the version it replaced),
+   **Notes** (the loose ones on the Overview, a node's on its page, with
    «Add note»), and **Subprojects** (a node's page: what hangs from it, with «Add project» or «Add subproject»).
 4. **Overview** (`/app`): the header with the date, two filters —the place (every place, General, or a client or
    project with what is below it, each saying its open tasks) and the mail account (each saying what the Mail box would
@@ -493,26 +487,11 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    page where the window holds both, and there it stays open from page to page until it is closed; where the window is
    narrow it opens as a sheet when asked, never by itself on load. It talks about the page's place —everything on the
    Overview, a project on its page— and keeps that place's conversation, with microphone, image attachment, cards for
-   what it did, and one close, «Close chat». The workspace's own conversation offers «Review my day», a fixed suggestion
-   sent as the person's words, which runs the daily review through `run_daily_review`; a client's or a project's chat does
-   not offer it, because the review reads everything and a scoped context does not run it.
-   **The daily review on screen** (`src/app/app/review-notice.tsx`, mounted once by the shell): the first time the person
-   opens the workspace in their day, the browser posts `/api/review` with the day and the zone, and remembers the person
-   and day it asked for, so a reload does not ask again (the server runs it once per person and day anyway); a tab left
-   open asks again when it is looked at on another day (`visibilitychange`), and nothing is asked while it is hidden. When
-   the run did something, the boxes read again —Activity shows it— and one sentence says what it did with its «Undo» («The
-   daily review completed “Wait for the app review approval”: …», the line that decided it), each task named by the
-   `task` its action carries (no read per task), once the page's boards entered and played their entrance and no dialog
-   is open; it leaves the focus where it is. Its «Undo» undoes each action, what it completed first, through
-   `POST /api/review/actions/<id>/undo`. The other answers are said in words: steps that failed (`failures`, with how
-   many, and that asking in the chat tries them again), a run that is running (`skipped: "running"`: said once, the day not remembered, and asked again when the tab is looked at again, so a run cut short is picked up), the day's
-   limit (429 `cap`: the server's own sentence, which says which limit and when it resets; the day is then remembered),
-   and a run that did not run or stopped (its cause once —stopped before it finished, not reached, or a refusal's
-   reason— and once that it runs again the next time the workspace opens: not remembered, so a stopped run is picked up
-   where it stopped). The chat's cards say the same, and every card names what it wrote from its tool's output
-   (`run_daily_review`'s `task`, and the `title` of `reorder_items`, `link_task_event`, `unlink_task_event`,
-   `set_task_mail`, and `link_mail`), each with its undo: taking a task out of its event puts it back in the event
-   `unlink_task_event` says it was in.
+   what it did, and one close, «Close chat». Nothing runs in it on its own: it acts only on what the person asks.
+   Every card names what it wrote from its tool's output (the `title` of `reorder_items`, `link_task_event`,
+   `unlink_task_event`, `set_task_mail`, `dismiss_reply`, and `link_mail`, and the task and the decision of
+   `complete_task`), each with its undo: taking a task out of its event puts it back in the event `unlink_task_event`
+   says it was in.
 7. **Calendar** (`/app/calendar`, styled by `src/app/styles/calendar.css`): «Week | Month» in the header (the
    header's `views`, in the place «List | Board» takes), with «Previous», «Today», «Next», and «New event» over the
    grid. The week lays its days side by side, a band for whole-day events and tasks without an hour, and the hours of
@@ -534,15 +513,19 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    event of the workspace's own) and the clients and projects linked to it, each taken off in place, «Link…» to add a
    task or a client or project, and «More» with Delete.
    **Mail** (`/app/mail`, styled by `src/app/styles/mail.css`): the list in «For your tasks», «Unread» and «Earlier»,
-   each message with its sender, subject, time, and its place or the task that waits for it, «Important» where Gmail
-   marks it; it reads `list_mail` over every account once and filters by place and account like the calendar (no
-   account hangs from General, so General is not offered). Opening a message calls `POST /api/mail/opened`: it reads as
+   each message once, with its sender, subject, time, and its place or the open task it is linked to, «Important» where
+   Gmail marks it. «For your tasks» heads each task that waits for mail with its possible replies —«2 possible replies
+   for “…”», with «Open the task», read task by task and account by account— and then the messages linked to an open
+   task. It reads `list_mail` over every account once and filters by place and account like the calendar, the possible
+   replies included (no account hangs from General, so General is not offered). Opening a message calls `POST /api/mail/opened`: it reads as
    read at once and keeps its place until the next read. The viewer (`mail/mail-viewer.tsx`) sits beside the list on a
    computer, sticky with its own scroll, and over it as a sheet of the whole screen on a phone. On top, its inbox row
    (sender, subject, the account it reached with its time, its place), «Light | Dark» and «Previous» and «Next» through
    the list; then the actions —«Create task» (`create_task_from_mail`), «Link to…» a task or a client or project
-   (`link_mail`), and «Open in Gmail», disabled with its reason for a sample account— and what it is linked to; then
-   the message. The message is painted in an `<iframe srcdoc>` sandboxed without `allow-scripts` (only
+   (`link_mail`), «Answers a task…» (a task that waits for mail, those this message is a possible reply of first; then
+   how it ended —«Approved», «Rejected», or the person's words— and `complete_task` with this message, with its «Undo»;
+   `src/app/app/task-outcome.tsx`, the same choice the task's detail shows), and «Open in Gmail», disabled with its
+   reason for a sample account— and what it is linked to; then the message. The message is painted in an `<iframe srcdoc>` sandboxed without `allow-scripts` (only
    `allow-same-origin`, so the page measures it, and popups that escape the sandbox, so its links open a new tab), under
    a content policy of its own: styles and inline pictures only, network images (`img-src https: http:`) once the person
    asks with «Show images», remembered per sender in the browser. It takes the reader's width; a design wider than that
@@ -553,15 +536,16 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    language the message declares —`get_mail`'s `language`, read from its `Content-Language` when the source gives it,
    else from the `lang` of its HTML's root before the sanitizer drops that tag (`src/lib/mail/language.ts`)— and the
    product's when it declares none.
-   **The Mail attribute of a task's detail** reads `get_item` (the mail it waits for, the messages linked to it, and the
-   one the daily review decided by): where it waits —no mail, every account of its place, or one account its place
-   sees—, from whom, the state and the sentence the review wrote, and «Stop waiting», all through `set_task_mail`; each
-   message links to it on the Mail page.
+   **The Mail attribute of a task's detail** reads `get_item` (the mail it waits for and the messages linked to it):
+   where it waits —no mail, every account of its place, or one account its place sees— and «What it waits for», the
+   person's words with their help, saved through `set_task_mail` (a new wait needs its words before it starts); then
+   «Possible replies», read account by account at once (`list_task_replies`), each with «This is it» —how it ended,
+   «Approved», «Rejected», or the person's words, and `complete_task`— and «Not it» (`dismiss_reply`), each with its
+   «Undo», and «Show more replies», the next ones of each account that holds more, as many times as there are; «Stop
+   waiting»; and the messages linked to it, each linking to it on the Mail page.
 8. **Trash**: what was deleted, each branch once, in one box of the page's column; «Restore» folds the row away and
    brings the whole branch back.
-9. **Settings** (styled, with Trash, by `src/app/styles/settings.css`): the page's column of boxes —Theme; **Daily
-   review**, a switch on by default and the instruction it follows, both saved as they change through
-   `/api/preferences` (an empty instruction is not saved, and one being written is saved on leaving); **Google
+9. **Settings** (styled, with Trash, by `src/app/styles/settings.css`): the page's column of boxes —Theme; **Google
    accounts**, each with the clients and projects it is connected to, which calendars are shown, and its mail (how many
    unread, from `list_mail`'s `unreadByAccount`, the count the sidebar adds up; no total of messages, which the list
    stops at its limit per account; or why it could not be read); and **Agent tokens** of every client,

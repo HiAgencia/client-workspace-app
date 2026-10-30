@@ -407,10 +407,6 @@
   color: var(--mail-waiting);
   font-weight: 650;
 }
-.task-mail[data-mail="arrived"] {
-  color: var(--mail-arrived);
-  font-weight: 650;
-}
 /* The date and the subtasks are controls of their own: quiet at rest, tinted in their state's color, filled on hover. */
 .task-when .picker,
 .task-subtasks-toggle {

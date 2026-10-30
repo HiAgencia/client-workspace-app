@@ -29,7 +29,8 @@ export function PathText({ path }: { path: string }) {
   );
 }
 
-// Who wrote something, in the words every list and filter uses: an agent says the name of its token.
+// Who wrote something, in the words every list and filter uses: an agent says the name of its token. `review` is only in
+// the history the daily review left when it completed tasks.
 export function sourceName(source: Item["source"], agentLabel: string | null): string {
   if (source === "manual") return "By hand";
   if (source === "chat") return "By the chat";

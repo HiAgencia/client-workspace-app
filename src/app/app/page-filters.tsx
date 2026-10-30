@@ -5,9 +5,10 @@ import { useCallback } from "react";
 import { firstWeekday, instantsOf, weekOf, type Day } from "@/lib/dates";
 import type { TasksView } from "@/lib/tools/tasks";
 import { useToolRead } from "./boxes";
-import { placeValue, readPlace, type MailList, type Place } from "./box-kinds";
+import { mailBoxRows, placeValue, readPlace, type MailList, type Place } from "./box-kinds";
 import type { TreeNode } from "./client-api";
 import { AccountFilter, ALL, MESSAGES, PlaceFilter, TASKS } from "./place-filters";
+import type { TaskReplies } from "./task-replies";
 
 // The header filters of the pages of boxes and of Tasks: the workspace's own place and account filters, with what each
 // option counts on these pages —open tasks for a place, what the Mail box shows for an account—, kept in the address.
@@ -61,10 +62,20 @@ export function TasksPlaceFilter({ place, onChange, tree, now }: { place: Place;
   return <PlaceFilter value={placeValue(place) ?? ALL} tree={tree} counts={counts} unit={TASKS} shows={shows} onChange={(value) => onChange(value === ALL ? { kind: "all" } : readPlace(value, tree))} />;
 }
 
-// The account the Mail box reads, each option with what it would show there: what a task waits for and what is unread.
-export function MailAccountFilter({ account, onChange, mail }: { account: string | null; onChange: (account: string | null) => void; mail: MailList | null }) {
-  const shown = mail ? [...mail.groups.forTasks.messages, ...mail.groups.unread.messages] : [];
-  const counts = new Map<string, number>([[ALL, new Set(shown.map((message) => `${message.accountId}:${message.id}`)).size]]);
-  for (const entry of mail?.accounts ?? []) counts.set(entry.id, new Set(shown.filter((message) => message.accountId === entry.id).map((message) => message.id)).size);
+// The account the Mail box reads, each option with what it would show there: what may answer a task that waits for mail,
+// what is linked to an open task, and what is unread.
+export function MailAccountFilter({
+  account,
+  onChange,
+  mail,
+  replies,
+}: {
+  account: string | null;
+  onChange: (account: string | null) => void;
+  mail: MailList | null;
+  replies: TaskReplies[];
+}) {
+  const counts = new Map<string, number>([[ALL, mail ? mailBoxRows(mail, replies, null).length : 0]]);
+  for (const entry of mail?.accounts ?? []) counts.set(entry.id, mail ? mailBoxRows(mail, replies, entry.id).length : 0);
   return <AccountFilter value={account ?? ALL} accounts={mail?.accounts ?? []} counts={counts} unit={MESSAGES} onChange={(value) => onChange(value === ALL ? null : value)} />;
 }

@@ -1,6 +1,6 @@
 /* The landing's picture of the demo: a small Overview drawn with the workspace's own pieces (the box, the task's row, the
-   week, the mail's rows, the notice), on a plane of the page's own canvas so it reads as the screen it shows. Every
-   value comes from a role in tokens.css. */
+   week, the mail's rows), on a plane of the page's own canvas so it reads as the screen it shows. Every value comes from
+   a role in tokens.css. */
 .preview-frame {
   container: preview / inline-size;
   display: flex;
@@ -63,18 +63,4 @@
 }
 .preview-frame .week-day {
   cursor: default;
-}
-/* The daily review's notice, where the workspace shows it: at the foot, at the end. It arrives last. */
-.preview-notice {
-  align-self: flex-end;
-  max-width: 100%;
-  animation: rise-in var(--dur-slow) var(--ease-out) 520ms backwards;
-}
-.preview-undo {
-  flex: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .preview-notice {
-    animation: none;
-  }
 }

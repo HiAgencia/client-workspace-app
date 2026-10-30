@@ -22,6 +22,7 @@ import { BoxBoard, customizeEntries, SPLIT, useBoardLayout, useToolRead, type Bo
 import { GoogleOutcome } from "./node-view";
 import { PageHeader } from "./page-header";
 import { MailAccountFilter, TasksPlaceFilter, useAddress, usePlaceParam } from "./page-filters";
+import { useTaskReplies } from "./task-replies";
 import { useChatScope, useWorkspace } from "./workspace";
 
 // The Overview's boxes, in their first order: the tasks and what happened on the left, the week, the mail, what has no
@@ -54,6 +55,9 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
   const mail = useToolRead<MailList>("list_mail", { ...placeInput(place), ...(account ? { account } : {}), limit: 50 });
   const everyAccount = useToolRead<MailList>("list_mail", account ? { ...placeInput(place), limit: 50 } : null);
   const mailOfPlace = account ? everyAccount : mail;
+  // What arrived for the tasks that wait for mail, read task by task and account by account in every account they wait
+  // in, so the account filter counts each option from the same read the box shows.
+  const replies = useTaskReplies(placeInput(place), now, tree, 5);
 
   const query = placeValue(place);
   const tasksHref = `/app/tasks${query ? `?place=${query}` : ""}`;
@@ -78,7 +82,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           id: "mail",
           title: NAMES.mail,
           count: mail.data ? `${mail.data.unread} unread` : undefined,
-          content: <MailBoxContent read={mail} now={now} place={place} connectHref="/app/settings#google-accounts" />,
+          content: <MailBoxContent read={mail} replies={replies} account={account} now={now} place={place} connectHref="/app/settings#google-accounts" />,
         },
         no_date: {
           id: "no_date",
@@ -100,7 +104,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           filters={
             <>
               <TasksPlaceFilter place={place} onChange={(next) => set({ place: placeValue(next), account: null })} tree={tree} now={now} />
-              <MailAccountFilter account={account} onChange={(next) => set({ account: next })} mail={mailOfPlace.data} />
+              <MailAccountFilter account={account} onChange={(next) => set({ account: next })} mail={mailOfPlace.data} replies={replies.data?.tasks ?? []} />
             </>
           }
           chat

@@ -16,14 +16,12 @@ import { dropFocusRequestOutside, hasFocusRequest, onFocusRequest } from "./focu
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
-import { ReviewNotice } from "./review-notice";
 import { TaskDetail } from "./task-detail";
 import { openTaskDetail } from "./task-row";
 import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
-// A notice that arrives on its own (the daily review's, after the page loads) is `quiet`: its «Undo» does not take the
-// focus from where the person is. `lasts` is how long a status stays when its sentence is longer than a few words.
-type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void; quiet?: boolean; lasts?: number };
+// A notice answers what the person just did: a status leaves on its own, an error stays until it is read.
+type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
 
 // The chat a page offers: a node's conversation, the workspace's own (null), or none on this page (undefined). It opens
 // on demand beside the page; docked as a column it stays open from page to page until it is closed, while the sheet of a
@@ -163,7 +161,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     // A status leaves on its own; an error stays until the person reads it and closes it.
     if (notice.tone === "status") {
       clearTimeout(timer.current);
-      timer.current = setTimeout(dismiss, notice.lasts ?? (notice.undo ? 6000 : 3000));
+      timer.current = setTimeout(dismiss, notice.undo ? 6000 : 3000);
     }
   }, [notice, leaving, dismiss]);
 
@@ -375,7 +373,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <TaskDetail />
       <QuickAddDialog />
-      <ReviewNotice />
       <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onDelete={(item) => void deleteItem(item)} />
       <p className="sr-only" role="status" aria-live="polite">
         {status}
@@ -400,9 +397,8 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                 <Button
                   size="sm"
                   variant="primary"
-                  // The deleted row held the focus; it goes to the undo of what was just deleted, not to the page. A notice
-                  // that arrived on its own leaves the focus where it is.
-                  autoFocus={!notice.quiet}
+                  // The deleted row held the focus; it goes to the undo of what was just deleted, not to the page.
+                  autoFocus
                   onClick={() => {
                     notice.undo?.();
                     dismiss();

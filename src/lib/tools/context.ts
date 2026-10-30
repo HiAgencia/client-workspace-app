@@ -1,8 +1,6 @@
 import type { Db } from "@/lib/db/client";
 import type { GoogleEvent, GoogleEventInput } from "@/lib/google/api";
-import type { TakeResult } from "@/lib/chat/usage";
 import type { MailSource } from "@/lib/mail/source";
-import type { ReviewJudge } from "@/lib/review/judge";
 import type { CalendarEvent, EventsFailure } from "./events-source";
 
 export type ToolSource = "manual" | "chat" | "agent";
@@ -36,11 +34,6 @@ export type ToolContext = {
   updatesSince?: string;
   events?: EventsSource;
   calendar?: CalendarWriter;
-  // Where the messages of the accounts come from (the demo's sample rows when absent), and who reads them in the daily
-  // review (the provider's judge when absent).
+  // Where the messages of the accounts come from (the demo's sample rows when absent).
   mail?: MailSource;
-  reviewJudge?: ReviewJudge;
-  // Takes one unit of the person's day before a daily review is read by Meta's model; without it, such a review does not
-  // run.
-  reviewQuota?: () => Promise<TakeResult>;
 };

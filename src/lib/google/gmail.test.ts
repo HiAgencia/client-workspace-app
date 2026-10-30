@@ -1,8 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { splitBatch, type GmailMessage } from "./api";
-import { addressList, bodiesOf, decodeWords, parseAddress, searchFrom, senderSearch, snippetText, toMailMessage, wordsSearch } from "./gmail";
+import { addressList, bodiesOf, candidatesSearch, decodeWords, parseAddress, searchFrom, snippetText, toMailMessage, wordsSearch } from "./gmail";
 
 const encode = (text: string, charset: BufferEncoding = "utf8") => Buffer.from(text, charset).toString("base64url");
+
+// What a wait's search must keep, read from the search it is handed: each word in a group of its own of the sender and
+// the subject, with nothing of Gmail's own search reaching past it, and no capital that could be one of its operators.
+const SINCE = "2026-10-29T00:00:00Z";
+const AFTER = `after:${Date.parse(SINCE) / 1000}`;
+const ARRIVED = "-in:sent -in:draft -in:chats -in:spam -in:trash";
+const HOSTILE = 'in:anywhere) OR {label:x} -(draft) "app review" AND +exact';
+
+function groupsOf(search: typeof candidatesSearch): string {
+  const q = search([HOSTILE], SINCE);
+  expect(q.startsWith(`${ARRIVED} `) && q.endsWith(` ${AFTER}`), "the search keeps what arrived since the wait began").toBe(true);
+  return q.slice(ARRIVED.length + 1, -(AFTER.length + 1));
+}
+
+function everyWordInItsGroup(search: typeof candidatesSearch) {
+  const groups = groupsOf(search);
+  const form = String.raw`(?:from|subject):[\p{L}\p{N}@._-]+`;
+  expect(new RegExp(String.raw`^\(${form}(?: OR ${form})*\)(?: \(${form}(?: OR ${form})*\))*$`, "u").test(groups), "every word stays inside a group of its own").toBe(true);
+}
+
+function noOperatorCapitals(search: typeof candidatesSearch) {
+  const values = groupsOf(search).replace(/\b(?:from|subject):/g, "").replace(/ OR /g, " ");
+  expect(/\p{Lu}/u.test(values), "no capital of a word reaches Gmail, where it could read as an operator").toBe(false);
+}
+
+// A twin: the control, handed a broken search, fails with its own words.
+function failsWith(control: () => void, phrase: string) {
+  let failure: unknown = null;
+  try {
+    control();
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure, `the twin fails «${phrase}»`).not.toBeNull();
+  expect(String((failure as Error).message)).toContain(phrase);
+}
 
 describe("reading a Gmail message", () => {
   it("decodes a header's encoded words, and leaves a plain one as it is", () => {
@@ -57,12 +93,28 @@ describe("reading a Gmail message", () => {
     expect(() => bodiesOf({ mimeType: "text/plain", body: { data: "@@@" } })).toThrow();
   });
 
-  it("searches for some senders with the words each one is named by", () => {
-    expect(senderSearch(["Bayside Bank"])).toBe("from:(Bayside Bank)");
-    expect(senderSearch(["Bayside Bank", "noreply@developers.example"])).toBe("{from:(Bayside Bank) from:(noreply@developers.example)}");
-    // What would change the search's own grouping is left out.
-    expect(senderSearch(['"Ana" (Studio)', "-x", "()"])).toBe("{from:(Ana Studio) from:(x)}");
-    expect(senderSearch(["()"])).toBe("");
+  it("looks for what a task waits for word by word, each in the sender or the subject, since the wait began", () => {
+    expect(candidatesSearch(["Developer Platform"], SINCE)).toBe(`${ARRIVED} (from:developer OR subject:developer) (from:platform OR subject:platform) ${AFTER}`);
+    // An address is one word; a word with accents is looked for with and without them.
+    expect(candidatesSearch(["noreply@developers.example"], SINCE)).toBe(`${ARRIVED} (from:noreply@developers.example OR subject:noreply@developers.example) ${AFTER}`);
+    expect(candidatesSearch(["Aprobación"], SINCE)).toBe(`${ARRIVED} (from:aprobación OR subject:aprobación OR from:aprobacion OR subject:aprobacion) ${AFTER}`);
+    // Words with nothing left to look for search nothing, rather than everything that arrived.
+    expect(candidatesSearch(["() -- {}"], SINCE)).toBe("");
+  });
+
+  it("keeps every word of a wait inside its own group, whatever the person writes", () => {
+    everyWordInItsGroup(candidatesSearch);
+    noOperatorCapitals(candidatesSearch);
+  });
+
+  it("its twins: a search that passes the words as they came, or with their capitals, fails each control", () => {
+    const raw: typeof candidatesSearch = (words, since) => searchFrom(`${ARRIVED} (${words.join(" ")})`, since);
+    failsWith(() => everyWordInItsGroup(raw), "every word stays inside a group of its own");
+    const capitals: typeof candidatesSearch = (words, since) =>
+      searchFrom(`${ARRIVED} ${words.join(" ").replace(/[^\p{L}\p{N}@._\s-]/gu, "").split(/\s+/).filter(Boolean).map((word) => `(from:${word.replace(/^-+/, "")} OR subject:${word.replace(/^-+/, "")})`).join(" ")}`, since);
+    // The capitals' twin keeps the groups whole, so only its own control fails.
+    everyWordInItsGroup(capitals);
+    failsWith(() => noOperatorCapitals(capitals), "no capital of a word reaches Gmail");
   });
 
   it("searches the words a person writes as one group, so none of them reaches past the inbox", () => {

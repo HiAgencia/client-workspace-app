@@ -603,7 +603,7 @@
   margin-top: 0.15rem;
 }
 
-/* ---- Activity: what the review, the chat and an agent did, each with its undo -------------------------------------- */
+/* ---- Activity: what the chat and an agent did, each with its undo ------------------------------------------------- */
 .activity-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -619,15 +619,9 @@
   font-size: var(--text-meta);
   font-weight: 650;
 }
-.activity-undo,
-.activity-undone {
+.activity-undo {
   grid-row: 1 / span 2;
   grid-column: 2;
-}
-.activity-undone {
-  color: var(--muted);
-  font-size: var(--text-meta);
-  font-weight: 600;
 }
 .activity-title {
   justify-self: start;
@@ -658,11 +652,6 @@
 }
 .activity-title-gone {
   text-decoration: none;
-}
-.activity-detail {
-  grid-column: 1;
-  color: var(--muted);
-  font-size: var(--text-meta);
 }
 
 /* ---- Subprojects: one row each, to its page ---------------------------------------------------------------------- */

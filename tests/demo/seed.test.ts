@@ -426,16 +426,16 @@ describe("the demo seed", () => {
       // Every sample is plain design: the sanitizer takes nothing out of it.
       expect(sanitizeMailHtml(row.html).removed).toEqual({ elements: 0, handlers: 0, links: 0, styles: 0 });
     }
-    const waits = await user.client.from("task_mail").select("item_id, account_id, expect_from, status");
+    const waits = await user.client.from("task_mail").select("item_id, account_id, waits_for, dismissed");
     expect((waits.data ?? []).map((row) => ({
       title: (items.data ?? []).find((item) => item.id === row.item_id)!.title,
       account: emailOf.get(row.account_id!),
-      from: row.expect_from,
-      status: row.status,
+      words: row.waits_for,
+      dismissed: row.dismissed,
     })).sort((x, y) => x.title.localeCompare(y.title))).toEqual(
       everyItem()
         .filter((item) => item.waitsFor)
-        .map((item) => ({ title: titleOf(item), account: item.waitsFor!.account, from: item.waitsFor!.from, status: "waiting" }))
+        .map((item) => ({ title: titleOf(item), account: item.waitsFor!.account, words: item.waitsFor!.words, dismissed: [] }))
         .sort((x, y) => x.title.localeCompare(y.title)),
     );
 
@@ -512,8 +512,6 @@ describe("the demo seed", () => {
       ["demo_mail", "id"],
       ["mail_links", "id"],
       ["task_mail", "item_id"],
-      ["daily_reviews", "id"],
-      ["review_actions", "id"],
       ["chat_messages", "id"],
       ["preferences", "owner_id"],
     ] as const;

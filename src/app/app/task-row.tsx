@@ -90,14 +90,11 @@ export function priorityName(priority: number | null): string {
   return PRIORITIES.find((option) => option.value === String(priority ?? 4))?.label ?? "Low";
 }
 
-// The mail a task waits for (`taskMailSchema`): still waiting, or a message arrived —whether it did what the task waits
-// for or not, which its detail says—. A task that waits for none says nothing.
-export function mailState(mail: unknown): "waiting" | "arrived" | null {
-  if (!mail || typeof mail !== "object") return null;
-  const status = (mail as { status?: unknown }).status;
-  if (status === "waiting") return "waiting";
-  if (status === "met" || status === "not_met") return "arrived";
-  return null;
+// Whether a task waits for mail (`taskMailSchema`): its row says so, and its detail shows the possible replies. A row does
+// not read Gmail: which message answers it is the person's to decide in the detail. A task that waits for none says
+// nothing.
+export function mailState(mail: unknown): "waiting" | null {
+  return mail && typeof mail === "object" ? "waiting" : null;
 }
 
 // A text that may carry links over its words: the words read as text and the link opens in a new tab.
@@ -611,7 +608,7 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
           {task.notes > 0 && <span className="task-notes">{count(task.notes, "note", "notes")}</span>}
           {mail && (
             <span className="task-mail" data-mail={mail}>
-              {mail === "arrived" ? "Mail arrived" : "Waiting for mail"}
+              Waiting for mail
             </span>
           )}
           {task.source !== "manual" && <span className="task-source">{sourceName(task.source, task.agentLabel)}</span>}

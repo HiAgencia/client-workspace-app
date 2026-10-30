@@ -12,14 +12,14 @@ import type { NoteRow } from "@/lib/tools/notes";
 import type { TasksView } from "@/lib/tools/tasks";
 import { buttonClass } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
-import { BoxEmpty, BoxFailed, BoxWait, useBoxRead, useBoxSettled, useToolRead, type BoxRead } from "./boxes";
+import { BoxEmpty, BoxFailed, BoxWait, useBoxSettled, useToolRead, type BoxRead } from "./boxes";
 import { get, post, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { PathText } from "./item-parts";
 import { subjectOf } from "./mail/subject";
-import { branchOf } from "./place-filters";
+import type { TaskReplies } from "./task-replies";
 import { QuickAddInline } from "./quick-add";
 import { NewNode } from "./side-nav";
-import { dayHeading, dayName, InlineText, openTaskDetail, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, type TaskData } from "./task-row";
+import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
 // The boxes the Overview and a client's or a project's page compose, each reading its own data for the place the page
@@ -45,12 +45,6 @@ export function readPlace(value: string | null, tree: TreeNode[] | null): Place 
 
 export function placeValue(place: Place): string | null {
   return place.kind === "all" ? null : place.kind === "general" ? "general" : place.id;
-}
-
-function inPlace(place: Place, tree: TreeNode[] | null, nodeId: string | null): boolean {
-  if (place.kind === "all") return true;
-  if (place.kind === "general") return nodeId === null;
-  return nodeId !== null && branchOf(tree, place.id).has(nodeId);
 }
 
 // ---- The tasks' groups: Overdue, Today, Upcoming day by day, and No date ----------------------------------------------
@@ -433,7 +427,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   );
 }
 
-// ---- Mail: first what a task waits for, then what is unread -------------------------------------------------------
+// ---- Mail: first what arrived for the tasks that wait for mail, then what is unread --------------------------------
 
 export type MailList = {
   accounts: Array<{ id: string; email: string; isDemo: boolean; status: string; nodeId: string | null }>;
@@ -455,11 +449,55 @@ function mailWhen(iso: string, now: Day): string {
   return day === now ? time : dayName(day, now);
 }
 
-export function MailBoxContent({ read, now, place, connectHref }: { read: BoxRead<MailList>; now: Day; place: Place; connectHref: string }) {
+const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
+
+// What the Mail box shows of one account, or of every account (null): first the newest possible reply of each task that
+// waits for mail —the person decides in the task which one answers it—, then the messages linked to an open task, then
+// what is unread, each message once. The account filter counts with it, so each option says what the box would show.
+export function mailBoxRows(mail: MailList, replies: TaskReplies[], account: string | null): Array<{ message: MailRow; label: string | null }> {
+  const inAccount = (message: MailRow) => account === null || message.accountId === account;
+  const seen = new Set<string>();
+  const rows: Array<{ message: MailRow; label: string | null }> = [];
+  for (const entry of replies) {
+    const own = entry.replies.filter(inAccount);
+    // Two tasks may wait with words one message holds: the second shows its next reply.
+    const shown = own.find((message) => !seen.has(mailKey(message)));
+    if (!shown) continue;
+    seen.add(mailKey(shown));
+    const more = entry.more.some((id) => account === null || id === account);
+    rows.push({ message: shown, label: `${count(own.length, "possible reply", "possible replies")}${more ? " and more" : ""} for “${inlinePlain(entry.task.title)}”` });
+  }
+  for (const message of [...mail.groups.forTasks.messages, ...mail.groups.unread.messages]) {
+    if (!inAccount(message) || seen.has(mailKey(message))) continue;
+    seen.add(mailKey(message));
+    rows.push({ message, label: null });
+  }
+  return rows;
+}
+
+export function MailBoxContent({
+  read,
+  replies,
+  account,
+  now,
+  place,
+  connectHref,
+}: {
+  read: BoxRead<MailList>;
+  replies: BoxRead<{ tasks: TaskReplies[] }>;
+  // The account the box shows, or every account of its place.
+  account: string | null;
+  now: Day;
+  place: Place;
+  connectHref: string;
+}) {
   const { data, error, stale, retry } = read;
-  useBoxSettled(read.settled);
+  useBoxSettled(read.settled && replies.settled);
   if (!data) return error ? <BoxFailed what="The mail" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the mail…" rows={3} />;
-  const rows = [...data.groups.forTasks.messages, ...data.groups.unread.messages.filter((message) => !data.groups.forTasks.messages.some((other) => other.id === message.id))].slice(0, MAIL_ROWS);
+  const rows = mailBoxRows(data, replies.data?.tasks ?? [], account).slice(0, MAIL_ROWS);
+  const failures = [...data.failures, ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures).filter((failure) => account === null || failure.accountId === account)].filter(
+    (failure, index, all) => all.findIndex((other) => other.accountId === failure.accountId) === index,
+  );
   const body = () => {
     if (data.accounts.length === 0) {
       return place.kind === "general" ? (
@@ -478,7 +516,7 @@ export function MailBoxContent({ read, now, place, connectHref }: { read: BoxRea
     }
     if (rows.length === 0) {
       return (
-        <BoxEmpty text="Nothing unread, and no task waits for a message." reason="nothing-unread">
+        <BoxEmpty text="Nothing unread, and nothing arrived for a task that waits for mail." reason="nothing-unread">
           <Link className={buttonClass({ size: "sm" })} href="/app/mail">
             <span className="btn-label">Show all mail</span>
           </Link>
@@ -488,10 +526,10 @@ export function MailBoxContent({ read, now, place, connectHref }: { read: BoxRea
     return (
       <>
         <ul className="mail-list">
-          {rows.map((message) => {
-            const waiting = message.tasks.find((task) => task.status === "open") ?? message.tasks[0];
+          {rows.map(({ message, label }) => {
+            const linked = message.tasks.find((task) => task.status === "open") ?? message.tasks[0];
             return (
-              <li key={`${message.accountId}:${message.id}`}>
+              <li key={mailKey(message)}>
                 <Link className="mail-row" href={`/app/mail?account=${message.accountId}&message=${encodeURIComponent(message.id)}`} data-unread={message.unread || undefined}>
                   <span className="mail-from">{message.from.name || message.from.email}</span>
                   <span className="mail-side">
@@ -500,8 +538,10 @@ export function MailBoxContent({ read, now, place, connectHref }: { read: BoxRea
                   </span>
                   <span className="mail-subject">{subjectOf(message)}</span>
                   <span className="mail-for">
-                    {waiting ? (
-                      `For: ${inlinePlain(waiting.title)}`
+                    {label ? (
+                      label
+                    ) : linked ? (
+                      `For: ${inlinePlain(linked.title)}`
                     ) : message.place ? (
                       <PlaceName path={message.place.path} color={message.place.color} />
                     ) : (
@@ -522,7 +562,8 @@ export function MailBoxContent({ read, now, place, connectHref }: { read: BoxRea
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
       {error && <BoxFailed what="The mail" message={error} kept onRetry={retry} />}
-      {data.failures.map((failure) => (
+      {replies.error && <BoxFailed what="The possible replies of the tasks" message={replies.error} kept={replies.data !== null} onRetry={replies.retry} />}
+      {failures.map((failure) => (
         <p key={failure.accountId} className="inline-note" data-tone="alert">
           {failure.accountEmail} could not be read: {failure.reason}
         </p>
@@ -659,12 +700,8 @@ function AddNote({ node }: { node: string | null }) {
   );
 }
 
-// ---- Activity: what the daily review, the chat and an agent did, each with its undo --------------------------------
+// ---- Activity: what the chat and an agent did, each with its undo ----------------------------------------------------
 
-// What a run of the review did, each action with its task as it reads now (null once the task is gone).
-type ReviewTask = { id: string; title: string; nodeId: string | null; path: string | null; status: "open" | "done" };
-type ReviewAction = { id: string; reviewId: string; taskId: string; kind: "mail_status" | "complete"; after: Record<string, unknown>; createdAt: string; undoneAt: string | null; task: ReviewTask | null };
-type Reviews = { reviews: Array<{ id: string; day: string; actions: ReviewAction[] }> };
 type Updates = { created: Item[]; changed: Item[]; completed: Item[]; deleted: Item[] };
 // A version: the item's versioned fields as they were before the change that left it, and who made that change.
 type Snapshot = { title: string; body: string | null; status: "open" | "done"; priority: number | null; due_on: string | null; due_time: string | null; parent_item_id: string | null };
@@ -675,12 +712,9 @@ type Entry = {
   at: string;
   what: string;
   title: string;
-  detail?: string | null;
-  done: boolean;
   undo: () => Promise<{ ok: boolean; message?: string }>;
+  // A deleted item is not opened: its undo brings it back.
   open?: () => void;
-  // The item it was about is no longer there.
-  gone?: boolean;
 };
 
 const ACTIVITY_DAYS = 7;
@@ -688,54 +722,20 @@ const FIRST_SHOWN = 5;
 
 function actor(source: Item["source"], label: string | null): string {
   if (source === "chat") return "The chat";
-  if (source === "review") return "The daily review";
   return label ? `The agent “${label}”` : "An agent";
 }
 
 const TYPE_WORD: Record<Item["type"], string> = { task: "a task", note: "a note", decision: "a decision" };
 
 export function ActivityBoxContent({ place }: { place: Place }) {
-  const { tree, openItem, saving, chat } = useWorkspace();
+  const { openItem, saving, chat } = useWorkspace();
   const [all, setAll] = useState(false);
   const [since] = useState(() => new Date(Date.now() - ACTIVITY_DAYS * 86_400_000));
   const sinceIso = since.toISOString();
-  const sinceDay = sinceIso.slice(0, 10);
-  const reviews = useBoxRead<Reviews>(() => get<Reviews>(`/api/review?since=${sinceDay}`), `reviews:${sinceDay}`);
   const updates = useToolRead<Updates>("get_updates_since", { since: sinceIso, ...(place.kind === "node" ? { node: place.id } : {}) });
 
   const entries = useMemo(() => {
     const list: Entry[] = [];
-    for (const run of reviews.data?.reviews ?? []) {
-      const byTask = new Map<string, ReviewAction[]>();
-      for (const action of run.actions) byTask.set(action.taskId, [...(byTask.get(action.taskId) ?? []), action]);
-      for (const [taskId, actions] of byTask) {
-        // The task as the run's read gives it; one that is gone keeps its entry, saying so.
-        const task = actions.find((action) => action.task)?.task ?? null;
-        if (task && !inPlace(place, tree, task.nodeId)) continue;
-        if (!task && place.kind !== "all") continue;
-        const completed = actions.some((action) => action.kind === "complete");
-        const sentence = actions.map((action) => action.after.sentence).find((value): value is string => typeof value === "string");
-        const open = actions.filter((action) => !action.undoneAt);
-        list.push({
-          key: `review:${run.id}:${taskId}`,
-          at: actions.map((action) => action.createdAt).sort().at(-1)!,
-          what: completed ? "The daily review completed a task" : "The daily review read the mail of a task",
-          title: task?.title ?? "A task that is no longer here",
-          detail: sentence,
-          done: open.length === 0,
-          // What it completed opens again first, then the mail's state goes back.
-          undo: async () => {
-            for (const action of [...open].sort((a, b) => Number(b.kind === "complete") - Number(a.kind === "complete"))) {
-              const answer = await post(`/api/review/actions/${action.id}/undo`, {});
-              if (!answer.ok) return answer;
-            }
-            return { ok: true };
-          },
-          open: task ? () => openTaskDetail({ id: task.id, task: { id: task.id, title: task.title, nodeId: task.nodeId, path: task.path, status: task.status } }) : undefined,
-          gone: !task,
-        });
-      }
-    }
     if (updates.data) {
       const kinds = [
         ["created", "added"],
@@ -750,7 +750,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
           const as = changedByOther ? "changed" : kind;
           const who = as === "created" ? item.source : (item.changedSource ?? item.source);
           const label = as === "created" ? item.agentLabel : (item.changedAgentLabel ?? null);
-          // What the person did by hand is theirs to remember; the review's own lives in its runs.
+          // What the person did by hand is theirs to remember.
           if (who !== "chat" && who !== "agent") continue;
           if (place.kind === "general" && item.nodeId !== null) continue;
           list.push({
@@ -758,7 +758,6 @@ export function ActivityBoxContent({ place }: { place: Place }) {
             at: as === "created" ? item.createdAt : as === "completed" ? (item.completedAt ?? item.updatedAt ?? item.createdAt) : (item.updatedAt ?? item.createdAt),
             what: `${actor(who, label)} ${changedByOther ? "changed" : verb} ${TYPE_WORD[item.type]}`,
             title: item.title,
-            done: false,
             undo: () => undoUpdate(as, item, who, label),
             open: kind === "deleted" ? undefined : () => openItem(item),
           });
@@ -766,21 +765,19 @@ export function ActivityBoxContent({ place }: { place: Place }) {
       }
     }
     return list.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [reviews.data, updates.data, place, tree, openItem]);
+  }, [updates.data, place, openItem]);
 
-  const failed = reviews.error ?? updates.error;
-  const loading = (!reviews.data && !reviews.error) || (!updates.data && !updates.error);
-  useBoxSettled(!loading || (reviews.settled && updates.settled && Boolean(failed)));
-  if (!reviews.data && !updates.data) {
-    if (failed) return <BoxFailed what="The activity" message={failed} kept={false} onRetry={() => (reviews.retry(), updates.retry())} />;
-    return <BoxWait what="Reading what the review, the chat and the agents did…" rows={3} />;
+  const failed = updates.error;
+  useBoxSettled(updates.settled);
+  if (!updates.data) {
+    if (failed) return <BoxFailed what="The activity" message={failed} kept={false} onRetry={updates.retry} />;
+    return <BoxWait what="Reading what the chat and the agents did…" rows={3} />;
   }
-  if (loading && entries.length === 0) return <BoxWait what="Reading what the review, the chat and the agents did…" rows={3} />;
   return (
     <div className="box-read" data-stale={updates.stale || undefined}>
-      {failed && <BoxFailed what="Part of the activity" message={failed} kept onRetry={() => (reviews.retry(), updates.retry())} />}
+      {failed && <BoxFailed what="The activity" message={failed} kept onRetry={updates.retry} />}
       {entries.length === 0 ? (
-        <BoxEmpty text={`Nothing done by the daily review, the chat, or an agent in the last ${count(ACTIVITY_DAYS, "day", "days")}.`} reason="no-activity">
+        <BoxEmpty text={`Nothing done by the chat or an agent in the last ${count(ACTIVITY_DAYS, "day", "days")}.`} reason="no-activity">
           <Button size="sm" onClick={() => chat.setOpen(true)}>
             Open the chat
           </Button>
@@ -791,23 +788,16 @@ export function ActivityBoxContent({ place }: { place: Place }) {
             {entries.slice(0, all ? entries.length : FIRST_SHOWN).map((entry) => (
               <li key={entry.key} className="activity-entry" data-activity={entry.key.split(":")[0]}>
                 <span className="activity-what">{entry.what}</span>
-                {entry.done ? (
-                  <span className="activity-undone">Undone</span>
-                ) : (
-                  <Button size="sm" variant="quiet" className="activity-undo" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
-                    Undo
-                  </Button>
-                )}
+                <Button size="sm" variant="quiet" className="activity-undo" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
+                  Undo
+                </Button>
                 {entry.open ? (
                   <button type="button" className="activity-title" onClick={entry.open}>
                     {inlinePlain(entry.title)}
                   </button>
                 ) : (
-                  <span className="activity-title activity-title-gone" data-gone={entry.gone || undefined}>
-                    {inlinePlain(entry.title)}
-                  </span>
+                  <span className="activity-title activity-title-gone">{inlinePlain(entry.title)}</span>
                 )}
-                {entry.detail && <span className="activity-detail">{entry.detail}</span>}
               </li>
             ))}
           </ol>

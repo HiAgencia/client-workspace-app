@@ -14,7 +14,8 @@ export const ITEM_COLUMNS =
 export const itemTypes = ["task", "note", "decision"] as const;
 export type ItemType = (typeof itemTypes)[number];
 
-// Who wrote: by hand, the chat, an agent, or the daily review (which only completes).
+// Who wrote: by hand, the chat, or an agent. `review` is what the daily review that used to complete tasks left in their
+// history; it stays readable until those rows are rewritten and the value leaves the enum.
 const sources = ["manual", "chat", "agent", "review"] as const;
 
 export const itemSchema = z.object({

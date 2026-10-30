@@ -8,8 +8,10 @@ import { inlinePlain } from "@/lib/inline-links";
 
 type Previous = { title: string; body: string | null; type: "task" | "note" | "decision"; priority: number | null; dueOn: string | null; dueTime: string | null; status: "open" | "done" };
 type Moved = { nodeId: string | null; parentId: string | null };
-type TaskMail = { accountId: string | null; expectFrom: string | null };
+type TaskMail = { accountId: string | null; waitsFor: string };
 type MailLink = { accountId: string; messageId: string; taskId: string | null; nodeId: string | null };
+// What `complete_task` linked: the reply, and whether this call linked it.
+type ReplyLink = { accountId: string; messageId: string; created: boolean };
 type EventLink = { itemId: string; eventId: string | null; accountId: string | null; calendarId: string | null; googleEventId: string | null };
 
 // What a write's output carries: its item, or the title it returns for its card, and what it replaced.
@@ -24,14 +26,19 @@ export type WriteOutput = {
   changed?: Array<{ id: string; title: string; previousDueOn: string }>;
   // `reorder_items`: each item with its title and the place it held.
   items?: Array<{ id: string; title: string; position: number; previous: number }>;
-  // `link_task_event`, `unlink_task_event`, `link_mail`, `set_task_mail`: the title of what was written.
+  // `link_task_event`, `unlink_task_event`, `link_mail`, `set_task_mail`, `dismiss_reply`: the title of what was written.
   title?: string;
-  // `link_mail`'s link, or the event link `link_task_event` wrote and `unlink_task_event` took off (null: it was in none).
-  link?: MailLink | EventLink | null;
+  // `link_mail`'s link, the event link `link_task_event` wrote and `unlink_task_event` took off (null: it was in none), or
+  // the reply `complete_task` linked.
+  link?: MailLink | EventLink | ReplyLink | null;
   removed?: boolean;
   created?: boolean;
   task?: string;
   mail?: TaskMail | null;
+  // `complete_task`: the decision that holds the result.
+  decision?: { id: string; title: string };
+  // `dismiss_reply`: the reply it ruled out or took back.
+  reply?: { account: string; id: string; dismissed: boolean };
 };
 
 type Undo = () => Promise<{ ok: boolean; message?: string }>;
@@ -95,17 +102,43 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
         }
       : null;
   },
-  // What it waited for goes back: none, or the account and the sender it had (its state starts waiting again).
+  // What it waited for goes back: none, or the account and the words it had.
   set_task_mail: (o) =>
     o.task && o.title
       ? {
-          what: o.mail ? `${quoted(o.title)} waits for mail` : `${quoted(o.title)} no longer waits for mail`,
+          what: o.mail ? `${quoted(o.title)} waits for mail with “${o.mail.waitsFor}”` : `${quoted(o.title)} no longer waits for mail`,
           undo: () =>
             o.previous
-              ? tool("set_task_mail", { task: o.task!, waiting: true, account: (o.previous as TaskMail).accountId, from: (o.previous as TaskMail).expectFrom })
+              ? tool("set_task_mail", { task: o.task!, waiting: true, account: (o.previous as TaskMail).accountId, words: (o.previous as TaskMail).waitsFor })
               : tool("set_task_mail", { task: o.task!, waiting: false }),
         }
       : null,
+  // A ruled-out reply comes back among the possible ones, and one taken back is ruled out again.
+  dismiss_reply: (o) => {
+    const reply = o.reply;
+    if (!o.task || !o.title || !reply) return null;
+    return {
+      what: reply.dismissed ? `Ruled out a reply to ${quoted(o.title)}` : `Took back a ruled-out reply to ${quoted(o.title)}`,
+      undo: () => tool("dismiss_reply", { task: o.task!, account: reply.account, id: reply.id, dismissed: !reply.dismissed }),
+    };
+  },
+  // The task opens again, its result goes, and the reply comes off it when this closing linked it.
+  complete_task: (o) => {
+    const reply = o.link as ReplyLink | null | undefined;
+    if (!o.item || !o.decision) return null;
+    const task = o.item;
+    const decision = o.decision;
+    return {
+      what: `Closed ${quoted(task.title)}: ${decision.title}`,
+      undo: async () => {
+        const reopened = await tool("update_item", { id: task.id, status: "open" });
+        if (!reopened.ok) return reopened;
+        const gone = await tool("delete_item", { id: decision.id });
+        if (!gone.ok) return gone;
+        return reply?.created ? tool("unlink_mail", { account: reply.accountId, id: reply.messageId, task: task.id }) : { ok: true };
+      },
+    };
+  },
 };
 
 function created(verb: string, output: WriteOutput): Card {

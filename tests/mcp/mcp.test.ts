@@ -1,6 +1,6 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { chatTools } from "@/lib/chat/tools";
-import { agentTools as registry, tools as everyTool } from "@/lib/tools/registry";
+import { tools as registry } from "@/lib/tools/registry";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashAgentToken, newAgentToken } from "@/lib/agent-token";
 import { mcpEndpoint } from "@/lib/mcp/server";
@@ -81,14 +81,11 @@ describe("the MCP endpoint", () => {
     await client.close();
   });
 
-  it("does not publish the person's own daily review, which the chat does", async () => {
+  it("publishes the same tools the chat does, the replies of a task that waits for mail among them", async () => {
     const client = await connect(token);
-    const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).not.toContain("run_daily_review");
-    expect(everyTool.map((t) => t.name)).toContain("run_daily_review");
-    expect(Object.keys(chatTools({ db: user!.client, ownerId: user!.id, source: "chat" }))).toContain("run_daily_review");
-    // Nothing else the MCP publishes is the chat's own.
-    expect(registry.filter((t) => t.chatOnly)).toEqual([]);
+    const names = (await client.listTools()).tools.map((t) => t.name).sort();
+    expect(names).toEqual(Object.keys(chatTools({ db: user!.client, ownerId: user!.id, source: "chat" })).sort());
+    expect(names).toEqual(expect.arrayContaining(["set_task_mail", "list_task_replies", "dismiss_reply", "complete_task"]));
     await client.close();
   });
 
