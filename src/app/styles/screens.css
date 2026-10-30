@@ -564,11 +564,6 @@ fieldset.stack {
   max-width: 82rem;
   margin-inline: auto;
 }
-@media (width >= 60rem) {
-  .landing {
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  }
-}
 .landing-copy {
   display: flex;
   flex-direction: column;
