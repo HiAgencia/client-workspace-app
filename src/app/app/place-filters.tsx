@@ -2,6 +2,7 @@
 
 import { Select } from "@/components/ui/select";
 import type { TreeNode } from "./client-api";
+import { count } from "./count";
 
 // The two filters a page of the workspace's calendar and mail carries, one per axis: the place —everything, General, a
 // client or a project— and the account. Each option says how much it brings, and one that would bring nothing is not
@@ -52,7 +53,7 @@ export const MESSAGES: FilterUnit = { one: "message", many: "messages" };
 export const ITEMS: FilterUnit = { one: "item", many: "items" };
 export const EVENTS: FilterUnit = { one: "event", many: "events" };
 
-const withCount = (label: string, n: number, unit: FilterUnit) => `${label} (${n} ${n === 1 ? unit.one : unit.many})`;
+export const withCount = (label: string, n: number, unit: FilterUnit) => `${label} (${count(n, unit.one, unit.many)})`;
 
 export function PlaceFilter({
   value,
