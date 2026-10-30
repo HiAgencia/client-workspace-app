@@ -159,7 +159,10 @@ and the screens. When the code changes a decision described here, this document 
   spare— is taken over in one statement, as a worker that died, and one that keeps beating is another call's, however
   long its attempt has been going (`attempt_started_at` is when that attempt began). So of two calls at once one resumes
   it and the other answers `skipped: "running"`; a stop clears both marks, so the next call picks it up at once, and a
-  stop that cannot be recorded is logged and said in the answer. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
+  stop that cannot be recorded is logged and said in the answer. Each beat and the attempt's end move `heartbeat_at`
+  from the attempt's own last beat in one statement, one beat at a time: an attempt whose run another call took over
+  finds a beat that is not its own, and from then on its tools refuse, its end is not written over the other call's,
+  and it answers `skipped: "running"`. A run read by Meta's model takes a unit of the person's day first (§The cap); without the cap
   it does not run. The
   simulated judge follows fixed rules —the sender, and the words of the subject and the text: a refusal first, then an
   approval—; Meta's judge (`MODEL_PROVIDER=meta`) reads the same data with a prompt that fences the messages as data. A

@@ -421,10 +421,11 @@ describe("a review that keeps beating", () => {
   });
 
   it("a run whose beat stopped is taken as cut and resumed, which is the case of a worker that died", async () => {
+    // The attempt is recent and only its beat is old: the beat decides, not how long the attempt has been going.
     const stale = new Date(Date.now() - 10 * 60_000).toISOString();
     const { data, error } = await user!.client
       .from("daily_reviews")
-      .insert({ day: CONTROL, instruction: "Review my day", requested: false, provider: "simulated", task_ids: [], attempt_started_at: stale, heartbeat_at: stale })
+      .insert({ day: CONTROL, instruction: "Review my day", requested: false, provider: "simulated", task_ids: [], attempt_started_at: new Date().toISOString(), heartbeat_at: stale })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -432,6 +433,72 @@ describe("a review that keeps beating", () => {
     if (!taken.ok) throw new Error(taken.message);
     expect(taken).toMatchObject({ ran: true, review: { id: data!.id } });
     expect(taken.review!.finishedAt).not.toBeNull();
+  });
+
+  it("an attempt whose run another call took over as cut writes nothing more, and the other call's end stands", async () => {
+    const day = dayPlus(5);
+    // A task of its own that still waits for its message: the earlier tests already decided the other two.
+    const project = await user!.client.from("nodes").select("id").eq("name", "Beat project").single();
+    const account = await user!.client.from("google_accounts").select("id").eq("email", "team@beatco.example").single();
+    const waiting = await user!.client.from("items").insert({ owner_id: user!.id, node_id: project.data!.id, type: "task", title: "Wait for the catering menu" }).select("id").single();
+    await user!.client.from("task_mail").insert({ item_id: waiting.data!.id, expect_from: "Caterer" });
+    const planted = await serviceClient()
+      .from("demo_mail")
+      .insert({
+        owner_id: user!.id,
+        account_id: account.data!.id,
+        from_name: "Caterer",
+        from_email: "menu@caterer.example",
+        subject: "Menu ready",
+        snippet: "The catering menu is ready.",
+        text_body: "The catering menu is ready.",
+        html: "<p>The catering menu is ready.</p>",
+        received_at: new Date(Date.now() + 60_000).toISOString(),
+      });
+    expect(planted.error).toBeNull();
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let began: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      began = resolve;
+    });
+    let lateAnswer: { ok: boolean; message: string } | null = null;
+    const stuck: ReviewJudge = {
+      provider: "simulated",
+      async review(tasks, tools, context) {
+        await context.beat?.();
+        began();
+        await held;
+        // A write after the run became another call's, on a task the run reads with the message that answers it.
+        const target = tasks.find((task) => task.id === waiting.data!.id);
+        lateAnswer = target?.messages[0]
+          ? await tools.writeMailStatus({ task: target.id, status: "met", sentence: "The menu is ready.", message: target.messages[0].id })
+          : { ok: true, message: "the waiting task was not in the run, so nothing was tried" };
+      },
+    };
+    const first = runDailyReview(as(user), { today: day, zone: ZONE, judge: stuck });
+    await started;
+    const row = await user!.client.from("daily_reviews").select("id").eq("day", day).single();
+    const id = row.data!.id;
+    // Its beat stops, as a worker that died: another call takes the run as cut and finishes it, writing nothing.
+    const aged = await user!.client.from("daily_reviews").update({ heartbeat_at: new Date(Date.now() - 10 * 60_000).toISOString() }).eq("id", id);
+    expect(aged.error).toBeNull();
+    const second = await runDailyReview(as(user), { today: day, zone: ZONE, judge: { provider: "simulated", async review() {} } });
+    if (!second.ok) throw new Error(second.message);
+    expect(second).toMatchObject({ ran: true, review: { id } });
+    expect(second.review!.finishedAt).not.toBeNull();
+    release();
+    const done = await first;
+    if (!done.ok) throw new Error(done.message);
+    expect(done).toMatchObject({ ran: false, skipped: "running", review: { id } });
+    expect(lateAnswer).toMatchObject({ ok: false });
+    // No action of the first attempt after it lost the run, and the end the second call wrote stands as it wrote it.
+    const actions = await user!.client.from("review_actions").select("id").eq("review_id", id);
+    expect(actions.data).toEqual([]);
+    const after = await user!.client.from("daily_reviews").select("finished_at, failures").eq("id", id).single();
+    expect(after.data).toEqual({ finished_at: second.review!.finishedAt, failures: second.review!.failures });
   });
 });
 

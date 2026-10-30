@@ -94,7 +94,8 @@ const RUN_COLUMNS = "id, day, instruction, requested, provider, task_ids, create
 // A run with no end writes its heartbeat as it walks its tasks (`heartbeat_at`), and the next call decides with it: a run
 // whose last beat is older than this floor is taken as cut —a worker that died— and resumed, and one that keeps beating
 // is another call's, however long its attempt has been going. The floor is one task's read with room to spare: a live run
-// beats again well inside it. A stop clears the beat, so the next call resumes at once.
+// beats again well inside it. A stop clears the beat, so the next call resumes at once. An attempt whose run was taken
+// over finds a beat that is not its own and stops writing, its end included (`toolsFor`, `finish`).
 const HEARTBEAT_FLOOR_MS = 5 * 60_000;
 
 function toAction(row: ActionRow, task: ReviewAction["task"] = null): ReviewAction {
@@ -242,28 +243,64 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
   return ok({ taskIds: rows.map((row) => row.id), waiting, failures: [...new Set(failures.map((failure) => failure.step))] });
 }
 
+// The judge's stop when the run became another call's: its walk ends there, and nothing of this attempt is written after.
+class TakenOver extends Error {
+  constructor() {
+    super("the review was taken over by another call");
+  }
+}
+
+// What an attempt holds of its run: the beat it wrote last. A write of the attempt —a beat, its end— goes through only
+// while the row still holds that beat: another call that took the run over as cut wrote its own, and from then on the
+// row is not this attempt's.
+type Attempt = { lastBeat: string };
+
 // The two tools, bound to one run: each writes only a task the run looked at, records what was there before in the same
 // statement, and does nothing when the change is already the state. A task is completed only after this run wrote it as
 // met, citing the message that does what it waits for.
-function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
+function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[], attempt: Attempt) {
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const met = new Set<string>();
   const rows: ActionRow[] = [];
   const failures: string[] = [];
+  let lost = false;
   const failed = (task: ReviewTask, what: string, cause: string) => {
     console.error(`daily review: ${what} ${task.id}: ${cause}`);
     failures.push(`${what} “${task.title}”`);
     return { ok: false, message: `${what} failed: try it again later` };
   };
-  // The run's heartbeat: the judge writes it as it walks its tasks, and every write of a tool counts as one. A beat that
+  // The run's heartbeat: the judge writes it as it walks its tasks, and every write of a tool counts as one. It moves from
+  // the attempt's last beat to a new one in one statement, one beat at a time, so two tools at once never read each
+  // other's beat as a takeover. No row moved means another call took the run over: the attempt is lost. A beat that
   // cannot be written is said in the log and the run goes on: it only risks another call taking it as cut later.
-  const beat = async () => {
-    const { error } = await ctx.db.from("daily_reviews").update({ heartbeat_at: new Date().toISOString() }).eq("id", run.id).is("finished_at", null);
-    if (error) console.error(`daily review: the heartbeat of ${run.id} could not be written: ${error.message}`);
+  let queue: Promise<boolean> = Promise.resolve(true);
+  const beatOnce = async () => {
+    if (lost) return false;
+    const next = new Date().toISOString();
+    const { data, error } = await ctx.db
+      .from("daily_reviews")
+      .update({ heartbeat_at: next })
+      .eq("id", run.id)
+      .eq("heartbeat_at", attempt.lastBeat)
+      .is("finished_at", null)
+      .select("id");
+    if (error) {
+      console.error(`daily review: the heartbeat of ${run.id} could not be written: ${error.message}`);
+      return true;
+    }
+    if ((data ?? []).length === 0) {
+      lost = true;
+      console.error(`daily review: ${run.id} was taken over by another call; this attempt stops writing`);
+      return false;
+    }
+    attempt.lastBeat = next;
+    return true;
   };
+  const beat = () => (queue = queue.then(beatOnce, beatOnce));
+  const LOST = { ok: false, message: "this review is now another call's: stop here" };
   const tools: ReviewTools = {
     async writeMailStatus({ task, status, sentence, message }) {
-      await beat();
+      if (!(await beat())) return LOST;
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       // A state that says a message did or did not do what the task waits for names that message.
@@ -308,7 +345,7 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "written" };
     },
     async completeTask({ task }) {
-      await beat();
+      if (!(await beat())) return LOST;
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       if (!met.has(task) || !target.mail.decidedMessageId) return { ok: false, message: "complete a task only once its mail is written as met" };
@@ -320,20 +357,31 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "completed" };
     },
   };
-  return { tools, rows, failures, beat };
+  // The judge's beat stops its walk once the run is another call's.
+  const judgeBeat = async () => {
+    if (!(await beat())) throw new TakenOver();
+  };
+  return { tools, rows, failures, beat: judgeBeat, lost: () => lost };
 }
 
 // The end of an attempt: finished, or stopped with its failures counted and its marks cleared —the attempt's and the
-// beat's—, so the next call resumes it.
-async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean) {
+// beat's—, so the next call resumes it. Only while the run is still the attempt's: the end of a run another call took
+// over is that call's to write, and `run` comes back null.
+async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean, attempt: Attempt) {
   const { data, error } = await ctx.db
     .from("daily_reviews")
     .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null, heartbeat_at: null })
     .eq("id", run.id)
+    .eq("heartbeat_at", attempt.lastBeat)
     .select(RUN_COLUMNS)
-    .single();
+    .maybeSingle();
   if (error) return dbFail("closing the review", error);
-  return ok({ run: toRun(data as RunRow) });
+  return ok({ run: data ? toRun(data as RunRow) : null });
+}
+
+// The answer of an attempt whose run another call took over: that call runs it, and what it does is its answer.
+function takenOver(run: ReviewRun) {
+  return ok({ review: run, ran: false, skipped: "running" as const, actions: [], failures: [] });
 }
 
 export async function runDailyReview(
@@ -346,6 +394,8 @@ export async function runDailyReview(
   const prefs = await readPreferences(ctx.db, ctx.ownerId);
   if (!prefs.ok) return fail("db_error", `reading the preferences: ${prefs.message}`);
   let resumed: ReviewRun | null = null;
+  // This call's attempt, from the beat it writes when it takes or starts the run.
+  const attempt: Attempt = { lastBeat: new Date().toISOString() };
   if (!requested) {
     const { data, error } = await ctx.db.from("daily_reviews").select(RUN_COLUMNS).eq("owner_id", ctx.ownerId).eq("day", input.today).eq("requested", false).maybeSingle();
     if (error) return dbFail("reading the day's review", error);
@@ -357,6 +407,7 @@ export async function runDailyReview(
       let claimed: RunRow | null = null;
       if (!run.finishedAt) {
         const now = new Date().toISOString();
+        attempt.lastBeat = now;
         const cutoff = new Date(Date.now() - HEARTBEAT_FLOOR_MS).toISOString();
         const claim = await ctx.db
           .from("daily_reviews")
@@ -393,9 +444,10 @@ export async function runDailyReview(
   const instruction = input.instruction ?? prefs.preferences.dailyReviewInstruction;
   let run = resumed;
   if (!run) {
+    attempt.lastBeat = new Date().toISOString();
     const { data: inserted, error } = await ctx.db
       .from("daily_reviews")
-      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds, heartbeat_at: new Date().toISOString() })
+      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds, heartbeat_at: attempt.lastBeat })
       .select(RUN_COLUMNS)
       .single();
     if (error?.code === "23505") {
@@ -405,23 +457,28 @@ export async function runDailyReview(
     if (error) return dbFail("starting the review", error);
     run = toRun(inserted as RunRow);
   }
-  const { tools, rows, failures, beat } = toolsFor(ctx, run, gathered.waiting);
+  const { tools, rows, failures, beat, lost } = toolsFor(ctx, run, gathered.waiting, attempt);
   let judged: Awaited<ReturnType<ReviewJudge["review"]>>;
   try {
     judged = await judge.review(gathered.waiting, tools, { instruction, today: input.today, zone: input.zone ?? "UTC", beat });
   } catch (cause) {
+    // A run another call took over is that call's: this attempt neither counts its stop nor clears the other's marks.
+    if (cause instanceof TakenOver || lost()) return takenOver(run);
     // The run stays unfinished, with its stop counted, so the next call of the day resumes it.
     console.error("daily review: the judge stopped:", cause instanceof Error ? cause.message : cause);
-    const stopped = await finish(ctx, run, failures.length + 1, false);
+    const stopped = await finish(ctx, run, failures.length + 1, false, attempt);
+    if (!isError(stopped) && !stopped.run) return takenOver(run);
     // A stop that could not be recorded leaves the run looking under way until its mark ages: it is said, never lost.
     if (isError(stopped)) console.error("daily review: recording the stop failed:", stopped.message);
     const unrecorded = isError(stopped) ? `; recording the stop failed too: ${stopped.message}` : "";
     return fail("internal", `the review stopped: ${cause instanceof Error ? cause.message : "the judge failed"}${unrecorded}`);
   }
+  if (lost()) return takenOver(run);
   // What the run could not read is as much a step that failed as what it could not write.
   const all = [...gathered.failures, ...failures, ...(judged?.failures ?? [])];
-  const closed = await finish(ctx, run, all.length, true);
+  const closed = await finish(ctx, run, all.length, true, attempt);
   if (isError(closed)) return closed;
+  if (!closed.run) return takenOver(run);
   const actions = await withTasks(ctx, rows);
   if (isError(actions)) return actions;
   return ok({ review: closed.run, ran: true, skipped: null, actions: actions.actions, failures: all });

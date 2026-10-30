@@ -489,8 +489,15 @@ describe("N6: a stop that cannot be recorded is said", () => {
   it("the error of recording it reaches the log and the answer", async () => {
     const day = reviewDay(-26);
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    // The database answers everything as the person's client does, but refuses to record the stop.
+    // The database answers everything as the person's client does, but refuses to record the stop, however many filters
+    // the call chains before reading the row back.
     const client = user!.client;
+    const refusal = { data: null, error: { message: "the stop was refused" } };
+    const refused = (): Record<string, unknown> => ({
+      eq: () => refused(),
+      is: () => refused(),
+      select: () => ({ single: async () => refusal, maybeSingle: async () => refusal }),
+    });
     const refusing = new Proxy(client, {
       get(target, key, receiver) {
         if (key !== "from") return Reflect.get(target, key, receiver);
@@ -500,10 +507,7 @@ describe("N6: a stop that cannot be recorded is said", () => {
           return new Proxy(query, {
             get(inner, method, innerReceiver) {
               if (method !== "update") return Reflect.get(inner, method, innerReceiver);
-              return (values: Record<string, unknown>) =>
-                "failures" in values
-                  ? { eq: () => ({ select: () => ({ single: async () => ({ data: null, error: { message: "the stop was refused" } }) }) }) }
-                  : inner.update(values as never);
+              return (values: Record<string, unknown>) => ("failures" in values ? refused() : inner.update(values as never));
             },
           });
         };
