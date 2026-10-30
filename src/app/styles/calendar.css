@@ -736,3 +736,15 @@
     transition-duration: var(--dur-hover);
   }
 }
+:is(.cal-slot, .cal-month-cell, .cal-hour-slot):focus-visible {
+  outline-offset: -2px;
+}
+.cal-hour-slot {
+  position: absolute;
+  inset-inline: 0;
+  height: 3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}

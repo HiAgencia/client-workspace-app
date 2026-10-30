@@ -5,6 +5,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -30,6 +31,7 @@ import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
 import { count, openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
 import { useSwap } from "../use-swap";
+import { activates, useGridKeys } from "./grid-keys";
 import { useChatScope, useWorkspace } from "../workspace";
 import "../../styles/calendar.css";
 
@@ -432,7 +434,7 @@ function Calendar() {
                 narrow ? (
                   <WeekList days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onAdd={(day) => setDraft({ day, time: null })} />
                 ) : (
-                  <WeekGrid days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onGap={onGap} />
+                  <WeekGrid days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onGap={onGap} onCreate={(day, time) => setDraft({ day, time })} />
                 )
               ) : (
                 <MonthGrid
@@ -443,6 +445,7 @@ function Calendar() {
                   chips={chipProps}
                   dropOn={dropOn}
                   onGap={onGap}
+                  onCreate={(day) => setDraft({ day, time: null })}
                   narrow={narrow}
                   chosen={chosenDay}
                   onChoose={setChosenDay}
@@ -600,12 +603,15 @@ function WeekGrid({
   chips,
   dropOn,
   onGap,
+  onCreate,
 }: {
   days: Day[];
   byDay: Map<Day, { events: CalEvent[]; tasks: TaskData[] }>;
   chips: ChipHandlers;
   dropOn: DropOn;
   onGap: (event: MouseEvent<HTMLElement>, day: Day, time: string | null) => void;
+  
+  onCreate: (day: Day, time: string | null) => void;
 }) {
   const now = today();
   
@@ -627,9 +633,23 @@ function WeekGrid({
   }
   const hours = Array.from({ length: last - first + 1 }, (_, i) => first + i);
   const top = (minutes: number) => `${((minutes - first * 60) / 60) * HOUR_REM}rem`;
+  
+  const grid = useGridKeys({ rows: hours.length + 1, cols: days.length }, { row: 0, col: Math.max(0, days.indexOf(now)) });
+  const hint = useId();
 
   return (
-    <div className="cal-week" role="grid" aria-label="The week" style={{ "--days": days.length } as CSSProperties}>
+    <div
+      className="cal-week"
+      role="grid"
+      aria-label="The week"
+      aria-describedby={hint}
+      style={{ "--days": days.length } as CSSProperties}
+      onKeyDown={grid.onKeyDown}
+      onFocus={grid.onFocus}
+    >
+      <span id={hint} className="sr-only">
+        The arrows move between days and hours; Enter adds an event there.
+      </span>
       <div className="cal-week-row cal-week-head" role="row">
         <span className="cal-gutter" aria-hidden="true" />
         {days.map((day) => (
@@ -641,7 +661,7 @@ function WeekGrid({
       </div>
       <div className="cal-week-row cal-allday" role="row">
         <span className="cal-gutter t-meta">All day</span>
-        {days.map((day) => {
+        {days.map((day, column) => {
           const entry = byDay.get(day);
           
           
@@ -651,7 +671,20 @@ function WeekGrid({
           ];
           const more = items.length - ALL_DAY_CHIPS;
           return (
-            <div key={day} role="gridcell" className="cal-slot" data-day={day} onClick={(event) => onGap(event, day, null)} {...dropOn(day)}>
+            <div
+              key={day}
+              role="gridcell"
+              className="cal-slot"
+              data-day={day}
+              onClick={(event) => onGap(event, day, null)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget || !activates(event.key)) return;
+                event.preventDefault();
+                onCreate(day, null);
+              }}
+              {...grid.cell(0, column)}
+              {...dropOn(day)}
+            >
               {items.slice(0, ALL_DAY_CHIPS)}
               {more > 0 && <span className="cal-more cal-more-band">+{more} more</span>}
               <span className="sr-only">{fullDay(day)}, all day</span>
@@ -670,7 +703,7 @@ function WeekGrid({
             </span>
           ))}
         </div>
-        {days.map((day) => {
+        {days.map((day, column) => {
           const entry = byDay.get(day);
           const timed = [
             ...(entry?.events ?? []).filter(onHours).map((event) => ({ kind: "event" as const, key: eventKey(event), start: minutesOf(event.start), end: Math.max(minutesOf(event.end), minutesOf(event.start) + 30), event })),
@@ -695,6 +728,18 @@ function WeekGrid({
               }}
               {...dropOn(day)}
             >
+              {}
+              {hours.map((hour, index) => (
+                <button
+                  key={hour}
+                  type="button"
+                  className="cal-hour-slot"
+                  style={{ top: top(hour * 60) }}
+                  aria-label={`${fullDay(day)}, ${hourName(hour)}: add event`}
+                  onClick={() => onCreate(day, hhmm(hour * 60))}
+                  {...grid.cell(index + 1, column)}
+                />
+              ))}
               {laned.map(({ item, lane, of }) => {
                 const style = {
                   top: top(item.start),
@@ -814,6 +859,7 @@ function MonthGrid({
   chips,
   dropOn,
   onGap,
+  onCreate,
   narrow,
   chosen,
   onChoose,
@@ -826,14 +872,32 @@ function MonthGrid({
   chips: ChipHandlers;
   dropOn: DropOn;
   onGap: (event: MouseEvent<HTMLElement>, day: Day, time: string | null) => void;
+  
+  onCreate: (day: Day) => void;
   narrow: boolean;
   chosen: Day | null;
   onChoose: (day: Day) => void;
   onMore: (day: Day) => void;
 }) {
   const now = today();
+  
+  const flat = weeks.flat();
+  const entry = flat.includes(now) ? flat.indexOf(now) : Math.max(0, flat.findIndex((day) => day.slice(0, 7) === month));
+  const grid = useGridKeys({ rows: weeks.length, cols: 7 }, { row: Math.floor(entry / 7), col: entry % 7 });
+  const hint = useId();
   return (
-    <div className="cal-month" role="grid" aria-label={monthTitle(`${month}-01`)} data-narrow={narrow ? "" : undefined}>
+    <div
+      className="cal-month"
+      role="grid"
+      aria-label={monthTitle(`${month}-01`)}
+      aria-describedby={hint}
+      data-narrow={narrow ? "" : undefined}
+      onKeyDown={grid.onKeyDown}
+      onFocus={grid.onFocus}
+    >
+      <span id={hint} className="sr-only">
+        {narrow ? "The arrows move between days; Enter chooses one." : "The arrows move between days; Enter adds an event on one."}
+      </span>
       <div className="cal-month-row cal-month-head" role="row">
         {names.map((name) => (
           <span key={name.long} role="columnheader" className="cal-month-name" aria-label={name.long}>
@@ -841,9 +905,9 @@ function MonthGrid({
           </span>
         ))}
       </div>
-      {weeks.map((week) => (
+      {weeks.map((week, row) => (
         <div key={week[0]} className="cal-month-row" role="row">
-          {week.map((day) => {
+          {week.map((day, column) => {
             const entry = byDay.get(day);
             const items: ReactNode[] = [
               ...(entry?.events ?? []).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />),
@@ -859,6 +923,7 @@ function MonthGrid({
                     aria-pressed={(chosen ?? now) === day}
                     aria-current={day === now ? "date" : undefined}
                     onClick={() => onChoose(day)}
+                    {...grid.cell(row, column)}
                   >
                     {}
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
@@ -879,6 +944,12 @@ function MonthGrid({
                 data-outside={day.slice(0, 7) !== month ? "" : undefined}
                 aria-current={day === now ? "date" : undefined}
                 onClick={(event) => onGap(event, day, null)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget || !activates(event.key)) return;
+                  event.preventDefault();
+                  onCreate(day);
+                }}
+                {...grid.cell(row, column)}
                 {...dropOn(day)}
               >
                 <span className="cal-month-num">{Number(day.slice(8))}</span>
