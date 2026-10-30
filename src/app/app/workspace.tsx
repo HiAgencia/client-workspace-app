@@ -343,9 +343,10 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
             <span className="brand-name">Client Workspace</span>
           </Link>
         </header>
-        <aside className="sidebar" aria-label="Workspace">
+        {}
+        <div className="sidebar">
           <SideNav onSignOut={() => void signOut()} />
-        </aside>
+        </div>
         {}
         <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
           {lastStatus}
