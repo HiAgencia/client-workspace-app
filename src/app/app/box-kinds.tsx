@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BoxEmpty, BoxFailed, BoxWait, useBoxRead, useBoxSettled, useToolRead, type BoxRead } from "./boxes";
 import { get, post, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { PathText } from "./item-parts";
+import { subjectOf } from "./mail/subject";
 import { branchOf } from "./place-filters";
 import { QuickAddInline } from "./quick-add";
 import { NewNode } from "./side-nav";
@@ -496,7 +497,7 @@ export function MailBoxContent({ read, now, place, connectHref }: { read: BoxRea
                     {message.important && <span className="pill mail-important">Important</span>}
                     <span className="mail-when">{mailWhen(message.receivedAt, now)}</span>
                   </span>
-                  <span className="mail-subject">{message.subject || "No subject"}</span>
+                  <span className="mail-subject">{subjectOf(message)}</span>
                   <span className="mail-for">
                     {waiting ? (
                       `For: ${inlinePlain(waiting.title)}`
