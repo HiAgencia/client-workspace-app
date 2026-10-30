@@ -72,6 +72,10 @@ describe("reading a Gmail message", () => {
     expect(wordsSearch("approved) OR {in:anywhere")).toBe("(approved OR in:anywhere)");
     expect(wordsSearch('"quote left open')).toBe("(quote left open)");
     expect(wordsSearch("( ) {}")).toBe("");
+    
+    expect(wordsSearch('"" -')).toBe("");
+    expect(wordsSearch('invoice "" - march')).toBe("(invoice march)");
+    expect(wordsSearch('-"draft copy" report')).toBe('(-"draft copy" report)');
   });
 
   it("turns Gmail's labels and date into the product's message", () => {

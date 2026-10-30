@@ -225,9 +225,12 @@ export function senderSearch(senders: string[]): string {
 
 
 
+
 export function wordsSearch(words: string): string {
-  const quoteLeftOpen = (words.match(/"/g) ?? []).length % 2 === 1;
-  const plain = words.replace(quoteLeftOpen ? /[(){}"]/g : /[(){}]/g, " ").replace(/\s+/g, " ").trim();
+  const pieces = words.replace(/[(){}]/g, " ").split('"');
+  
+  const phrased = pieces.length % 2 === 1 ? pieces.map((piece, index) => (index % 2 === 0 ? piece : piece.trim() ? `"${piece}"` : " ")).join("") : pieces.join(" ");
+  const plain = phrased.replace(/(^|\s)-+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
   return plain ? `(${plain})` : "";
 }
 
