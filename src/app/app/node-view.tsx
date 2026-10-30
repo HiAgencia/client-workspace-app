@@ -28,7 +28,7 @@ import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
 import { allTasks, BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
-import { count } from "./task-row";
+import { count } from "./count";
 import { useChatScope, useWorkspace } from "./workspace";
 
 

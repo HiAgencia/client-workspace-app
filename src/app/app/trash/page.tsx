@@ -9,7 +9,7 @@ import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
 import { get, post, type Item } from "../client-api";
 import { PathText, TYPE_NAMES } from "../item-parts";
 import { PageHeader } from "../page-header";
-import { count } from "../task-row";
+import { count } from "../count";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 

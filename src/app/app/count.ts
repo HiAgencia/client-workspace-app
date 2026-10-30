@@ -2,7 +2,13 @@ import { LOCALE } from "@/lib/dates";
 
 
 
-const plural = new Intl.PluralRules(LOCALE);
+const rules = new Intl.PluralRules(LOCALE);
+
+
+export function plural(n: number, one: string, other: string): string {
+  return rules.select(n) === "one" ? one : other;
+}
+
 export function count(n: number, one: string, other: string): string {
-  return `${n} ${plural.select(n) === "one" ? one : other}`;
+  return `${n} ${plural(n, one, other)}`;
 }
