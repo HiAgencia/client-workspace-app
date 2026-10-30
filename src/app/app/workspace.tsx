@@ -8,6 +8,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
+import { PRODUCT_NAME } from "@/lib/product";
 import { browserClient } from "@/lib/supabase/browser";
 import { ChatDock, useDocked } from "./chat-panel";
 import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
@@ -237,6 +238,15 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   
   
+  
+  useEffect(() => {
+    const id = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1];
+    const name = id ? tree?.find((node) => node.id === id)?.name : undefined;
+    if (name) document.title = `${name} · ${PRODUCT_NAME}`;
+  }, [pathname, tree]);
+
+  
+  
   useEffect(() => {
     if (!drawerOpen) return;
     return onFocusRequest(() => setDrawerOpen(false));
@@ -338,9 +348,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
           <Button className="drawer-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
             Menu
           </Button>
-          <Link href="/app" className="brand" aria-label="Client Workspace, Overview">
+          <Link href="/app" className="brand" aria-label={`${PRODUCT_NAME}, Overview`}>
             <BrandMark className="brand-mark" />
-            <span className="brand-name">Client Workspace</span>
+            <span className="brand-name">{PRODUCT_NAME}</span>
           </Link>
         </header>
         {}

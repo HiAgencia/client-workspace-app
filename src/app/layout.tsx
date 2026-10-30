@@ -9,8 +9,10 @@ import "./globals.css";
 const display = Wix_Madefor_Display({ variable: "--font-madefor-display", subsets: ["latin"] });
 const text = Wix_Madefor_Text({ variable: "--font-madefor-text", subsets: ["latin"] });
 
+
+
 export const metadata: Metadata = {
-  title: PRODUCT_NAME,
+  title: { default: PRODUCT_NAME, template: `%s · ${PRODUCT_NAME}` },
   description: PRODUCT_DESCRIPTION,
 };
 
