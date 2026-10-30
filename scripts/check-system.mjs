@@ -4,7 +4,8 @@
 //   - native pickers in the screens (select, date, checkbox): the product's own controls replace them;
 //   - color literals outside the roles (src/app/styles/tokens.css);
 //   - text sizes and colors written as Tailwind utilities instead of the roles' classes;
-//   - a `:hover` rule outside `@media (hover: hover)`, where a touch screen would keep it lit.
+//   - a `:hover` rule outside `@media (hover: hover)`, where a touch screen would keep it lit;
+//   - the product's name written outside `src/lib/product.ts`, its one place: the final name changes there alone.
 // Usage: node scripts/check-system.mjs
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
@@ -27,6 +28,7 @@ const code = all.filter((f) => /\.(tsx?|jsx?)$/.test(f) && !/\.test\./.test(f));
 const css = all.filter((f) => f.endsWith(".css"));
 const rel = (f) => relative(root, f).split(sep).join("/");
 const strip = (text) => text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " ")).replace(/(^|[^:])\/\/.*$/gm, "$1");
+const productName = /PRODUCT_NAME = "([^"]+)"/.exec(readFileSync(join(src, "lib", "product.ts"), "utf8"))?.[1];
 
 const checks = [
   {
@@ -61,6 +63,15 @@ const checks = [
       ),
   },
   { name: ":hover outside (hover: hover)", cap: 0, find: hoverOutside },
+  {
+    name: "the product's name outside src/lib/product.ts",
+    cap: 0,
+    // A name the check could not read is a finding, never a clean zero.
+    find: () =>
+      productName
+        ? findIn(code.filter((f) => rel(f) !== "src/lib/product.ts"), new RegExp(productName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))
+        : ["src/lib/product.ts: PRODUCT_NAME not found"],
+  },
 ];
 
 function findIn(list, pattern, keep = () => true) {
