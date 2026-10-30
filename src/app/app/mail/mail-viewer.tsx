@@ -7,6 +7,7 @@ import { LOCALE } from "@/lib/dates";
 import { currentTheme, subscribeTheme, type Theme } from "@/lib/theme";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { tool } from "../client-api";
+import { count } from "../count";
 import { documentFor } from "./mail-document";
 import { subjectOf } from "./subject";
 import { PlaceName } from "../task-row";
@@ -153,7 +154,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded
           <p className="t-help">
             {imagesOn
               ? `The images of ${row.from.email} load on their own.`
-              : `${message.remoteImages === 1 ? "1 image waits" : `${message.remoteImages} images wait`} to load: an image from the network tells the sender the message was opened.`}
+              : `${count(message.remoteImages, "image waits", "images wait")} to load: an image from the network tells the sender the message was opened.`}
           </p>
           <Button size="sm" onClick={() => setImages(!imagesOn)} data-show-images={imagesOn ? undefined : ""}>
             {imagesOn ? "Stop loading images" : "Show images"}

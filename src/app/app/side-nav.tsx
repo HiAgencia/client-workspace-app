@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { usePiece } from "@/components/ui/use-piece";
 import { PRODUCT_NAME } from "@/lib/product";
 import { post, type TreeNode } from "./client-api";
+import { count } from "./count";
 import { plainClick, requestFocus } from "./focus-request";
 import { openQuickAdd } from "./quick-add-bus";
 import { useWorkspace } from "./workspace";
@@ -310,7 +311,7 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
         >
           <span className="side-mark" data-color={node.color ?? undefined} aria-hidden="true" />
           <span className="side-link-name">{node.name}</span>
-          {node.openTasks > 0 && <Count value={node.openTasks} spoken={node.openTasks === 1 ? "1 open task" : `${node.openTasks} open tasks`} />}
+          {node.openTasks > 0 && <Count value={node.openTasks} spoken={count(node.openTasks, "open task", "open tasks")} />}
         </Link>
       </div>
       {children.length > 0 && (

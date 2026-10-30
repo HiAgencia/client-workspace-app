@@ -8,7 +8,7 @@ import { BoxFailed, BoxWait, savePreference } from "../boxes";
 import { placeValue, TaskGroups, useTasksRead, type Sort } from "../box-kinds";
 import { PageHeader, type PageLayout } from "../page-header";
 import { TasksPlaceFilter, useAddress, usePlaceParam } from "../page-filters";
-import { count } from "../task-row";
+import { count } from "../count";
 import { useChatScope, useWorkspace } from "../workspace";
 
 const SORTS: Array<{ value: Sort; label: string }> = [

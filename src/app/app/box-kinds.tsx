@@ -18,7 +18,8 @@ import { subjectOf } from "./mail/subject";
 import { branchOf } from "./place-filters";
 import { QuickAddInline } from "./quick-add";
 import { NewNode } from "./side-nav";
-import { count, dayHeading, dayName, InlineText, openTaskDetail, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, type TaskData } from "./task-row";
+import { count } from "./count";
+import { dayHeading, dayName, InlineText, openTaskDetail, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
 // The boxes the Overview and a client's or a project's page compose, each reading its own data for the place the page
@@ -358,7 +359,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         const who = read.data!.failures.filter((failure) => failure.reason === reason).map((failure) => failure.accountEmail || "The workspace's calendar");
         return (
           <p key={reason} className="inline-note" data-tone="alert">
-            {`${who.length === 1 ? `${who[0]} could` : `${who.length} calendars could`} not be read: ${reason}.`}
+            {`${who.length === 1 ? who[0] : count(who.length, "calendar", "calendars")} could not be read: ${reason}.`}
             {who.length > 1 && <span className="calendar-failed-who">{who.join(", ")}</span>}
           </p>
         );

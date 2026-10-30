@@ -1,4 +1,5 @@
 import { post, tool } from "./client-api";
+import { count } from "./count";
 import { inlinePlain } from "@/lib/inline-links";
 
 // What each write of the chat says on its card and how it is undone, from what the tool's output already carries —its
@@ -53,7 +54,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
   reschedule_overdue: (o) =>
     o.changed?.length
       ? {
-          what: `Rescheduled ${o.changed.length === 1 ? quoted(o.changed[0].title) : `${o.changed.length} overdue tasks`}`,
+          what: `Rescheduled ${o.changed.length === 1 ? quoted(o.changed[0].title) : count(o.changed.length, "overdue task", "overdue tasks")}`,
           undo: async () => {
             for (const task of o.changed ?? []) {
               const answer = await tool("update_item", { id: task.id, dueOn: task.previousDueOn });
@@ -67,7 +68,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
   reorder_items: (o) =>
     o.items?.length
       ? {
-          what: `Reordered ${o.items.length === 1 ? quoted(o.items[0].title) : `${o.items.length} tasks`}`,
+          what: `Reordered ${o.items.length === 1 ? quoted(o.items[0].title) : count(o.items.length, "task", "tasks")}`,
           undo: () => tool("reorder_items", { ids: [...o.items!].sort((a, b) => a.previous - b.previous).map((item) => item.id) }),
         }
       : null,

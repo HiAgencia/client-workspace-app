@@ -30,7 +30,8 @@ import { PRODUCT_NAME } from "@/lib/product";
 import { get, post, tool, type EventsFailure, type Item, type TreeNode } from "../client-api";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
-import { count, openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
+import { count, plural } from "../count";
+import { openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
 import { useSwap } from "../use-swap";
 import { activates, useGridKeys } from "./grid-keys";
 import { useChatScope, useWorkspace } from "../workspace";
@@ -931,7 +932,7 @@ function MonthGrid({
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
                     <span className="sr-only">, {fullDay(day)}: </span>
                     <span className="cal-month-count">{total > 0 ? total : ""}</span>
-                    <span className="sr-only">{total === 0 ? "nothing" : new Intl.PluralRules(LOCALE).select(total) === "one" ? " item" : " items"}</span>
+                    <span className="sr-only">{total === 0 ? "nothing" : ` ${plural(total, "item", "items")}`}</span>
                   </button>
                 </div>
               );

@@ -86,8 +86,6 @@ function rowWhen(task: TaskData, dayShown: Day | null | undefined, now: Day): st
   return whenLabel(task.dueOn, task.dueTime, now);
 }
 
-export { count };
-
 export function priorityName(priority: number | null): string {
   return PRIORITIES.find((option) => option.value === String(priority ?? 4))?.label ?? "Low";
 }

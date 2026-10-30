@@ -5,6 +5,7 @@ import { LOCALE, today, untilAgain } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { browserClient } from "@/lib/supabase/browser";
 import { post } from "./client-api";
+import { count } from "./count";
 import { useWorkspace } from "./workspace";
 
 // The daily review on screen. The first time the person opens the workspace in their day, the browser asks the server
@@ -24,7 +25,6 @@ const ASKED_KEY = "client-workspace:review-asked";
 const ENTRY_WAIT_MS = 8000;
 
 const list = new Intl.ListFormat(LOCALE, { style: "long", type: "conjunction" });
-const plural = new Intl.PluralRules(LOCALE);
 
 export function closed(sentence: string): string {
   const clean = sentence.trim();
@@ -54,14 +54,14 @@ export function reviewSentence(actions: ReviewAction[]): string {
     return closed(`The daily review completed ${named(taskOf(completed[0]))}${why ? `: ${why}` : ""}`);
   }
   if (completed.length > 0) {
-    const more = read.length > 0 ? `, and read the mail of ${read.length === 1 ? named(taskOf(read[0])) : `${read.length} more tasks`}` : "";
+    const more = read.length > 0 ? `, and read the mail of ${read.length === 1 ? named(taskOf(read[0])) : count(read.length, "more task", "more tasks")}` : "";
     return closed(`The daily review completed ${list.format(completed.map((id) => named(taskOf(id))))}${more}`);
   }
   if (read.length === 1) {
     const why = sentenceOf(read[0]);
     return closed(`The daily review read the mail of ${named(taskOf(read[0]))}${why ? `: ${why}` : ""}`);
   }
-  return closed(`The daily review read the mail of ${read.length} tasks`);
+  return closed(`The daily review read the mail of ${count(read.length, "task", "tasks")}`);
 }
 
 // The steps a finished run could not do, and that the review is running: the same words in the notice and in the chat.
@@ -72,8 +72,7 @@ export function reviewNotes(review: { skipped?: Review["skipped"]; failures?: st
   if (review.skipped === "running") notes.push("The daily review is running. What it does shows in Activity.");
   const failures = review.failures ?? [];
   if (failures.length > 0) {
-    const steps = plural.select(failures.length) === "one" ? "1 step" : `${failures.length} steps`;
-    notes.push(`${steps} of the daily review could not be done: ${list.format(failures)}. Ask the chat to review your day to try again.`);
+    notes.push(`${count(failures.length, "step", "steps")} of the daily review could not be done: ${list.format(failures)}. Ask the chat to review your day to try again.`);
   }
   return notes;
 }
