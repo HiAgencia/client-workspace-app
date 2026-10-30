@@ -94,6 +94,13 @@ export async function deleteTestUser(admin: Db, id: string): Promise<string | nu
   return error.message;
 }
 
+// Writes a record again holding only the users that could not be deleted, which wait there for the next run to try again;
+// with none left, the record goes.
+export function keepInRun(run: RunRecord, ids: string[]): void {
+  if (ids.length === 0) rmSync(run.file, { force: true });
+  else writeFileSync(run.file, `run ${run.pid} ${run.start ?? ""}\n${ids.map((id) => `+${id}\n`).join("")}`);
+}
+
 // What the runs that no longer live left: each user is deleted and each emptied record removed. A user that could not
 // be deleted stays in its record for the next run, and is counted. A live run's record, this run's included, is left
 // alone by its process and start time.
@@ -120,8 +127,7 @@ export async function sweepDeadRuns(admin: Db): Promise<{ runs: number; deleted:
         failed.push(`${id}: ${error}`);
       } else deleted++;
     }
-    if (left.length === 0) rmSync(run.file, { force: true });
-    else writeFileSync(run.file, `run ${run.pid} ${run.start ?? ""}\n${left.map((id) => `+${id}\n`).join("")}`);
+    keepInRun(run, left);
   }
   return { runs, deleted, failed };
 }

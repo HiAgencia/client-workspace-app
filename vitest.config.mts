@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -11,11 +11,19 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 60_000,
     projects: [
-      // The logic beside its code: nothing of the network, so a run of these alone asks no service.
-      { test: { name: "unit", include: ["src/**/*.test.ts"] } },
+      // What runs without the network —the logic beside its code, and the suite's own helpers—, so a run of these alone
+      // asks no service.
+      { test: { name: "unit", include: ["src/**/*.test.ts", "tests/support/**/*.test.ts"] } },
       // Against the real project: the run's setup deletes what a cut run left, and fails a run that leaves a test user
       // behind.
-      { test: { name: "integration", include: ["tests/**/*.test.ts"], globalSetup: ["tests/setup/users.ts"] } },
+      {
+        test: {
+          name: "integration",
+          include: ["tests/**/*.test.ts"],
+          exclude: [...configDefaults.exclude, "tests/support/**"],
+          globalSetup: ["tests/setup/users.ts"],
+        },
+      },
     ],
   },
 });

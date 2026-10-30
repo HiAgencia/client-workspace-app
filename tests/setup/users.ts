@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import type { TestProject } from "vitest/node";
-import { countUsers, deleteTestUser, openRun, readRun, stillThere, sweepDeadRuns } from "../support/test-users";
+import { countUsers, deleteTestUser, keepInRun, openRun, readRun, stillThere, sweepDeadRuns } from "../support/test-users";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db/types";
 import "./env";
@@ -22,8 +22,8 @@ declare module "vitest" {
 }
 
 // Once per run, before any test file: deletes what runs cut halfway left, counts the project's users, and opens this run's
-// record. At the end it counts again and fails the run if a user it created is still there, deleting it so the next run
-// starts clean.
+// record. At the end it counts again and fails the run if a user it created is still there, deleting it, or keeping it in
+// the run's record for the next run to try again when it cannot.
 export default async function setup(project: TestProject) {
   const admin = serviceClient();
   const swept = await sweepDeadRuns(admin);
@@ -38,18 +38,22 @@ export default async function setup(project: TestProject) {
   return async () => {
     const run = readRun(file);
     const left = await stillThere(admin, run?.users ?? []);
-    const failed: string[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
     for (const id of left) {
       const error = await deleteTestUser(admin, id);
-      if (error) failed.push(`${id}: ${error}`);
+      if (error) failed.push({ id, error });
     }
     const after = await countUsers(admin);
     console.log(`[test users] before: ${before.total} (${before.suite} with the suite's address); after: ${after.total} (${after.suite}); left by this run: ${left.length}`);
-    // A run whose users are all gone leaves no record; one that was cut, or whose user could not be deleted, keeps it for
-    // the next run to sweep.
-    if (failed.length === 0) rmSync(file, { force: true });
+    // The record keeps only the users that could not be deleted, for the next run to sweep; a run whose users are all gone
+    // leaves none. A run cut before this point keeps its whole record.
+    if (run) keepInRun(run, failed.map((failure) => failure.id));
+    else rmSync(file, { force: true });
     if (left.length > 0) {
-      const deleted = failed.length === 0 ? "deleted now" : `${failed.length} could not be deleted and wait in the run's record for the next run: ${failed.join("; ")}`;
+      const deleted =
+        failed.length === 0
+          ? "deleted now"
+          : `${failed.length} could not be deleted and wait in the run's record for the next run: ${failed.map((failure) => `${failure.id}: ${failure.error}`).join("; ")}`;
       throw new Error(`the run left ${left.length} test user(s) behind (${deleted}): ${left.join(", ")}`);
     }
   };
