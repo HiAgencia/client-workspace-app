@@ -314,7 +314,9 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 - An access token is renewed shortly before it expires; a refresh Google refuses (`invalid_grant`) marks the account
   `revoked`, is not asked again, and the screen asks to connect it again. A token Google refuses before its date
   (HTTP 401, as when the person revokes the access from their Google account) is renewed once and the call made again
-  (`withAccessToken`), so a revoked access ends marked as one. Every call to Google carries its own deadline.
+  (`withAccessToken`), so a revoked access ends marked as one. Gmail takes a batch whatever its token and refuses the
+  token in each of its reads (HTTP 200 outside, 401 in every part, measured against Gmail): a batch whose every read
+  answered 401 is that refused request. Every call to Google carries its own deadline.
 - **Writing**: `events.insert`, `events.patch`, and `events.delete` on a connected account that is not the demo's and
   not revoked; a whole day's end goes to Google as the next day, as it counts it.
 - **Events**: `calendarList.list` on connect; `events.list` with `singleEvents=true` and `orderBy=startTime` for each

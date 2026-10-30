@@ -323,6 +323,11 @@ async function batchOnce(
     throw new GoogleError(`reading the messages: HTTP ${response.status}`, response.status, errorReason(text));
   }
   const parts = splitBatch(text, response.headers.get("Content-Type"));
+  // Google takes a batch whatever its token and refuses a token in each read: every read refused is the token's failure,
+  // thrown as a refused request so its caller renews the token.
+  if (ids.every((_, index) => parts.get(`item${index}`)?.status === 401)) {
+    throw new GoogleError("reading the messages: HTTP 401", 401, errorReason(parts.get("item0")!.body));
+  }
   // Each answer says which read it answers; one that cannot be paired is that read's failure, never another's message.
   return ids.map((_, index) => {
     const part = parts.get(`item${index}`);

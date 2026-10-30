@@ -150,9 +150,11 @@ const fakeGoogle: Fetch = async (input, init) => {
     return json(200, { access_token: `token-${refresh?.replace("refresh-", "")}`, expires_in: 3600 });
   }
   const token = (init?.headers as Record<string, string>).Authorization.replace("Bearer ", "");
-  // A token Google stopped accepting before its date.
-  if (token === "token-dead") return json(401, { error: { code: 401, status: "UNAUTHENTICATED" } });
-  if (!READERS.has(token)) return json(403, { error: { status: "PERMISSION_DENIED" } });
+  // A token Google stopped accepting before its date: a request answers 401, while a batch is taken and each of its reads
+  // answers 401, as Gmail answers a refused token.
+  const dead = token === "token-dead";
+  if (dead && url.pathname !== "/batch/gmail/v1") return json(401, { error: { code: 401, status: "UNAUTHENTICATED" } });
+  if (!dead && !READERS.has(token)) return json(403, { error: { status: "PERMISSION_DENIED" } });
   if (url.pathname === "/gmail/v1/users/me/messages") {
     const q = url.searchParams.get("q") ?? "";
     searches.push(q);
@@ -178,10 +180,10 @@ const fakeGoogle: Fetch = async (input, init) => {
     const parts = [...body.matchAll(/Content-ID: <(item\d+)>\r\n\r\nGET \/gmail\/v1\/users\/me\/messages\/([^?\s]+)\?(\S+)/g)];
     batchFormats.push(new URLSearchParams(parts[0]?.[3] ?? "").get("format") ?? "");
     const answers = parts.map(([, item, id, query]) => {
-      const planned = trouble.flaky.get(decodeURIComponent(id))?.shift();
+      const planned = dead ? 401 : trouble.flaky.get(decodeURIComponent(id))?.shift();
       const message = planned ? null : answer(decodeURIComponent(id), new URLSearchParams(query));
       const status = planned ? `${planned} Trouble` : message ? "200 OK" : "404 Not Found";
-      const payload = message ? JSON.stringify(message) : JSON.stringify({ error: { code: planned ?? 404 } });
+      const payload = message ? JSON.stringify(message) : JSON.stringify({ error: { code: planned ?? 404, ...(dead ? { status: "UNAUTHENTICATED" } : {}) } });
       return `--batch_fake\r\nContent-Type: application/http\r\nContent-ID: <response-${item}>\r\n\r\nHTTP/1.1 ${status}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${payload}\r\n`;
     });
     return new Response(`${answers.join("")}--batch_fake--\r\n`, { status: 200, headers: { "Content-Type": "multipart/mixed; boundary=batch_fake" } });
@@ -414,6 +416,23 @@ describe("the Gmail source", () => {
     expect(await decrypt(deps.key, late.access_token!)).toBe("token-late");
     expect(late.status).toBe("active");
     expect(data!.find((row) => row.id === ids.gone)!.status).toBe("revoked");
+  });
+
+  it("renews once a token Google refused in each read of a batch, which the mail of a task reaches with no search first", async () => {
+    const dead = { node: ids.other, access: { token: "token-dead", until: "2099-01-01T00:00:00Z" } };
+    const late = await insertAccount("late-batch@example.com", "refresh-late", ALL, dead);
+    const gone = await insertAccount("revoked-batch@example.com", "refresh-revoked", ALL, dead);
+    forget();
+    const source = gmailMailSource(deps);
+    const read = await source.many({ db: user!.client, ownerId: user!.id, account: account(late, "late-batch@example.com", ALL), ids: ["m1", "m2"] });
+    expect(read.failures).toEqual([]);
+    expect(read.messages.map((message) => message.id)).toEqual(["m1", "m2"]);
+    const refused = await source.many({ db: user!.client, ownerId: user!.id, account: account(gone, "revoked-batch@example.com", ALL), ids: ["m1"] });
+    expect(refused).toEqual({ messages: [], failures: [{ accountId: gone, accountEmail: "revoked-batch@example.com", reason: expect.stringMatching(/access was revoked: connect the account again/) }] });
+    expect(calls.filter((call) => call.endsWith("/token"))).toHaveLength(2);
+    const { data } = await serviceClient().from("google_accounts").select("id, status").in("id", [late, gone]);
+    expect(data!.find((row) => row.id === late)!.status).toBe("active");
+    expect(data!.find((row) => row.id === gone)!.status).toBe("revoked");
   });
 
   it("reads nothing of an account of another person", async () => {
