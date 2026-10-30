@@ -314,9 +314,10 @@
     }
   }
 }
+/* An hour's height, `--hour`, is set by the page from the one value its positions are computed with. */
 .cal-hours {
   position: relative;
-  height: calc(var(--hours) * 3rem);
+  height: calc(var(--hours) * var(--hour));
 }
 .cal-hour-names {
   position: relative;
@@ -339,9 +340,9 @@
   background-image: repeating-linear-gradient(
     to bottom,
     var(--division) 0 1px,
-    transparent 1px 1.5rem,
-    color-mix(in srgb, var(--division) 45%, transparent) 1.5rem calc(1.5rem + 1px),
-    transparent calc(1.5rem + 1px) 3rem
+    transparent 1px calc(var(--hour) / 2),
+    color-mix(in srgb, var(--division) 45%, transparent) calc(var(--hour) / 2) calc(var(--hour) / 2 + 1px),
+    transparent calc(var(--hour) / 2 + 1px) var(--hour)
   );
   box-shadow: inset 1px 0 0 var(--division);
   cursor: cell;
@@ -788,7 +789,7 @@
 .cal-hour-slot {
   position: absolute;
   inset-inline: 0;
-  height: 3rem;
+  height: var(--hour);
   padding: 0;
   border: 0;
   background: none;

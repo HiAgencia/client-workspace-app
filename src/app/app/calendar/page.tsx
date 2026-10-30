@@ -597,6 +597,7 @@ function subscribeFine(onChange: () => void) {
 
 // ---- The week: its days side by side, the whole-day band on top and the hours below ----------------------------------
 
+// An hour's height, in rem: what is placed on the hours is computed with it, and the stylesheet reads it as `--hour`.
 const HOUR_REM = 3;
 
 function WeekGrid({
@@ -697,7 +698,7 @@ function WeekGrid({
           );
         })}
       </div>
-      <div className="cal-week-row cal-hours" role="row" style={{ "--hours": hours.length } as CSSProperties}>
+      <div className="cal-week-row cal-hours" role="row" style={{ "--hours": hours.length, "--hour": `${HOUR_REM}rem` } as CSSProperties}>
         <div className="cal-gutter cal-hour-names" aria-hidden="true">
           {hours.map((hour) => (
             <span key={hour} className="t-meta" style={{ top: top(hour * 60) }}>
