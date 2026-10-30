@@ -76,6 +76,14 @@ describe("reading a Gmail message", () => {
     expect(wordsSearch('"" -')).toBe("");
     expect(wordsSearch('invoice "" - march')).toBe("(invoice march)");
     expect(wordsSearch('-"draft copy" report')).toBe('(-"draft copy" report)');
+    
+    expect(wordsSearch('"a - b"')).toBe('("a - b")');
+    expect(wordsSearch('"-" ". ."')).toBe("");
+    
+    expect(wordsSearch("report -(draft)")).toBe("(report -(draft))");
+    expect(wordsSearch("{invoice receipt} -(draft copy)")).toBe("({invoice receipt} -(draft copy))");
+    expect(wordsSearch("report -() {}")).toBe("(report)");
+    expect(wordsSearch("({a)}")).toBe("(a)");
   });
 
   it("turns Gmail's labels and date into the product's message", () => {

@@ -226,12 +226,45 @@ export function senderSearch(senders: string[]): string {
 
 
 
+
 export function wordsSearch(words: string): string {
-  const pieces = words.replace(/[(){}]/g, " ").split('"');
+  const pieces = words.replace(/\u0000/g, " ").split('"');
   
-  const phrased = pieces.length % 2 === 1 ? pieces.map((piece, index) => (index % 2 === 0 ? piece : piece.trim() ? `"${piece}"` : " ")).join("") : pieces.join(" ");
-  const plain = phrased.replace(/(^|\s)-+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
+  const phrases: string[] = [];
+  let text =
+    pieces.length % 2 === 1
+      ? pieces
+          .map((piece, index) => {
+            if (index % 2 === 0) return piece;
+            const phrase = piece.replace(/[(){}]/g, " ");
+            if (!/[\p{L}\p{N}]/u.test(phrase)) return " ";
+            phrases.push(phrase);
+            return `\u0000${phrases.length - 1}\u0000`;
+          })
+          .join("")
+      : pieces.join(" ");
+  if (!groupsNest(text)) text = text.replace(/[(){}]/g, " ");
+  for (let before = ""; before !== text; ) {
+    before = text;
+    text = text.replace(/[({]\s*[)}]/g, " ").replace(/(^|\s)-+(?=\s|$)/g, " ");
+  }
+  const plain = text
+    .replace(/\u0000(\d+)\u0000/g, (_, index: string) => `"${phrases[Number(index)]}"`)
+    .replace(/\s+/g, " ")
+    .trim();
   return plain ? `(${plain})` : "";
+}
+
+
+function groupsNest(text: string): boolean {
+  const open: string[] = [];
+  for (const char of text) {
+    if (char === "(" || char === "{") open.push(char);
+    else if (char === ")" || char === "}") {
+      if (open.pop() !== (char === ")" ? "(" : "{")) return false;
+    }
+  }
+  return open.length === 0;
 }
 
 
