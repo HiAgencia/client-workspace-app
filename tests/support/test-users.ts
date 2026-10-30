@@ -12,12 +12,14 @@ import type { Db } from "@/lib/db/client";
 
 
 
+
 export function suiteDir(): string {
   return process.env.DEMO_POOL_DIR || tmpdir();
 }
 
 const registryDir = () => join(suiteDir(), "cw-test-users");
-const RUN_FILE = /^run-(\d+)\.txt$/;
+
+const RUN_FILE = /^run-\d+(?:-\d+)?\.txt$/;
 
 
 
@@ -72,8 +74,8 @@ export function readRun(file: string): RunRecord | null {
 
 export function openRun(pid = process.pid): string {
   mkdirSync(registryDir(), { recursive: true });
-  const file = join(registryDir(), `run-${pid}.txt`);
-  writeFileSync(file, `run ${pid} ${startOf(pid) ?? ""}\n`);
+  const file = join(registryDir(), `run-${pid}-${Date.now()}.txt`);
+  writeFileSync(file, `run ${pid} ${startOf(pid) ?? ""}\n`, { flag: "wx" });
   return file;
 }
 
@@ -86,7 +88,7 @@ export function untrack(file: string, id: string): void {
 }
 
 
-async function deleteUser(admin: Db, id: string): Promise<string | null> {
+export async function deleteTestUser(admin: Db, id: string): Promise<string | null> {
   const { error } = await admin.auth.admin.deleteUser(id);
   if (!error || error.status === 404 || /not found/i.test(error.message)) return null;
   return error.message;
@@ -94,7 +96,8 @@ async function deleteUser(admin: Db, id: string): Promise<string | null> {
 
 
 
-export async function sweepDeadRuns(admin: Db, self = process.pid): Promise<{ runs: number; deleted: number; failed: string[] }> {
+
+export async function sweepDeadRuns(admin: Db): Promise<{ runs: number; deleted: number; failed: string[] }> {
   let names: string[] = [];
   try {
     names = readdirSync(registryDir());
@@ -105,14 +108,13 @@ export async function sweepDeadRuns(admin: Db, self = process.pid): Promise<{ ru
   let deleted = 0;
   const failed: string[] = [];
   for (const name of names) {
-    const match = RUN_FILE.exec(name);
-    if (!match || Number(match[1]) === self) continue;
+    if (!RUN_FILE.test(name)) continue;
     const run = readRun(join(registryDir(), name));
     if (!run || runAlive(run.pid, run.start)) continue;
     runs++;
     const left: string[] = [];
     for (const id of run.users) {
-      const error = await deleteUser(admin, id);
+      const error = await deleteTestUser(admin, id);
       if (error) {
         left.push(id);
         failed.push(`${id}: ${error}`);
