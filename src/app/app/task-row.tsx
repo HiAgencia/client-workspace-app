@@ -18,6 +18,7 @@ import { inlineLink, inlinePieces, inlinePlain } from "@/lib/inline-links";
 import type { TaskRow } from "@/lib/tools/tasks";
 import { cx } from "@/lib/utils";
 import { post, tool, type Item, type TreeNode } from "./client-api";
+import { count } from "./count";
 import { PathText, PRIORITIES, sourceName } from "./item-parts";
 import { useWorkspace } from "./workspace";
 import "../styles/task.css";
@@ -85,10 +86,7 @@ function rowWhen(task: TaskData, dayShown: Day | null | undefined, now: Day): st
   return whenLabel(task.dueOn, task.dueTime, now);
 }
 
-const plural = new Intl.PluralRules(LOCALE);
-export function count(n: number, one: string, other: string): string {
-  return `${n} ${plural.select(n) === "one" ? one : other}`;
-}
+export { count };
 
 export function priorityName(priority: number | null): string {
   return PRIORITIES.find((option) => option.value === String(priority ?? 4))?.label ?? "Low";

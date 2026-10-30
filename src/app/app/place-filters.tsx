@@ -2,6 +2,7 @@
 
 import { Select } from "@/components/ui/select";
 import type { TreeNode } from "./client-api";
+import { count } from "./count";
 
 
 
@@ -52,7 +53,7 @@ export const MESSAGES: FilterUnit = { one: "message", many: "messages" };
 export const ITEMS: FilterUnit = { one: "item", many: "items" };
 export const EVENTS: FilterUnit = { one: "event", many: "events" };
 
-const withCount = (label: string, n: number, unit: FilterUnit) => `${label} (${n} ${n === 1 ? unit.one : unit.many})`;
+export const withCount = (label: string, n: number, unit: FilterUnit) => `${label} (${count(n, unit.one, unit.many)})`;
 
 export function PlaceFilter({
   value,
