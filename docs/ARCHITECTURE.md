@@ -326,13 +326,13 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   and by its labels. A list searches each account's inbox (`messages.list`, `in:inbox`, from a moment with `after:`)
   and reads the messages it found in batch requests (`/batch/gmail/v1`, 50 reads each, with only their sender,
   recipients, and subject): an account costs one search and one batch per 50 messages listed (a list reads `MAIL_LIMIT`,
-  50), plus a renewal and its storing when its token expired, against the 50 requests of its own a Worker on the free plan
-  makes per request it serves. A read Gmail answers with its rate limit or a server error, or leaves out of a batch, is
-  asked once more, all of them in one batch and after a pause when it was the rate limit; a message deleted between the
-  search and the read is no failure; one still lost, or whose content cannot be decoded, is counted in its account's
-  failure, its statuses in the log, and the rest still show. The daily review reads whole what arrived since its
-  oldest wait, archived included, because a filter may file away the mail a task waits for: at most 50 messages, and
-  when the account holds more, once more only those of the senders its tasks wait for (`from:`). The unread count is
+  50), plus a renewal and its storing when its token expired (what that leaves a request, below). A read Gmail answers
+  with its rate limit or a server error, or leaves out of a batch, is asked once more, all of them in one batch and after
+  a pause when it was the rate limit; a message deleted between the search and the read is no failure; one still lost,
+  or whose content cannot be decoded, is counted in its account's failure, its statuses in the log, and the rest still
+  show. The daily review reads whole what arrived since its oldest wait, archived included, because a filter may file
+  away the mail a task waits for: at most 50 messages, and when the account holds more, once more only those of the
+  senders its tasks wait for (`from:`). The unread count is
   the inbox's, the same search as the list's, read in pages of 500 ids up to four; past them it says it stopped. A search
   passes its words to Gmail's own search of the inbox as one group: the words' own groups stay when their parentheses and
   braces pair and nest, and otherwise those and a quote left open are read as spaces, so no operator among them reaches
@@ -343,6 +343,17 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   is not tried and says why. The log names an account by its id, never by its address.
   The events of a node include those of the accounts it inherits, also for an agent token scoped to it: an inherited
   account is part of what the node shows, while the token still reaches no item or node outside its subtree.
+- **What a request fits**: a Worker on Cloudflare's free plan makes at most 50 requests of its own for each request it
+  serves —to Google and to Supabase alike— and that request fails whole past them (10,000 on the paid plan). Counted
+  with every token expired, for a workspace whose task waits for a message (`tests/google/mail.test.ts`): the Mail page's
+  list (`list_mail` over every account, 50 messages each) asks 11 requests whatever its accounts and 5 per account —the
+  token's renewal and its storing, a search, a batch, and the first page of its unread count—, and the sidebar's count
+  (`list_tree` with `withMail`) 7 and 3 per account; a valid token saves 2 of each account's, and an unread count that
+  reads all its pages asks 3 more. The route adds one: who is signed in, or a coding agent's token. So, with the person's
+  session valid, the list fits 7 accounts and the count 14 —4 and 7 when their unread counts read all their pages—, and
+  renewing the session first takes one request more, one account less in the count. A chat turn over everything that
+  reads the mail once asks 16 requests of its own, up to 6 to the model, and 1 to store the turn: it fits 5 accounts, 3
+  when their counts read all their pages, and each other tool that reads mail in the same turn takes from the same 50.
 - The Google Cloud app is published without verification: users see Google's unverified-app screen, and
   authorizations do not expire after seven days as they do in testing mode.
 

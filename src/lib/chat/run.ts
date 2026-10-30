@@ -13,8 +13,9 @@ import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { chatTools } from "./tools";
 
-// A turn may call several tools in a row (look up, then write, then answer); the loop ends at this bound.
-const MAX_STEPS = 6;
+// A turn may call several tools in a row (look up, then write, then answer); the loop ends at this bound. Each step is
+// one request to the model, counted with the rest of the turn's against the Worker's own requests.
+export const MAX_STEPS = 6;
 
 type TreeRow = { id: string; path: string; openTasks: number };
 
