@@ -1,4 +1,4 @@
-import { CALENDAR_LIST_SCOPE, CONNECT_SCOPES, EVENTS_SCOPE, exchangeCode, GOOGLE_AUTH_URL, listCalendars, userEmail } from "./api";
+import { CALENDAR_LIST_SCOPE, CONNECT_SCOPES, EVENTS_SCOPE, exchangeCode, GMAIL_READ_SCOPE, GOOGLE_AUTH_URL, listCalendars, userEmail } from "./api";
 import { encrypt } from "./crypto";
 import type { GoogleDeps } from "./events";
 
@@ -30,9 +30,13 @@ export async function connectAccount(
   const tokens = await exchangeCode(deps.fetch, deps.client, code, redirectUri);
   if (!tokens.refresh_token) throw new Error("Google returned no refresh token: connect the account again");
   const scopes = (tokens.scope ?? "").split(" ").filter(Boolean);
-  // Both are needed: the events to read and write them, and the calendar list to know which calendars there are.
+  // All three are needed: the events to read and write them, the calendar list to know which calendars there are, and the
+  // mail to read it. Google lets the person untick each one on its consent screen.
   if (!scopes.includes(EVENTS_SCOPE) || !scopes.includes(CALENDAR_LIST_SCOPE)) {
     throw new Error("calendar access was not granted: tick both calendar permissions when connecting");
+  }
+  if (!scopes.includes(GMAIL_READ_SCOPE)) {
+    throw new Error("mail access was not granted: tick the Gmail permission when connecting");
   }
   const profile = await userEmail(deps.fetch, tokens.access_token);
   if (!profile.email) throw new Error("Google did not share the account's email");

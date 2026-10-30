@@ -13,8 +13,9 @@ let user: DisposableUser | undefined;
 let deps: GoogleDeps;
 const ids = { root: "", project: "", leaf: "", agency: "", landing: "", revoked: "" };
 const calls: string[] = [];
-let grantedScope =
-  "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/userinfo.email";
+const FULL_GRANT =
+  "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email";
+let grantedScope = FULL_GRANT;
 let written = 0;
 
 const googleEvents: Record<string, unknown[]> = {
@@ -23,6 +24,7 @@ const googleEvents: Record<string, unknown[]> = {
     { id: "a2", summary: "Cancelled", status: "cancelled", start: { dateTime: "2026-11-03T13:00:00Z" }, end: { dateTime: "2026-11-03T14:00:00Z" } },
   ],
   "token-landing": [{ id: "l1", summary: "Landing review", start: { date: "2026-11-02" }, end: { date: "2026-11-03" } }],
+  "token-late": [{ id: "t1", summary: "Late review", start: { date: "2026-11-04" }, end: { date: "2026-11-05" } }],
 };
 
 const fakeGoogle: Fetch = async (input, init) => {
@@ -49,6 +51,8 @@ const fakeGoogle: Fetch = async (input, init) => {
   }
   if (url.pathname.includes("/events")) {
     const token = (init?.headers as Record<string, string>).Authorization.replace("Bearer ", "");
+    // A token Google stopped accepting before its date.
+    if (token === "token-dead") return json(401, { error: { code: 401, status: "UNAUTHENTICATED" } });
     const list = (googleEvents[token] ??= []) as Array<Record<string, unknown>>;
     const eventId = decodeURIComponent(url.pathname.split("/events/")[1] ?? "");
     const method = init?.method ?? "GET";
@@ -208,6 +212,37 @@ describe("events from inherited accounts", () => {
       await deleteDisposableUsers([other]);
     }
   });
+
+  it("a token Google refused before its date is renewed once and read again, and a revoked grant marks the account", async () => {
+    // Under a client of their own, so the reads above keep their accounts: both stored tokens are valid by their date.
+    const node = await insertNode("client", "Late");
+    const service = serviceClient();
+    const accountIds: string[] = [];
+    for (const [email, refresh] of [["late@example.com", "refresh-late"], ["revoked-late@example.com", "refresh-revoked"]]) {
+      const { data, error } = await service
+        .from("google_accounts")
+        .insert({
+          owner_id: user!.id,
+          email,
+          refresh_token: await encrypt(deps.key, refresh),
+          access_token: await encrypt(deps.key, "token-dead"),
+          access_token_expires_at: "2099-01-01T00:00:00Z",
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      accountIds.push(data.id);
+      await service.from("node_accounts").insert({ node_id: node, account_id: data.id });
+      await service.from("account_calendars").insert({ account_id: data.id, calendar_id: "primary", summary: email, selected: true });
+    }
+    const { events, failures } = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: node, ...window });
+    expect(events.map((event) => event.title)).toEqual(["Late review"]);
+    expect(failures).toEqual([{ accountId: accountIds[1], accountEmail: "revoked-late@example.com", reason: "access was revoked: connect the account again" }]);
+    const { data } = await service.from("google_accounts").select("id, access_token, status").in("id", accountIds);
+    const late = data!.find((row) => row.id === accountIds[0])!;
+    expect(await decrypt(deps.key, late.access_token!)).toBe("token-late");
+    expect(data!.find((row) => row.id === accountIds[1])!.status).toBe("revoked");
+  });
 });
 
 describe("connecting an account", () => {
@@ -287,18 +322,34 @@ describe("writing to Google", () => {
   });
 
   it("connecting refuses an authorization without the events or the calendar list permission", async () => {
-    grantedScope = "openid https://www.googleapis.com/auth/calendar.readonly";
+    grantedScope = "openid https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly";
     try {
       await expect(connectAccount(deps, { ownerId: user!.id, nodeId: ids.project }, "code", "http://localhost/api/google/callback")).rejects.toThrow(/calendar access/);
     } finally {
-      grantedScope =
-        "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/userinfo.email";
+      grantedScope = FULL_GRANT;
     }
   });
 
-  it("the authorization asks exactly for the events and the calendar list, besides identity", async () => {
+  it("connecting refuses an authorization without the Gmail permission", async () => {
+    // Google's consent screen lets each permission be unticked: the calendar alone does not connect an account whose
+    // mail the product reads.
+    grantedScope = "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+    try {
+      await expect(connectAccount(deps, { ownerId: user!.id, nodeId: ids.project }, "code", "http://localhost/api/google/callback")).rejects.toThrow(/mail access/);
+    } finally {
+      grantedScope = FULL_GRANT;
+    }
+  });
+
+  it("the authorization asks exactly for the events, the calendar list and reading mail, besides identity", async () => {
     const { authorizationUrl } = await import("@/lib/google/connect");
     const scope = new URL(authorizationUrl("id", "http://localhost/cb", "state")).searchParams.get("scope");
-    expect(scope?.split(" ").sort()).toEqual(["email", "https://www.googleapis.com/auth/calendar.calendarlist.readonly", "https://www.googleapis.com/auth/calendar.events", "openid"]);
+    expect(scope?.split(" ").sort()).toEqual([
+      "email",
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "openid",
+    ]);
   });
 });

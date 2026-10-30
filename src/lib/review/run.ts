@@ -153,7 +153,10 @@ async function actionsOf(ctx: ToolContext, reviewIds: string[]) {
 
 // The tasks of the run: overdue and due today, and every open task that waits for a message, with what arrived for it.
 // The accounts each place sees are resolved once, and each account's mail is read once, from the oldest wait that reads it.
-async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ taskIds: string[]; waiting: ReviewTask[] }>> {
+// An account holding more than one read brings is read again for the senders its tasks wait for, so a busy inbox does
+// not hide a task's answer; what still stays unread —a task waiting for any sender in a busy inbox— and an account that
+// could not be read come back as failures in plain words, which the run shows and counts.
+async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ taskIds: string[]; waiting: ReviewTask[]; failures: string[] }>> {
   const loaded = await loadScope(ctx);
   if (isError(loaded)) return loaded;
   const { scope } = loaded;
@@ -188,12 +191,36 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
   }
   // One read per account, all at once.
   const arrived = await Promise.all(
-    [...since].map(([id, from]) =>
-      mailOf(ctx).read({ db: ctx.db, ownerId: ctx.ownerId, accounts: [mapped.map.accounts.get(id)!], since: from, limit: MAIL_LIMIT }),
-    ),
+    [...since].map(async ([id, from]) => {
+      const account = mapped.map.accounts.get(id)!;
+      // What the person reads of each read that failed or stopped short, and what the log keeps, by the account's id.
+      const failures: Array<{ log: string; step: string }> = [];
+      const failed = (what: string, reason: string) => failures.push({ log: `account ${id}: ${reason}`, step: `${what}: ${reason}` });
+      const read = await mailOf(ctx).read({ db: ctx.db, ownerId: ctx.ownerId, accounts: [account], since: from, limit: MAIL_LIMIT });
+      for (const failure of read.failures) failed(`reading the mail of ${account.email}`, failure.reason);
+      if (!read.more.includes(id)) return { messages: read.messages, failures };
+      const readers = reading.filter((row) => accountsOfTask.get(row.id)!.has(id));
+      const named = readers.filter((row) => mail.byTask.get(row.id)!.expectFrom);
+      const messages = [...read.messages];
+      if (named.length > 0) {
+        const senders = [...new Set(named.map((row) => mail.byTask.get(row.id)!.expectFrom!))];
+        const oldest = named.reduce((first, row) => (row.created_at < first ? row.created_at : first), named[0].created_at);
+        const theirs = await mailOf(ctx).read({ db: ctx.db, ownerId: ctx.ownerId, accounts: [account], since: oldest, limit: MAIL_LIMIT, from: senders });
+        const known = new Set(messages.map((message) => message.id));
+        messages.push(...theirs.messages.filter((message) => !known.has(message.id)));
+        const what = `reading the mail of ${account.email} from ${senders.join(", ")}`;
+        for (const failure of theirs.failures) failed(what, failure.reason);
+        if (theirs.more.includes(id)) failed(what, `only the latest ${MAIL_LIMIT} messages were read`);
+      }
+      if (readers.length > named.length) {
+        failed(`reading the mail of ${account.email} for a task that waits for any sender`, `only the latest ${MAIL_LIMIT} messages since it waits were read`);
+      }
+      return { messages, failures };
+    }),
   );
   const messages = arrived.flatMap((answer) => answer.messages).sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
-  for (const failure of arrived.flatMap((answer) => answer.failures)) console.error(`daily review: ${failure.accountEmail}: ${failure.reason}`);
+  const failures = arrived.flatMap((answer) => answer.failures);
+  for (const failure of failures) console.error(`daily review: ${failure.log}`);
   const waiting = reading.map((row): ReviewTask => {
     const accounts = accountsOfTask.get(row.id)!;
     // A task that names who it waits for reads only that sender's mail: what anyone else sent to the same account is not
@@ -212,7 +239,7 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
         .map(({ html, text, ...message }) => ({ ...message, text: text ?? richTextToPlain(html) })),
     };
   });
-  return ok({ taskIds: rows.map((row) => row.id), waiting });
+  return ok({ taskIds: rows.map((row) => row.id), waiting, failures: [...new Set(failures.map((failure) => failure.step))] });
 }
 
 // The two tools, bound to one run: each writes only a task the run looked at, records what was there before in the same
@@ -391,7 +418,8 @@ export async function runDailyReview(
     const unrecorded = isError(stopped) ? `; recording the stop failed too: ${stopped.message}` : "";
     return fail("internal", `the review stopped: ${cause instanceof Error ? cause.message : "the judge failed"}${unrecorded}`);
   }
-  const all = [...failures, ...(judged?.failures ?? [])];
+  // What the run could not read is as much a step that failed as what it could not write.
+  const all = [...gathered.failures, ...failures, ...(judged?.failures ?? [])];
   const closed = await finish(ctx, run, all.length, true);
   if (isError(closed)) return closed;
   const actions = await withTasks(ctx, rows);

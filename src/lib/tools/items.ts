@@ -8,6 +8,7 @@ import { defineTool } from "./define";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 import { ITEM_COLUMNS, hourOf, itemSchema, itemTypes, selectAllItems, toItem, byPriorityThenDue, newestFirst, type ItemType } from "./rows";
 import { dueOn, dueTime, priority, titleText } from "./fields";
+import { mailFailureSchema } from "@/lib/mail/source";
 import { searchMail } from "./mail";
 import { mailRowSchema } from "./mail-schema";
 import { loadScope, reachOf, reaches, resolveReadPlace, resolveWritePlace, type Scope } from "./tree";
@@ -453,7 +454,12 @@ export const searchItems = defineTool({
     type: z.enum(itemTypes).optional(),
     status: z.enum(["open", "done", "all"]).default("all").describe("open, done, or all (default)."),
   }),
-  output: z.object({ items: z.array(itemSchema), mail: z.array(mailRowSchema).optional() }),
+  output: z.object({
+    items: z.array(itemSchema),
+    mail: z.array(mailRowSchema).optional(),
+    // The accounts whose mail could not be searched, each with its reason.
+    mailFailures: z.array(mailFailureSchema).optional(),
+  }),
   async run(ctx, input) {
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
@@ -486,7 +492,7 @@ export const searchItems = defineTool({
       console.error("search: the mail could not be read", mail.message);
       return ok({ items });
     }
-    return ok({ items, mail: mail.rows });
+    return ok({ items, mail: mail.rows, mailFailures: mail.failures });
   },
 });
 

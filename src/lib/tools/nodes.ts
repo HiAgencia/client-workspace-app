@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mailFailureSchema, type MailFailure } from "@/lib/mail/source";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { defineTool } from "./define";
 import { browseEvents, browsedEventSchema, fromLocal } from "./browse";
@@ -52,8 +53,9 @@ export const listTree = defineTool({
     nodes: z.array(treeNodeSchema),
     // Over everything the list reaches, General included where reached: what is overdue and due today.
     tasks: z.object({ overdue: z.number(), today: z.number() }).nullable(),
-    // With withMail: the unread messages of the accounts in reach (unread in Gmail and not opened here).
-    mail: z.object({ unread: z.number() }).nullable().optional(),
+    // With withMail: the unread messages of the accounts in reach (unread in Gmail and not opened here), and the accounts
+    // whose count failed or stopped short, which the number leaves out or counts in part.
+    mail: z.object({ unread: z.number(), failures: z.array(mailFailureSchema) }).nullable().optional(),
     // With withContent: the nodes that have something to show besides their tasks —the mail of an account they see, the
     // notes of what is below them, the week's events of their accounts or of what is below them— and whether General has.
     content: z.object({ nodes: z.array(z.string()), general: z.boolean() }).nullable().optional(),
@@ -104,13 +106,13 @@ export const listTree = defineTool({
           { overdue: 0, today: 0 },
         )
       : null;
-    let mail: { unread: number } | null = null;
+    let mail: { unread: number; failures: MailFailure[] } | null = null;
     if (input.withMail) {
       const reached = await accountsOf(ctx, scope, place);
       if (isError(reached)) return reached;
       const count = await unreadMail(ctx, reached.accounts);
       if (isError(count)) return count;
-      mail = { unread: count.unread };
+      mail = { unread: count.unread, failures: count.failures };
     }
     if (!input.withContent) return ok({ nodes, tasks, mail, content: null });
     const shown = await contentOf(ctx, scope, place, input.withContent);

@@ -15,7 +15,7 @@ export type GoogleDeps = {
   fetch: Fetch;
 };
 
-type AccountRow = {
+export type TokenRow = {
   id: string;
   email: string;
   refresh_token: string | null;
@@ -23,11 +23,12 @@ type AccountRow = {
   access_token_expires_at: string | null;
 };
 
-// A valid access token for one account, renewed with its refresh token when needed and stored again encrypted.
-// A revoked authorization marks the account so the screen can offer to connect it again.
-export async function accessTokenFor(deps: GoogleDeps, account: AccountRow, now = Date.now()): Promise<string> {
+// A valid access token for one account, renewed with its refresh token when needed —or always, when `renew` says the
+// stored one was refused— and stored again encrypted. A revoked authorization marks the account so the screen can offer
+// to connect it again.
+export async function accessTokenFor(deps: GoogleDeps, account: TokenRow, now = Date.now(), renew = false): Promise<string> {
   const expires = account.access_token_expires_at ? Date.parse(account.access_token_expires_at) : 0;
-  if (account.access_token && expires - RENEW_MARGIN_MS > now) return decrypt(deps.key, account.access_token);
+  if (!renew && account.access_token && expires - RENEW_MARGIN_MS > now) return decrypt(deps.key, account.access_token);
   if (!account.refresh_token) throw new GoogleError("the account has no refresh token: connect it again", 0, "invalid_grant");
   let answer;
   try {
@@ -51,6 +52,20 @@ export async function accessTokenFor(deps: GoogleDeps, account: AccountRow, now 
     .eq("id", account.id);
   if (error) throw new Error(`storing the renewed token: ${error.message}`);
   return answer.access_token;
+}
+
+// What a call does with an account's access token. Google refuses a token still valid by its date once the person
+// revokes the access from their Google account (HTTP 401): the token is renewed once and the call made again, so a
+// revoked access ends as one —the renewal answers `invalid_grant` and marks the account— instead of reading as an HTTP
+// error until the stored token expires.
+export async function withAccessToken<T>(deps: GoogleDeps, account: TokenRow, call: (token: string) => Promise<T>): Promise<T> {
+  const token = await accessTokenFor(deps, account);
+  try {
+    return await call(token);
+  } catch (error) {
+    if (!(error instanceof GoogleError) || error.status !== 401) throw error;
+    return call(await accessTokenFor(deps, account, Date.now(), true));
+  }
 }
 
 function toEvent(
@@ -113,15 +128,19 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
           return;
         }
         try {
-          const token = await accessTokenFor(deps, account);
           const own = calendars.data.filter((calendar) => calendar.account_id === account.id);
-          for (const calendar of own) {
-            const items = await listEvents(deps.fetch, token, calendar.calendar_id, from, to);
-            for (const item of items) {
-              const event = toEvent(item, calendar, account, fromNode.get(account.id)!);
-              if (event) events.push(event);
+          // Read whole before any is kept: a call made again after a refused token does not add its events twice.
+          const read = await withAccessToken(deps, account, async (token) => {
+            const found: CalendarEvent[] = [];
+            for (const calendar of own) {
+              for (const item of await listEvents(deps.fetch, token, calendar.calendar_id, from, to)) {
+                const event = toEvent(item, calendar, account, fromNode.get(account.id)!);
+                if (event) found.push(event);
+              }
             }
-          }
+            return found;
+          });
+          events.push(...read);
         } catch (error) {
           failures.push({
             accountId: account.id,
@@ -143,7 +162,7 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
 // Writing to an account's calendar: the account must be the owner's, connected for real (not the demo's) and not revoked;
 // its token is renewed as for reading.
 export function googleCalendarWriter(deps: GoogleDeps): CalendarWriter {
-  async function tokenFor(ownerId: string, accountId: string) {
+  async function accountFor(ownerId: string, accountId: string) {
     const { data, error } = await deps.service
       .from("google_accounts")
       .select("id, email, status, is_demo, refresh_token, access_token, access_token_expires_at")
@@ -154,17 +173,18 @@ export function googleCalendarWriter(deps: GoogleDeps): CalendarWriter {
     if (!data) throw new GoogleError("no such account", 404, "not_found");
     if (data.is_demo) throw new GoogleError("the demo's sample account is read-only", 403, "read_only");
     if (data.status === "revoked") throw new GoogleError("access was revoked: connect the account again", 401, "invalid_grant");
-    return accessTokenFor(deps, data);
+    return data;
   }
+  // A write Google refused for its token was not made, so making it again with the renewed token writes it once.
   return {
     async create({ ownerId, accountId, calendarId, event }) {
-      return insertEvent(deps.fetch, await tokenFor(ownerId, accountId), calendarId, event);
+      return withAccessToken(deps, await accountFor(ownerId, accountId), (token) => insertEvent(deps.fetch, token, calendarId, event));
     },
     async update({ ownerId, accountId, calendarId, eventId, event }) {
-      return patchEvent(deps.fetch, await tokenFor(ownerId, accountId), calendarId, eventId, event);
+      return withAccessToken(deps, await accountFor(ownerId, accountId), (token) => patchEvent(deps.fetch, token, calendarId, eventId, event));
     },
     async remove({ ownerId, accountId, calendarId, eventId }) {
-      await deleteEvent(deps.fetch, await tokenFor(ownerId, accountId), calendarId, eventId);
+      await withAccessToken(deps, await accountFor(ownerId, accountId), (token) => deleteEvent(deps.fetch, token, calendarId, eventId));
     },
   };
 }

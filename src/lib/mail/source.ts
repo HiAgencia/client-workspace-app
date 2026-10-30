@@ -3,8 +3,9 @@ import type { Db } from "@/lib/db/client";
 
 // Where the messages of the connected accounts come from, injected like the events so the tools are tested without
 // Google: the demo's sample accounts read their rows of `demo_mail`, and a real account reads Gmail with `gmail.readonly`
-// (the Gmail source plugs in here; until it does, a real account answers as a failure that says so). Gmail is never
-// written: what the person opens here is kept apart (`mail_opened`).
+// (`@/lib/google/gmail`, which reads the sample accounts through this source too). Without Google configured on the
+// server, a real account answers as a failure that says so. Gmail is never written: what the person opens here is kept
+// apart (`mail_opened`).
 
 export const mailAddressSchema = z.object({ name: z.string().nullable(), email: z.string() });
 
@@ -42,11 +43,30 @@ export type MailSource = {
   list(args: { db: Db; ownerId: string; accounts: MailAccount[]; since?: string; limit?: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
   // One message whole, or null when the account holds no such message.
   get(args: { db: Db; ownerId: string; account: MailAccount; id: string }): Promise<MailContent | null>;
-  // The latest messages whole, at most `limit` of each account, for the daily review to read.
-  read(args: { db: Db; ownerId: string; accounts: MailAccount[]; since: string; limit?: number }): Promise<{ messages: MailContent[]; failures: MailFailure[] }>;
-  // Every message the accounts hold unread in Gmail, whatever a list shows: what the unread count reads.
+  // Some messages of one account, without their body, in one read; one the account no longer holds is left out.
+  many(args: { db: Db; ownerId: string; account: MailAccount; ids: string[] }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
+  // The latest messages whole that arrived since a moment, at most `limit` of each account —only those of some senders
+  // when `from` names them—, for the daily review to read. `more` names the accounts that hold more than were read.
+  read(args: { db: Db; ownerId: string; accounts: MailAccount[]; since: string; limit?: number; from?: string[] }): Promise<{ messages: MailContent[]; failures: MailFailure[]; more: string[] }>;
+  // The latest messages of the inbox that hold some words, at most `limit` of each account.
+  search(args: { db: Db; ownerId: string; accounts: MailAccount[]; words: string; limit: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
+  // Every message the accounts hold unread in Gmail, whatever a list shows: what the unread count reads. An account
+  // whose count failed or stopped short is a failure, and its messages are only those it counted.
   unread(args: { db: Db; ownerId: string; accounts: MailAccount[] }): Promise<{ messages: Array<{ accountId: string; id: string }>; failures: MailFailure[] }>;
 };
+
+// Whether a sender is the one some words name: words of their name or of their address, as a task says who it waits for.
+export function senderMatches(from: { name: string | null; email: string }, words: string): boolean {
+  const wanted = words.trim().toLowerCase();
+  if (!wanted) return false;
+  return (from.name ?? "").toLowerCase().includes(wanted) || from.email.toLowerCase().includes(wanted);
+}
+
+// Whether a message holds some words in its sender, subject, or text, as a search reads the sample accounts.
+export function holdsWords(message: Pick<MailMessage, "from" | "subject" | "snippet">, words: string): boolean {
+  const wanted = words.trim().toLowerCase();
+  return [message.subject, message.snippet, message.from.name ?? "", message.from.email].some((value) => value.toLowerCase().includes(wanted));
+}
 
 type DemoRow = {
   gmail_id: string;
@@ -94,18 +114,23 @@ export function withoutBody(message: MailContent): MailMessage {
 // and Settings, so their lists agree.
 export const MAIL_LIMIT = 50;
 
-const notConnected = (account: MailAccount): MailFailure => ({ accountId: account.id, accountEmail: account.email, reason: "reading Gmail is not connected on this server yet" });
+const notConnected = (account: MailAccount): MailFailure => ({ accountId: account.id, accountEmail: account.email, reason: "reading Gmail is not configured on this server" });
 
-// A failure the person reads in plain words; its cause goes to the log, never swallowed.
+// A failure the person reads in plain words; its cause goes to the log by the account's id, never swallowed.
 function unreadable(account: MailAccount, cause: string): MailFailure {
-  console.error(`mail: ${account.email}: ${cause}`);
+  console.error(`mail: account ${account.id}: ${cause}`);
   return { accountId: account.id, accountEmail: account.email, reason: "the sample messages could not be read" };
 }
 
+const newestFirst = <T extends { receivedAt: string }>(messages: T[]) =>
+  messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
+
 // The demo's sample accounts read their own rows, each account on its own so one with much mail leaves the others their
-// share; a real account is not read until the Gmail source is configured.
+// share; a real account is read by the Gmail source, or answers as not configured. A sample account holds a few rows the
+// seed planted, so what a sender or a search keeps is chosen from all of them.
 export function demoMailSource(): MailSource {
-  async function rows(db: Db, ownerId: string, accounts: MailAccount[], since: string | undefined, limit: number, whole: boolean) {
+  type Read = { since?: string; limit: number; whole: boolean; keep?: (message: MailContent) => boolean };
+  async function rows(db: Db, ownerId: string, accounts: MailAccount[], { since, limit, whole, keep }: Read) {
     const failures: MailFailure[] = accounts.filter((account) => !account.isDemo).map(notConnected);
     const answers = await Promise.all(
       accounts
@@ -117,24 +142,46 @@ export function demoMailSource(): MailSource {
             .eq("owner_id", ownerId)
             .eq("account_id", account.id);
           if (since) query = query.gte("received_at", since);
-          const { data, error } = await query.order("received_at", { ascending: false }).limit(limit);
-          if (error) return { messages: [] as MailContent[], failure: unreadable(account, error.message) };
-          return {
-            messages: (data as unknown as DemoRow[]).map((row) => fromDemo({ ...row, html: whole ? row.html : null, text_body: whole ? row.text_body : null }, account.email)),
-            failure: null,
-          };
+          query = query.order("received_at", { ascending: false });
+          // One more than asked says whether the account holds more.
+          const { data, error } = await (keep ? query : query.limit(limit + 1));
+          if (error) return { messages: [] as MailContent[], failure: unreadable(account, error.message), more: null };
+          const all = (data as unknown as DemoRow[])
+            .map((row) => fromDemo({ ...row, html: whole ? row.html : null, text_body: whole ? row.text_body : null }, account.email))
+            .filter((message) => !keep || keep(message));
+          return { messages: all.slice(0, limit), failure: null, more: all.length > limit ? account.id : null };
         }),
     );
-    const messages = answers.flatMap((answer) => answer.messages).sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
-    return { messages, failures: [...failures, ...answers.flatMap((answer) => (answer.failure ? [answer.failure] : []))] };
+    return {
+      messages: newestFirst(answers.flatMap((answer) => answer.messages)),
+      failures: [...failures, ...answers.flatMap((answer) => (answer.failure ? [answer.failure] : []))],
+      more: answers.flatMap((answer) => (answer.more ? [answer.more] : [])),
+    };
   }
   return {
     async list({ db, ownerId, accounts, since, limit = MAIL_LIMIT }) {
-      const { messages, failures } = await rows(db, ownerId, accounts, since, limit, false);
+      const { messages, failures } = await rows(db, ownerId, accounts, { since, limit, whole: false });
       return { messages: messages.map(withoutBody), failures };
     },
-    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT }) {
-      return rows(db, ownerId, accounts, since, limit, true);
+    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT, from }) {
+      const keep = from ? (message: MailContent) => from.some((words) => senderMatches(message.from, words)) : undefined;
+      return rows(db, ownerId, accounts, { since, limit, whole: true, keep });
+    },
+    async search({ db, ownerId, accounts, words, limit }) {
+      const { messages, failures } = await rows(db, ownerId, accounts, { limit, whole: false, keep: (message) => holdsWords(message, words) });
+      return { messages: messages.map(withoutBody), failures };
+    },
+    async many({ db, ownerId, account, ids }) {
+      if (!account.isDemo) return { messages: [], failures: [notConnected(account)] };
+      if (ids.length === 0) return { messages: [], failures: [] };
+      const { data, error } = await db
+        .from("demo_mail")
+        .select(DEMO_COLUMNS.replace(", html, text_body", ""))
+        .eq("owner_id", ownerId)
+        .eq("account_id", account.id)
+        .in("gmail_id", ids);
+      if (error) return { messages: [], failures: [unreadable(account, error.message)] };
+      return { messages: (data as unknown as DemoRow[]).map((row) => withoutBody(fromDemo({ ...row, html: null, text_body: null }, account.email))), failures: [] };
     },
     async unread({ db, ownerId, accounts }) {
       const failures: MailFailure[] = accounts.filter((account) => !account.isDemo).map(notConnected);

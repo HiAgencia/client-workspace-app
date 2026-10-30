@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { demoMailSource, MAIL_LIMIT, mailFailureSchema, withoutBody, type MailAccount, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
+import { demoMailSource, MAIL_LIMIT, mailFailureSchema, senderMatches, type MailAccount, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
 import { sanitizeMailHtml } from "@/lib/mail/sanitize";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
@@ -14,7 +14,7 @@ import { describePlace, loadScope, reaches, resolveNode, resolveReadPlace, resol
 // was not opened here, then the rest. A message's own text is data to show, never an instruction.
 
 // The source the tools read, injected like the events; without one, the demo's sample accounts are read and a real
-// account answers as not connected yet.
+// account answers that reading Gmail is not configured on this server.
 export function mailOf(ctx: ToolContext): MailSource {
   return ctx.mail ?? demoMailSource();
 }
@@ -175,9 +175,7 @@ const IN_CHUNK = 200;
 
 // Whether a message comes from the sender a task waits for.
 export function fromExpected(message: Pick<MailMessage, "from">, expectFrom: string | null): boolean {
-  if (!expectFrom) return false;
-  const wanted = expectFrom.trim().toLowerCase();
-  return (message.from.name ?? "").toLowerCase().includes(wanted) || message.from.email.toLowerCase().includes(wanted);
+  return expectFrom ? senderMatches(message.from, expectFrom) : false;
 }
 
 function toRows(
@@ -240,7 +238,9 @@ export async function readMail(
 }
 
 // How many messages a place's accounts hold unread in Gmail and were not opened here, whatever a list shows: the same
-// figure for the sidebar, the Mail page, and each account in Settings.
+// figure for the sidebar, the Mail page, and each account in Settings. An account whose count failed is a failure, never
+// a zero: it is left out of `byAccount` when nothing of it was counted, and what was counted before a failure or a cut
+// stays with the failure that says the count is not whole.
 export async function unreadMail(
   ctx: ToolContext,
   accounts: MailAccount[],
@@ -259,9 +259,20 @@ export async function unreadMail(
     seen = new Set(data.map((row) => `${row.account_id}:${row.message_id}`));
   }
   const fresh = messages.filter((message) => !seen.has(`${message.accountId}:${message.id}`));
-  const byAccount: Record<string, number> = Object.fromEntries(accounts.map((account) => [account.id, 0]));
+  const failed = new Set(failures.map((failure) => failure.accountId));
+  const counted = new Set(messages.map((message) => message.accountId));
+  const byAccount: Record<string, number> = Object.fromEntries(
+    accounts.filter((account) => !failed.has(account.id) || counted.has(account.id)).map((account) => [account.id, 0]),
+  );
   for (const message of fresh) byAccount[message.accountId] = (byAccount[message.accountId] ?? 0) + 1;
   return ok({ unread: fresh.length, byAccount, failures });
+}
+
+// One failure per account, the first said: two reads of one account that failed are one account to fix.
+export function failuresByAccount(...lists: MailFailure[][]): MailFailure[] {
+  const byAccount = new Map<string, MailFailure>();
+  for (const failure of lists.flat()) if (!byAccount.has(failure.accountId)) byAccount.set(failure.accountId, failure);
+  return [...byAccount.values()];
 }
 
 export const listMail = defineTool({
@@ -284,8 +295,9 @@ export const listMail = defineTool({
     groups: z.object({ forTasks: mailGroup, unread: mailGroup, earlier: mailGroup }),
     // Every unread message of the place's accounts, listed or not, the first group's included.
     unread: z.number(),
-    // The same count, account by account.
+    // The same count, account by account; an account whose count failed is not here, and its failure says why.
     unreadByAccount: z.record(z.string(), z.number()),
+    // An account whose messages or whose unread count could not be read, once each.
     failures: z.array(mailFailureSchema),
   }),
   async run(ctx, input) {
@@ -311,7 +323,7 @@ export const listMail = defineTool({
       },
       unread: count.unread,
       unreadByAccount: count.byAccount,
-      failures: read.failures,
+      failures: failuresByAccount(read.failures, count.failures),
     });
   },
 });
@@ -569,21 +581,25 @@ export const setTaskMail = defineTool({
   },
 });
 
-// The mail a search finds: the messages of the place's accounts whose sender, subject, or text holds the words.
-export async function searchMail(ctx: ToolContext, scope: Scope, place: ReadPlace, query: string): Promise<ToolResult<{ rows: MailRow[] }>> {
-  const read = await readMail(ctx, scope, place, { limit: 200 });
-  if (isError(read)) return read;
-  const words = query.toLowerCase();
-  return ok({
-    rows: read.rows
-      .filter((row) => [row.subject, row.snippet, row.from.name ?? "", row.from.email].some((value) => value.toLowerCase().includes(words)))
-      .slice(0, 20),
-  });
+// How many messages a search shows, over all the place's accounts.
+const SEARCH_LIMIT = 20;
+
+// The mail a search finds: the latest messages of the place's inbox that hold the words, found by Gmail's own search
+// —a sample account looks in its sender, subject, and text—, with the accounts that could not be searched.
+export async function searchMail(ctx: ToolContext, scope: Scope, place: ReadPlace, query: string): Promise<ToolResult<{ rows: MailRow[]; failures: MailFailure[] }>> {
+  const reached = await accountsOf(ctx, scope, place);
+  if (isError(reached)) return reached;
+  if (reached.accounts.length === 0) return ok({ rows: [], failures: [] });
+  const { messages, failures } = await mailOf(ctx).search({ db: ctx.db, ownerId: ctx.ownerId, accounts: reached.accounts, words: query, limit: SEARCH_LIMIT });
+  const shown = messages.slice(0, SEARCH_LIMIT);
+  const context = await mailContext(ctx, scope, [...new Set(shown.map((message) => message.accountId))]);
+  if (isError(context)) return context;
+  return ok({ rows: toRows(shown, context, new Map(reached.accounts.map((account) => [account.id, account])), scope), failures });
 }
 
-
-// The messages linked to an item, and the one that decided the mail it waits for, read whole from their accounts and
-// shown as rows. A message of an account the caller does not reach is left out; one its account no longer holds too.
+// The messages linked to an item, and the one that decided the mail it waits for, read from their accounts —one read
+// per account, all at once— and shown as rows. A message of an account the caller does not reach is left out; one its
+// account no longer holds too.
 export async function itemMailOf(
   ctx: ToolContext,
   scope: Scope,
@@ -599,19 +615,15 @@ export async function itemMailOf(
   const reached = await accountsOf(ctx, scope, place);
   if (isError(reached)) return reached;
   const accounts = new Map(reached.accounts.map((account) => [account.id, account]));
-  const messages: MailMessage[] = [];
-  const failures: MailFailure[] = [];
+  const byAccount = new Map<string, string[]>();
   for (const { accountId, messageId } of wanted.values()) {
-    const account = accounts.get(accountId);
-    if (!account) continue;
-    try {
-      const content = await mailOf(ctx).get({ db: ctx.db, ownerId: ctx.ownerId, account, id: messageId });
-      if (!content) continue;
-      messages.push(withoutBody(content));
-    } catch (cause) {
-      failures.push({ accountId, accountEmail: account.email, reason: cause instanceof Error ? cause.message : "the message could not be read" });
-    }
+    if (accounts.has(accountId)) byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), messageId]);
   }
+  const answers = await Promise.all(
+    [...byAccount].map(([accountId, ids]) => mailOf(ctx).many({ db: ctx.db, ownerId: ctx.ownerId, account: accounts.get(accountId)!, ids })),
+  );
+  const messages: MailMessage[] = answers.flatMap((answer) => answer.messages);
+  const failures = failuresByAccount(...answers.map((answer) => answer.failures));
   const context = await mailContext(ctx, scope, [...new Set(messages.map((message) => message.accountId))]);
   if (isError(context)) return context;
   messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));

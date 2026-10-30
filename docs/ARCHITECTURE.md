@@ -122,14 +122,20 @@ and the screens. When the code changes a decision described here, this document 
   working minutes of each moment included; the general work is `demoGeneral`.
 
 - **The mail** comes from a source the tools are given (`src/lib/mail/source.ts`), as the events do: the demo's sample
-  accounts read their rows of `demo_mail`; a real account answers as not read until the Gmail source (`gmail.readonly`)
-  is configured. A place's accounts are those visible from its node, inherited included, every account over
+  accounts read their rows of `demo_mail`, and a real account reads Gmail with its own token (`src/lib/google/gmail.ts`,
+  below in §Google accounts); without Google configured on the server, a real account answers as a failure that says
+  so. A place's accounts are those visible from its node, inherited included, every account over
   everything, and none for General. A list reads the latest messages of each account (`MAIL_LIMIT` by default), so an
   account with much mail leaves the others their share. A message is "for your tasks" when an open task is linked to it
   or waits for it: in its own account, or in every account its place sees (General's tasks, in every account of the
   owner), its sender holding the task's `expect_from`, arrived after the task existed. "Unread" is unread in Gmail and
   not opened here, and its count (`list_mail.unread`, `list_tree` with `withMail`) is every unread message of the
-  accounts, listed or not. An access scoped to a node reads in a message only the tasks and the nodes it reaches.
+  accounts, listed or not; an account whose count failed or stopped short is a failure beside it (`list_mail.failures`,
+  one per account, and `list_tree`'s `mail.failures`), and is left out of `unreadByAccount` when nothing of it was
+  counted, never read as a zero. A search (`search_items`) asks each account's own search for the words —Gmail's for a
+  real account; a sample account looks in its sender, subject, and text— and shows at most 20 messages with the accounts
+  it could not search; the mail of a task (`get_item`) is read once per account. An access scoped to a node reads in a
+  message only the tasks and the nodes it reaches.
   Waiting for another account or another sender starts the wait over (`waiting`, the deciding message forgotten), and a
   task moved to a place that does not see its account waits in every account of its new place. The HTML that leaves the server is sanitized (`src/lib/mail/sanitize.ts`): no scripts, forms and their
   controls, frames, embedded objects, handlers, active links, or style rules that load or run something; remote images
@@ -139,7 +145,10 @@ and the screens. When the code changes a decision described here, this document 
   accounts marked as the demo's without tokens, once.
 - **The daily review** (`src/lib/review/`) walks the person's overdue tasks, today's, and every open task that waits for
   a message whatever its date; for each that waits, it reads what arrived in its accounts since the task exists (each
-  account read once, from the oldest wait that reads it), and only from its sender when it names one (`fromExpected`).
+  account read once, from the oldest wait that reads it, and once more for the senders its tasks wait for when it holds
+  more than one read brings), and only from its sender when it names one (`fromExpected`). What it could not read —an
+  account that failed, or a task waiting for any sender in an account with more mail than was read— is one of the run's
+  failures, said in its answer.
   A judge decides with two tools only, bound to the tasks of the run: write the state of a task's mail (with a sentence
   that quotes the deciding line and, for `met` and `not_met`, the message that decides it: one that arrived for that
   task, from its sender, or about it when it names none), and complete a task this run wrote as `met`. Each writes
@@ -289,8 +298,9 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   variables and handed to the browser by the page, so one build runs anywhere with that place's variables.
 - **Connecting an account** is a separate OAuth flow per account, started from the node it hangs from
   (`/api/google/connect?node=` → `/api/google/callback`): `access_type=offline`, `prompt=consent select_account`,
-  `include_granted_scopes`, scope `calendar.events` and `calendar.calendarlist.readonly` plus `openid email`; the callback
-  refuses an authorization without both calendar permissions. The `state` carries the node, the person,
+  `include_granted_scopes`, scope `calendar.events`, `calendar.calendarlist.readonly`, and `gmail.readonly` plus
+  `openid email`; the callback refuses an authorization without both calendar permissions or without the Gmail one,
+  each of which Google's consent screen lets the person untick. The `state` carries the node, the person,
   an expiry, and a nonce, signed with HMAC under a key derived from `TOKEN_ENCRYPTION_KEY`; the nonce also sits in an
   http-only cookie of the browser that started, and the callback demands both and the same signed-in person. The
   tokens are encrypted with AES-GCM (WebCrypto) under `TOKEN_ENCRYPTION_KEY`, a Worker secret, and only the service
@@ -298,13 +308,30 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   node, and keeps the person's choice of calendars; a new calendar starts shown when it is the primary one or Google
   marks it selected. A demo session does not connect accounts.
 - An access token is renewed shortly before it expires; a refresh Google refuses (`invalid_grant`) marks the account
-  `revoked`, is not asked again, and the screen asks to connect it again. Every call to Google carries its own
-  deadline.
+  `revoked`, is not asked again, and the screen asks to connect it again. A token Google refuses before its date
+  (HTTP 401, as when the person revokes the access from their Google account) is renewed once and the call made again
+  (`withAccessToken`), so a revoked access ends marked as one. Every call to Google carries its own deadline.
 - **Writing**: `events.insert`, `events.patch`, and `events.delete` on a connected account that is not the demo's and
   not revoked; a whole day's end goes to Google as the next day, as it counts it.
 - **Events**: `calendarList.list` on connect; `events.list` with `singleEvents=true` and `orderBy=startTime` for each
   selected calendar of each visible account, merged in time order, each with its calendar's color and its account. The
   demo's sample accounts hold no tokens: nothing is asked of Google for them, and they are no failure.
+- **Mail**: Gmail is only read, and what the account sent, drafted, or chatted is never mail that arrived, in a search
+  and by its labels. A list searches each account's inbox (`messages.list`, `in:inbox`, from a moment with `after:`)
+  and reads the messages it found in batch requests (`/batch/gmail/v1`, 50 reads each, with only their sender,
+  recipients, and subject): an account costs one search and one batch per 50 messages listed (a list reads `MAIL_LIMIT`,
+  50), plus a renewal and its storing when its token expired, against the 50 requests of its own a Worker on the free plan
+  makes per request it serves. A read Gmail answers with its rate limit or a server error, or leaves out of a batch, is
+  asked once more, all of them in one batch and after a pause when it was the rate limit; a message deleted between the
+  search and the read is no failure; one still lost, or whose content cannot be decoded, is counted in its account's
+  failure, its statuses in the log, and the rest still show. The daily review reads whole what arrived since its
+  oldest wait, archived included, because a filter may file away the mail a task waits for: at most 50 messages, and
+  when the account holds more, once more only those of the senders its tasks wait for (`from:`). The unread count is
+  the inbox's, the same search as the list's, read in pages of 500 ids up to four; past them it says it stopped. A search
+  passes its words to Gmail's own search of the inbox, with the metadata of at most 20 messages per account; the mail of
+  a task is read in one batch per account. A message opened in the viewer is read alone, whole: its HTML and its text,
+  each part decoded in its own charset, attachments left out. An account connected before mail was asked, or revoked,
+  is not tried and says why. The log names an account by its id, never by its address.
   The events of a node include those of the accounts it inherits, also for an agent token scoped to it: an inherited
   account is part of what the node shows, while the token still reaches no item or node outside its subtree.
 - The Google Cloud app is published without verification: users see Google's unverified-app screen, and

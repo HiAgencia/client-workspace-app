@@ -1,11 +1,28 @@
 import { createMcpHandler, McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 import type { Db } from "@/lib/db/client";
-import { demoMailSource } from "@/lib/mail/source";
+import { demoMailSource, type MailSource } from "@/lib/mail/source";
 import type { CalendarWriter, EventsSource, ToolContext } from "@/lib/tools/context";
 import { agentTools, callTool } from "@/lib/tools/registry";
 import { authenticateAgent, type AgentAccess } from "./auth";
 
-type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter };
+type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter; mail?: MailSource };
+
+// The tools that call Google: the calendar's, and those that read the accounts' mail —its list and count, a message, a
+// search, and the mail of a task—.
+const OPEN_WORLD = new Set([
+  "list_events",
+  "browse_events",
+  "create_google_event",
+  "update_google_event",
+  "delete_google_event",
+  "list_mail",
+  "get_mail",
+  "link_mail",
+  "create_task_from_mail",
+  "search_items",
+  "get_item",
+  "list_tree",
+]);
 
 function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
   return {
@@ -18,7 +35,7 @@ function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
     updatesSince: access.lastReadAt ?? "1970-01-01T00:00:00Z",
     events: deps.events,
     calendar: deps.calendar,
-    mail: demoMailSource(),
+    mail: deps.mail ?? demoMailSource(),
   };
 }
 
@@ -45,8 +62,9 @@ function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
           // Deleting is logical and undoable on screen, so nothing here destroys data; deleting a Google event is the
           // one write Google keeps in its own trash, outside this product.
           destructiveHint: definition.name === "delete_google_event",
-          // What reads or writes a Google calendar reaches outside the workspace.
-          openWorldHint: ["list_events", "browse_events", "create_google_event", "update_google_event", "delete_google_event"].includes(definition.name),
+          // What reads or writes a Google calendar, or reads Gmail —whose messages are a third party's content—, reaches
+          // outside the workspace.
+          openWorldHint: OPEN_WORLD.has(definition.name),
         },
       },
       async (input: unknown) => {

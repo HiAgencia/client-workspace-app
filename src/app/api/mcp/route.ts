@@ -1,5 +1,6 @@
 import { googleDeps } from "@/lib/google/deps";
 import { googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
+import { gmailMailSource } from "@/lib/google/gmail";
 import { mcpEndpoint } from "@/lib/mcp/server";
 import { serviceClient } from "@/lib/supabase/server";
 
@@ -10,6 +11,7 @@ async function serve(request: Request): Promise<Response> {
     service: serviceClient(),
     events: deps ? googleEventsSource(deps) : undefined,
     calendar: deps ? googleCalendarWriter(deps) : undefined,
+    mail: deps ? gmailMailSource(deps) : undefined,
   })(request);
 }
 
