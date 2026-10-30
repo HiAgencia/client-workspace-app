@@ -283,7 +283,8 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 - **The session** lives in cookies the browser client keeps fresh. Route handlers read it with `auth.getUser()`,
   which asks the auth server, and can write a refreshed session back; pages never read it on the server, because a
   Server Component cannot store a refresh and would spend the refresh token the browser holds. There is no request
-  interception file: the Workers adapter does not run Next's `proxy.ts`.
+  interception file: the Workers adapter in use (`@opennextjs/cloudflare` 1.20.13) does not run Next's `proxy.ts`; a
+  release that runs it reopens the choice.
 - Server configuration, the Supabase address and publishable key included, is read per request from the Worker's
   variables and handed to the browser by the page, so one build runs anywhere with that place's variables.
 - **Connecting an account** is a separate OAuth flow per account, started from the node it hangs from
