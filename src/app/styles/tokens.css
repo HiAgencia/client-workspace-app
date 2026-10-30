@@ -94,6 +94,7 @@
   --header-h: 3.5rem;
   --sidebar-w: clamp(15.5rem, 12rem + 5vw, 18.5rem);
   --nav-row: 2.125rem;
+  --target-min: 24px;
   --content-w: 76rem;
   --chat-w: clamp(21rem, 15rem + 8vw, 27rem);
   --radius-card: 1rem;

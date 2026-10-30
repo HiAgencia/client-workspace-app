@@ -51,7 +51,7 @@
   gap: 0.4em;
   min-width: 0;
   width: 100%;
-  min-height: 1.85em;
+  min-height: max(1.85em, var(--target-min));
   padding: 0.25em 0.5em;
   border: 0;
   border-radius: calc(var(--radius-control) * 0.8);
@@ -109,7 +109,7 @@
   gap: 0.35em;
   min-width: 0;
   width: 100%;
-  min-height: 1.85em;
+  min-height: max(1.85em, var(--target-min));
   padding: 0.1em 0.3em;
   border-radius: calc(var(--radius-control) * 0.8);
   background: transparent;
@@ -127,6 +127,12 @@
   }
   &[draggable="true"] {
     cursor: grab;
+  }
+  &:not([data-timed]) {
+    padding-block: 0;
+  }
+  &:not([data-timed]) .cal-task-open {
+    padding-block: max(0.15em, calc((var(--target-min) - 1.3em) / 2));
   }
   &[data-timed] {
     position: absolute;
@@ -264,10 +270,6 @@
 .cal-allday {
   background: var(--card);
   box-shadow: 0 1px 0 var(--division);
-}
-.cal-more {
-  padding: 0 0.15rem;
-  color: var(--muted);
 }
 .cal-slot {
   position: relative;
@@ -422,6 +424,7 @@
 }
 .cal-more {
   align-self: flex-start;
+  min-height: var(--target-min);
   padding: 0.15em 0.45em;
   border: 0;
   border-radius: 0.35em;
