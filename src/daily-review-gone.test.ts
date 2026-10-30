@@ -3,12 +3,12 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// The daily review left the product: nothing in the code may judge a task's mail, run a review, or keep its switch. The
-// only file that names them is this check.
+// The daily review left the product: no code may judge a task's mail with a model, run a review, or keep its switch.
+// The names it had —its judge, its run, its folder, its switch— appear in this check alone.
 
 const SRC = fileURLToPath(new URL(".", import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
-const TRACE = /judge|run_daily_review|dailyReview/;
+const TRACE = /\b(?:ReviewJudge|reviewJudge|judgeFor|metaJudge|simulatedJudge|run_daily_review|dailyReview)\b|lib\/review\//;
 
 type File = { path: string; text: string };
 

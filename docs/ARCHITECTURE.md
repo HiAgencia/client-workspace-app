@@ -146,15 +146,19 @@ and the screens. When the code changes a decision described here, this document 
   sends it or what it is about: «Meta», «app review»— and where: one account, or every account its place sees
   (`set_task_mail`). Its possible replies are the messages that arrived in those accounts since the wait began, archived
   included, never what the account sent, drafted, or chatted, nor spam or the trash, whose sender's name or address or
-  whose subject holds every word, accents and capitals aside (`holdsEveryWord`). Gmail is asked with each word in a group
+  whose subject holds every word whole —as Gmail reads a word, never part of a longer one—, accents and capitals aside
+  (`holdsEveryWord`). Gmail is asked with each word in a group
   of its own of the sender and the subject, cleaned of anything its search would read as an operator
   (`candidatesSearch`), and what it brings is kept only where every word holds, as the sample accounts compare them.
   Nothing decides which message answers the task: the person does, in the task's detail or in the open message. Closing
   it (`complete_task`) takes the result the person gives —«Approved», «Rejected», or their own words—: the task is
   marked done, the result hangs from it as a decision that names the message, and the message stays linked to it; a
   reply that is not it is ruled out (`dismiss_reply`, one statement through `public.dismiss_task_reply`, so two at once
-  each keep theirs) and leaves the possible ones. Each has its undo, and no model is read for any of it: the chat or an
-  agent reads the possible replies and closes a task only when the person asks.
+  each keep theirs) and leaves the possible ones. Each has its undo —a wait let go or changed comes back whole, since when
+  it waited and what it had ruled out—, and no model is read for any of it: the chat or an agent reads the possible
+  replies and closes a task only when the person asks. A wait left with no account to read —its own, or every one, taken
+  off the client in Settings— reads nothing and says what the person can do: choose where it waits, connect an account
+  in Settings, or stop waiting.
   **One account per request**: the screens read a task's possible replies one task and one account at a time
   (`list_task_replies` with `account`), all at once, so a request does one account's work however many accounts and
   tasks a place holds; an account that holds more than was read says where its next replies start (`next`, read back
@@ -207,7 +211,7 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
 | `link_node_event`, `unlink_node_event` | no | Links a client or a project to an event of the workspace or of Google, or takes it off |
 | `link_mail`, `unlink_mail` | no | Links a message to a task or to a client or project, or takes it off |
 | `create_task_from_mail` | no | A task from a message, where the message's account hangs, with the message linked |
-| `set_task_mail` | no | Says that a task waits for mail —in one account or every account of its place, in the person's words— or for none, and returns what it replaced; other words or another account start the wait over |
+| `set_task_mail` | no | Says that a task waits for mail —in one account or every account of its place, in the person's words— or for none, and returns what it replaced; other words or another account clear what it had ruled out, and what it replaced, passed back with its `since` and `dismissed`, puts the wait back as it was |
 | `list_task_replies` | yes | A task's possible replies: what arrived since its wait began in the accounts it waits in —or only the one asked for— whose sender or subject holds every word, newest first, without the ones ruled out, and the accounts that hold more with where their next replies start (`more`, `next`; `pageToken` reads one account's next page); none of them is the answer until the person says so |
 | `dismiss_reply` | no | Rules a possible reply out, or takes that back |
 | `complete_task` | no | Closes a task with the result the person gives and, when a message answered it, that message: done, the result as a decision hanging from it, and the message linked; used only when the person says how it ended |

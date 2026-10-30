@@ -432,8 +432,8 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
       });
       const answer = answers[0]?.value;
       return {
-        // Gmail reads a word whole and its name and address as it tokenizes them; what it brings is kept only when the
-        // words are in the sender or the subject as the sample accounts compare them, so both read the same.
+        // Gmail reads each word whole, and the name and the address split at their signs; what it brings is kept only
+        // when every word stands whole in the sender or the subject, as the sample accounts compare them.
         messages: newestFirst((answer?.messages ?? []).filter((message) => holdsEveryWord(message, words))),
         failures: [...failures, ...(answer?.failure ? [answer.failure] : [])],
         nextPageToken: answer?.next ?? null,

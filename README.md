@@ -9,13 +9,13 @@ in its own browser profile, each with its own calendar. Keeping up means checkin
 
 This puts everything current in one place:
 
-- **Clients and projects of your own**, each project with its subprojects, tasks, priorities, decisions, links, and
-  items to review, and an Overview that shows what is late, due, and waiting across all of them. Useful without AI:
-  open it, write it down, keep going.
+- **Clients and projects of your own**, each project with its subprojects, tasks, priorities, notes, and decisions,
+  and an Overview that shows what is late, due, and waiting across all of them. Useful without AI: open it, write it
+  down, keep going.
 - **Google accounts and calendars attached to each node**, with inheritance: an agency account shows in every
   project, an account shared with a client shows in that client's projects, a project's own account only there.
-- **A chat on Meta's models that acts on the project**: it creates tasks, records decisions, looks up what is
-  pending, and advises — from text, voice, or a screenshot.
+- **A chat on Meta's models that acts on the project when you ask**: it creates tasks, records decisions, looks up
+  what is pending, and advises — from text, voice, or a screenshot.
 - **An MCP server per project** for the developer's coding agent: "what's new from the client since my last
   session?", read and written back. Its token opens one node of the tree —a client, a project, or a subproject— and
   everything under it.

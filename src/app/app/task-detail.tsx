@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
@@ -387,9 +387,9 @@ export function TaskDetail() {
                       <EventField key={item.id} task={item} />
                     </dd>
                   </div>
-                  {/* The mail a task waits for goes here, once the mail's own layer gives it: the account it waits in and
-                      the mail linked to it. */}
-                  <MailAttribute task={item} />
+                  {/* What the task waits for —where, in what words, its possible replies— and the mail linked to it. A link
+                      that leaves for another page closes the detail, as the place's link above does. */}
+                  <MailAttribute task={item} onLeave={() => dialog.current?.close()} />
                 </dl>
                 <p className="t-meta task-detail-origin">
                   {addedBy(item.source, item.agentLabel)}, {stamp(item.createdAt)}
@@ -464,8 +464,8 @@ function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: st
   return { replies: rows.sort(newestFirst), next, failures };
 }
 
-function MailAttribute({ task }: { task: Item }) {
-  const { tree, notify, touch, version } = useWorkspace();
+function MailAttribute({ task, onLeave }: { task: Item; onLeave: () => void }) {
+  const { tree, notify, touch, saving, version } = useWorkspace();
   const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null } | null>(null);
   const [accounts, setAccounts] = useState<MailAccount[] | null>(null);
   // Where the person chose to wait before saying what for: a wait needs its words before it is saved.
@@ -506,9 +506,12 @@ function MailAttribute({ task }: { task: Item }) {
   ];
   const value = waitingHere ? (waitingHere.account ?? WAIT_PLACE) : !mail ? WAIT_NONE : (mail.accountId ?? WAIT_PLACE);
   const wordsValue = words?.id === task.id ? words.value : (mail?.waitsFor ?? "");
-  // The accounts the wait looks in, each read on its own and all at once.
+  // The accounts the wait looks in, each read on its own and all at once. A wait with none left to read —its account, or
+  // every account, taken off the client in Settings— reads nothing and says what the person can do.
   const lookIn = mail ? visible.filter((account) => mail.accountId === null || account.id === mail.accountId) : [];
-  const repliesKey = mail && task.status === "open" ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((account) => account.id).join(",")}:${version}` : null;
+  const unseen = mail !== null && accounts !== null && lookIn.length === 0;
+  const repliesKey =
+    mail && task.status === "open" && !unseen ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((account) => account.id).join(",")}:${version}` : null;
 
   useEffect(() => {
     if (!repliesKey) return;
@@ -543,11 +546,19 @@ function MailAttribute({ task }: { task: Item }) {
     setWords(null);
     touch();
     const previous = answer.previous;
+    // The wait comes back whole: since when it waited and what it had ruled out, or none.
     notify({
       text,
       tone: "status",
       undo: () =>
-        void tool("set_task_mail", previous ? { task: task.id, account: previous.accountId, words: previous.waitsFor } : { task: task.id, waiting: false }).then(() => touch()),
+        void saving(
+          tool(
+            "set_task_mail",
+            previous
+              ? { task: task.id, account: previous.accountId, words: previous.waitsFor, since: previous.since, dismissed: previous.dismissed }
+              : { task: task.id, waiting: false },
+          ),
+        ),
     });
   }
 
@@ -594,7 +605,7 @@ function MailAttribute({ task }: { task: Item }) {
     notify({
       text: `“${subjectOf(reply)}” is not what “${inlinePlain(task.title)}” waits for`,
       tone: "status",
-      undo: () => void tool("dismiss_reply", { task: task.id, account: reply.accountId, id: reply.id, dismissed: false }).then(() => touch()),
+      undo: () => void saving(tool("dismiss_reply", { task: task.id, account: reply.accountId, id: reply.id, dismissed: false })),
     });
   }
 
@@ -612,10 +623,11 @@ function MailAttribute({ task }: { task: Item }) {
         ) : (
           <>
             {options.length > 1 ? (
-              <Select label="Waits for mail in" value={value} options={options} onChange={choose} />
-            ) : (
+              // An account the place no longer sees is no option: the control asks for one instead of naming an id.
+              <Select label="Waits for mail in" value={options.some((option) => option.value === value) ? value : null} options={options} onChange={choose} />
+            ) : !mail ? (
               <p className="t-help">No account is connected where this task lives, so it waits for no mail.</p>
-            )}
+            ) : null}
             {asking && (
               <div className="task-mail-words">
                 <label className="t-label" htmlFor={wordsId}>
@@ -625,7 +637,7 @@ function MailAttribute({ task }: { task: Item }) {
                   id={wordsId}
                   className="field"
                   value={wordsValue}
-                  placeholder="Meta, app review"
+                  placeholder="Meta app review"
                   maxLength={200}
                   autoFocus={Boolean(waitingHere)}
                   aria-describedby={wordsHelpId}
@@ -663,7 +675,18 @@ function MailAttribute({ task }: { task: Item }) {
                 <p className="t-help">
                   What arrived since {stamp(mail.since)} with these words. You decide which one answers it.
                 </p>
-                {!shown ? (
+                {unseen ? (
+                  visible.length > 0 ? (
+                    <p className="t-help">The account it waits in is not connected where this task lives anymore: choose where it waits.</p>
+                  ) : (
+                    <>
+                      <p className="t-help">No account is connected where this task lives anymore: connect one, or stop waiting.</p>
+                      <Link href="/app/settings" className={buttonClass({ size: "sm" })} onClick={onLeave}>
+                        <span className="btn-label">Connect Google account</span>
+                      </Link>
+                    </>
+                  )
+                ) : !shown ? (
                   <span className="skeleton" aria-label="Reading its possible replies" />
                 ) : shown.replies.length === 0 ? (
                   <p className="t-help">Nothing has arrived with these words yet.</p>
@@ -674,7 +697,7 @@ function MailAttribute({ task }: { task: Item }) {
                       const trigger = `${repliesId}-${index}`;
                       return (
                         <li key={key} className="task-reply" data-reply-open={choosing === key ? "" : undefined}>
-                          <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(key)}`}>
+                          <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(key)}`} onClick={onLeave}>
                             <span className="t-value">{subjectOf(reply)}</span>
                             <span className="t-meta">
                               {reply.from.name ?? reply.from.email}, {stamp(reply.receivedAt)}
@@ -689,7 +712,7 @@ function MailAttribute({ task }: { task: Item }) {
                             </Button>
                           </div>
                           {choosing === key && (
-                            <TaskOutcome question="How did it end?" title={task.title} onClose={(outcome) => void complete(reply, outcome)} onCancel={() => stopChoosing(trigger)} />
+                            <TaskOutcome question="How did it end?" title={task.title} onClose={(outcome) => complete(reply, outcome)} onCancel={() => stopChoosing(trigger)} />
                           )}
                         </li>
                       );
@@ -717,7 +740,7 @@ function MailAttribute({ task }: { task: Item }) {
               <ul className="task-mail-list" aria-label="Its mail">
                 {read.messages.map((message) => (
                   <li key={replyKey(message)}>
-                    <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(replyKey(message))}`}>
+                    <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(replyKey(message))}`} onClick={onLeave}>
                       <span className="t-value">{subjectOf(message)}</span>
                       <span className="t-meta">
                         {message.from.name ?? message.from.email}, {stamp(message.receivedAt)}

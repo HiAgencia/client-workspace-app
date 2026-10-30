@@ -78,12 +78,23 @@ export function waitWords(text: string): string[] {
     .filter((word) => /[\p{L}\p{N}]/u.test(word));
 }
 
-// Whether a message is a possible reply to what a task waits for: every word in its sender's name or address or in its
-// subject, without accents or capitals. No word, no reply: a wait with nothing to look for would take every message.
+// Whether a message is a possible reply to what a task waits for: every word whole in its sender's name or address or in
+// its subject, without accents or capitals. A word is whole as Gmail reads it —no letter or figure right before or after
+// it—, so «Dev» is not found in «Developer» by the sample accounts either. No word, no reply: a wait with nothing to look
+// for would take every message.
 export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, words: string[]): boolean {
   if (words.length === 0) return false;
   const fields = folded([message.from.name ?? "", message.from.email, message.subject].join("\n"));
-  return words.every((word) => fields.includes(folded(word)));
+  return words.every((word) => holdsWhole(fields, folded(word)));
+}
+
+const LETTER_OR_FIGURE = /[\p{L}\p{N}]/u;
+
+function holdsWhole(text: string, word: string): boolean {
+  for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
+    if (!LETTER_OR_FIGURE.test(text[at - 1] ?? "") && !LETTER_OR_FIGURE.test(text[at + word.length] ?? "")) return true;
+  }
+  return false;
 }
 
 // Whether a message holds some words in its sender, subject, or text, as a search reads the sample accounts.

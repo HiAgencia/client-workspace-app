@@ -32,6 +32,13 @@ function noWordNoReply(holds: Holds) {
   expect(holds(APPROVAL, []), "a wait with no word takes no message").toBe(false);
 }
 
+// Gmail reads a word whole: the sample accounts must not find what a real account would not.
+function wholeWords(holds: Holds) {
+  expect(holds(APPROVAL, ["dev"]), "a word is whole, as Gmail reads it: part of a longer one is no reply").toBe(false);
+  expect(holds(APPROVAL, ["approve"]), "a word is whole, as Gmail reads it: part of a longer one is no reply").toBe(false);
+  expect(holds(APPROVAL, ["review"]), "a whole word between others still counts").toBe(true);
+}
+
 // A twin: the control, handed a broken piece, fails with its own words.
 function failsWith(control: (holds: Holds) => void, broken: Holds, phrase: string) {
   let failure: unknown = null;
@@ -48,12 +55,13 @@ const fieldsOf = (message: Parameters<Holds>[0], parts: Array<"name" | "address"
   parts.map((part) => (part === "name" ? (message.from.name ?? "") : part === "address" ? message.from.email : message.subject)).join("\n");
 
 describe("a possible reply to what a task waits for", () => {
-  it("holds every word in the sender's name or address or in the subject, accents and capitals aside", () => {
+  it("holds every word whole in the sender's name or address or in the subject, accents and capitals aside", () => {
     inNameAddressOrSubject(holdsEveryWord);
     everyWord(holdsEveryWord);
     noCapitals(holdsEveryWord);
     noAccents(holdsEveryWord);
     noWordNoReply(holdsEveryWord);
+    wholeWords(holdsEveryWord);
   });
 
   it("its twins: each broken piece fails its own control", () => {
@@ -68,6 +76,8 @@ describe("a possible reply to what a task waits for", () => {
     failsWith(noAccents, withAccents, "accents aside, on either side");
     const everyMessage: Holds = (message, words) => words.every((word) => folded(fieldsOf(message, ["name", "address", "subject"])).includes(folded(word)));
     failsWith(noWordNoReply, everyMessage, "a wait with no word takes no message");
+    const anyPart: Holds = (message, words) => words.length > 0 && words.every((word) => folded(fieldsOf(message, ["name", "address", "subject"])).includes(folded(word)));
+    failsWith(wholeWords, anyPart, "a word is whole, as Gmail reads it");
   });
 
   it("reads a wait's words cleaned of what a search would take for its own", () => {

@@ -56,7 +56,8 @@ export const setTaskMail = defineTool({
     "Say that a task waits for a message, in the person's words —who sends it or what it is about, such as «Meta» or " +
     "«app review»—, in one account or in every account of its place; or that it waits for none (waiting false). The " +
     "task then shows the messages that arrive with those words in their sender or subject as possible replies, and the " +
-    "person decides which one answers it. Use it when someone says they are waiting for a message.",
+    "person decides which one answers it. Use it when someone says they are waiting for a message. To put back a wait as " +
+    "`previous` gave it, pass its since and dismissed too.",
   readOnly: false,
   input: z.strictObject({
     task: z.uuid(),
@@ -69,6 +70,14 @@ export const setTaskMail = defineTool({
       .max(200)
       .optional()
       .describe("What it waits for, in the person's words: every word is looked for in the sender's name or address and in the subject."),
+    since: z.iso
+      .datetime({ offset: true })
+      .optional()
+      .describe("Only to put back a wait that was let go: the moment it began, as `previous` gave it. A new wait begins now; one that already waits keeps its own."),
+    dismissed: z
+      .array(z.string().min(1).max(250))
+      .optional()
+      .describe("Only to put back a wait as `previous` gave it: the replies it had ruled out."),
   }),
   output: z.object({ task: z.string(), title: z.string(), mail: taskMailSchema.nullable(), previous: taskMailSchema.nullable() }),
   async run(ctx, input) {
@@ -95,18 +104,32 @@ export const setTaskMail = defineTool({
         return fail("not_found", `no account with id ${input.account} is visible from the task's place`);
       }
     }
+    // A wait put back begins when it began, never before its task existed.
+    if (input.since !== undefined && Date.parse(input.since) < Date.parse(found.row.created_at)) {
+      return fail("invalid_input", "a wait cannot begin before its task existed");
+    }
     const wanted = { account_id: input.account === undefined ? (previous?.accountId ?? null) : input.account, waits_for: words };
-    // Waiting for other words or in another account is another wait: what was ruled out for the old one does not hold.
+    // Waiting for other words or in another account is another wait: what was ruled out for the old one does not hold,
+    // unless the call puts back what it had.
     const changed = previous !== null && (previous.accountId !== wanted.account_id || previous.waitsFor !== wanted.waits_for);
-    const { data, error } = previous
-      ? await ctx.db
+    const rulings = input.dismissed ? { dismissed: input.dismissed } : changed ? { dismissed: [] } : {};
+    const update = () =>
+      ctx.db
+        .from("task_mail")
+        .update({ ...wanted, ...rulings })
+        .eq("item_id", found.row.id)
+        .eq("owner_id", ctx.ownerId)
+        .select(TASK_MAIL_COLUMNS)
+        .single();
+    const first = previous
+      ? await update()
+      : await ctx.db
           .from("task_mail")
-          .update(changed ? { ...wanted, dismissed: [] } : wanted)
-          .eq("item_id", found.row.id)
-          .eq("owner_id", ctx.ownerId)
+          .insert({ item_id: found.row.id, owner_id: ctx.ownerId, ...wanted, ...rulings, ...(input.since ? { created_at: input.since } : {}) })
           .select(TASK_MAIL_COLUMNS)
-          .single()
-      : await ctx.db.from("task_mail").insert({ item_id: found.row.id, owner_id: ctx.ownerId, ...wanted }).select(TASK_MAIL_COLUMNS).single();
+          .single();
+    // Two first waits at once: the one that finds the row the other just wrote writes over it.
+    const { data, error } = !previous && first.error?.code === "23505" ? await update() : first;
     if (error) return dbFail("saving what the task waits for", error);
     return ok({ task: found.row.id, title: found.row.title, mail: toTaskMail(data as TaskMailRow), previous });
   },
@@ -122,14 +145,18 @@ const waitingTaskSchema = z.object({
 });
 
 // The accounts a task's wait looks in, among those its place sees: its own account, or all of them; one asked for must be
-// among them.
+// among them. An account its place stopped seeing —taken off the client in Settings— is read for nobody: the person
+// chooses again where the task waits.
 async function waitAccounts(ctx: ToolContext, scope: Scope, nodeId: string | null, wait: TaskMail, only?: string): Promise<ToolResult<{ accounts: ReachedAccount[] }>> {
   const reached = await accountsOf(ctx, scope, placeOf(scope, nodeId));
   if (isError(reached)) return reached;
   let accounts = wait.accountId ? reached.accounts.filter((account) => account.id === wait.accountId) : reached.accounts;
+  if (wait.accountId && accounts.length === 0) {
+    return fail("not_found", "the account the task waits in is not connected where the task lives anymore: choose where it waits in the task");
+  }
   if (only) {
     accounts = accounts.filter((account) => account.id === only);
-    if (accounts.length === 0) return fail("not_found", `the task does not wait for mail in account ${only}`);
+    if (accounts.length === 0) return fail("not_found", "the task does not wait for mail in that account");
   }
   return ok({ accounts });
 }

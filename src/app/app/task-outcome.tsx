@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { inlinePlain } from "@/lib/inline-links";
 import { WRITES, type WriteOutput } from "./chat-cards";
@@ -15,10 +15,21 @@ import "../styles/mail.css";
 // The results a person picks with one press; any other is written.
 const OUTCOMES = ["Approved", "Rejected"] as const;
 
-export function TaskOutcome({ question, title, onClose, onCancel }: { question: string; title: string; onClose: (outcome: string) => void; onCancel: () => void }) {
+export function TaskOutcome({ question, title, onClose, onCancel }: { question: string; title: string; onClose: (outcome: string) => Promise<unknown>; onCancel: () => void }) {
   const [other, setOther] = useState("");
   const otherId = useId();
   const written = other.trim();
+  // A closing on its way takes no second press: a double click would close the task once and then say it could not.
+  const closing = useRef(false);
+  async function close(outcome: string) {
+    if (closing.current) return;
+    closing.current = true;
+    try {
+      await onClose(outcome);
+    } finally {
+      closing.current = false;
+    }
+  }
   return (
     <div
       className="task-reply-outcome"
@@ -35,7 +46,7 @@ export function TaskOutcome({ question, title, onClose, onCancel }: { question: 
       <p className="t-label">{question}</p>
       <div className="task-reply-actions">
         {OUTCOMES.map((outcome, index) => (
-          <Button key={outcome} size="sm" autoFocus={index === 0} onClick={() => onClose(outcome)}>
+          <Button key={outcome} size="sm" autoFocus={index === 0} onClick={() => void close(outcome)}>
             {outcome}
           </Button>
         ))}
@@ -52,12 +63,12 @@ export function TaskOutcome({ question, title, onClose, onCancel }: { question: 
         onKeyDown={(event) => {
           if (event.key === "Enter" && written) {
             event.preventDefault();
-            onClose(written);
+            void close(written);
           }
         }}
       />
       <div className="task-reply-actions">
-        <Button size="sm" variant="primary" disabled={!written} onClick={() => onClose(written)}>
+        <Button size="sm" variant="primary" disabled={!written} onClick={() => void close(written)}>
           Close the task
         </Button>
         <Button size="sm" variant="quiet" onClick={onCancel}>

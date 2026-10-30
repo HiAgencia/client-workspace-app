@@ -727,6 +727,147 @@ describe("what a task waits for, over a busy inbox", () => {
     await failsWith(() => otherWordsStartOver(keepsRulings), "other words are another wait");
   });
 
+  // ---- A wait let go or reworded, and put back as it was ----
+  type Wait = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
+  type Read = Replies & { task: { since: string } };
+  type PutBack = (task: string, previous: Wait) => Promise<unknown>;
+  const putBack: PutBack = (task, previous) =>
+    callTool("set_task_mail", context(), { task, account: previous.accountId, words: previous.waitsFor, since: previous.since, dismissed: previous.dismissed });
+
+  // The change a wait goes through before it is put back: let go, or other words.
+  const LET_GO = { waiting: false };
+  const REWORDED = { words: "Bayside" };
+
+  async function putBackAsItWas(change: typeof LET_GO | typeof REWORDED, putting: PutBack) {
+    const task = await waitingTask();
+    await rule(task, "bank-card", true);
+    const before = (await replies(task)) as Read;
+    const changed = (await callTool("set_task_mail", context(), { task, ...change })) as unknown as { ok: boolean; previous: Wait };
+    expect(changed.ok).toBe(true);
+    await putting(task, changed.previous);
+    const after = (await replies(task)) as Read;
+    expect({ since: after.task.since, replies: idsOf(after) }, "a wait put back begins when it began and keeps what it had ruled out").toEqual({
+      since: before.task.since,
+      replies: idsOf(before),
+    });
+  }
+
+  // The undo as it was before: the account and the words, without the moment it began or what it had ruled out.
+  const wordsOnly: PutBack = (task, previous) => callTool("set_task_mail", context(), { task, account: previous.accountId, words: previous.waitsFor });
+
+  it("puts back a wait let go as it was: since when it waited and what it had ruled out", async () => {
+    await putBackAsItWas(LET_GO, putBack);
+  });
+
+  it("its twin: a wait let go and put back with only its account and words fails it", async () => {
+    await failsWith(() => putBackAsItWas(LET_GO, wordsOnly), "a wait put back begins when it began");
+  });
+
+  it("puts back a reworded wait as it was: what it had ruled out stays ruled out", async () => {
+    await putBackAsItWas(REWORDED, putBack);
+  });
+
+  it("its twin: a reworded wait put back with only its account and words fails it", async () => {
+    await failsWith(() => putBackAsItWas(REWORDED, wordsOnly), "a wait put back begins when it began");
+  });
+
+  it("refuses to put back a wait that would begin before its task existed", async () => {
+    const task = await waitingTask();
+    expect((await callTool("set_task_mail", context(), { task, waiting: false })).ok).toBe(true);
+    expect(await callTool("set_task_mail", context(), { task, words: "Bayside Bank", since: "2000-01-01T00:00:00+00:00" })).toMatchObject({
+      ok: false,
+      code: "invalid_input",
+      message: expect.stringContaining("before its task existed"),
+    });
+  });
+
+  // ---- Two first waits at once ----
+  // Holds each insert into `task_mail` until `parties` of them arrived, so two first waits race for real: both read that
+  // the task waits for nothing, and both insert.
+  function racingInserts(db: ToolContext["db"], parties: number): ToolContext["db"] {
+    let arrived = 0;
+    let release!: () => void;
+    const together = new Promise<void>((resolve) => (release = resolve));
+    const held = <T extends object>(builder: T): T =>
+      new Proxy(builder, {
+        get(target, prop) {
+          const value = Reflect.get(target, prop, target) as unknown;
+          if (prop === "then") {
+            return (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => {
+              if (++arrived === parties) release();
+              return together.then(() => (value as PromiseLike<unknown>["then"]).call(target, resolve, reject));
+            };
+          }
+          if (typeof value !== "function") return value;
+          return (...args: unknown[]) => {
+            const out = (value as (...rest: unknown[]) => unknown).apply(target, args);
+            return out !== null && typeof out === "object" ? held(out) : out;
+          };
+        },
+      });
+    return new Proxy(db, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop, target) as unknown;
+        if (prop !== "from") return typeof value === "function" ? (value as (...rest: unknown[]) => unknown).bind(target) : value;
+        return (table: string) => {
+          const builder = (value as (name: string) => object).call(target, table);
+          if (table !== "task_mail") return builder;
+          return new Proxy(builder, {
+            get(inner, key) {
+              const member = Reflect.get(inner, key, inner) as unknown;
+              if (key === "insert") return (...args: unknown[]) => held((member as (...rest: unknown[]) => object).apply(inner, args));
+              return typeof member === "function" ? (member as (...rest: unknown[]) => unknown).bind(inner) : member;
+            },
+          });
+        };
+      },
+    });
+  }
+
+  async function newTask(): Promise<string> {
+    const created = (await callTool("create_task", context(), { node: ids.client, title: "Wait for the bank" })) as unknown as { ok: boolean; item: { id: string } };
+    expect(created.ok).toBe(true);
+    return created.item.id;
+  }
+
+  it("takes two first waits at once: the one that finds the row taken writes over it", async () => {
+    const task = await newTask();
+    const racing = { ...context(), db: racingInserts(user!.client, 2) };
+    const answers = await Promise.all(["Bayside", "Bayside Bank"].map((words) => callTool("set_task_mail", racing, { task, account: ids.mail, words })));
+    expect(
+      answers.map((answer) => answer.ok),
+      "two first waits at once both hold",
+    ).toEqual([true, true]);
+  });
+
+  it("its control: two plain inserts held together race, and one of them finds the row taken", async () => {
+    const task = await newTask();
+    const db = racingInserts(user!.client, 2);
+    const row = { item_id: task, owner_id: user!.id, account_id: ids.mail, waits_for: "Bayside" };
+    const answers = await Promise.all([1, 2].map(() => db.from("task_mail").insert(row).select("item_id").single()));
+    expect(
+      answers.filter((answer) => answer.error?.code === "23505"),
+      "held together, the second insert finds the row the first one wrote",
+    ).toHaveLength(1);
+  });
+
+  // ---- An account its place stopped seeing ----
+  it("reads a wait whose account was taken off its client for nobody, and says why instead of finding nothing", async () => {
+    const node = await user!.client.from("nodes").insert({ owner_id: user!.id, kind: "client", name: "Gamma" }).select("id").single();
+    expect(node.error).toBeNull();
+    const attached = await user!.client.from("node_accounts").insert({ node_id: node.data!.id, account_id: ids.mail });
+    expect(attached.error).toBeNull();
+    const created = (await callTool("create_task", context(), { node: node.data!.id, title: "Wait for the transfer" })) as unknown as { ok: boolean; item: { id: string } };
+    expect((await callTool("set_task_mail", context(), { task: created.item.id, account: ids.mail, words: "Bayside Bank" })).ok).toBe(true);
+    const detached = await user!.client.from("node_accounts").delete().eq("node_id", node.data!.id).eq("account_id", ids.mail);
+    expect(detached.error).toBeNull();
+    expect(await callTool("list_task_replies", context(), { task: created.item.id }), "an account its place no longer sees is read for nobody, and the answer says why").toMatchObject({
+      ok: false,
+      code: "not_found",
+      message: expect.stringContaining("not connected where the task lives anymore"),
+    });
+  });
+
   // ---- Closing a task with its result ----
   type Close = (task: string, outcome: string, reply: Reply) => Promise<unknown>;
   const close: Close = (task, outcome, reply) => callTool("complete_task", context(), { task, outcome, reply });

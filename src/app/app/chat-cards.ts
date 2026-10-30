@@ -8,7 +8,7 @@ import { inlinePlain } from "@/lib/inline-links";
 
 type Previous = { title: string; body: string | null; type: "task" | "note" | "decision"; priority: number | null; dueOn: string | null; dueTime: string | null; status: "open" | "done" };
 type Moved = { nodeId: string | null; parentId: string | null };
-type TaskMail = { accountId: string | null; waitsFor: string };
+type TaskMail = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
 type MailLink = { accountId: string; messageId: string; taskId: string | null; nodeId: string | null };
 // What `complete_task` linked: the reply, and whether this call linked it.
 type ReplyLink = { accountId: string; messageId: string; created: boolean };
@@ -102,17 +102,18 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
         }
       : null;
   },
-  // What it waited for goes back: none, or the account and the words it had.
-  set_task_mail: (o) =>
-    o.task && o.title
-      ? {
-          what: o.mail ? `${quoted(o.title)} waits for mail with “${o.mail.waitsFor}”` : `${quoted(o.title)} no longer waits for mail`,
-          undo: () =>
-            o.previous
-              ? tool("set_task_mail", { task: o.task!, waiting: true, account: (o.previous as TaskMail).accountId, words: (o.previous as TaskMail).waitsFor })
-              : tool("set_task_mail", { task: o.task!, waiting: false }),
-        }
-      : null,
+  // What it waited for goes back whole: none, or the account, the words, the moment it began, and what it had ruled out.
+  set_task_mail: (o) => {
+    if (!o.task || !o.title) return null;
+    const was = o.previous as TaskMail | null | undefined;
+    return {
+      what: o.mail ? `${quoted(o.title)} waits for mail with “${o.mail.waitsFor}”` : `${quoted(o.title)} no longer waits for mail`,
+      undo: () =>
+        was
+          ? tool("set_task_mail", { task: o.task!, waiting: true, account: was.accountId, words: was.waitsFor, since: was.since, dismissed: was.dismissed })
+          : tool("set_task_mail", { task: o.task!, waiting: false }),
+    };
+  },
   // A ruled-out reply comes back among the possible ones, and one taken back is ruled out again.
   dismiss_reply: (o) => {
     const reply = o.reply;
