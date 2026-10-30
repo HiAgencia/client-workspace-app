@@ -26,7 +26,8 @@ export default function Home({ searchParams }: PageProps<"/">) {
     <main className="landing">
       <div className="landing-copy">
         <div className="landing-top enter">
-          <span className="brand" aria-hidden="true">
+          {/* The brand is read by its name; the mark beside it is drawing only. */}
+          <span className="brand">
             <BrandMark className="brand-mark" />
             <span className="brand-name">{PRODUCT_NAME}</span>
           </span>

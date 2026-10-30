@@ -343,9 +343,10 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
             <span className="brand-name">Client Workspace</span>
           </Link>
         </header>
-        <aside className="sidebar" aria-label="Workspace">
+        {/* A plain column: the navigation inside is the one «Workspace» region a screen reader lists. */}
+        <div className="sidebar">
           <SideNav onSignOut={() => void signOut()} />
-        </aside>
+        </div>
         {/* «Saving… / Saved» beside the brand: at the end of the phone's bar, and at the end of the sidebar's brand row on a
             computer, where nothing else sits. */}
         <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
