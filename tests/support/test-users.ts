@@ -96,6 +96,13 @@ export async function deleteTestUser(admin: Db, id: string): Promise<string | nu
 
 
 
+export function keepInRun(run: RunRecord, ids: string[]): void {
+  if (ids.length === 0) rmSync(run.file, { force: true });
+  else writeFileSync(run.file, `run ${run.pid} ${run.start ?? ""}\n${ids.map((id) => `+${id}\n`).join("")}`);
+}
+
+
+
 
 export async function sweepDeadRuns(admin: Db): Promise<{ runs: number; deleted: number; failed: string[] }> {
   let names: string[] = [];
@@ -120,8 +127,7 @@ export async function sweepDeadRuns(admin: Db): Promise<{ runs: number; deleted:
         failed.push(`${id}: ${error}`);
       } else deleted++;
     }
-    if (left.length === 0) rmSync(run.file, { force: true });
-    else writeFileSync(run.file, `run ${run.pid} ${run.start ?? ""}\n${left.map((id) => `+${id}\n`).join("")}`);
+    keepInRun(run, left);
   }
   return { runs, deleted, failed };
 }
