@@ -223,6 +223,15 @@ export function senderSearch(senders: string[]): string {
 
 
 
+
+export function wordsSearch(words: string): string {
+  const quoteLeftOpen = (words.match(/"/g) ?? []).length % 2 === 1;
+  const plain = words.replace(quoteLeftOpen ? /[(){}"]/g : /[(){}]/g, " ").replace(/\s+/g, " ").trim();
+  return plain ? `(${plain})` : "";
+}
+
+
+
 type Readable = TokenRow & { status: string };
 
 function failureOf(account: MailAccount, reason: string): MailFailure {
@@ -396,9 +405,11 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     async search({ db, ownerId, accounts, words, limit }) {
       const query = words.replace(/\s+/g, " ").trim();
       if (!query) return { messages: [], failures: [] };
+      const group = wordsSearch(query);
       const [sample, real] = await Promise.all([
         accounts.some(isDemo) ? demo.search({ db, ownerId, accounts: accounts.filter(isDemo), words: query, limit }) : nothing,
-        accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${query}`, limit, "metadata", toMailMessage) : nothing,
+        
+        group && accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${group}`, limit, "metadata", toMailMessage) : nothing,
       ]);
       return { messages: newestFirst([...sample.messages, ...real.messages]), failures: [...sample.failures, ...real.failures] };
     },
