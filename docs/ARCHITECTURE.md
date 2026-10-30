@@ -467,7 +467,10 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    sees; the account narrows the events of the connected accounts. Each option says what it brings, the other filter
    applied, and one that brings nothing is not offered. Another range leaves before the next enters (`use-swap.ts`);
    while it is read, what shows dims. A task dragged to a day takes that day, and so does Alt with the arrows (a day,
-   or a week) on a focused task, each with «Undo». A press on a day's free space —or «New event»— opens the new event:
+   or a week) on a focused task, each with «Undo». The week and the month are ARIA grids with one stop in the tab order
+   (`grid-keys.ts`): the arrows move between days —and, in the week, between the whole-day band and each hour—, Home and
+   End to the row's ends, Ctrl with them to the grid's, Page Up and Page Down by a few rows, and Enter or Space on a day or
+   an hour opens the new event there. A press on a day's free space —or «New event»— opens the new event:
    its title, day, hour (or all day), the calendar it goes to (the workspace's own, or a connected account's that can be
    written) and its place. An event opens its detail: when, its place, the tasks and subtasks inside it (read for an
    event of the workspace's own) and the clients and projects linked to it, each taken off in place, «Link…» to add a

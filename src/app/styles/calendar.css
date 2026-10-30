@@ -771,3 +771,18 @@
     transition-duration: var(--dur-hover);
   }
 }
+
+/* The grid's cells for the keys: the ring is drawn inside the cell, which its neighbours would otherwise cover. Each hour
+   of a day's column is a transparent button the keys reach; the pointer passes through it to the column. */
+:is(.cal-slot, .cal-month-cell, .cal-hour-slot):focus-visible {
+  outline-offset: -2px;
+}
+.cal-hour-slot {
+  position: absolute;
+  inset-inline: 0;
+  height: 3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
