@@ -30,7 +30,7 @@ export type MailMessage = z.infer<typeof mailMessageSchema>;
 
 
 
-export type MailContent = MailMessage & { html: string | null; text: string | null };
+export type MailContent = MailMessage & { html: string | null; text: string | null; contentLanguage?: string | null };
 
 export type MailAccount = { id: string; email: string; isDemo: boolean; status: string; scopes: string[] };
 
