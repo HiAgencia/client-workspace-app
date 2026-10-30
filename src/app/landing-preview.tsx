@@ -2,15 +2,18 @@
 
 import { useSyncExternalStore, type CSSProperties } from "react";
 import { addDays, LOCALE, today, type Day } from "@/lib/dates";
+import type { DemoOverview } from "@/lib/demo-seed";
 import { PathText } from "./app/item-parts";
 import "./styles/boxes.css";
 import "./styles/task.css";
 
 // The landing's picture of the demo, drawn with the workspace's own pieces and sheets —a box with its title and count, the
-// task's row with its circle, its data and its place, the week, the mail's rows, the notice of the daily review— so what
-// the visitor sees is what they find after entering. It is a picture, not controls: inert and out of the accessibility
-// tree, its caption says what it shows. It does not import the workspace's components, so the landing does not load
-// them. The week is the visitor's own, read once mounted; the server paints the same week without its numbers.
+// task's row with its circle, its data and its place, the week, the mail's rows, the notice of the daily review—. It is a
+// picture, not controls: inert and out of the accessibility tree, its caption says what it shows. It does not import the
+// workspace's components, so the landing does not load them. Its figures are the planted demo's own, counted from the
+// seed (`demoOverview`); its rows, its event and its messages are a few of the demo's, drawn on a working morning at the
+// moment the daily review completes a task, so the hours of the mail and the completed row still in the list are that
+// moment's. The week is the visitor's own, read once mounted; the server paints the same week without its numbers.
 
 type Row = {
   title: string;
@@ -80,14 +83,14 @@ function PreviewRow({ row }: { row: Row }) {
   );
 }
 
-function Group({ title, tone, rows }: { title: string; tone: "overdue" | "today"; rows: Row[] }) {
+function Group({ title, tone, rows, count }: { title: string; tone: "overdue" | "today"; rows: Row[]; count: number }) {
   return (
     <section className="group">
       <div className="group-head">
         <p className="group-title" data-when={tone}>
           {title}
         </p>
-        <span className="group-count">{rows.filter((row) => !row.done).length}</span>
+        <span className="group-count">{count}</span>
       </div>
       <ul className="task-list" data-layout="list" data-place="">
         {rows.map((row) => (
@@ -105,7 +108,7 @@ function weekOf(day: Day): Day[] {
   return Array.from({ length: 7 }, (_, index) => addDays(day, index - offset));
 }
 
-export function LandingPreview() {
+export function LandingPreview({ figures }: { figures: DemoOverview }) {
   const now = useSyncExternalStore(noSubscription, () => today(), () => null);
   const week = now ? weekOf(now) : null;
   const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -122,12 +125,12 @@ export function LandingPreview() {
           <section className="box preview-box" data-preview-box="tasks" data-shown="" style={{ "--enter-delay": "140ms" } as CSSProperties}>
             <header className="box-head">
               <p className="t-title box-title">Tasks</p>
-              <span className="box-count">3</span>
+              <span className="box-count">{figures.scheduled} scheduled</span>
             </header>
             <div className="box-body">
               <div className="groups">
-                <Group title="Overdue" tone="overdue" rows={OVERDUE} />
-                <Group title="Today" tone="today" rows={TODAY} />
+                <Group title="Overdue" tone="overdue" rows={OVERDUE} count={figures.overdue} />
+                <Group title="Today" tone="today" rows={TODAY} count={figures.today} />
               </div>
             </div>
           </section>
@@ -158,7 +161,7 @@ export function LandingPreview() {
                   </p>
                   <ul className="event-list">
                     <li className="event-row">
-                      <span className="event-when">10:00 AM</span>
+                      <span className="event-when">All day</span>
                       <span className="event-what">
                         <span className="event-title">Weekly planning</span>
                         <span className="event-where">Operations</span>
@@ -171,12 +174,12 @@ export function LandingPreview() {
             <section className="box preview-box" data-preview-box="mail" data-shown="" style={{ "--enter-delay": "260ms" } as CSSProperties}>
               <header className="box-head">
                 <p className="t-title box-title">Mail</p>
-                <span className="box-count">2 unread</span>
+                <span className="box-count">{figures.unread} unread</span>
               </header>
               <div className="box-body">
                 <ul className="mail-list">
                   <li>
-                    <span className="mail-row">
+                    <span className="mail-row" data-unread="">
                       <span className="mail-from">Developer Platform</span>
                       <span className="mail-side">
                         <span className="mail-when">9:05 AM</span>

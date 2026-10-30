@@ -346,7 +346,8 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
 1. **Landing**: the brand, a title and a line, "Try the demo" and "Sign in with Google", and what the demo holds; beside
    them a picture of the demo's Overview drawn with the workspace's own pieces (`src/app/landing-preview.tsx`, styled by
    `src/app/styles/landing.css`): the Tasks box with a task the daily review completed, the week —the visitor's own,
-   read once the page runs—, the Mail box, and the review's notice. The product's name and its one-line description
+   read once the page runs—, the Mail box, and the review's notice. Its figures are the planted demo's, counted from the
+   seed (`demoOverview` in `src/lib/demo-seed.ts`), and `tests/demo/overview.test.ts` reads them back from the tools. The product's name and its one-line description
    come from `src/lib/product.ts`, which the document's title and the web manifest read too. A demo whose seed failed is
    tried again on the same session.
 2. **Sidebar**, fixed at the left and as tall as the window, navigation only: its options never change from one screen to

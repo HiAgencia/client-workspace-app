@@ -385,6 +385,36 @@ export function demoShape(): { clients: number; ownProjects: number } {
   return { clients: roots.filter((node) => node.kind === "client").length, ownProjects: roots.filter((node) => node.kind === "project").length };
 }
 
+// The figures the demo's Overview opens with, read from the same tree and counted as its boxes count them: the open tasks
+// with a day, by group (a review an agent asked for is due the day it asked, a subtask with a day counts like any task),
+// and every unread message of the sample accounts. The landing's picture says these, and a test plants the demo and reads
+// the same figures from the tools.
+export type DemoOverview = { overdue: number; today: number; upcoming: number; scheduled: number; unread: number };
+
+export function demoOverview(today: string): DemoOverview {
+  const figures = { overdue: 0, today: 0, upcoming: 0, scheduled: 0, unread: 0 };
+  const count = (items: SeedItem[]) => {
+    for (const item of items) {
+      const due = item.tool === "request_review" ? today : item.tool === "create_task" && typeof item.input.dueOn === "string" ? item.input.dueOn : null;
+      if (due !== null && item.doneAgo === undefined) {
+        figures[due < today ? "overdue" : due === today ? "today" : "upcoming"]++;
+        figures.scheduled++;
+      }
+      count(item.children ?? []);
+    }
+  };
+  const walk = (nodes: Seed[]) => {
+    for (const node of nodes) {
+      count(node.items ?? []);
+      for (const account of node.accounts ?? []) figures.unread += account.mail.filter((message) => message.unread).length;
+      walk(node.children ?? []);
+    }
+  };
+  walk(demoSeedTree(today));
+  count(demoGeneral(today).items);
+  return figures;
+}
+
 // Plants the demo only into an empty workspace, so reloading never duplicates it. One statement: it plants everything or
 // nothing, so a cut in the middle leaves no partial tree to clean up. The zone places what it planted in the visitor's
 // working hours; without it the database uses UTC.

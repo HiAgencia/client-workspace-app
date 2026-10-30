@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
-import { demoShape } from "@/lib/demo-seed";
+import { demoOverview, demoShape } from "@/lib/demo-seed";
 import { publicConfig } from "@/lib/env";
 import { PRODUCT_NAME } from "@/lib/product";
 import { LandingPreview } from "./landing-preview";
@@ -20,6 +20,8 @@ async function SessionControls({ searchParams }: { searchParams: PageProps<"/">[
 // them.
 export default function Home({ searchParams }: PageProps<"/">) {
   const shape = demoShape();
+  // The seed dates its tasks by offsets from the visitor's day, so its Overview's figures are the same on any day.
+  const figures = demoOverview("2026-01-01");
   return (
     <main className="landing">
       <div className="landing-copy">
@@ -54,7 +56,7 @@ export default function Home({ searchParams }: PageProps<"/">) {
           </p>
         </section>
       </div>
-      <LandingPreview />
+      <LandingPreview figures={figures} />
     </main>
   );
 }
