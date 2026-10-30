@@ -9,6 +9,8 @@ import { describe, expect, it } from "vitest";
 const SRC = fileURLToPath(new URL(".", import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
 const TRACE = /\b(?:ReviewJudge|reviewJudge|judgeFor|metaJudge|simulatedJudge|run_daily_review|dailyReview)\b|lib\/review\//;
+// Its folder, read from where a file lives and not only from what imports it.
+const FOLDER = /^lib\/review\//;
 
 type File = { path: string; text: string };
 
@@ -24,7 +26,7 @@ function filesUnder(folder: string): File[] {
 function noTraceOfTheReview(files: File[]) {
   expect(files.length, "the code was read").toBeGreaterThan(0);
   expect(
-    files.filter((file) => TRACE.test(file.text)).map((file) => relative(SRC, file.path)),
+    files.filter((file) => TRACE.test(file.text) || FOLDER.test(relative(SRC, file.path).replace(/\\/g, "/"))).map((file) => relative(SRC, file.path)),
     "no trace of the daily review is left in the code",
   ).toEqual([]);
 }
@@ -34,13 +36,22 @@ describe("the daily review", () => {
     noTraceOfTheReview(filesUnder(SRC));
   });
 
-  it("its twin: a file that still runs the review fails the check with its own words", () => {
+  // Each twin plants one trace in the code read: a name, or only a file in the review's folder.
+  const failsWith = (planted: File) => {
     let failure: unknown = null;
     try {
-      noTraceOfTheReview([...filesUnder(SRC), { path: join(SRC, "lib", "review", "run.ts"), text: "export async function run_daily_review() {}" }]);
+      noTraceOfTheReview([...filesUnder(SRC), planted]);
     } catch (error) {
       failure = error;
     }
     expect(String((failure as Error | null)?.message)).toContain("no trace of the daily review is left in the code");
+  };
+
+  it("its twin: a file that still runs the review fails the check with its own words", () => {
+    failsWith({ path: join(SRC, "lib", "elsewhere.ts"), text: "export async function run_daily_review() {}" });
+  });
+
+  it("its twin: a file left in the review's folder, naming nothing, fails the check too", () => {
+    failsWith({ path: join(SRC, "lib", "review", "notes.ts"), text: "export const notes = [];" });
   });
 });

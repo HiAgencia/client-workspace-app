@@ -830,14 +830,20 @@ describe("what a task waits for, over a busy inbox", () => {
     return created.item.id;
   }
 
-  it("takes two first waits at once: the one that finds the row taken writes over it", async () => {
+  it("takes two first waits at once: the one that finds the row taken writes over it, and says what it replaced", async () => {
     const task = await newTask();
     const racing = { ...context(), db: racingInserts(user!.client, 2) };
-    const answers = await Promise.all(["Bayside", "Bayside Bank"].map((words) => callTool("set_task_mail", racing, { task, account: ids.mail, words })));
+    const answers = (await Promise.all(["Bayside", "Bayside Bank"].map((words) => callTool("set_task_mail", racing, { task, account: ids.mail, words })))) as unknown as Array<{
+      ok: boolean;
+      previous: Wait | null;
+    }>;
     expect(
       answers.map((answer) => answer.ok),
       "two first waits at once both hold",
     ).toEqual([true, true]);
+    expect(answers.filter((answer) => answer.previous !== null), "the one that wrote over the other says it replaced it, so its undo puts it back").toHaveLength(1);
+    const stored = await user!.client.from("task_mail").select("waits_for").eq("item_id", task).single();
+    expect(["Bayside", "Bayside Bank"], "the wait keeps the words of one of the two").toContain(stored.data?.waits_for);
   });
 
   it("its control: two plain inserts held together race, and one of them finds the row taken", async () => {
@@ -855,17 +861,29 @@ describe("what a task waits for, over a busy inbox", () => {
   it("reads a wait whose account was taken off its client for nobody, and says why instead of finding nothing", async () => {
     const node = await user!.client.from("nodes").insert({ owner_id: user!.id, kind: "client", name: "Gamma" }).select("id").single();
     expect(node.error).toBeNull();
-    const attached = await user!.client.from("node_accounts").insert({ node_id: node.data!.id, account_id: ids.mail });
-    expect(attached.error).toBeNull();
-    const created = (await callTool("create_task", context(), { node: node.data!.id, title: "Wait for the transfer" })) as unknown as { ok: boolean; item: { id: string } };
-    expect((await callTool("set_task_mail", context(), { task: created.item.id, account: ids.mail, words: "Bayside Bank" })).ok).toBe(true);
-    const detached = await user!.client.from("node_accounts").delete().eq("node_id", node.data!.id).eq("account_id", ids.mail);
-    expect(detached.error).toBeNull();
-    expect(await callTool("list_task_replies", context(), { task: created.item.id }), "an account its place no longer sees is read for nobody, and the answer says why").toMatchObject({
-      ok: false,
-      code: "not_found",
-      message: expect.stringContaining("not connected where the task lives anymore"),
-    });
+    try {
+      const attached = await user!.client.from("node_accounts").insert({ node_id: node.data!.id, account_id: ids.mail });
+      expect(attached.error).toBeNull();
+      const created = (await callTool("create_task", context(), { node: node.data!.id, title: "Wait for the transfer" })) as unknown as { ok: boolean; item: { id: string } };
+      const task = created.item.id;
+      expect((await callTool("set_task_mail", context(), { task, account: ids.mail, words: "Bayside Bank" })).ok).toBe(true);
+      const detached = await user!.client.from("node_accounts").delete().eq("node_id", node.data!.id).eq("account_id", ids.mail);
+      expect(detached.error).toBeNull();
+      expect(await callTool("list_task_replies", context(), { task }), "an account its place no longer sees is read for nobody, and the answer says why").toMatchObject({
+        ok: false,
+        code: "not_found",
+        message: expect.stringContaining("not connected where the task lives anymore"),
+      });
+      // Let go and put back, that wait cannot come back to an account its place does not see, and the refusal names no id.
+      const stopped = (await callTool("set_task_mail", context(), { task, waiting: false })) as unknown as { ok: boolean; previous: Wait };
+      expect(stopped.ok).toBe(true);
+      const back = (await putBack(task, stopped.previous)) as { ok: boolean; message?: string };
+      expect({ ok: back.ok, namesAnId: back.message?.includes(ids.mail) }, "the refusal says the account is not connected there, without its id").toEqual({ ok: false, namesAnId: false });
+      expect(back.message).toContain("not connected where the task lives");
+    } finally {
+      // The client this case made leaves with what hangs from it, so no later case counts it.
+      await user!.client.from("nodes").delete().eq("id", node.data!.id);
+    }
   });
 
   // ---- Closing a task with its result ----

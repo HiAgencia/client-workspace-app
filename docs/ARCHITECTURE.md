@@ -146,8 +146,9 @@ and the screens. When the code changes a decision described here, this document 
   sends it or what it is about: «Meta», «app review»— and where: one account, or every account its place sees
   (`set_task_mail`). Its possible replies are the messages that arrived in those accounts since the wait began, archived
   included, never what the account sent, drafted, or chatted, nor spam or the trash, whose sender's name or address or
-  whose subject holds every word whole —as Gmail reads a word, never part of a longer one—, accents and capitals aside
-  (`holdsEveryWord`). Gmail is asked with each word in a group
+  whose subject holds every word whole —as Gmail reads a word, never part of a longer one, save in a script written
+  without spaces, whose word is found inside a longer run—, accents and capitals aside (`holdsEveryWord`). Gmail is
+  asked with each word in a group
   of its own of the sender and the subject, cleaned of anything its search would read as an operator
   (`candidatesSearch`), and what it brings is kept only where every word holds, as the sample accounts compare them.
   Nothing decides which message answers the task: the person does, in the task's detail or in the open message. Closing
@@ -157,8 +158,9 @@ and the screens. When the code changes a decision described here, this document 
   each keep theirs) and leaves the possible ones. Each has its undo —a wait let go or changed comes back whole, since when
   it waited and what it had ruled out—, and no model is read for any of it: the chat or an agent reads the possible
   replies and closes a task only when the person asks. A wait left with no account to read —its own, or every one, taken
-  off the client in Settings— reads nothing and says what the person can do: choose where it waits, connect an account
-  in Settings, or stop waiting.
+  off the client in Settings— reads nothing: the Mail page and box do not read it, so no account shows as unreadable
+  for it, and the task's detail says what the person can do: choose where it waits, connect an account in Settings, or
+  stop waiting.
   **One account per request**: the screens read a task's possible replies one task and one account at a time
   (`list_task_replies` with `account`), all at once, so a request does one account's work however many accounts and
   tasks a place holds; an account that holds more than was read says where its next replies start (`next`, read back

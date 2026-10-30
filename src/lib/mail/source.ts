@@ -80,8 +80,8 @@ export function waitWords(text: string): string[] {
 
 // Whether a message is a possible reply to what a task waits for: every word whole in its sender's name or address or in
 // its subject, without accents or capitals. A word is whole as Gmail reads it —no letter or figure right before or after
-// it—, so «Dev» is not found in «Developer» by the sample accounts either. No word, no reply: a wait with nothing to look
-// for would take every message.
+// it—, so «Dev» is not found in «Developer» by the sample accounts either; a word of a script written without spaces is
+// found inside a longer run. No word, no reply: a wait with nothing to look for would take every message.
 export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, words: string[]): boolean {
   if (words.length === 0) return false;
   const fields = folded([message.from.name ?? "", message.from.email, message.subject].join("\n"));
@@ -89,10 +89,18 @@ export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, w
 }
 
 const LETTER_OR_FIGURE = /[\p{L}\p{N}]/u;
+// Scripts written without spaces between words —or, in Korean, with particles joined to them— have no whole word to cut
+// at a space: a word of them is found inside a longer run.
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 
 function holdsWhole(text: string, word: string): boolean {
+  if (UNSPACED.test(word)) return text.includes(word);
   for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
-    if (!LETTER_OR_FIGURE.test(text[at - 1] ?? "") && !LETTER_OR_FIGURE.test(text[at + word.length] ?? "")) return true;
+    // The characters around it, whole: a letter outside the basic plane takes two code units.
+    const before = Array.from(text.slice(Math.max(0, at - 2), at)).pop() ?? "";
+    const next = text.codePointAt(at + word.length);
+    const after = next === undefined ? "" : String.fromCodePoint(next);
+    if (!LETTER_OR_FIGURE.test(before) && !LETTER_OR_FIGURE.test(after)) return true;
   }
   return false;
 }

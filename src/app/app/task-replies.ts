@@ -40,9 +40,14 @@ export function useTaskReplies(place: Record<string, unknown>, today: Day | null
           const rows = [...groups.overdue.tasks, ...groups.today.tasks, ...groups.upcoming.days.flatMap((day) => day.tasks), ...groups.noDate.tasks];
           const waiting = rows.filter((row) => row.mail !== null);
           const emails = new Map(listed.accounts.map((account) => [account.id, account.email]));
-          const reads = waiting.flatMap((row) =>
-            (row.mail!.accountId ? [row.mail!.accountId] : accountsSeenFrom(tree, listed.accounts, row.nodeId)).map((account) => ({ row, account })),
-          );
+          // A task reads the accounts its place sees: its own account while the place sees it, or all of them. An account
+          // taken off the client is read for nobody —the task's detail says what to do—, so it never shows here as an
+          // account that could not be read.
+          const reads = waiting.flatMap((row) => {
+            const seen = accountsSeenFrom(tree, listed.accounts, row.nodeId);
+            const fixed = row.mail!.accountId;
+            return (fixed ? seen.filter((account) => account === fixed) : seen).map((account) => ({ row, account }));
+          });
           const answers = await Promise.all(
             reads.map(({ row, account }) => tool<{ replies: MailRow[]; more: string[]; failures: Failure[] }>("list_task_replies", { task: row.id, account, limit: perAccount })),
           );
