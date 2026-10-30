@@ -75,9 +75,9 @@ export const setTaskMail = defineTool({
       .optional()
       .describe("Only to put back a wait that was let go: the moment it began, as `previous` gave it. A new wait begins now; one that already waits keeps its own."),
     dismissed: z
-      .array(z.string().min(1).max(250))
+      .array(z.string().regex(/^[0-9a-f-]{36}:.{1,200}$/i, "each ruled-out reply is `<account id>:<message id>`, as previous gave it"))
       .optional()
-      .describe("Only to put back a wait as `previous` gave it: the replies it had ruled out."),
+      .describe("Only to put back a wait as `previous` gave it: the replies it had ruled out, each `<account id>:<message id>`."),
   }),
   output: z.object({ task: z.string(), title: z.string(), mail: taskMailSchema.nullable(), previous: taskMailSchema.nullable() }),
   async run(ctx, input) {
@@ -101,7 +101,7 @@ export const setTaskMail = defineTool({
       const reached = await accountsOf(ctx, found.scope, placeOf(found.scope, found.row.node_id));
       if (isError(reached)) return reached;
       if (!reached.accounts.some((account) => account.id === input.account)) {
-        return fail("not_found", `no account with id ${input.account} is visible from the task's place`);
+        return fail("not_found", "that account is not connected where the task lives: connect it there in Settings, or choose another");
       }
     }
     
@@ -129,9 +129,18 @@ export const setTaskMail = defineTool({
           .select(TASK_MAIL_COLUMNS)
           .single();
     
-    const { data, error } = !previous && first.error?.code === "23505" ? await update() : first;
+    
+    let replaced = previous;
+    let written = first;
+    if (!previous && first.error?.code === "23505") {
+      const now = await taskMailOf(ctx, [found.row.id]);
+      if (isError(now)) return now;
+      replaced = now.byTask.get(found.row.id) ?? null;
+      written = await update();
+    }
+    const { data, error } = written;
     if (error) return dbFail("saving what the task waits for", error);
-    return ok({ task: found.row.id, title: found.row.title, mail: toTaskMail(data as TaskMailRow), previous });
+    return ok({ task: found.row.id, title: found.row.title, mail: toTaskMail(data as TaskMailRow), previous: replaced });
   },
 });
 

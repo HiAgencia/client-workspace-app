@@ -90,9 +90,17 @@ export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, w
 
 const LETTER_OR_FIGURE = /[\p{L}\p{N}]/u;
 
+
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
 function holdsWhole(text: string, word: string): boolean {
+  if (UNSPACED.test(word)) return text.includes(word);
   for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
-    if (!LETTER_OR_FIGURE.test(text[at - 1] ?? "") && !LETTER_OR_FIGURE.test(text[at + word.length] ?? "")) return true;
+    
+    const before = Array.from(text.slice(Math.max(0, at - 2), at)).pop() ?? "";
+    const next = text.codePointAt(at + word.length);
+    const after = next === undefined ? "" : String.fromCodePoint(next);
+    if (!LETTER_OR_FIGURE.test(before) && !LETTER_OR_FIGURE.test(after)) return true;
   }
   return false;
 }

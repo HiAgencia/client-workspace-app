@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
@@ -176,6 +176,12 @@ export function TaskDetail() {
     void flush().then(() => dialog.current?.close());
   }
 
+  
+  function leave(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    dialog.current?.close();
+  }
+
   function onClosed() {
     void flush();
     const id = current.current;
@@ -280,7 +286,7 @@ export function TaskDetail() {
             <header className="task-detail-head">
               <p className="task-detail-path t-meta">
                 {item.nodeId ? (
-                  <Link className="link link-meta" href={`/app/node/${item.nodeId}`} onClick={() => dialog.current?.close()}>
+                  <Link className="link link-meta" href={`/app/node/${item.nodeId}`} onClick={leave}>
                     <PlaceName path={item.nodePath} color={null} />
                   </Link>
                 ) : (
@@ -388,7 +394,7 @@ export function TaskDetail() {
                     </dd>
                   </div>
                   {}
-                  <MailAttribute task={item} onLeave={() => dialog.current?.close()} />
+                  <MailAttribute task={item} onLeave={leave} />
                 </dl>
                 <p className="t-meta task-detail-origin">
                   {addedBy(item.source, item.agentLabel)}, {stamp(item.createdAt)}
@@ -463,7 +469,7 @@ function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: st
   return { replies: rows.sort(newestFirst), next, failures };
 }
 
-function MailAttribute({ task, onLeave }: { task: Item; onLeave: () => void }) {
+function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   const { tree, notify, touch, saving, version } = useWorkspace();
   const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null } | null>(null);
   const [accounts, setAccounts] = useState<MailAccount[] | null>(null);
@@ -556,7 +562,7 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: () => void }) {
             previous
               ? { task: task.id, account: previous.accountId, words: previous.waitsFor, since: previous.since, dismissed: previous.dismissed }
               : { task: task.id, waiting: false },
-          ),
+          ).then((back) => (back.ok ? back : { ...back, message: `What “${inlinePlain(task.title)}” waited for could not come back: ${back.message}` })),
         ),
     });
   }

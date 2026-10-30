@@ -40,6 +40,18 @@ function wholeWords(holds: Holds) {
 }
 
 
+function unspacedScripts(holds: Holds) {
+  const message = { from: { name: "総務部", email: "soumu@example.jp" }, subject: "会議室のご案内" };
+  expect(holds(message, ["会議"]), "a word of a script written without spaces is found inside a longer run").toBe(true);
+}
+
+
+function wholeAcrossPlanes(holds: Holds) {
+  const message = { from: { name: "Ops", email: "ops@example.com" }, subject: "𝐀pproved today" };
+  expect(holds(message, ["pproved"]), "a letter outside the basic plane before a word makes it part of a longer one").toBe(false);
+}
+
+
 function failsWith(control: (holds: Holds) => void, broken: Holds, phrase: string) {
   let failure: unknown = null;
   try {
@@ -62,6 +74,8 @@ describe("a possible reply to what a task waits for", () => {
     noAccents(holdsEveryWord);
     noWordNoReply(holdsEveryWord);
     wholeWords(holdsEveryWord);
+    unspacedScripts(holdsEveryWord);
+    wholeAcrossPlanes(holdsEveryWord);
   });
 
   it("its twins: each broken piece fails its own control", () => {
@@ -78,6 +92,16 @@ describe("a possible reply to what a task waits for", () => {
     failsWith(noWordNoReply, everyMessage, "a wait with no word takes no message");
     const anyPart: Holds = (message, words) => words.length > 0 && words.every((word) => folded(fieldsOf(message, ["name", "address", "subject"])).includes(folded(word)));
     failsWith(wholeWords, anyPart, "a word is whole, as Gmail reads it");
+    
+    const wholeByUnits = (text: string, word: string) => {
+      for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
+        if (!/[\p{L}\p{N}]/u.test(text[at - 1] ?? "") && !/[\p{L}\p{N}]/u.test(text[at + word.length] ?? "")) return true;
+      }
+      return false;
+    };
+    const byUnits: Holds = (message, words) => words.length > 0 && words.every((word) => wholeByUnits(folded(fieldsOf(message, ["name", "address", "subject"])), folded(word)));
+    failsWith(unspacedScripts, byUnits, "a word of a script written without spaces is found inside a longer run");
+    failsWith(wholeAcrossPlanes, byUnits, "a letter outside the basic plane before a word makes it part of a longer one");
   });
 
   it("reads a wait's words cleaned of what a search would take for its own", () => {
