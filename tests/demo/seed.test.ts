@@ -538,7 +538,8 @@ describe("the demo seed", () => {
 
   it("starting over empties only the calling demo's workspace: another demo and a person keep theirs", async () => {
     if (!user) throw new Error("the test user was not created");
-    await user.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
+    const seededOwn = await user.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
+    expect(seededOwn.error).toBeNull();
     const other = await createAnonymousUser("demo-reset-other");
     const person = await createDisposableUser("demo-reset-person");
     try {
@@ -554,6 +555,8 @@ describe("the demo seed", () => {
       const before = { nodes: await count(other.client, "nodes"), items: await count(other.client, "items"), mail: await count(other.client, "demo_mail") };
       expect(before.nodes).toBe(expectedNodes().length);
       expect(before.items).toBeGreaterThan(0);
+      // The caller's own workspace holds its demo, so finding it empty after the reset says the reset emptied it.
+      expect(await count(user.client, "nodes")).toBeGreaterThan(0);
 
       const reset = await user.client.rpc("reset_demo");
       expect(reset.error).toBeNull();
