@@ -352,10 +352,12 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   reuse them, emptying each before using it, because the project's anonymous sign-ups share a rate limit and a run that
   opened one per step ran into it.
 - **The suite's users**: each user a run of the tests creates is written down the moment it exists, in a record of that
-  run named by its process and start time (`tests/support/test-users.ts`); the run's global setup (`tests/setup/users.ts`)
-  deletes first what a run that no longer lives left, counts the project's users before and after, and fails the run if
-  a user it created is still there. That record and the demo pool's file live in `DEMO_POOL_DIR`, the system's
-  temporary folder when it is not set.
+  run named by its process and the moment it opened, which carries the process's start time
+  (`tests/support/test-users.ts`), so a run that gets a dead run's process id never writes over that run's record. The
+  global setup of the integration tests (`tests/**`, in `tests/setup/users.ts`) deletes first what a run that no longer
+  lives left, counts the project's users before and after, and fails the run if a user it created is still there; the
+  unit tests beside the code (`src/**`) ask no service and run without it. That record and the demo pool's file live in
+  `DEMO_POOL_DIR`, the system's temporary folder when it is not set.
 - The demo is the emulation of a real case —a small agency's week— and opens on its Overview like any workspace, with no
   banner or guide of its own; the landing says what it holds (its clients and its own projects, read from the seed's
   tree) and where to write first.
