@@ -6,7 +6,8 @@
 
 const ADDRESS = /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+)/i;
 
-const FIRST_WORD = /^[^\s<&]*/u;
+
+const FIRST_WORD = /^[^\s<&[\]()]*/u;
 
 function capitalAt(text: string, index: number): string {
   const rest = text.slice(index);
