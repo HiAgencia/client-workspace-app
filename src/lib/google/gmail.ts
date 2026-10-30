@@ -222,16 +222,49 @@ export function senderSearch(senders: string[]): string {
   return groups.length > 1 ? `{${groups.join(" ")}}` : (groups[0] ?? "");
 }
 
-// The words a person searches, as one group of Gmail's search: what would close the group or open another —a
-// parenthesis, a brace, a quote left open— is read as a space, so the words narrow the inbox and never reach past it; an
-// empty phrase and a minus sign with no word after it are dropped, so neither reaches Gmail as a search of its own.
-// Empty when no word is left.
+// The words a person searches, as one group of Gmail's search, so they narrow the inbox and never reach past it. The
+// words' own groups —`-(draft)`, `{invoice receipt}`— stay when their parentheses and braces pair and nest, each opening
+// and closing inside the inbox's group; otherwise every one of them is a space, and so is a quote left open. A phrase
+// keeps its words as they came; one with no letter or figure, an empty group, and a minus sign with nothing after it are
+// dropped, so none reaches Gmail as a search of its own. Empty when nothing is left.
 export function wordsSearch(words: string): string {
-  const pieces = words.replace(/[(){}]/g, " ").split('"');
-  // With the quotes paired, every other piece is a phrase; with one left open, every quote is a space.
-  const phrased = pieces.length % 2 === 1 ? pieces.map((piece, index) => (index % 2 === 0 ? piece : piece.trim() ? `"${piece}"` : " ")).join("") : pieces.join(" ");
-  const plain = phrased.replace(/(^|\s)-+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
+  const pieces = words.replace(/\u0000/g, " ").split('"');
+  // With the quotes paired every other piece is a phrase, held aside so what follows never changes its words.
+  const phrases: string[] = [];
+  let text =
+    pieces.length % 2 === 1
+      ? pieces
+          .map((piece, index) => {
+            if (index % 2 === 0) return piece;
+            const phrase = piece.replace(/[(){}]/g, " ");
+            if (!/[\p{L}\p{N}]/u.test(phrase)) return " ";
+            phrases.push(phrase);
+            return `\u0000${phrases.length - 1}\u0000`;
+          })
+          .join("")
+      : pieces.join(" ");
+  if (!groupsNest(text)) text = text.replace(/[(){}]/g, " ");
+  for (let before = ""; before !== text; ) {
+    before = text;
+    text = text.replace(/[({]\s*[)}]/g, " ").replace(/(^|\s)-+(?=\s|$)/g, " ");
+  }
+  const plain = text
+    .replace(/\u0000(\d+)\u0000/g, (_, index: string) => `"${phrases[Number(index)]}"`)
+    .replace(/\s+/g, " ")
+    .trim();
   return plain ? `(${plain})` : "";
+}
+
+// Whether every parenthesis and brace of a text closes the last one opened, and all of them close.
+function groupsNest(text: string): boolean {
+  const open: string[] = [];
+  for (const char of text) {
+    if (char === "(" || char === "{") open.push(char);
+    else if (char === ")" || char === "}") {
+      if (open.pop() !== (char === ")" ? "(" : "{")) return false;
+    }
+  }
+  return open.length === 0;
 }
 
 // ---- The source -------------------------------------------------------------------------------------------------------

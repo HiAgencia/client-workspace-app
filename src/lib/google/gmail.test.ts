@@ -76,6 +76,14 @@ describe("reading a Gmail message", () => {
     expect(wordsSearch('"" -')).toBe("");
     expect(wordsSearch('invoice "" - march')).toBe("(invoice march)");
     expect(wordsSearch('-"draft copy" report')).toBe('(-"draft copy" report)');
+    // A phrase keeps its words as they came, and one with no letter or figure is no search either.
+    expect(wordsSearch('"a - b"')).toBe('("a - b")');
+    expect(wordsSearch('"-" ". ."')).toBe("");
+    // The words' own groups stay when they pair and nest, so an exclusion stays one; an empty group goes.
+    expect(wordsSearch("report -(draft)")).toBe("(report -(draft))");
+    expect(wordsSearch("{invoice receipt} -(draft copy)")).toBe("({invoice receipt} -(draft copy))");
+    expect(wordsSearch("report -() {}")).toBe("(report)");
+    expect(wordsSearch("({a)}")).toBe("(a)");
   });
 
   it("turns Gmail's labels and date into the product's message", () => {
