@@ -8,6 +8,7 @@ import {
   type UIMessageChunk,
 } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import { count } from "@/lib/count";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { chatTools } from "./tools";
@@ -28,7 +29,7 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
   }).format(now);
   const summary = nodes
     .slice(0, 80)
-    .map((node) => `- ${node.path} (${node.openTasks} open tasks)`)
+    .map((node) => `- ${node.path} (${count(node.openTasks, "open task", "open tasks")})`)
     .join("\n");
   return [
     "You work inside a task manager where every task has an optional place —a client, a project, a subproject, or",

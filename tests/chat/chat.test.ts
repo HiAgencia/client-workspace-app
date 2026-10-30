@@ -1,7 +1,7 @@
 import { readUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runChat } from "@/lib/chat/run";
+import { runChat, systemPrompt } from "@/lib/chat/run";
 import { simulatedModel } from "@/lib/chat/simulated";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { dailyCap, takeUsage, takeUsageFor } from "@/lib/chat/usage";
@@ -207,5 +207,16 @@ describe("the daily cap", () => {
   it("a signed-in person cannot take units for themselves", async () => {
     const { error } = await user!.client.rpc("take_usage", { p_owner: user!.id, p_kind: "chat_message", p_day: "2026-01-15", p_cap: 1000 });
     expect(error?.code).toBe("42501");
+  });
+});
+
+describe("what the model knows before it reads", () => {
+  it("names each place with its open tasks, one of them in the singular", async () => {
+    const solo = await user!.client.from("nodes").insert({ owner_id: user!.id, kind: "client", name: "Solo" }).select("id").single();
+    if (solo.error) throw new Error(solo.error.message);
+    const task = await user!.client.from("items").insert({ owner_id: user!.id, node_id: solo.data.id, type: "task", title: "Call the printer" });
+    if (task.error) throw new Error(task.error.message);
+    const prompt = await systemPrompt({ db: user!.client, ownerId: user!.id, source: "chat" }, "UTC");
+    expect(prompt).toMatch(/^- Solo \(1 open task\)$/m);
   });
 });
