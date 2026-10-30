@@ -35,7 +35,7 @@ export function secondsToNextDay(now = new Date()): number {
   return Math.ceil((next.getTime() - now.getTime()) / 1000);
 }
 
-export type TakeResult = { allowed: true; count: number } | { allowed: false; reason: "cap" | "demo_cap" | "error" };
+type TakeResult = { allowed: true; count: number } | { allowed: false; reason: "cap" | "demo_cap" | "error" };
 
 
 export async function takeUsage(service: Db, ownerId: string, kind: UsageKind, cap: number, now = new Date()): Promise<TakeResult> {

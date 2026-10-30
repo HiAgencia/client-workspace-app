@@ -5,7 +5,7 @@ import { requireServerEnv, serverEnv } from "@/lib/env";
 import { simulatedModel } from "./simulated";
 
 export const META_BASE_URL = "https://api.meta.ai/v1";
-export const META_CHAT_MODEL = "muse-spark-1.3";
+const META_CHAT_MODEL = "muse-spark-1.3";
 
 export type ChatProvider = "meta" | "simulated";
 

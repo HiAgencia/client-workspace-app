@@ -66,15 +66,17 @@ describe("the chat's cards", () => {
     expect(sent).toEqual([{ url: "/api/tools/reorder_items", body: { ids: ["a", "b"] } }]);
   });
 
-  it("what a task waits for goes back to the account and the words it had, or to none", async () => {
+  it("what a task waits for goes back whole —its account, its words, since when, and what it ruled out— or to none", async () => {
     const sent = capture();
-    const changed = WRITES.set_task_mail({ ok: true, task: "t4", title: "Wait for the transfer", mail: { accountId: null, waitsFor: "Bayside" }, previous: { accountId: "a1", waitsFor: "Bayside Bank" } });
+    const since = "2026-11-02T14:05:09.123456+00:00";
+    const now = { accountId: null, waitsFor: "Bayside", since, dismissed: [] };
+    const changed = WRITES.set_task_mail({ ok: true, task: "t4", title: "Wait for the transfer", mail: now, previous: { accountId: "a1", waitsFor: "Bayside Bank", since, dismissed: ["a1:m2"] } });
     expect(changed?.what).toBe("“Wait for the transfer” waits for mail with “Bayside”");
     await changed?.undo?.();
-    const started = WRITES.set_task_mail({ ok: true, task: "t4", title: "Wait for the transfer", mail: { accountId: null, waitsFor: "Bayside" }, previous: null });
+    const started = WRITES.set_task_mail({ ok: true, task: "t4", title: "Wait for the transfer", mail: now, previous: null });
     await started?.undo?.();
     expect(sent).toEqual([
-      { url: "/api/tools/set_task_mail", body: { task: "t4", waiting: true, account: "a1", words: "Bayside Bank" } },
+      { url: "/api/tools/set_task_mail", body: { task: "t4", waiting: true, account: "a1", words: "Bayside Bank", since, dismissed: ["a1:m2"] } },
       { url: "/api/tools/set_task_mail", body: { task: "t4", waiting: false } },
     ]);
   });

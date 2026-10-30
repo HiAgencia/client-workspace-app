@@ -80,10 +80,21 @@ export function waitWords(text: string): string[] {
 
 
 
+
+
 export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, words: string[]): boolean {
   if (words.length === 0) return false;
   const fields = folded([message.from.name ?? "", message.from.email, message.subject].join("\n"));
-  return words.every((word) => fields.includes(folded(word)));
+  return words.every((word) => holdsWhole(fields, folded(word)));
+}
+
+const LETTER_OR_FIGURE = /[\p{L}\p{N}]/u;
+
+function holdsWhole(text: string, word: string): boolean {
+  for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
+    if (!LETTER_OR_FIGURE.test(text[at - 1] ?? "") && !LETTER_OR_FIGURE.test(text[at + word.length] ?? "")) return true;
+  }
+  return false;
 }
 
 

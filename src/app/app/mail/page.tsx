@@ -524,7 +524,7 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
             key={chosen.id}
             question={`How did “${inlinePlain(chosen.title)}” end?`}
             title={chosen.title}
-            onClose={(result) => void answer(chosen, result)}
+            onClose={(result) => answer(chosen, result)}
             onCancel={stopAnswering}
           />
         </div>

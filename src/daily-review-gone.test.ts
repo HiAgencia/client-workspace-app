@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 const SRC = fileURLToPath(new URL(".", import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
-const TRACE = /judge|run_daily_review|dailyReview/;
+const TRACE = /\b(?:ReviewJudge|reviewJudge|judgeFor|metaJudge|simulatedJudge|run_daily_review|dailyReview)\b|lib\/review\//;
 
 type File = { path: string; text: string };
 
