@@ -6,12 +6,13 @@
 
 const ADDRESS = /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+)/i;
 
-const BRAND = /^\p{Ll}+\p{Lu}/u;
+const FIRST_WORD = /^[^\s<&]*/u;
 
 function capitalAt(text: string, index: number): string {
   const rest = text.slice(index);
-  if (ADDRESS.test(rest) || BRAND.test(rest)) return text;
+  if (ADDRESS.test(rest)) return text;
   const letter = String.fromCodePoint(text.codePointAt(index)!);
+  if (/\p{Lu}/u.test(FIRST_WORD.exec(rest)![0].slice(letter.length))) return text;
   const capital = letter.toUpperCase();
   
   if (capital === letter || [...capital].length !== 1) return text;
