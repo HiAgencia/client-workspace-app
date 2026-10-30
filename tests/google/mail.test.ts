@@ -104,13 +104,13 @@ const fromOf = (message: Stored) => (message.payload.headers ?? []).find((header
 const subjectOf = (message: Stored) => (message.payload.headers ?? []).find((header) => header.name === "Subject")?.value ?? "";
 
 // Gmail's search, as far as the source uses it: the inbox, unread, what was sent, a moment, senders (`from:(words)`, one
-// group or several in `{…}`), and loose words in the sender, subject, or snippet.
+// group or several in `{…}`), and loose words, alone or in one group, in the sender, subject, or snippet.
 function search(q: string): Stored[] {
   const after = /after:(\d+)/.exec(q);
   const senders = [...q.matchAll(/from:\(([^)]*)\)/g)].map(([, words]) => words.toLowerCase().split(/\s+/).filter(Boolean));
   const loose = q
     .replace(/from:\([^)]*\)/g, " ")
-    .replace(/[{}]/g, " ")
+    .replace(/[{}()]/g, " ")
     .split(/\s+/)
     .filter((word) => word && !/^-?(in|is|after):/.test(word))
     .map((word) => word.toLowerCase());
@@ -493,9 +493,13 @@ describe("the tools over Gmail", () => {
     expect(found.ok).toBe(true);
     expect(found.mail.map((row) => row.id)).toEqual(["m1"]);
     expect(found.mailFailures.map((failure) => failure.accountEmail).sort()).toEqual(["calendar@example.com", "gone@example.com"]);
-    expect(searches).toEqual([expect.stringMatching(/^in:inbox .*approved$/)]);
+    expect(searches).toEqual(["in:inbox -in:sent -in:draft -in:chats (approved)"]);
     expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(1);
     expect(batchFormats).toEqual(["metadata"]);
+    // The words stay one group of the inbox's search: what would close it or open another reaches Gmail as a space.
+    forget();
+    await callTool("search_items", context(), { query: "approved) OR {in:anywhere", node: ids.client });
+    expect(searches).toEqual(["in:inbox -in:sent -in:draft -in:chats (approved OR in:anywhere)"]);
   });
 
   it("reads the mail of a task in one batch of metadata per account", async () => {

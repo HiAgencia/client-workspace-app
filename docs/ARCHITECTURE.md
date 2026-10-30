@@ -332,7 +332,8 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   oldest wait, archived included, because a filter may file away the mail a task waits for: at most 50 messages, and
   when the account holds more, once more only those of the senders its tasks wait for (`from:`). The unread count is
   the inbox's, the same search as the list's, read in pages of 500 ids up to four; past them it says it stopped. A search
-  passes its words to Gmail's own search of the inbox, with the metadata of at most 20 messages per account; the mail of
+  passes its words to Gmail's own search of the inbox as one group, its parentheses, braces, and a quote left open read
+  as spaces so no operator among them reaches past the inbox, with the metadata of at most 20 messages per account; the mail of
   a task is read in one batch per account. A message opened in the viewer is read alone, whole: its HTML and its text,
   each part decoded in its own charset, attachments left out. An account connected before mail was asked, or revoked,
   is not tried and says why. The log names an account by its id, never by its address.

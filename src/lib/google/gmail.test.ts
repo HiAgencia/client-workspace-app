@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitBatch, type GmailMessage } from "./api";
-import { addressList, bodiesOf, decodeWords, parseAddress, searchFrom, senderSearch, snippetText, toMailMessage } from "./gmail";
+import { addressList, bodiesOf, decodeWords, parseAddress, searchFrom, senderSearch, snippetText, toMailMessage, wordsSearch } from "./gmail";
 
 const encode = (text: string, charset: BufferEncoding = "utf8") => Buffer.from(text, charset).toString("base64url");
 
@@ -63,6 +63,15 @@ describe("reading a Gmail message", () => {
     // What would change the search's own grouping is left out.
     expect(senderSearch(['"Ana" (Studio)', "-x", "()"])).toBe("{from:(Ana Studio) from:(x)}");
     expect(senderSearch(["()"])).toBe("");
+  });
+
+  it("searches the words a person writes as one group, so none of them reaches past the inbox", () => {
+    expect(wordsSearch("approved")).toBe("(approved)");
+    expect(wordsSearch('"quarterly report" draft')).toBe('("quarterly report" draft)');
+    // What would close the group or open another is read as a space.
+    expect(wordsSearch("approved) OR {in:anywhere")).toBe("(approved OR in:anywhere)");
+    expect(wordsSearch('"quote left open')).toBe("(quote left open)");
+    expect(wordsSearch("( ) {}")).toBe("");
   });
 
   it("turns Gmail's labels and date into the product's message", () => {

@@ -221,6 +221,15 @@ export function senderSearch(senders: string[]): string {
   return groups.length > 1 ? `{${groups.join(" ")}}` : (groups[0] ?? "");
 }
 
+// The words a person searches, as one group of Gmail's search: what would close the group or open another —a
+// parenthesis, a brace, a quote left open— is read as a space, so the words narrow the inbox and never reach past it.
+// Empty when no word is left.
+export function wordsSearch(words: string): string {
+  const quoteLeftOpen = (words.match(/"/g) ?? []).length % 2 === 1;
+  const plain = words.replace(quoteLeftOpen ? /[(){}"]/g : /[(){}]/g, " ").replace(/\s+/g, " ").trim();
+  return plain ? `(${plain})` : "";
+}
+
 // ---- The source -------------------------------------------------------------------------------------------------------
 
 type Readable = TokenRow & { status: string };
@@ -396,9 +405,11 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     async search({ db, ownerId, accounts, words, limit }) {
       const query = words.replace(/\s+/g, " ").trim();
       if (!query) return { messages: [], failures: [] };
+      const group = wordsSearch(query);
       const [sample, real] = await Promise.all([
         accounts.some(isDemo) ? demo.search({ db, ownerId, accounts: accounts.filter(isDemo), words: query, limit }) : nothing,
-        accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${query}`, limit, "metadata", toMailMessage) : nothing,
+        // Words with nothing left to search find nothing, rather than the whole inbox.
+        group && accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${group}`, limit, "metadata", toMailMessage) : nothing,
       ]);
       return { messages: newestFirst([...sample.messages, ...real.messages]), failures: [...sample.failures, ...real.failures] };
     },
