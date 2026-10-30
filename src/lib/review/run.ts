@@ -95,6 +95,7 @@ const RUN_COLUMNS = "id, day, instruction, requested, provider, task_ids, create
 
 
 
+
 const HEARTBEAT_FLOOR_MS = 5 * 60_000;
 
 function toAction(row: ActionRow, task: ReviewAction["task"] = null): ReviewAction {
@@ -243,13 +244,26 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
 }
 
 
+class TakenOver extends Error {
+  constructor() {
+    super("the review was taken over by another call");
+  }
+}
 
 
-function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
+
+
+type Attempt = { lastBeat: string };
+
+
+
+
+function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[], attempt: Attempt) {
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const met = new Set<string>();
   const rows: ActionRow[] = [];
   const failures: string[] = [];
+  let lost = false;
   const failed = (task: ReviewTask, what: string, cause: string) => {
     console.error(`daily review: ${what} ${task.id}: ${cause}`);
     failures.push(`${what} “${task.title}”`);
@@ -257,13 +271,36 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
   };
   
   
-  const beat = async () => {
-    const { error } = await ctx.db.from("daily_reviews").update({ heartbeat_at: new Date().toISOString() }).eq("id", run.id).is("finished_at", null);
-    if (error) console.error(`daily review: the heartbeat of ${run.id} could not be written: ${error.message}`);
+  
+  
+  let queue: Promise<boolean> = Promise.resolve(true);
+  const beatOnce = async () => {
+    if (lost) return false;
+    const next = new Date().toISOString();
+    const { data, error } = await ctx.db
+      .from("daily_reviews")
+      .update({ heartbeat_at: next })
+      .eq("id", run.id)
+      .eq("heartbeat_at", attempt.lastBeat)
+      .is("finished_at", null)
+      .select("id");
+    if (error) {
+      console.error(`daily review: the heartbeat of ${run.id} could not be written: ${error.message}`);
+      return true;
+    }
+    if ((data ?? []).length === 0) {
+      lost = true;
+      console.error(`daily review: ${run.id} was taken over by another call; this attempt stops writing`);
+      return false;
+    }
+    attempt.lastBeat = next;
+    return true;
   };
+  const beat = () => (queue = queue.then(beatOnce, beatOnce));
+  const LOST = { ok: false, message: "this review is now another call's: stop here" };
   const tools: ReviewTools = {
     async writeMailStatus({ task, status, sentence, message }) {
-      await beat();
+      if (!(await beat())) return LOST;
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       
@@ -308,7 +345,7 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "written" };
     },
     async completeTask({ task }) {
-      await beat();
+      if (!(await beat())) return LOST;
       const target = byId.get(task);
       if (!target) return { ok: false, message: "that task is not one this review reads" };
       if (!met.has(task) || !target.mail.decidedMessageId) return { ok: false, message: "complete a task only once its mail is written as met" };
@@ -320,20 +357,31 @@ function toolsFor(ctx: ToolContext, run: ReviewRun, tasks: ReviewTask[]) {
       return { ok: true, message: "completed" };
     },
   };
-  return { tools, rows, failures, beat };
+  
+  const judgeBeat = async () => {
+    if (!(await beat())) throw new TakenOver();
+  };
+  return { tools, rows, failures, beat: judgeBeat, lost: () => lost };
 }
 
 
 
-async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean) {
+
+async function finish(ctx: ToolContext, run: ReviewRun, failures: number, finished: boolean, attempt: Attempt) {
   const { data, error } = await ctx.db
     .from("daily_reviews")
     .update({ failures: run.failures + failures, finished_at: finished ? new Date().toISOString() : null, attempt_started_at: null, heartbeat_at: null })
     .eq("id", run.id)
+    .eq("heartbeat_at", attempt.lastBeat)
     .select(RUN_COLUMNS)
-    .single();
+    .maybeSingle();
   if (error) return dbFail("closing the review", error);
-  return ok({ run: toRun(data as RunRow) });
+  return ok({ run: data ? toRun(data as RunRow) : null });
+}
+
+
+function takenOver(run: ReviewRun) {
+  return ok({ review: run, ran: false, skipped: "running" as const, actions: [], failures: [] });
 }
 
 export async function runDailyReview(
@@ -346,6 +394,8 @@ export async function runDailyReview(
   const prefs = await readPreferences(ctx.db, ctx.ownerId);
   if (!prefs.ok) return fail("db_error", `reading the preferences: ${prefs.message}`);
   let resumed: ReviewRun | null = null;
+  
+  const attempt: Attempt = { lastBeat: new Date().toISOString() };
   if (!requested) {
     const { data, error } = await ctx.db.from("daily_reviews").select(RUN_COLUMNS).eq("owner_id", ctx.ownerId).eq("day", input.today).eq("requested", false).maybeSingle();
     if (error) return dbFail("reading the day's review", error);
@@ -357,6 +407,7 @@ export async function runDailyReview(
       let claimed: RunRow | null = null;
       if (!run.finishedAt) {
         const now = new Date().toISOString();
+        attempt.lastBeat = now;
         const cutoff = new Date(Date.now() - HEARTBEAT_FLOOR_MS).toISOString();
         const claim = await ctx.db
           .from("daily_reviews")
@@ -393,9 +444,10 @@ export async function runDailyReview(
   const instruction = input.instruction ?? prefs.preferences.dailyReviewInstruction;
   let run = resumed;
   if (!run) {
+    attempt.lastBeat = new Date().toISOString();
     const { data: inserted, error } = await ctx.db
       .from("daily_reviews")
-      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds, heartbeat_at: new Date().toISOString() })
+      .insert({ owner_id: ctx.ownerId, day: input.today, instruction, requested, provider: judge.provider, task_ids: gathered.taskIds, heartbeat_at: attempt.lastBeat })
       .select(RUN_COLUMNS)
       .single();
     if (error?.code === "23505") {
@@ -405,23 +457,28 @@ export async function runDailyReview(
     if (error) return dbFail("starting the review", error);
     run = toRun(inserted as RunRow);
   }
-  const { tools, rows, failures, beat } = toolsFor(ctx, run, gathered.waiting);
+  const { tools, rows, failures, beat, lost } = toolsFor(ctx, run, gathered.waiting, attempt);
   let judged: Awaited<ReturnType<ReviewJudge["review"]>>;
   try {
     judged = await judge.review(gathered.waiting, tools, { instruction, today: input.today, zone: input.zone ?? "UTC", beat });
   } catch (cause) {
     
+    if (cause instanceof TakenOver || lost()) return takenOver(run);
+    
     console.error("daily review: the judge stopped:", cause instanceof Error ? cause.message : cause);
-    const stopped = await finish(ctx, run, failures.length + 1, false);
+    const stopped = await finish(ctx, run, failures.length + 1, false, attempt);
+    if (!isError(stopped) && !stopped.run) return takenOver(run);
     
     if (isError(stopped)) console.error("daily review: recording the stop failed:", stopped.message);
     const unrecorded = isError(stopped) ? `; recording the stop failed too: ${stopped.message}` : "";
     return fail("internal", `the review stopped: ${cause instanceof Error ? cause.message : "the judge failed"}${unrecorded}`);
   }
+  if (lost()) return takenOver(run);
   
   const all = [...gathered.failures, ...failures, ...(judged?.failures ?? [])];
-  const closed = await finish(ctx, run, all.length, true);
+  const closed = await finish(ctx, run, all.length, true, attempt);
   if (isError(closed)) return closed;
+  if (!closed.run) return takenOver(run);
   const actions = await withTasks(ctx, rows);
   if (isError(actions)) return actions;
   return ok({ review: closed.run, ran: true, skipped: null, actions: actions.actions, failures: all });
