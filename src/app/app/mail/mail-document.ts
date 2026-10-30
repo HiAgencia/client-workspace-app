@@ -3,9 +3,9 @@ import type { Theme } from "@/lib/theme";
 import type { MailContent } from "./mail-viewer";
 
 // ---- The document the frame paints ----------------------------------------------------------------------------------
-// A real message is not to be trusted: it is painted in a frame with no scripts (the `sandbox` below), under a content
-// policy of its own that loads nothing but its styles and inline pictures —and its network images only once asked—, with
-// every link opening a new tab that knows nothing of where it came from.
+// A real message is not to be trusted: it is painted in a frame with no scripts (its `sandbox`, in `mail-viewer.tsx`),
+// under a content policy of its own that loads nothing but its styles and inline pictures —and its network images only
+// once asked—, with every link opening a new tab that knows nothing of where it came from.
 
 // Whether the message brings colors of its own for a dark screen.
 const ownDark = (html: string) => /prefers-color-scheme\s*:\s*dark/i.test(html);
