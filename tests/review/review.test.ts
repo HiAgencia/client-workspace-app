@@ -104,7 +104,7 @@ describe("the mail beside the work", () => {
     expect(after.unread).toBe(2);
     expect(after.groups.earlier.messages.find((row) => row.id === photos.id)).toMatchObject({ unread: false, opened: true });
     const tree = await run<{ mail: { unread: number } | null }>("list_tree", as(demo), { withMail: true });
-    expect(tree.mail).toEqual({ unread: 2 });
+    expect(tree.mail).toEqual({ unread: 2, failures: [] });
     expect((await run<{ mail: unknown }>("list_tree", as(demo), {})).mail).toBeNull();
   });
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { demoMailSource, MAIL_LIMIT, mailFailureSchema, withoutBody, type MailAccount, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
+import { demoMailSource, MAIL_LIMIT, mailFailureSchema, senderMatches, type MailAccount, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
 import { sanitizeMailHtml } from "@/lib/mail/sanitize";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
@@ -175,9 +175,7 @@ const IN_CHUNK = 200;
 
 
 export function fromExpected(message: Pick<MailMessage, "from">, expectFrom: string | null): boolean {
-  if (!expectFrom) return false;
-  const wanted = expectFrom.trim().toLowerCase();
-  return (message.from.name ?? "").toLowerCase().includes(wanted) || message.from.email.toLowerCase().includes(wanted);
+  return expectFrom ? senderMatches(message.from, expectFrom) : false;
 }
 
 function toRows(
@@ -241,6 +239,8 @@ export async function readMail(
 
 
 
+
+
 export async function unreadMail(
   ctx: ToolContext,
   accounts: MailAccount[],
@@ -259,9 +259,20 @@ export async function unreadMail(
     seen = new Set(data.map((row) => `${row.account_id}:${row.message_id}`));
   }
   const fresh = messages.filter((message) => !seen.has(`${message.accountId}:${message.id}`));
-  const byAccount: Record<string, number> = Object.fromEntries(accounts.map((account) => [account.id, 0]));
+  const failed = new Set(failures.map((failure) => failure.accountId));
+  const counted = new Set(messages.map((message) => message.accountId));
+  const byAccount: Record<string, number> = Object.fromEntries(
+    accounts.filter((account) => !failed.has(account.id) || counted.has(account.id)).map((account) => [account.id, 0]),
+  );
   for (const message of fresh) byAccount[message.accountId] = (byAccount[message.accountId] ?? 0) + 1;
   return ok({ unread: fresh.length, byAccount, failures });
+}
+
+
+export function failuresByAccount(...lists: MailFailure[][]): MailFailure[] {
+  const byAccount = new Map<string, MailFailure>();
+  for (const failure of lists.flat()) if (!byAccount.has(failure.accountId)) byAccount.set(failure.accountId, failure);
+  return [...byAccount.values()];
 }
 
 export const listMail = defineTool({
@@ -286,6 +297,7 @@ export const listMail = defineTool({
     unread: z.number(),
     
     unreadByAccount: z.record(z.string(), z.number()),
+    
     failures: z.array(mailFailureSchema),
   }),
   async run(ctx, input) {
@@ -311,7 +323,7 @@ export const listMail = defineTool({
       },
       unread: count.unread,
       unreadByAccount: count.byAccount,
-      failures: read.failures,
+      failures: failuresByAccount(read.failures, count.failures),
     });
   },
 });
@@ -570,15 +582,19 @@ export const setTaskMail = defineTool({
 });
 
 
-export async function searchMail(ctx: ToolContext, scope: Scope, place: ReadPlace, query: string): Promise<ToolResult<{ rows: MailRow[] }>> {
-  const read = await readMail(ctx, scope, place, { limit: 200 });
-  if (isError(read)) return read;
-  const words = query.toLowerCase();
-  return ok({
-    rows: read.rows
-      .filter((row) => [row.subject, row.snippet, row.from.name ?? "", row.from.email].some((value) => value.toLowerCase().includes(words)))
-      .slice(0, 20),
-  });
+const SEARCH_LIMIT = 20;
+
+
+
+export async function searchMail(ctx: ToolContext, scope: Scope, place: ReadPlace, query: string): Promise<ToolResult<{ rows: MailRow[]; failures: MailFailure[] }>> {
+  const reached = await accountsOf(ctx, scope, place);
+  if (isError(reached)) return reached;
+  if (reached.accounts.length === 0) return ok({ rows: [], failures: [] });
+  const { messages, failures } = await mailOf(ctx).search({ db: ctx.db, ownerId: ctx.ownerId, accounts: reached.accounts, words: query, limit: SEARCH_LIMIT });
+  const shown = messages.slice(0, SEARCH_LIMIT);
+  const context = await mailContext(ctx, scope, [...new Set(shown.map((message) => message.accountId))]);
+  if (isError(context)) return context;
+  return ok({ rows: toRows(shown, context, new Map(reached.accounts.map((account) => [account.id, account])), scope), failures });
 }
 
 
@@ -599,19 +615,15 @@ export async function itemMailOf(
   const reached = await accountsOf(ctx, scope, place);
   if (isError(reached)) return reached;
   const accounts = new Map(reached.accounts.map((account) => [account.id, account]));
-  const messages: MailMessage[] = [];
-  const failures: MailFailure[] = [];
+  const byAccount = new Map<string, string[]>();
   for (const { accountId, messageId } of wanted.values()) {
-    const account = accounts.get(accountId);
-    if (!account) continue;
-    try {
-      const content = await mailOf(ctx).get({ db: ctx.db, ownerId: ctx.ownerId, account, id: messageId });
-      if (!content) continue;
-      messages.push(withoutBody(content));
-    } catch (cause) {
-      failures.push({ accountId, accountEmail: account.email, reason: cause instanceof Error ? cause.message : "the message could not be read" });
-    }
+    if (accounts.has(accountId)) byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), messageId]);
   }
+  const answers = await Promise.all(
+    [...byAccount].map(([accountId, ids]) => mailOf(ctx).many({ db: ctx.db, ownerId: ctx.ownerId, account: accounts.get(accountId)!, ids })),
+  );
+  const messages: MailMessage[] = answers.flatMap((answer) => answer.messages);
+  const failures = failuresByAccount(...answers.map((answer) => answer.failures));
   const context = await mailContext(ctx, scope, [...new Set(messages.map((message) => message.accountId))]);
   if (isError(context)) return context;
   messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));

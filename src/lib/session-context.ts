@@ -1,5 +1,6 @@
 import { googleDeps } from "@/lib/google/deps";
 import { googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
+import { gmailMailSource } from "@/lib/google/gmail";
 import { demoMailSource } from "@/lib/mail/source";
 import { takeUsageFor } from "@/lib/chat/usage";
 import { currentUser, serviceClient, userClient, type SessionUser } from "@/lib/supabase/server";
@@ -25,7 +26,7 @@ export async function sessionContext(
       scopeNodeId,
       events: deps ? googleEventsSource(deps) : undefined,
       calendar: deps ? googleCalendarWriter(deps) : undefined,
-      mail: demoMailSource(),
+      mail: deps ? gmailMailSource(deps) : demoMailSource(),
       reviewQuota: () => takeUsageFor(serviceClient(), user, "daily_review"),
     },
   };

@@ -6,6 +6,7 @@ import type { Db } from "@/lib/db/client";
 
 
 
+
 export const mailAddressSchema = z.object({ name: z.string().nullable(), email: z.string() });
 
 
@@ -43,10 +44,29 @@ export type MailSource = {
   
   get(args: { db: Db; ownerId: string; account: MailAccount; id: string }): Promise<MailContent | null>;
   
-  read(args: { db: Db; ownerId: string; accounts: MailAccount[]; since: string; limit?: number }): Promise<{ messages: MailContent[]; failures: MailFailure[] }>;
+  many(args: { db: Db; ownerId: string; account: MailAccount; ids: string[] }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
+  
+  
+  read(args: { db: Db; ownerId: string; accounts: MailAccount[]; since: string; limit?: number; from?: string[] }): Promise<{ messages: MailContent[]; failures: MailFailure[]; more: string[] }>;
+  
+  search(args: { db: Db; ownerId: string; accounts: MailAccount[]; words: string; limit: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
+  
   
   unread(args: { db: Db; ownerId: string; accounts: MailAccount[] }): Promise<{ messages: Array<{ accountId: string; id: string }>; failures: MailFailure[] }>;
 };
+
+
+export function senderMatches(from: { name: string | null; email: string }, words: string): boolean {
+  const wanted = words.trim().toLowerCase();
+  if (!wanted) return false;
+  return (from.name ?? "").toLowerCase().includes(wanted) || from.email.toLowerCase().includes(wanted);
+}
+
+
+export function holdsWords(message: Pick<MailMessage, "from" | "subject" | "snippet">, words: string): boolean {
+  const wanted = words.trim().toLowerCase();
+  return [message.subject, message.snippet, message.from.name ?? "", message.from.email].some((value) => value.toLowerCase().includes(wanted));
+}
 
 type DemoRow = {
   gmail_id: string;
@@ -94,18 +114,23 @@ export function withoutBody(message: MailContent): MailMessage {
 
 export const MAIL_LIMIT = 50;
 
-const notConnected = (account: MailAccount): MailFailure => ({ accountId: account.id, accountEmail: account.email, reason: "reading Gmail is not connected on this server yet" });
+const notConnected = (account: MailAccount): MailFailure => ({ accountId: account.id, accountEmail: account.email, reason: "reading Gmail is not configured on this server" });
 
 
 function unreadable(account: MailAccount, cause: string): MailFailure {
-  console.error(`mail: ${account.email}: ${cause}`);
+  console.error(`mail: account ${account.id}: ${cause}`);
   return { accountId: account.id, accountEmail: account.email, reason: "the sample messages could not be read" };
 }
+
+const newestFirst = <T extends { receivedAt: string }>(messages: T[]) =>
+  messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
+
 
 
 
 export function demoMailSource(): MailSource {
-  async function rows(db: Db, ownerId: string, accounts: MailAccount[], since: string | undefined, limit: number, whole: boolean) {
+  type Read = { since?: string; limit: number; whole: boolean; keep?: (message: MailContent) => boolean };
+  async function rows(db: Db, ownerId: string, accounts: MailAccount[], { since, limit, whole, keep }: Read) {
     const failures: MailFailure[] = accounts.filter((account) => !account.isDemo).map(notConnected);
     const answers = await Promise.all(
       accounts
@@ -117,24 +142,46 @@ export function demoMailSource(): MailSource {
             .eq("owner_id", ownerId)
             .eq("account_id", account.id);
           if (since) query = query.gte("received_at", since);
-          const { data, error } = await query.order("received_at", { ascending: false }).limit(limit);
-          if (error) return { messages: [] as MailContent[], failure: unreadable(account, error.message) };
-          return {
-            messages: (data as unknown as DemoRow[]).map((row) => fromDemo({ ...row, html: whole ? row.html : null, text_body: whole ? row.text_body : null }, account.email)),
-            failure: null,
-          };
+          query = query.order("received_at", { ascending: false });
+          
+          const { data, error } = await (keep ? query : query.limit(limit + 1));
+          if (error) return { messages: [] as MailContent[], failure: unreadable(account, error.message), more: null };
+          const all = (data as unknown as DemoRow[])
+            .map((row) => fromDemo({ ...row, html: whole ? row.html : null, text_body: whole ? row.text_body : null }, account.email))
+            .filter((message) => !keep || keep(message));
+          return { messages: all.slice(0, limit), failure: null, more: all.length > limit ? account.id : null };
         }),
     );
-    const messages = answers.flatMap((answer) => answer.messages).sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
-    return { messages, failures: [...failures, ...answers.flatMap((answer) => (answer.failure ? [answer.failure] : []))] };
+    return {
+      messages: newestFirst(answers.flatMap((answer) => answer.messages)),
+      failures: [...failures, ...answers.flatMap((answer) => (answer.failure ? [answer.failure] : []))],
+      more: answers.flatMap((answer) => (answer.more ? [answer.more] : [])),
+    };
   }
   return {
     async list({ db, ownerId, accounts, since, limit = MAIL_LIMIT }) {
-      const { messages, failures } = await rows(db, ownerId, accounts, since, limit, false);
+      const { messages, failures } = await rows(db, ownerId, accounts, { since, limit, whole: false });
       return { messages: messages.map(withoutBody), failures };
     },
-    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT }) {
-      return rows(db, ownerId, accounts, since, limit, true);
+    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT, from }) {
+      const keep = from ? (message: MailContent) => from.some((words) => senderMatches(message.from, words)) : undefined;
+      return rows(db, ownerId, accounts, { since, limit, whole: true, keep });
+    },
+    async search({ db, ownerId, accounts, words, limit }) {
+      const { messages, failures } = await rows(db, ownerId, accounts, { limit, whole: false, keep: (message) => holdsWords(message, words) });
+      return { messages: messages.map(withoutBody), failures };
+    },
+    async many({ db, ownerId, account, ids }) {
+      if (!account.isDemo) return { messages: [], failures: [notConnected(account)] };
+      if (ids.length === 0) return { messages: [], failures: [] };
+      const { data, error } = await db
+        .from("demo_mail")
+        .select(DEMO_COLUMNS.replace(", html, text_body", ""))
+        .eq("owner_id", ownerId)
+        .eq("account_id", account.id)
+        .in("gmail_id", ids);
+      if (error) return { messages: [], failures: [unreadable(account, error.message)] };
+      return { messages: (data as unknown as DemoRow[]).map((row) => withoutBody(fromDemo({ ...row, html: null, text_body: null }, account.email))), failures: [] };
     },
     async unread({ db, ownerId, accounts }) {
       const failures: MailFailure[] = accounts.filter((account) => !account.isDemo).map(notConnected);

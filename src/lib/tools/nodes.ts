@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mailFailureSchema, type MailFailure } from "@/lib/mail/source";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { defineTool } from "./define";
 import { browseEvents, browsedEventSchema, fromLocal } from "./browse";
@@ -53,7 +54,8 @@ export const listTree = defineTool({
     
     tasks: z.object({ overdue: z.number(), today: z.number() }).nullable(),
     
-    mail: z.object({ unread: z.number() }).nullable().optional(),
+    
+    mail: z.object({ unread: z.number(), failures: z.array(mailFailureSchema) }).nullable().optional(),
     
     
     content: z.object({ nodes: z.array(z.string()), general: z.boolean() }).nullable().optional(),
@@ -104,13 +106,13 @@ export const listTree = defineTool({
           { overdue: 0, today: 0 },
         )
       : null;
-    let mail: { unread: number } | null = null;
+    let mail: { unread: number; failures: MailFailure[] } | null = null;
     if (input.withMail) {
       const reached = await accountsOf(ctx, scope, place);
       if (isError(reached)) return reached;
       const count = await unreadMail(ctx, reached.accounts);
       if (isError(count)) return count;
-      mail = { unread: count.unread };
+      mail = { unread: count.unread, failures: count.failures };
     }
     if (!input.withContent) return ok({ nodes, tasks, mail, content: null });
     const shown = await contentOf(ctx, scope, place, input.withContent);
