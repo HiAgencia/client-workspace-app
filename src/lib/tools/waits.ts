@@ -75,7 +75,7 @@ export const setTaskMail = defineTool({
       .optional()
       .describe("Only to put back a wait that was let go: the moment it began, as `previous` gave it. A new wait begins now; one that already waits keeps its own."),
     dismissed: z
-      .array(z.string().regex(/^[0-9a-f-]{36}:.{1,200}$/i, "each ruled-out reply is `<account id>:<message id>`, as previous gave it"))
+      .array(z.string().regex(/^[0-9a-f-]{36}:.{1,200}$/, "each ruled-out reply is `<account id>:<message id>`, as previous gave it"))
       .optional()
       .describe("Only to put back a wait as `previous` gave it: the replies it had ruled out, each `<account id>:<message id>`."),
   }),
