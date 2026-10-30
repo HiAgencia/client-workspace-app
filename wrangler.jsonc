@@ -7,5 +7,9 @@
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
+	},
+	"dev": {
+		"ip": "127.0.0.1",
+		"port": 8796
 	}
 }
