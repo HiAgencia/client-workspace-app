@@ -535,4 +535,32 @@ describe("the demo seed", () => {
       await deleteDisposableUsers([person]);
     }
   });
+
+  it("starting over keeps the demo's usage, and only the service role refills it", async () => {
+    if (!user) throw new Error("the test user was not created");
+    const service = serviceClient();
+    
+    const day = "2001-01-01";
+    const total = async () => {
+      const { data, error } = await service.rpc("anonymous_usage", { p_kind: "chat_message", p_day: day });
+      expect(error).toBeNull();
+      return Number(data);
+    };
+    const taken = await service.rpc("take_usage", { p_owner: user.id, p_kind: "chat_message", p_day: day, p_cap: 100 });
+    expect(taken.error).toBeNull();
+    expect(await total()).toBe(1);
+    
+    const reset = await user.client.rpc("reset_demo");
+    expect(reset.error).toBeNull();
+    expect(await total()).toBe(1);
+    
+    const refused = await user.client.rpc("reset_demo_usage", { p_owner: user.id });
+    expect(refused.error?.code).toBe("42501");
+    expect(await total()).toBe(1);
+    
+    const refilled = await service.rpc("reset_demo_usage", { p_owner: user.id });
+    expect(refilled.error).toBeNull();
+    expect(refilled.data).toBeGreaterThan(0);
+    expect(await total()).toBe(0);
+  });
 });

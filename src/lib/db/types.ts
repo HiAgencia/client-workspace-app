@@ -1026,6 +1026,7 @@ export type Database = {
         }
       }
       reset_demo: { Args: never; Returns: boolean }
+      reset_demo_usage: { Args: { p_owner: string }; Returns: number }
       restore_item_branch: {
         Args: {
           p_agent_label: string
