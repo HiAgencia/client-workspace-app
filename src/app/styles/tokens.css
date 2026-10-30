@@ -133,6 +133,9 @@
   --sidebar-w: clamp(15.5rem, 12rem + 5vw, 18.5rem);
   /* A row of the sidebar, as dense as a list's own rows. */
   --nav-row: 2.125rem;
+  /* The smallest target a pointer presses (WCAG 2.2, SC 2.5.8, in CSS pixels): a pressed piece drawn smaller than this
+     grows its box to it. */
+  --target-min: 24px;
   /* The page's column: centered, with its widest measure. */
   --content-w: 76rem;
   --chat-w: clamp(21rem, 15rem + 8vw, 27rem);

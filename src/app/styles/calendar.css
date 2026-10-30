@@ -59,7 +59,8 @@
   gap: 0.4em;
   min-width: 0;
   width: 100%;
-  min-height: 1.85em;
+  /* An event is pressed inside a cell the keys also reach, so it measures the smallest target on its own. */
+  min-height: max(1.85em, var(--target-min));
   padding: 0.25em 0.5em;
   border: 0;
   border-radius: calc(var(--radius-control) * 0.8);
@@ -119,7 +120,8 @@
   gap: 0.35em;
   min-width: 0;
   width: 100%;
-  min-height: 1.85em;
+  /* Like an event, a task is pressed and dragged inside a cell the keys also reach. */
+  min-height: max(1.85em, var(--target-min));
   padding: 0.1em 0.3em;
   border-radius: calc(var(--radius-control) * 0.8);
   background: transparent;
@@ -137,6 +139,14 @@
   }
   &[draggable="true"] {
     cursor: grab;
+  }
+  /* A task without an hour: its title's button takes the chip's whole height, so the box that is pressed measures the
+     smallest target too; its text stays centered where the chip's padding put it. */
+  &:not([data-timed]) {
+    padding-block: 0;
+  }
+  &:not([data-timed]) .cal-task-open {
+    padding-block: max(0.15em, calc((var(--target-min) - 1.3em) / 2));
   }
   &[data-timed] {
     position: absolute;
@@ -280,11 +290,6 @@
 .cal-allday {
   background: var(--card);
   box-shadow: 0 1px 0 var(--division);
-}
-/* How many more chips a day of the all-day strip holds, when three are already shown. */
-.cal-more {
-  padding: 0 0.15rem;
-  color: var(--muted);
 }
 .cal-slot {
   position: relative;
@@ -442,8 +447,11 @@
   gap: 0.2rem;
   min-width: 0;
 }
+/* How many more a day holds when its chips are full, in the week's all-day strip and in the month: pressed inside a cell
+   the keys also reach, it measures the smallest target, its text centered as a button's is. */
 .cal-more {
   align-self: flex-start;
+  min-height: var(--target-min);
   padding: 0.15em 0.45em;
   border: 0;
   border-radius: 0.35em;
