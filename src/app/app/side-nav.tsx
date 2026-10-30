@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { usePiece } from "@/components/ui/use-piece";
+import { PRODUCT_NAME } from "@/lib/product";
 import { post, type TreeNode } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
 import { openQuickAdd } from "./quick-add-bus";
@@ -35,9 +36,9 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
     <nav className="side-nav" aria-label="Workspace">
       {!inDrawer && (
         <div className="side-top">
-          <Link href="/app" className="brand side-brand" aria-label="Client Workspace, Overview">
+          <Link href="/app" className="brand side-brand" aria-label={`${PRODUCT_NAME}, Overview`}>
             <BrandMark className="brand-mark" />
-            <span className="brand-name">Client Workspace</span>
+            <span className="brand-name">{PRODUCT_NAME}</span>
           </Link>
         </div>
       )}

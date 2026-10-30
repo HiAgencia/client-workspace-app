@@ -43,6 +43,8 @@ export function PageHeader({ title, count, trail, filters, layout, views, chat, 
     const el = heading.current;
     if (!el) return;
     const name = () => {
+      // A heading its screen already took away still holds its text, and the title the next screen declared must stand.
+      if (!el.isConnected) return;
       const shown = el.textContent?.replace(/\s+/g, " ").trim();
       const wanted = shown ? `${shown} · ${PRODUCT_NAME}` : "";
       if (wanted && document.title !== wanted) document.title = wanted;

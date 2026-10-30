@@ -352,9 +352,12 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    them a picture of the demo's Overview drawn with the workspace's own pieces (`src/app/landing-preview.tsx`, styled by
    `src/app/styles/landing.css`): the Tasks box with a task the daily review completed, the week —the visitor's own,
    read once the page runs—, the Mail box, and the review's notice. Its figures are the planted demo's, counted from the
-   seed (`demoOverview` in `src/lib/demo-seed.ts`), and `tests/demo/overview.test.ts` reads them back from the tools. The product's name and its one-line description
-   come from `src/lib/product.ts`, which the document's title and the web manifest read too. A demo whose seed failed is
-   tried again on the same session.
+   seed (`demoOverview` in `src/lib/demo-seed.ts`), and `tests/demo/overview.test.ts` reads them back from the tools. The
+   product's name and its one-line description come from `src/lib/product.ts`, which the brand, the document's title and
+   the web manifest read too. Each screen of the workspace declares its title as route metadata («Tasks · Client
+   Workspace»), and a client's or a project's page takes its name from the tree in memory in the commit that shows it, so
+   Next's route announcer reads the new screen's name and not the one the person left; the page's header keeps the title
+   afterwards. A demo whose seed failed is tried again on the same session.
 2. **Sidebar**, fixed at the left and as tall as the window, navigation only: its options never change from one screen to
    another. The brand on top, then "Add task" (key Q, outside a field: it opens quick add through
    `src/app/app/quick-add-bus.ts`, in the open client or project when the page is one's) and "Search" (Ctrl/Cmd+K, the

@@ -8,6 +8,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
+import { PRODUCT_NAME } from "@/lib/product";
 import { browserClient } from "@/lib/supabase/browser";
 import { ChatDock, useDocked } from "./chat-panel";
 import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
@@ -235,6 +236,15 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
+  // A client's or a project's page takes its name as the document's title in the commit that shows it, from the tree in
+  // memory: its header arrives with its data, after Next's route announcer has read the title, which then would be the
+  // screen the person left. The other screens declare theirs as route metadata; the header keeps it afterwards.
+  useEffect(() => {
+    const id = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1];
+    const name = id ? tree?.find((node) => node.id === id)?.name : undefined;
+    if (name) document.title = `${name} · ${PRODUCT_NAME}`;
+  }, [pathname, tree]);
+
   // A landing asked for from inside the drawer closes it first: a modal holds the focus, and the place behind it could
   // not take it. The request waits for the node's data, so closing here does not lose it.
   useEffect(() => {
@@ -338,9 +348,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
           <Button className="drawer-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
             Menu
           </Button>
-          <Link href="/app" className="brand" aria-label="Client Workspace, Overview">
+          <Link href="/app" className="brand" aria-label={`${PRODUCT_NAME}, Overview`}>
             <BrandMark className="brand-mark" />
-            <span className="brand-name">Client Workspace</span>
+            <span className="brand-name">{PRODUCT_NAME}</span>
           </Link>
         </header>
         {/* A plain column: the navigation inside is the one «Workspace» region a screen reader lists. */}

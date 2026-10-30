@@ -26,6 +26,7 @@ import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select } from "@/components/ui/select";
 import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, monthGrid, monthTitle, rangeLabel, today, weekdayNames, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { PRODUCT_NAME } from "@/lib/product";
 import { get, post, tool, type EventsFailure, type Item, type TreeNode } from "../client-api";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
@@ -71,7 +72,7 @@ const VIEWS = [
   { value: "week", label: "Week" },
   { value: "month", label: "Month" },
 ];
-const OWN_CALENDAR = "Client Workspace calendar";
+const OWN_CALENDAR = `${PRODUCT_NAME} calendar`;
 // How many chips the all-day strip of a week shows in a day before it says how many more it holds.
 const ALL_DAY_CHIPS = 3;
 
