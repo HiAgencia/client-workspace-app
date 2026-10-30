@@ -65,4 +65,46 @@ describe("the chat's cards", () => {
     await card?.undo?.();
     expect(sent).toEqual([{ url: "/api/tools/reorder_items", body: { ids: ["a", "b"] } }]);
   });
+
+  it("what a task waits for goes back to the account and the words it had, or to none", async () => {
+    const sent = capture();
+    const changed = WRITES.set_task_mail({ ok: true, task: "t4", title: "Wait for the transfer", mail: { accountId: null, waitsFor: "Bayside" }, previous: { accountId: "a1", waitsFor: "Bayside Bank" } });
+    expect(changed?.what).toBe("“Wait for the transfer” waits for mail with “Bayside”");
+    await changed?.undo?.();
+    const started = WRITES.set_task_mail({ ok: true, task: "t4", title: "Wait for the transfer", mail: { accountId: null, waitsFor: "Bayside" }, previous: null });
+    await started?.undo?.();
+    expect(sent).toEqual([
+      { url: "/api/tools/set_task_mail", body: { task: "t4", waiting: true, account: "a1", words: "Bayside Bank" } },
+      { url: "/api/tools/set_task_mail", body: { task: "t4", waiting: false } },
+    ]);
+  });
+
+  it("a reply ruled out comes back among the possible ones", async () => {
+    const sent = capture();
+    const card = WRITES.dismiss_reply({ ok: true, task: "t5", title: "Wait for the transfer", reply: { account: "a1", id: "m1", dismissed: true } });
+    expect(card?.what).toBe("Ruled out a reply to “Wait for the transfer”");
+    await card?.undo?.();
+    expect(sent).toEqual([{ url: "/api/tools/dismiss_reply", body: { task: "t5", account: "a1", id: "m1", dismissed: false } }]);
+  });
+
+  it("a task closed with its result opens again, its result goes, and the reply comes off it only when the closing linked it", async () => {
+    const closed = (created: boolean) =>
+      WRITES.complete_task({
+        ok: true,
+        item: { id: "t6", title: "Wait for the app review", type: "task" },
+        decision: { id: "d6", title: "Approved" },
+        link: { accountId: "a1", messageId: "m6", created },
+      });
+    expect(closed(true)?.what).toBe("Closed “Wait for the app review”: Approved");
+    const sent = capture();
+    await closed(true)?.undo?.();
+    await closed(false)?.undo?.();
+    expect(sent).toEqual([
+      { url: "/api/tools/update_item", body: { id: "t6", status: "open" } },
+      { url: "/api/tools/delete_item", body: { id: "d6" } },
+      { url: "/api/tools/unlink_mail", body: { account: "a1", id: "m6", task: "t6" } },
+      { url: "/api/tools/update_item", body: { id: "t6", status: "open" } },
+      { url: "/api/tools/delete_item", body: { id: "d6" } },
+    ]);
+  });
 });

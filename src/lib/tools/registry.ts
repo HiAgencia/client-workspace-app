@@ -8,13 +8,13 @@ import { addDecision, addNote, createTask, deleteItem, listItems, searchItems, u
 import { createEvent, deleteEvent, linkNodeEvent, linkTaskEvent, unlinkNodeEvent, unlinkTaskEvent, updateEvent } from "./local-events";
 import { createGoogleEvent, deleteGoogleEvent, updateGoogleEvent } from "./google-events";
 import { getOverview, listTree } from "./nodes";
-import { createTaskFromMail, getMail, linkMail, listMail, setTaskMail, unlinkMail } from "./mail";
+import { createTaskFromMail, getMail, linkMail, listMail, unlinkMail } from "./mail";
 import { getItem } from "./item-detail";
 import { listNotes } from "./notes";
-import { runDailyReviewTool } from "./review";
 import { fail, type ToolError, type ToolResult } from "./result";
 import { getTasks, moveItem, reorderItems, requestReview, rescheduleOverdue } from "./tasks";
 import { getUpdatesSince } from "./updates";
+import { completeTask, dismissReply, listTaskReplies, setTaskMail } from "./waits";
 
 
 export const tools: Tool[] = [
@@ -55,17 +55,10 @@ export const tools: Tool[] = [
   unlinkMail,
   createTaskFromMail,
   setTaskMail,
-  runDailyReviewTool,
+  listTaskReplies,
+  dismissReply,
+  completeTask,
 ];
-
-
-export const agentTools: Tool[] = tools.filter((tool) => !tool.chatOnly);
-
-
-export function findScreenTool(name: string): Tool | undefined {
-  const tool = findTool(name);
-  return tool && !tool.chatOnly ? tool : undefined;
-}
 
 export function findTool(name: string): Tool | undefined {
   return tools.find((tool) => tool.name === name);

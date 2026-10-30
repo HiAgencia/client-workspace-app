@@ -47,7 +47,16 @@ export type MailSource = {
   many(args: { db: Db; ownerId: string; account: MailAccount; ids: string[] }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
   
   
-  read(args: { db: Db; ownerId: string; accounts: MailAccount[]; since: string; limit?: number; from?: string[] }): Promise<{ messages: MailContent[]; failures: MailFailure[]; more: string[] }>;
+  
+  candidates(args: {
+    db: Db;
+    ownerId: string;
+    account: MailAccount;
+    since: string;
+    words: string[];
+    limit: number;
+    pageToken?: string;
+  }): Promise<{ messages: MailMessage[]; failures: MailFailure[]; nextPageToken: string | null }>;
   
   search(args: { db: Db; ownerId: string; accounts: MailAccount[]; words: string; limit: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
   
@@ -56,10 +65,25 @@ export type MailSource = {
 };
 
 
-export function senderMatches(from: { name: string | null; email: string }, words: string): boolean {
-  const wanted = words.trim().toLowerCase();
-  if (!wanted) return false;
-  return (from.name ?? "").toLowerCase().includes(wanted) || from.email.toLowerCase().includes(wanted);
+export function folded(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+
+
+export function waitWords(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}@._-]/gu, "").replace(/^[-@._]+|[-@._]+$/g, ""))
+    .filter((word) => /[\p{L}\p{N}]/u.test(word));
+}
+
+
+
+export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, words: string[]): boolean {
+  if (words.length === 0) return false;
+  const fields = folded([message.from.name ?? "", message.from.email, message.subject].join("\n"));
+  return words.every((word) => fields.includes(folded(word)));
 }
 
 
@@ -163,9 +187,17 @@ export function demoMailSource(): MailSource {
       const { messages, failures } = await rows(db, ownerId, accounts, { since, limit, whole: false });
       return { messages: messages.map(withoutBody), failures };
     },
-    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT, from }) {
-      const keep = from ? (message: MailContent) => from.some((words) => senderMatches(message.from, words)) : undefined;
-      return rows(db, ownerId, accounts, { since, limit, whole: true, keep });
+    async candidates({ db, ownerId, account, since, words, limit, pageToken }) {
+      if (!account.isDemo) return { messages: [], failures: [notConnected(account)], nextPageToken: null };
+      if (words.length === 0) return { messages: [], failures: [], nextPageToken: null };
+      const { messages, failures } = await rows(db, ownerId, [account], { since, limit: Number.MAX_SAFE_INTEGER, whole: false, keep: (message) => holdsEveryWord(message, words) });
+      
+      const start = Math.max(0, Math.trunc(Number(pageToken ?? 0)) || 0);
+      return {
+        messages: messages.slice(start, start + limit).map(withoutBody),
+        failures,
+        nextPageToken: start + limit < messages.length ? String(start + limit) : null,
+      };
     },
     async search({ db, ownerId, accounts, words, limit }) {
       const { messages, failures } = await rows(db, ownerId, accounts, { limit, whole: false, keep: (message) => holdsWords(message, words) });

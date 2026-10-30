@@ -11,9 +11,11 @@ import { Select, type SelectOption } from "@/components/ui/select";
 import { addDays, instantsOf, LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { richTextToPlain } from "@/lib/rich-text";
-import { get, post, tool, type Item } from "./client-api";
+import { get, post, tool, type Answer, type Item } from "./client-api";
 import { PRIORITIES, sourceName } from "./item-parts";
 import { subjectOf } from "./mail/subject";
+import { TaskOutcome, useCompleteTask } from "./task-outcome";
+import { accountsSeenFrom } from "./task-replies";
 import {
   dayName,
   InlineText,
@@ -421,20 +423,61 @@ export function TaskDetail() {
 
 
 
-type TaskMailState = { status: "waiting" | "met" | "not_met"; sentence: string | null; accountId: string | null; expectFrom: string | null; checkedAt: string | null };
+
+
+
+type TaskWait = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
 type MailMessageRow = { id: string; accountId: string; accountEmail: string; from: { name: string | null; email: string }; subject: string; receivedAt: string };
-type MailDetail = { mail: TaskMailState | null; messages: MailMessageRow[]; mailFailures: Array<{ accountEmail: string; reason: string }> };
+type MailFailure = { accountEmail: string; reason: string };
+type MailDetail = { mail: TaskWait | null; messages: MailMessageRow[]; mailFailures: MailFailure[] };
 type MailAccount = { id: string; email: string; nodeIds: string[] };
+
+type RepliesRead = { replies: MailMessageRow[]; next: Record<string, string>; failures: MailFailure[] };
 
 const WAIT_NONE = "none";
 const WAIT_PLACE = "place";
+
+
+const REPLIES = 20;
+
+const replyKey = (reply: { accountId: string; id: string }) => `${reply.accountId}:${reply.id}`;
+const newestFirst = (a: MailMessageRow, b: MailMessageRow) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0);
+
+
+
+function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: string; email: string }>, before: MailMessageRow[] = []): RepliesRead {
+  const failures: MailFailure[] = [];
+  const next: Record<string, string> = {};
+  const seen = new Set(before.map(replyKey));
+  const rows = [...before];
+  answers.forEach((answer, index) => {
+    if (!answer.ok) return void failures.push({ accountEmail: accounts[index].email, reason: answer.message });
+    for (const reply of answer.replies) {
+      if (seen.has(replyKey(reply))) continue;
+      seen.add(replyKey(reply));
+      rows.push(reply);
+    }
+    Object.assign(next, answer.next);
+    failures.push(...answer.failures);
+  });
+  return { replies: rows.sort(newestFirst), next, failures };
+}
 
 function MailAttribute({ task }: { task: Item }) {
   const { tree, notify, touch, version } = useWorkspace();
   const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null } | null>(null);
   const [accounts, setAccounts] = useState<MailAccount[] | null>(null);
-  const [from, setFrom] = useState<{ id: string; value: string } | null>(null);
-  const fromId = useId();
+  
+  const [pending, setPending] = useState<{ id: string; account: string | null } | null>(null);
+  const [words, setWords] = useState<{ id: string; value: string } | null>(null);
+  const [replies, setReplies] = useState<{ key: string; read: RepliesRead | null } | null>(null);
+  const [readingMore, setReadingMore] = useState(false);
+  
+  const [choosing, setChoosing] = useState<string | null>(null);
+  const closeTask = useCompleteTask();
+  const wordsId = useId();
+  const wordsHelpId = useId();
+  const repliesId = useId();
 
   useEffect(() => {
     let live = true;
@@ -450,52 +493,113 @@ function MailAttribute({ task }: { task: Item }) {
 
   const read = detail?.id === task.id ? detail.read : null;
   const mail = read?.mail ?? null;
+  const waitingHere = pending?.id === task.id ? pending : null;
   
-  const line = new Set<string>();
-  const byId = new Map((tree ?? []).map((node) => [node.id, node]));
-  for (let node = task.nodeId ? byId.get(task.nodeId) : undefined; node && !line.has(node.id); node = node.parentId ? byId.get(node.parentId) : undefined) line.add(node.id);
-  const visible = (accounts ?? []).filter((account) => task.nodeId === null || account.nodeIds.some((id) => line.has(id)));
+  const seen = new Set(accountsSeenFrom(tree, accounts ?? [], task.nodeId));
+  const visible = (accounts ?? []).filter((account) => seen.has(account.id));
   const placeLabel = task.nodeId === null ? "Every account" : "Every account of its place";
   const options: SelectOption[] = [
     { value: WAIT_NONE, label: "No mail" },
     ...(visible.length > 0 ? [{ value: WAIT_PLACE, label: placeLabel }] : []),
     ...visible.map((account) => ({ value: account.id, label: account.email })),
   ];
-  const value = !mail ? WAIT_NONE : mail.accountId ?? WAIT_PLACE;
-  const fromValue = from?.id === task.id ? from.value : (mail?.expectFrom ?? "");
+  const value = waitingHere ? (waitingHere.account ?? WAIT_PLACE) : !mail ? WAIT_NONE : (mail.accountId ?? WAIT_PLACE);
+  const wordsValue = words?.id === task.id ? words.value : (mail?.waitsFor ?? "");
+  
+  const lookIn = mail ? visible.filter((account) => mail.accountId === null || account.id === mail.accountId) : [];
+  const repliesKey = mail && task.status === "open" ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((account) => account.id).join(",")}:${version}` : null;
+
+  useEffect(() => {
+    if (!repliesKey) return;
+    let live = true;
+    void Promise.all(lookIn.map((account) => tool<RepliesRead>("list_task_replies", { task: task.id, account: account.id, limit: REPLIES }))).then((answers) => {
+      if (live) setReplies({ key: repliesKey, read: joinReads(answers, lookIn) });
+    });
+    return () => {
+      live = false;
+    };
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repliesKey]);
+  const shown = replies?.key === repliesKey ? replies.read : null;
+
+  
+  async function readMore() {
+    if (!shown || !repliesKey) return;
+    const pages = Object.entries(shown.next);
+    setReadingMore(true);
+    const answers = await Promise.all(pages.map(([account, pageToken]) => tool<RepliesRead>("list_task_replies", { task: task.id, account, limit: REPLIES, pageToken })));
+    setReadingMore(false);
+    const emails = pages.map(([account]) => ({ id: account, email: lookIn.find((entry) => entry.id === account)?.email ?? "An account" }));
+    setReplies((current) => (current?.key === repliesKey && current.read ? { key: repliesKey, read: joinReads(answers, emails, current.read.replies) } : current));
+  }
 
   async function save(input: Record<string, unknown>, text: string) {
-    const answer = await tool<{ mail: TaskMailState | null; previous: TaskMailState | null }>("set_task_mail", { task: task.id, ...input });
+    const answer = await tool<{ mail: TaskWait | null; previous: TaskWait | null }>("set_task_mail", { task: task.id, ...input });
     if (!answer.ok) return notify({ text: `What “${inlinePlain(task.title)}” waits for could not be saved: ${answer.message}`, tone: "error" });
     setDetail((current) => (current && current.read ? { ...current, read: { ...current.read, mail: answer.mail } } : current));
+    setPending(null);
+    setWords(null);
     touch();
     const previous = answer.previous;
     notify({
       text,
       tone: "status",
       undo: () =>
-        void tool("set_task_mail", previous ? { task: task.id, account: previous.accountId, from: previous.expectFrom } : { task: task.id, waiting: false }).then(() => touch()),
+        void tool("set_task_mail", previous ? { task: task.id, account: previous.accountId, words: previous.waitsFor } : { task: task.id, waiting: false }).then(() => touch()),
     });
   }
 
   function choose(next: string) {
     if (next === value) return;
-    if (next === WAIT_NONE) return void save({ waiting: false }, `“${inlinePlain(task.title)}” waits for no mail now`);
+    if (next === WAIT_NONE) {
+      if (waitingHere) return setPending(null);
+      return void save({ waiting: false }, `“${inlinePlain(task.title)}” waits for no mail now`);
+    }
     const account = next === WAIT_PLACE ? null : next;
+    
+    if (!mail) return setPending({ id: task.id, account });
     const where = account ? (visible.find((entry) => entry.id === account)?.email ?? "that account") : placeLabel.toLowerCase();
     void save({ account }, `“${inlinePlain(task.title)}” waits for its mail in ${where}`);
   }
 
-  function saveFrom() {
+  function saveWords() {
+    const next = wordsValue.trim();
+    if (waitingHere) {
+      if (!next) return notify({ text: "Say what it waits for: who sends it or what it is about.", tone: "error" });
+      return void save({ account: waitingHere.account, words: next }, `“${inlinePlain(task.title)}” waits for mail with “${next}”`);
+    }
     if (!mail) return;
-    const next = fromValue.trim();
-    if (next === (mail.expectFrom ?? "")) return;
-    void save({ from: next || null }, next ? `“${inlinePlain(task.title)}” waits for mail from ${next}` : `“${inlinePlain(task.title)}” waits for mail from anyone`);
+    
+    if (!next) return setWords(null);
+    if (next === mail.waitsFor) return;
+    void save({ words: next }, `“${inlinePlain(task.title)}” waits for mail with “${next}”`);
   }
 
-  const state = !mail ? null : mail.status === "waiting" ? "Waiting for mail" : mail.status === "met" ? "Mail arrived" : "Mail arrived, without what it waits for";
+  async function complete(reply: MailMessageRow, outcome: string) {
+    if (await closeTask(task, reply, outcome)) setChoosing(null);
+  }
+
+  
+  function stopChoosing(trigger: string) {
+    setChoosing(null);
+    requestAnimationFrame(() => document.getElementById(trigger)?.focus());
+  }
+
+  async function dismiss(reply: MailMessageRow) {
+    const answer = await tool("dismiss_reply", { task: task.id, account: reply.accountId, id: reply.id, dismissed: true });
+    if (!answer.ok) return notify({ text: `“${subjectOf(reply)}” could not be ruled out: ${answer.message}`, tone: "error" });
+    setReplies((current) => (current?.read ? { ...current, read: { ...current.read, replies: current.read.replies.filter((entry) => replyKey(entry) !== replyKey(reply)) } } : current));
+    notify({
+      text: `“${subjectOf(reply)}” is not what “${inlinePlain(task.title)}” waits for`,
+      tone: "status",
+      undo: () => void tool("dismiss_reply", { task: task.id, account: reply.accountId, id: reply.id, dismissed: false }).then(() => touch()),
+    });
+  }
+
+  const asking = Boolean(mail) || Boolean(waitingHere);
   return (
-    <div className="task-attr task-mail-attr" data-task-mail={mail?.status ?? "none"}>
+    <div className="task-attr task-mail-attr" data-task-mail={mail ? "waiting" : "none"}>
       <dt className="t-label">Mail</dt>
       <dd className="task-mail-body">
         {!read && !detail?.error ? (
@@ -511,46 +615,108 @@ function MailAttribute({ task }: { task: Item }) {
             ) : (
               <p className="t-help">No account is connected where this task lives, so it waits for no mail.</p>
             )}
-            {mail && (
-              <>
-                <label className="task-mail-from" htmlFor={fromId}>
-                  <span className="t-meta">From</span>
-                  <input
-                    id={fromId}
-                    className="field"
-                    value={fromValue}
-                    placeholder="Anyone; or words of the sender"
-                    maxLength={200}
-                    onChange={(event) => setFrom({ id: task.id, value: event.target.value })}
-                    onBlur={saveFrom}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        saveFrom();
-                      }
-                      if (event.key === "Escape" && fromValue !== (mail.expectFrom ?? "")) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setFrom({ id: task.id, value: mail.expectFrom ?? "" });
-                      }
-                    }}
-                  />
+            {asking && (
+              <div className="task-mail-words">
+                <label className="t-label" htmlFor={wordsId}>
+                  What it waits for
                 </label>
-                <p className="task-mail-state" data-state={mail.status}>
-                  {state}
+                <input
+                  id={wordsId}
+                  className="field"
+                  value={wordsValue}
+                  placeholder="Meta, app review"
+                  maxLength={200}
+                  autoFocus={Boolean(waitingHere)}
+                  aria-describedby={wordsHelpId}
+                  onChange={(event) => setWords({ id: task.id, value: event.target.value })}
+                  onBlur={() => {
+                    if (mail) saveWords();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      saveWords();
+                    }
+                    if (event.key === "Escape" && wordsValue !== (mail?.waitsFor ?? "")) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setWords(null);
+                    }
+                  }}
+                />
+                <p id={wordsHelpId} className="t-help">
+                  Who sends it or what it is about. Every word is looked for in the sender and the subject of what arrives.
                 </p>
-                {mail.sentence && <p className="t-body task-mail-sentence">{mail.sentence}</p>}
-                {mail.checkedAt && <p className="t-meta">Read by the daily review, {stampTime(mail.checkedAt)}</p>}
-                <Button size="sm" variant="quiet" onClick={() => choose(WAIT_NONE)}>
-                  Stop waiting
-                </Button>
-              </>
+                {waitingHere && (
+                  <Button size="sm" variant="primary" onClick={saveWords} disabled={!wordsValue.trim()}>
+                    Start waiting
+                  </Button>
+                )}
+              </div>
+            )}
+            {mail && task.status === "open" && (
+              <section className="task-replies" aria-labelledby={repliesId}>
+                <p className="t-label" id={repliesId}>
+                  Possible replies
+                </p>
+                <p className="t-help">
+                  What arrived since {stamp(mail.since)} with these words. You decide which one answers it.
+                </p>
+                {!shown ? (
+                  <span className="skeleton" aria-label="Reading its possible replies" />
+                ) : shown.replies.length === 0 ? (
+                  <p className="t-help">Nothing has arrived with these words yet.</p>
+                ) : (
+                  <ul className="task-reply-list">
+                    {shown.replies.map((reply, index) => {
+                      const key = replyKey(reply);
+                      const trigger = `${repliesId}-${index}`;
+                      return (
+                        <li key={key} className="task-reply" data-reply-open={choosing === key ? "" : undefined}>
+                          <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(key)}`}>
+                            <span className="t-value">{subjectOf(reply)}</span>
+                            <span className="t-meta">
+                              {reply.from.name ?? reply.from.email}, {stamp(reply.receivedAt)}
+                            </span>
+                          </Link>
+                          <div className="task-reply-actions">
+                            <Button id={trigger} size="sm" aria-expanded={choosing === key} onClick={() => (choosing === key ? stopChoosing(trigger) : setChoosing(key))}>
+                              This is it
+                            </Button>
+                            <Button size="sm" variant="quiet" onClick={() => void dismiss(reply)}>
+                              Not it
+                            </Button>
+                          </div>
+                          {choosing === key && (
+                            <TaskOutcome question="How did it end?" title={task.title} onClose={(outcome) => void complete(reply, outcome)} onCancel={() => stopChoosing(trigger)} />
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {shown && Object.keys(shown.next).length > 0 && (
+                  <Button size="sm" variant="quiet" onClick={() => void readMore()} disabled={readingMore} aria-busy={readingMore || undefined}>
+                    {readingMore ? "Reading more replies…" : "Show more replies"}
+                  </Button>
+                )}
+                {shown?.failures.map((failure) => (
+                  <p key={failure.accountEmail} className="inline-note" data-tone="alert">
+                    The mail of {failure.accountEmail} could not be read: {failure.reason}
+                  </p>
+                ))}
+              </section>
+            )}
+            {mail && (
+              <Button size="sm" variant="quiet" onClick={() => choose(WAIT_NONE)}>
+                Stop waiting
+              </Button>
             )}
             {read && read.messages.length > 0 && (
               <ul className="task-mail-list" aria-label="Its mail">
                 {read.messages.map((message) => (
-                  <li key={`${message.accountId}:${message.id}`}>
-                    <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(`${message.accountId}:${message.id}`)}`}>
+                  <li key={replyKey(message)}>
+                    <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(replyKey(message))}`}>
                       <span className="t-value">{subjectOf(message)}</span>
                       <span className="t-meta">
                         {message.from.name ?? message.from.email}, {stamp(message.receivedAt)}

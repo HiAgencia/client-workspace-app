@@ -16,8 +16,6 @@ async function SessionControls({ searchParams }: { searchParams: PageProps<"/">[
   return <SignIn config={publicConfig()} failed={auth === "failed"} />;
 }
 
-
-
 export default function Home({ searchParams }: PageProps<"/">) {
   const shape = demoShape();
   
@@ -35,8 +33,8 @@ export default function Home({ searchParams }: PageProps<"/">) {
         </div>
         <h1 className="t-h1 enter">See your whole day, across every client and project.</h1>
         <p className="t-body landing-lead enter">
-          Tasks, notes, calendars, and mail live with the client or project they belong to. Each day an AI reads the mail your
-          tasks wait for, completes the ones whose message arrived, and tells you so, with Undo.
+          Tasks, notes, calendars, and mail live with the client or project they belong to. A task that waits for mail shows
+          the messages that may answer it, and you say which one did and how it ended.
         </p>
         <div className="session-slot enter">
           <Suspense fallback={<SignInPlaceholder />}>
@@ -52,8 +50,8 @@ export default function Home({ searchParams }: PageProps<"/">) {
             sample accounts.
           </p>
           <p className="t-help">
-            Its Overview opens with what the daily review just did. Press Add task, or open Chat and ask it to review your day.
-            Your own Google calendars show once you sign in with Google.
+            Its Overview opens on today&apos;s tasks, and its mail starts with the messages that may answer a task. Press Add
+            task, or open Chat and ask what arrived for your tasks. Your own Google calendars show once you sign in with Google.
           </p>
         </section>
       </div>

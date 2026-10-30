@@ -16,14 +16,12 @@ import { dropFocusRequestOutside, hasFocusRequest, onFocusRequest } from "./focu
 import { ItemPanel } from "./item-panel";
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
-import { ReviewNotice } from "./review-notice";
 import { TaskDetail } from "./task-detail";
 import { openTaskDetail } from "./task-row";
 import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
 
-
-type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void; quiet?: boolean; lasts?: number };
+type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
 
 
 
@@ -163,7 +161,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     
     if (notice.tone === "status") {
       clearTimeout(timer.current);
-      timer.current = setTimeout(dismiss, notice.lasts ?? (notice.undo ? 6000 : 3000));
+      timer.current = setTimeout(dismiss, notice.undo ? 6000 : 3000);
     }
   }, [notice, leaving, dismiss]);
 
@@ -374,7 +372,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <TaskDetail />
       <QuickAddDialog />
-      <ReviewNotice />
       <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onDelete={(item) => void deleteItem(item)} />
       <p className="sr-only" role="status" aria-live="polite">
         {status}
@@ -399,8 +396,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                   size="sm"
                   variant="primary"
                   
-                  
-                  autoFocus={!notice.quiet}
+                  autoFocus
                   onClick={() => {
                     notice.undo?.();
                     dismiss();

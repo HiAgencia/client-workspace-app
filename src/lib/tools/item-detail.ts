@@ -3,8 +3,9 @@ import { mailFailureSchema } from "@/lib/mail/source";
 import { defineTool } from "./define";
 import { reachableItem } from "./items";
 import { EVENT_COLUMNS, localEventSchema, taskEventLinks, taskEventSchema, toLocalEvent } from "./local-events";
-import { itemMailOf, taskMailOf } from "./mail";
+import { itemMailOf } from "./mail";
 import { mailRowSchema, taskMailSchema } from "./mail-schema";
+import { taskMailOf } from "./waits";
 import { noteRowSchema } from "./notes";
 import { dbFail, isError, ok } from "./result";
 import { itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
@@ -35,8 +36,7 @@ export const getItem = defineTool({
   name: "get_item",
   description:
     "One item by id with what its detail shows: where it lives, its parent task, its subtasks with their counts, its " +
-    "notes and decisions, the event it is in, the mail it waits for with the state the daily review wrote, and the " +
-    "messages linked to it.",
+    "notes and decisions, the event it is in, what mail it waits for, and the messages linked to it.",
   readOnly: true,
   input: z.strictObject({ id: z.uuid() }),
   output: itemDetailOutput,
@@ -106,8 +106,7 @@ export const getItem = defineTool({
     }
 
     const mail = waits.byTask.get(row.id) ?? null;
-    const decided = mail?.decidedAccountId && mail.decidedMessageId ? { accountId: mail.decidedAccountId, messageId: mail.decidedMessageId } : null;
-    const messages = await itemMailOf(ctx, scope, row.id, decided);
+    const messages = await itemMailOf(ctx, scope, row.id);
     if (isError(messages)) return messages;
 
     return ok({

@@ -92,12 +92,9 @@ export function priorityName(priority: number | null): string {
 
 
 
-export function mailState(mail: unknown): "waiting" | "arrived" | null {
-  if (!mail || typeof mail !== "object") return null;
-  const status = (mail as { status?: unknown }).status;
-  if (status === "waiting") return "waiting";
-  if (status === "met" || status === "not_met") return "arrived";
-  return null;
+
+export function mailState(mail: unknown): "waiting" | null {
+  return mail && typeof mail === "object" ? "waiting" : null;
 }
 
 
@@ -611,7 +608,7 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
           {task.notes > 0 && <span className="task-notes">{count(task.notes, "note", "notes")}</span>}
           {mail && (
             <span className="task-mail" data-mail={mail}>
-              {mail === "arrived" ? "Mail arrived" : "Waiting for mail"}
+              Waiting for mail
             </span>
           )}
           {task.source !== "manual" && <span className="task-source">{sourceName(task.source, task.agentLabel)}</span>}

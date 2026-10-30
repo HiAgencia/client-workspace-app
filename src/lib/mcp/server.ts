@@ -2,7 +2,7 @@ import { createMcpHandler, McpServer, type AuthInfo } from "@modelcontextprotoco
 import type { Db } from "@/lib/db/client";
 import { demoMailSource, type MailSource } from "@/lib/mail/source";
 import type { CalendarWriter, EventsSource, ToolContext } from "@/lib/tools/context";
-import { agentTools, callTool } from "@/lib/tools/registry";
+import { callTool, tools } from "@/lib/tools/registry";
 import { authenticateAgent, type AgentAccess } from "./auth";
 
 type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter; mail?: MailSource };
@@ -22,6 +22,8 @@ const OPEN_WORLD = new Set([
   "search_items",
   "get_item",
   "list_tree",
+  "list_task_replies",
+  "complete_task",
 ]);
 
 function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
@@ -48,10 +50,11 @@ async function markRead(deps: Dependencies, access: AgentAccess, until: string):
 
 
 
+
 function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
   const server = new McpServer({ name: "client-workspace", version: "1.0.0" });
   const ctx = contextFor(access, deps);
-  for (const definition of agentTools) {
+  for (const definition of tools) {
     server.registerTool(
       definition.name,
       {

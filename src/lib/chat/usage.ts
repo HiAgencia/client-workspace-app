@@ -2,22 +2,21 @@ import { untilAgain } from "@/lib/dates";
 import type { Db } from "@/lib/db/client";
 import { serverEnv } from "@/lib/env";
 
-export type UsageKind = "chat_message" | "transcription" | "daily_review";
-
+export type UsageKind = "chat_message" | "transcription";
 
 
 
 
 const DEFAULTS = {
-  person: { chat_message: 60, transcription: 20, daily_review: 5 },
-  demoSession: { chat_message: 20, transcription: 5, daily_review: 2 },
-  demoTotal: { chat_message: 400, transcription: 60, daily_review: 100 },
+  person: { chat_message: 60, transcription: 20 },
+  demoSession: { chat_message: 20, transcription: 5 },
+  demoTotal: { chat_message: 400, transcription: 60 },
 } as const;
 
 const NAMES = {
-  person: { chat_message: "CHAT_DAILY_CAP", transcription: "TRANSCRIPTION_DAILY_CAP", daily_review: "DAILY_REVIEW_DAILY_CAP" },
-  demoSession: { chat_message: "DEMO_CHAT_DAILY_CAP", transcription: "DEMO_TRANSCRIPTION_DAILY_CAP", daily_review: "DEMO_DAILY_REVIEW_DAILY_CAP" },
-  demoTotal: { chat_message: "DEMO_TOTAL_CHAT_DAILY_CAP", transcription: "DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP", daily_review: "DEMO_TOTAL_DAILY_REVIEW_DAILY_CAP" },
+  person: { chat_message: "CHAT_DAILY_CAP", transcription: "TRANSCRIPTION_DAILY_CAP" },
+  demoSession: { chat_message: "DEMO_CHAT_DAILY_CAP", transcription: "DEMO_TRANSCRIPTION_DAILY_CAP" },
+  demoTotal: { chat_message: "DEMO_TOTAL_CHAT_DAILY_CAP", transcription: "DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP" },
 } as const;
 
 export function dailyCap(scope: keyof typeof DEFAULTS, kind: UsageKind): number {
@@ -68,7 +67,7 @@ export async function takeUsageFor(
 
 
 export function capMessage(reason: "cap" | "demo_cap", kind: UsageKind, seconds = secondsToNextDay()): string {
-  const what = kind === "chat_message" ? "chat messages" : kind === "transcription" ? "voice notes" : "daily reviews";
+  const what = kind === "chat_message" ? "chat messages" : "voice notes";
   const when = untilAgain(seconds);
   return reason === "demo_cap"
     ? `The demo reached today's limit of ${what} for everyone. Sign in with Google to keep going, or come back ${when}.`

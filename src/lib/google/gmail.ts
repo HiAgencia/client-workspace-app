@@ -1,5 +1,5 @@
 import { count } from "@/lib/count";
-import { demoMailSource, MAIL_LIMIT, type MailAccount, type MailContent, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
+import { demoMailSource, folded, holdsEveryWord, MAIL_LIMIT, waitWords, type MailAccount, type MailContent, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
 import { GMAIL_READ_SCOPE, getMessage, getMessages, GoogleError, listMessageIds, type GmailFormat, type GmailMessage, type GmailPart } from "./api";
 import { withAccessToken, type GoogleDeps, type TokenRow } from "./events";
 
@@ -15,6 +15,7 @@ const NOT_RECEIVED = new Set(["SENT", "DRAFT", "CHAT"]);
 
 
 const INBOX = `in:inbox ${RECEIVED}`;
+const ARRIVED_ANYWHERE = `${RECEIVED} -in:spam -in:trash`;
 const UNREAD = `is:unread ${INBOX}`;
 
 const UNREAD_PAGE = 500;
@@ -214,12 +215,16 @@ export function searchFrom(base: string, since?: string): string {
 
 
 
-export function senderSearch(senders: string[]): string {
-  const groups = senders
-    .map((words) => words.replace(/[(){}"]/g, " ").replace(/\s+/g, " ").trim().replace(/^-+/, ""))
-    .filter(Boolean)
-    .map((words) => `from:(${words})`);
-  return groups.length > 1 ? `{${groups.join(" ")}}` : (groups[0] ?? "");
+
+
+
+
+export function candidatesSearch(words: string[], since: string): string {
+  const groups = waitWords(words.join(" ")).map((word) => {
+    const forms = [...new Set([word.toLowerCase(), folded(word)])];
+    return `(${forms.flatMap((form) => [`from:${form}`, `subject:${form}`]).join(" OR ")})`;
+  });
+  return groups.length === 0 ? "" : searchFrom(`${ARRIVED_ANYWHERE} ${groups.join(" ")}`, since);
 }
 
 
@@ -392,26 +397,18 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
 
   const isDemo = (account: MailAccount) => account.isDemo;
   const isReal = (account: MailAccount) => !account.isDemo;
-  const nothing = { messages: [], failures: [], more: [] };
+  const nothing = { messages: [], failures: [] };
 
   
-  async function searched<T extends MailMessage>(
-    ownerId: string,
-    accounts: MailAccount[],
-    q: string,
-    limit: number,
-    format: GmailFormat,
-    to: (message: GmailMessage, account: MailAccount) => T,
-  ) {
+  async function searched(ownerId: string, accounts: MailAccount[], q: string, limit: number) {
     const { answers, failures } = await eachAccount(ownerId, accounts, async (account, token) => {
       const page = await listMessageIds(deps.fetch, token, { q, maxResults: limit });
-      const read = await readIds(token, page.messages.map((message) => message.id), format);
-      return { ...fromBatch(account, page.messages.length, read, (message) => to(message, account), arrived), more: Boolean(page.nextPageToken) };
+      const read = await readIds(token, page.messages.map((message) => message.id), "metadata");
+      return fromBatch(account, page.messages.length, read, (message) => toMailMessage(message, account), arrived);
     });
     return {
       messages: answers.flatMap(({ value }) => value.messages),
       failures: [...failures, ...answers.flatMap(({ value }) => (value.failure ? [value.failure] : []))],
-      more: answers.flatMap(({ account, value }) => (value.more ? [account.id] : [])),
     };
   }
 
@@ -419,24 +416,27 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     async list({ db, ownerId, accounts, since, limit = MAIL_LIMIT }) {
       const [sample, real] = await Promise.all([
         accounts.some(isDemo) ? demo.list({ db, ownerId, accounts: accounts.filter(isDemo), since, limit }) : nothing,
-        accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), searchFrom(INBOX, since), limit, "metadata", toMailMessage) : nothing,
+        accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), searchFrom(INBOX, since), limit) : nothing,
       ]);
       return { messages: newestFirst([...sample.messages, ...real.messages]), failures: [...sample.failures, ...real.failures] };
     },
-    async read({ db, ownerId, accounts, since, limit = MAIL_LIMIT, from }) {
-      const senders = from ? senderSearch(from) : "";
-      const real = accounts.filter(isReal);
-      const [sample, read] = await Promise.all([
-        accounts.some(isDemo) ? demo.read({ db, ownerId, accounts: accounts.filter(isDemo), since, limit, from }) : nothing,
-        
-        real.length > 0 && !(from && !senders)
-          ? searched(ownerId, real, [searchFrom(RECEIVED, since), senders].filter(Boolean).join(" "), limit, "full", toMailContent)
-          : nothing,
-      ]);
+    async candidates({ db, ownerId, account, since, words, limit, pageToken }) {
+      if (account.isDemo) return demo.candidates({ db, ownerId, account, since, words, limit, pageToken });
+      const q = candidatesSearch(words, since);
+      
+      if (!q) return { messages: [], failures: [], nextPageToken: null };
+      const { answers, failures } = await eachAccount(ownerId, [account], async (reached, token) => {
+        const page = await listMessageIds(deps.fetch, token, { q, maxResults: limit, pageToken });
+        const read = await readIds(token, page.messages.map((message) => message.id), "metadata");
+        return { ...fromBatch(reached, page.messages.length, read, (message) => toMailMessage(message, reached), arrived), next: page.nextPageToken ?? null };
+      });
+      const answer = answers[0]?.value;
       return {
-        messages: newestFirst([...sample.messages, ...read.messages]),
-        failures: [...sample.failures, ...read.failures],
-        more: [...sample.more, ...read.more],
+        
+        
+        messages: newestFirst((answer?.messages ?? []).filter((message) => holdsEveryWord(message, words))),
+        failures: [...failures, ...(answer?.failure ? [answer.failure] : [])],
+        nextPageToken: answer?.next ?? null,
       };
     },
     async search({ db, ownerId, accounts, words, limit }) {
@@ -446,7 +446,7 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
       const [sample, real] = await Promise.all([
         accounts.some(isDemo) ? demo.search({ db, ownerId, accounts: accounts.filter(isDemo), words: query, limit }) : nothing,
         
-        group && accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${group}`, limit, "metadata", toMailMessage) : nothing,
+        group && accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${group}`, limit) : nothing,
       ]);
       return { messages: newestFirst([...sample.messages, ...real.messages]), failures: [...sample.failures, ...real.failures] };
     },

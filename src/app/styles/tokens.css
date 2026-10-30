@@ -57,7 +57,6 @@
   --prio-normal: var(--node-blue);
   --prio-low: var(--node-gray);
   --mail-waiting: var(--node-indigo);
-  --mail-arrived: var(--node-teal);
   --tone-red: var(--node-red);
   --tone-amber: var(--node-amber);
   --tone-green: var(--node-green);

@@ -59,16 +59,3 @@
 .preview-frame .week-day {
   cursor: default;
 }
-.preview-notice {
-  align-self: flex-end;
-  max-width: 100%;
-  animation: rise-in var(--dur-slow) var(--ease-out) 520ms backwards;
-}
-.preview-undo {
-  flex: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .preview-notice {
-    animation: none;
-  }
-}

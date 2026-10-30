@@ -21,24 +21,23 @@ export const mailRowSchema = z.object({
   
   place: z.object({ nodeId: z.string(), path: z.string(), color: z.string().nullable() }).nullable(),
   
-  tasks: z.array(z.object({ id: z.string(), title: z.string(), status: z.enum(["open", "done"]), waits: z.boolean() })),
+  tasks: z.array(z.object({ id: z.string(), title: z.string(), status: z.enum(["open", "done"]) })),
   nodes: z.array(z.object({ id: z.string(), path: z.string() })),
 });
 
 export type MailRow = z.infer<typeof mailRowSchema>;
 
 
+
 export const taskMailSchema = z.object({
   
-  status: z.enum(["waiting", "met", "not_met"]),
-  sentence: z.string().nullable(),
-  
   accountId: z.string().nullable(),
-  expectFrom: z.string().nullable(),
   
-  decidedAccountId: z.string().nullable(),
-  decidedMessageId: z.string().nullable(),
-  checkedAt: z.string().nullable(),
+  waitsFor: z.string(),
+  
+  since: z.string(),
+  
+  dismissed: z.array(z.string()),
 });
 
 export type TaskMail = z.infer<typeof taskMailSchema>;

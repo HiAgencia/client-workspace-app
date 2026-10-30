@@ -578,15 +578,9 @@
   font-size: var(--text-meta);
   font-weight: 650;
 }
-.activity-undo,
-.activity-undone {
+.activity-undo {
   grid-row: 1 / span 2;
   grid-column: 2;
-}
-.activity-undone {
-  color: var(--muted);
-  font-size: var(--text-meta);
-  font-weight: 600;
 }
 .activity-title {
   justify-self: start;
@@ -617,11 +611,6 @@
 }
 .activity-title-gone {
   text-decoration: none;
-}
-.activity-detail {
-  grid-column: 1;
-  color: var(--muted);
-  font-size: var(--text-meta);
 }
 .child-row {
   display: flex;

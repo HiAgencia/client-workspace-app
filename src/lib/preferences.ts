@@ -17,13 +17,9 @@ export const boardSchema = z.strictObject({
 
 export const layoutSchema = z.enum(["list", "board"]);
 
-const DEFAULT_INSTRUCTION = "Review my tasks for today and the mail they wait for.";
-
 export const preferencesSchema = z.object({
   boards: z.record(pageKey, boardSchema),
   layouts: z.record(pageKey, layoutSchema),
-  dailyReview: z.boolean(),
-  dailyReviewInstruction: z.string(),
 });
 
 export type Preferences = z.infer<typeof preferencesSchema>;
@@ -32,18 +28,13 @@ export type Preferences = z.infer<typeof preferencesSchema>;
 
 export const preferencesChange = z
   .strictObject({
-    page: pageKey.optional(),
+    page: pageKey,
     board: boardSchema.nullable().optional(),
     layout: layoutSchema.nullable().optional(),
-    dailyReview: z.boolean().optional(),
-    dailyReviewInstruction: z.string().trim().min(1).max(2000).optional(),
   })
-  .refine((value) => (value.board === undefined && value.layout === undefined) || value.page !== undefined, {
-    message: "say which page the boxes or the layout belong to",
-  })
-  .refine((value) => Object.keys(value).some((key) => key !== "page"), { message: "nothing to change" });
+  .refine((value) => value.board !== undefined || value.layout !== undefined, { message: "nothing to change" });
 
-export const DEFAULT_PREFERENCES: Preferences = { boards: {}, layouts: {}, dailyReview: true, dailyReviewInstruction: DEFAULT_INSTRUCTION };
+export const DEFAULT_PREFERENCES: Preferences = { boards: {}, layouts: {} };
 
 
 function readMap<T>(value: unknown, entry: z.ZodType<T>): Record<string, T> {
@@ -56,19 +47,14 @@ function readMap<T>(value: unknown, entry: z.ZodType<T>): Record<string, T> {
   return out;
 }
 
-type Row = { boards: unknown; layouts: unknown; daily_review: boolean; daily_review_instruction: string };
+type Row = { boards: unknown; layouts: unknown };
 
 function fromRow(row: Row | null): Preferences {
   if (!row) return DEFAULT_PREFERENCES;
-  return {
-    boards: readMap(row.boards, boardSchema),
-    layouts: readMap(row.layouts, layoutSchema),
-    dailyReview: row.daily_review,
-    dailyReviewInstruction: row.daily_review_instruction,
-  };
+  return { boards: readMap(row.boards, boardSchema), layouts: readMap(row.layouts, layoutSchema) };
 }
 
-const COLUMNS = "boards, layouts, daily_review, daily_review_instruction";
+const COLUMNS = "boards, layouts";
 
 export async function readPreferences(db: Db, ownerId: string): Promise<{ ok: true; preferences: Preferences } | { ok: false; message: string }> {
   const { data, error } = await db.from("preferences").select(COLUMNS).eq("owner_id", ownerId).maybeSingle();
@@ -88,13 +74,14 @@ export async function savePreferences(
   const none = null as unknown as string;
   const { data, error } = await db
     .rpc("save_preferences", {
-      p_page: change.page ?? none,
+      p_page: change.page,
       p_board: (change.board ?? null) as never,
       p_board_clear: change.board === null,
       p_layout: change.layout ?? none,
       p_layout_clear: change.layout === null,
-      p_daily_review: (change.dailyReview ?? null) as unknown as boolean,
-      p_instruction: change.dailyReviewInstruction ?? none,
+      
+      p_daily_review: null as unknown as boolean,
+      p_instruction: none,
     })
     .single();
   if (error) return { ok: false, message: error.message };

@@ -36,7 +36,8 @@ export type SeedItem = {
   
   rank?: number;
   
-  waitsFor?: { account: string; from: string };
+  
+  waitsFor?: { account: string; words: string };
 };
 
 
@@ -320,6 +321,15 @@ export function demoSeedTree(today: string): Seed[] {
               important: false,
             },
             {
+              from: { name: "Developer Platform", email: "noreply@developers.example" },
+              subject: "API changes coming in November",
+              snippet: "Two endpoints change on November 15. See what moves before your next release.",
+              text: "Hello,\n\nTwo endpoints change on November 15. See what moves before your next release.\n\nThe Developer Platform team",
+              ago: 1210,
+              unread: false,
+              important: false,
+            },
+            {
               from: { name: "Coworking Hub", email: "billing@coworkinghub.example" },
               subject: "Your October invoice is ready",
               snippet: "Your invoice for October is ready to download.",
@@ -355,8 +365,9 @@ export function demoSeedTree(today: string): Seed[] {
           { ago: 437, rank: 2 },
         ),
         
-        task({ title: "Wait for the app review approval", priority: 2 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", from: "Developer Platform" } }),
-        task({ title: "Wait for the bank transfer", priority: 2, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", from: "Bayside Bank" } }),
+        
+        task({ title: "Wait for the app review approval", priority: 2 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", words: "Developer Platform" } }),
+        task({ title: "Wait for the bank transfer", priority: 2, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", words: "Bayside Bank" } }),
         note("<p><strong>Payment terms</strong></p><p>Half up front, half on delivery; invoices due in 15 days.</p>", 7942),
       ],
       events: [

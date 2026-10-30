@@ -5,9 +5,10 @@ import { useCallback } from "react";
 import { firstWeekday, instantsOf, weekOf, type Day } from "@/lib/dates";
 import type { TasksView } from "@/lib/tools/tasks";
 import { useToolRead } from "./boxes";
-import { placeValue, readPlace, type MailList, type Place } from "./box-kinds";
+import { mailBoxRows, placeValue, readPlace, type MailList, type Place } from "./box-kinds";
 import type { TreeNode } from "./client-api";
 import { AccountFilter, ALL, MESSAGES, PlaceFilter, TASKS } from "./place-filters";
+import type { TaskReplies } from "./task-replies";
 
 
 
@@ -62,9 +63,19 @@ export function TasksPlaceFilter({ place, onChange, tree, now }: { place: Place;
 }
 
 
-export function MailAccountFilter({ account, onChange, mail }: { account: string | null; onChange: (account: string | null) => void; mail: MailList | null }) {
-  const shown = mail ? [...mail.groups.forTasks.messages, ...mail.groups.unread.messages] : [];
-  const counts = new Map<string, number>([[ALL, new Set(shown.map((message) => `${message.accountId}:${message.id}`)).size]]);
-  for (const entry of mail?.accounts ?? []) counts.set(entry.id, new Set(shown.filter((message) => message.accountId === entry.id).map((message) => message.id)).size);
+
+export function MailAccountFilter({
+  account,
+  onChange,
+  mail,
+  replies,
+}: {
+  account: string | null;
+  onChange: (account: string | null) => void;
+  mail: MailList | null;
+  replies: TaskReplies[];
+}) {
+  const counts = new Map<string, number>([[ALL, mail ? mailBoxRows(mail, replies, null).length : 0]]);
+  for (const entry of mail?.accounts ?? []) counts.set(entry.id, mail ? mailBoxRows(mail, replies, entry.id).length : 0);
   return <AccountFilter value={account ?? ALL} accounts={mail?.accounts ?? []} counts={counts} unit={MESSAGES} onChange={(value) => onChange(value === ALL ? null : value)} />;
 }
