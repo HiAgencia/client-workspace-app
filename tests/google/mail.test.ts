@@ -833,7 +833,8 @@ describe("what a task waits for, over a busy inbox", () => {
   it("takes two first waits at once: the one that finds the row taken writes over it, and says what it replaced", async () => {
     const task = await newTask();
     const racing = { ...context(), db: racingInserts(user!.client, 2) };
-    const answers = (await Promise.all(["Bayside", "Bayside Bank"].map((words) => callTool("set_task_mail", racing, { task, account: ids.mail, words })))) as unknown as Array<{
+    const words = ["Bayside", "Bayside Bank"];
+    const answers = (await Promise.all(words.map((said) => callTool("set_task_mail", racing, { task, account: ids.mail, words: said })))) as unknown as Array<{
       ok: boolean;
       previous: Wait | null;
     }>;
@@ -842,8 +843,13 @@ describe("what a task waits for, over a busy inbox", () => {
       "two first waits at once both hold",
     ).toEqual([true, true]);
     expect(answers.filter((answer) => answer.previous !== null), "the one that wrote over the other says it replaced it, so its undo puts it back").toHaveLength(1);
+    // The one that wrote last replaced the other's words, and its own are what the wait keeps.
+    const last = answers.findIndex((answer) => answer.previous !== null);
     const stored = await user!.client.from("task_mail").select("waits_for").eq("item_id", task).single();
-    expect(["Bayside", "Bayside Bank"], "the wait keeps the words of one of the two").toContain(stored.data?.waits_for);
+    expect({ replaced: answers[last]?.previous?.waitsFor, kept: stored.data?.waits_for }, "what it replaced is the other's wait, and the wait keeps its words").toEqual({
+      replaced: words[1 - last],
+      kept: words[last],
+    });
   });
 
   it("its control: two plain inserts held together race, and one of them finds the row taken", async () => {
@@ -882,7 +888,8 @@ describe("what a task waits for, over a busy inbox", () => {
       expect(back.message).toContain("not connected where the task lives");
     } finally {
       // The client this case made leaves with what hangs from it, so no later case counts it.
-      await user!.client.from("nodes").delete().eq("id", node.data!.id);
+      const removed = await user!.client.from("nodes").delete().eq("id", node.data!.id);
+      expect(removed.error, "the client this case made is deleted").toBeNull();
     }
   });
 
