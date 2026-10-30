@@ -324,6 +324,11 @@ async function batchOnce(
   }
   const parts = splitBatch(text, response.headers.get("Content-Type"));
   
+  
+  if (ids.every((_, index) => parts.get(`item${index}`)?.status === 401)) {
+    throw new GoogleError("reading the messages: HTTP 401", 401, errorReason(parts.get("item0")!.body));
+  }
+  
   return ids.map((_, index) => {
     const part = parts.get(`item${index}`);
     if (!part) return new GoogleError("reading the message: the batch answer left it out", 0, null);
