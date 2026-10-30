@@ -1,6 +1,7 @@
 import type { LanguageModelV4Prompt, LanguageModelV4StreamPart } from "@ai-sdk/provider";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
+import { count } from "@/lib/count";
 
 
 
@@ -101,8 +102,8 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
           const states = actions.filter((action) => action.kind === "mail_status").length;
           if (actions.length === 0) return "I reviewed your day: nothing needed a change.";
           const parts = [
-            ...(completed ? [`completed ${completed === 1 ? "1 task" : `${completed} tasks`}`] : []),
-            ...(states ? [`wrote the mail's state of ${states === 1 ? "1 task" : `${states} tasks`}`] : []),
+            ...(completed ? [`completed ${count(completed, "task", "tasks")}`] : []),
+            ...(states ? [`wrote the mail's state of ${count(states, "task", "tasks")}`] : []),
           ];
           return `I reviewed your day: I ${parts.join(" and ")}. Each change has its undo below.`;
         }

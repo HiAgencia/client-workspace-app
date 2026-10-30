@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
+import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import type { MailRow } from "@/lib/tools/mail-schema";
@@ -18,7 +19,6 @@ import { subjectOf } from "./mail/subject";
 import { branchOf } from "./place-filters";
 import { QuickAddInline } from "./quick-add";
 import { NewNode } from "./side-nav";
-import { count } from "./count";
 import { dayHeading, dayName, InlineText, openTaskDetail, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
@@ -780,7 +780,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
     <div className="box-read" data-stale={updates.stale || undefined}>
       {failed && <BoxFailed what="Part of the activity" message={failed} kept onRetry={() => (reviews.retry(), updates.retry())} />}
       {entries.length === 0 ? (
-        <BoxEmpty text={`Nothing done by the daily review, the chat, or an agent in the last ${ACTIVITY_DAYS} days.`} reason="no-activity">
+        <BoxEmpty text={`Nothing done by the daily review, the chat, or an agent in the last ${count(ACTIVITY_DAYS, "day", "days")}.`} reason="no-activity">
           <Button size="sm" onClick={() => chat.setOpen(true)}>
             Open the chat
           </Button>

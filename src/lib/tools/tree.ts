@@ -1,3 +1,4 @@
+import { count } from "@/lib/count";
 import type { Database } from "@/lib/db/types";
 import { isNodeColor, type NodeColor } from "@/lib/node-colors";
 import type { ToolContext } from "./context";
@@ -181,7 +182,7 @@ export function resolveNode(scope: Scope, ref: string | undefined): ToolResult<{
   });
   if (partial.length === 1) return ok({ node: partial[0] });
   if (partial.length === 0) return fail("not_found", `no node matches "${value}" here`);
-  return fail("ambiguous", `"${value}" matches ${partial.length} nodes: pick one by id`, {
+  return fail("ambiguous", `"${value}" matches ${count(partial.length, "node", "nodes")}: pick one by id`, {
     ambiguous: true,
     candidates: partial.map(describeNode),
   });

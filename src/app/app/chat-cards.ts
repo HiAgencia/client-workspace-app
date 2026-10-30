@@ -1,5 +1,5 @@
 import { post, tool } from "./client-api";
-import { count } from "./count";
+import { count } from "@/lib/count";
 import { inlinePlain } from "@/lib/inline-links";
 
 

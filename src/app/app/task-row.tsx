@@ -13,12 +13,12 @@ import {
 } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
+import { count } from "@/lib/count";
 import { addDays, LOCALE, today, type Day } from "@/lib/dates";
 import { inlineLink, inlinePieces, inlinePlain } from "@/lib/inline-links";
 import type { TaskRow } from "@/lib/tools/tasks";
 import { cx } from "@/lib/utils";
 import { post, tool, type Item, type TreeNode } from "./client-api";
-import { count } from "./count";
 import { PathText, PRIORITIES, sourceName } from "./item-parts";
 import { useWorkspace } from "./workspace";
 import "../styles/task.css";
