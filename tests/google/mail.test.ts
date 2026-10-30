@@ -1,11 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { loadHistory } from "@/lib/chat/history";
+import { MAX_STEPS, systemPrompt } from "@/lib/chat/run";
+import { takeUsageFor } from "@/lib/chat/usage";
 import { CALENDAR_LIST_SCOPE, EVENTS_SCOPE, GMAIL_READ_SCOPE, type Fetch, type GmailPart } from "@/lib/google/api";
 import { decrypt, encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
 import type { GoogleDeps } from "@/lib/google/events";
 import { gmailMailSource } from "@/lib/google/gmail";
 import type { MailAccount } from "@/lib/mail/source";
+import { authenticateAgent } from "@/lib/mcp/auth";
 import type { ReviewJudge } from "@/lib/review/judge";
 import { runDailyReview, type ReviewTask } from "@/lib/review/run";
+import { currentUser } from "@/lib/supabase/server";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
@@ -206,13 +211,13 @@ async function insertAccount(
   email: string,
   refresh: string,
   scopes: string[],
-  options: { node?: string; status?: "active" | "revoked"; access?: { token: string; until: string } } = {},
+  options: { node?: string; status?: "active" | "revoked"; access?: { token: string; until: string }; owner?: DisposableUser } = {},
 ) {
   const service = serviceClient();
   const { data, error } = await service
     .from("google_accounts")
     .insert({
-      owner_id: user!.id,
+      owner_id: (options.owner ?? user!).id,
       email,
       refresh_token: await encrypt(deps.key, refresh),
       
@@ -614,5 +619,169 @@ describe("the daily review over a busy inbox", () => {
       spy.mockRestore();
       await user!.client.from("task_mail").delete().eq("item_id", data.id);
     }
+  });
+});
+
+describe("what reading the mail costs in requests of the Worker's own", () => {
+  
+  
+  
+  
+  
+  
+  const BUDGET = 50;
+  let owner: DisposableUser | undefined;
+  let place = "";
+  let readers = 0;
+  const ownerContext = (): ToolContext => ({ db: owner!.client, ownerId: owner!.id, source: "manual", mail: gmailMailSource(deps) });
+  const today = () => new Date().toISOString().slice(0, 10);
+  
+  const mailPage = () => callTool("list_mail", ownerContext(), { limit: 50 });
+  const sidebar = () => callTool("list_tree", ownerContext(), { today: today(), withMail: true });
+  
+  const fits = (fixed: number, perAccount: number) => Math.floor((BUDGET - fixed) / perAccount);
+
+  type Cost = { gmail: number; token: number; supabase: number; total: number };
+
+  
+  
+  
+  async function costOf<T>(run: () => Promise<T>): Promise<{ cost: Cost; result: T }> {
+    forget();
+    const spy = vi.spyOn(globalThis, "fetch");
+    const settled = await run().then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    const urls = spy.mock.calls.map(([input]) => (input instanceof Request ? input.url : String(input)));
+    spy.mockRestore();
+    if (!settled.ok) throw settled.error;
+    expect(urls.filter((url) => !/\/(rest|auth)\/v1\//.test(url))).toEqual([]);
+    const token = calls.filter((call) => call.endsWith("/token")).length;
+    const gmail = calls.length - token;
+    return { cost: { gmail, token, supabase: urls.length, total: gmail + token + urls.length }, result: settled.value };
+  }
+
+  
+  async function tokens(state: "expired" | "valid") {
+    const stored =
+      state === "expired"
+        ? { access_token_expires_at: "2020-01-01T00:00:00Z" }
+        : { access_token: await encrypt(deps.key, "token-mail"), access_token_expires_at: new Date(Date.now() + 3_600_000).toISOString() };
+    const { error } = await serviceClient().from("google_accounts").update(stored).eq("owner_id", owner!.id);
+    if (error) throw new Error(error.message);
+  }
+
+  
+  async function withReaders(count: number) {
+    for (; readers < count; readers++) await insertAccount(`reader-${readers + 1}@example.com`, "refresh-mail", ALL, { owner: owner!, node: place });
+  }
+
+  const cutCount = { accountId: expect.any(String), accountEmail: expect.any(String), reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/) };
+
+  beforeAll(async () => {
+    owner = await createDisposableUser("gmail-cost");
+    const node = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "client", name: "Northwind" }).select("id").single();
+    if (node.error) throw new Error(node.error.message);
+    place = node.data.id;
+    
+    const task = await owner.client.from("items").insert({ owner_id: owner.id, node_id: place, type: "task", title: "Wait for the signed contract" }).select("id").single();
+    if (task.error) throw new Error(task.error.message);
+    const waits = await owner.client.from("task_mail").insert({ item_id: task.data.id, owner_id: owner.id, expect_from: "Northwind" });
+    if (waits.error) throw new Error(waits.error.message);
+  }, 60_000);
+
+  afterAll(async () => {
+    if (owner) await deleteDisposableUsers([owner]);
+  }, 60_000);
+
+  it("costs each account its renewal and its storing, a search, a batch, and its unread count, so a place fits seven in the list", async () => {
+    const measured: Array<{ accounts: number; page: Cost; sidebar: Cost }> = [];
+    for (let accounts = 1; accounts <= 3; accounts++) {
+      await withReaders(accounts);
+      await tokens("expired");
+      const page = await costOf(mailPage);
+      
+      expect(page.result).toMatchObject({ ok: true, unread: accounts, failures: [] });
+      await tokens("expired");
+      const side = await costOf(sidebar);
+      expect(side.result).toMatchObject({ ok: true, mail: { unread: accounts, failures: [] } });
+      measured.push({ accounts, page: page.cost, sidebar: side.cost });
+    }
+    expect(measured).toEqual([
+      { accounts: 1, page: { gmail: 3, token: 1, supabase: 12, total: 16 }, sidebar: { gmail: 1, token: 1, supabase: 8, total: 10 } },
+      { accounts: 2, page: { gmail: 6, token: 2, supabase: 13, total: 21 }, sidebar: { gmail: 2, token: 2, supabase: 9, total: 13 } },
+      { accounts: 3, page: { gmail: 9, token: 3, supabase: 14, total: 26 }, sidebar: { gmail: 3, token: 3, supabase: 10, total: 16 } },
+    ]);
+    
+    await tokens("valid");
+    expect((await costOf(mailPage)).cost).toEqual({ gmail: 9, token: 0, supabase: 11, total: 20 });
+    expect((await costOf(sidebar)).cost).toEqual({ gmail: 3, token: 0, supabase: 7, total: 10 });
+    
+    
+    const per = (kind: "page" | "sidebar") => measured[2][kind].total - measured[1][kind].total;
+    const fixed = (kind: "page" | "sidebar") => measured[0][kind].total - per(kind);
+    expect({ page: fits(1 + fixed("page"), per("page")), sidebar: fits(1 + fixed("sidebar"), per("sidebar")) }).toEqual({ page: 7, sidebar: 14 });
+  });
+
+  it("costs an account whose unread count runs to its last page three searches more, so a place fits four in the list", async () => {
+    await withReaders(3);
+    trouble.endlessUnread = true;
+    try {
+      await tokens("expired");
+      const page = await costOf(mailPage);
+      expect(page.result).toMatchObject({ ok: true, failures: [cutCount, cutCount, cutCount] });
+      await tokens("expired");
+      const side = await costOf(sidebar);
+      expect(side.result).toMatchObject({ ok: true, mail: { failures: [cutCount, cutCount, cutCount] } });
+      expect({ page: page.cost, sidebar: side.cost }).toEqual({
+        page: { gmail: 18, token: 3, supabase: 14, total: 35 },
+        sidebar: { gmail: 12, token: 3, supabase: 10, total: 25 },
+      });
+      
+      const perAccount = { page: (page.cost.total - 11) / 3, sidebar: (side.cost.total - 7) / 3 };
+      expect(perAccount).toEqual({ page: 8, sidebar: 6 });
+      expect({ page: fits(1 + 11, perAccount.page), sidebar: fits(1 + 7, perAccount.sidebar) }).toEqual({ page: 4, sidebar: 7 });
+    } finally {
+      clearTrouble();
+    }
+  });
+
+  it("leaves room for the route that runs the call: the screens', the coding agent's, and a chat turn's with its model", async () => {
+    await withReaders(3);
+    
+    
+    expect((await costOf(() => currentUser(owner!.client))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
+    const agent = new Request("http://localhost/api/mcp", { headers: { authorization: `Bearer cwa_${"a".repeat(43)}` } });
+    expect((await costOf(() => authenticateAgent(agent, serviceClient()))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
+    
+    
+    
+    const turn = async () => {
+      const ctx: ToolContext = { ...ownerContext(), source: "chat" };
+      await currentUser(owner!.client);
+      await takeUsageFor(serviceClient(), { id: owner!.id, isAnonymous: false }, "chat_message");
+      await loadHistory(owner!.client, null);
+      await systemPrompt(ctx, "UTC");
+      return callTool("list_mail", ctx, {});
+    };
+    await tokens("expired");
+    const nominal = await costOf(turn);
+    expect(nominal.result).toMatchObject({ ok: true, failures: [] });
+    expect(nominal.cost).toEqual({ gmail: 9, token: 3, supabase: 19, total: 31 });
+    trouble.endlessUnread = true;
+    try {
+      await tokens("expired");
+      const full = await costOf(turn);
+      expect(full.result).toMatchObject({ ok: true, failures: [cutCount, cutCount, cutCount] });
+      expect(full.cost).toEqual({ gmail: 18, token: 3, supabase: 19, total: 40 });
+    } finally {
+      clearTrouble();
+    }
+    
+    const own = nominal.cost.total - 3 * 5 + MAX_STEPS + 1;
+    expect(own).toBe(23);
+    
+    expect({ nominal: fits(own, 5), full: fits(own, 8) }).toEqual({ nominal: 5, full: 3 });
   });
 });

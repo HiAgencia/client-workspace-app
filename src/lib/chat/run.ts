@@ -14,7 +14,8 @@ import { callTool } from "@/lib/tools/registry";
 import { chatTools } from "./tools";
 
 
-const MAX_STEPS = 6;
+
+export const MAX_STEPS = 6;
 
 type TreeRow = { id: string; path: string; openTasks: number };
 
