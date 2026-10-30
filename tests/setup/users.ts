@@ -43,12 +43,12 @@ export default async function setup(project: TestProject) {
       const error = await deleteTestUser(admin, id);
       if (error) failed.push({ id, error });
     }
-    const after = await countUsers(admin);
-    console.log(`[test users] before: ${before.total} (${before.suite} with the suite's address); after: ${after.total} (${after.suite}); left by this run: ${left.length}`);
-    // The record keeps only the users that could not be deleted, for the next run to sweep; a run whose users are all gone
-    // leaves none. A run cut before this point keeps its whole record.
+    // The record keeps only the users that could not be deleted, for the next run to sweep, before anything else can
+    // fail; a run whose users are all gone leaves none. A run cut before this point keeps its whole record.
     if (run) keepInRun(run, failed.map((failure) => failure.id));
     else rmSync(file, { force: true });
+    const after = await countUsers(admin);
+    console.log(`[test users] before: ${before.total} (${before.suite} with the suite's address); after: ${after.total} (${after.suite}); left by this run: ${left.length}`);
     if (left.length > 0) {
       const deleted =
         failed.length === 0
