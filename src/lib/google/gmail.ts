@@ -223,11 +223,14 @@ export function senderSearch(senders: string[]): string {
 }
 
 // The words a person searches, as one group of Gmail's search: what would close the group or open another —a
-// parenthesis, a brace, a quote left open— is read as a space, so the words narrow the inbox and never reach past it.
+// parenthesis, a brace, a quote left open— is read as a space, so the words narrow the inbox and never reach past it; an
+// empty phrase and a minus sign with no word after it are dropped, so neither reaches Gmail as a search of its own.
 // Empty when no word is left.
 export function wordsSearch(words: string): string {
-  const quoteLeftOpen = (words.match(/"/g) ?? []).length % 2 === 1;
-  const plain = words.replace(quoteLeftOpen ? /[(){}"]/g : /[(){}]/g, " ").replace(/\s+/g, " ").trim();
+  const pieces = words.replace(/[(){}]/g, " ").split('"');
+  // With the quotes paired, every other piece is a phrase; with one left open, every quote is a space.
+  const phrased = pieces.length % 2 === 1 ? pieces.map((piece, index) => (index % 2 === 0 ? piece : piece.trim() ? `"${piece}"` : " ")).join("") : pieces.join(" ");
+  const plain = phrased.replace(/(^|\s)-+(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
   return plain ? `(${plain})` : "";
 }
 
