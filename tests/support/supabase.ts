@@ -1,15 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { inject } from "vitest";
 import type { Db } from "@/lib/db/client";
 import type { Database } from "@/lib/db/types";
 import { resetDemo } from "@/lib/demo-seed";
+import { suiteDir, track, untrack } from "./test-users";
 
 export type { Db };
 
 export type DisposableUser = { id: string; email: string; client: Db; pooled?: string };
+
+// This run's record of the users it creates, opened by the run's global setup (`tests/setup/users.ts`).
+const runFile = () => inject("testUsersFile");
 
 // A test that cannot reach its database fails with the reason; it never passes or skips.
 export function requireEnv(name: string): string {
@@ -54,6 +58,8 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
   if (created.error || !created.data.user) {
     throw new Error(`could not create the test user ${label}: ${created.error?.message ?? "no user returned"}`);
   }
+  // Written down before anything else can fail: a run cut from here on leaves it for the next run to delete.
+  track(runFile(), created.data.user.id);
   const client = publicClient();
   const signedIn = await client.auth.signInWithPassword({ email, password });
   if (signedIn.error) throw new Error(`could not sign in as ${label}: ${signedIn.error.message}`);
@@ -64,8 +70,10 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
 // repository: the project limits the anonymous sign-ups one address opens per hour, and a run that opened one per step
 // ran into it. The session of a label lives between runs, and a caller starts from an
 // empty workspace because it is emptied before every use. `DEMO_POOL_LIMPIAR=1` deletes them instead of keeping them.
-const POOL_FILE = join(tmpdir(), "cw-demo-pool.json");
-const POOL_LOCK = join(tmpdir(), "cw-demo-pool.lock");
+// The pool's file is the only record of those live users: it lives in `suiteDir()` (`DEMO_POOL_DIR`, else the system's
+// temporary folder).
+const POOL_FILE = join(suiteDir(), "cw-demo-pool.json");
+const POOL_LOCK = join(suiteDir(), "cw-demo-pool.lock");
 
 type Pool = Record<string, { id: string; refreshToken: string }>;
 
@@ -149,9 +157,15 @@ export async function createAnonymousUser(label: string): Promise<DisposableUser
     }
     id = opened.data.user.id;
     refreshToken = opened.data.session.refresh_token;
-  }
-  await remember(label, { id, refreshToken });
+    // A new session is this run's until the pool holds it.
+    track(runFile(), id);
+    await remember(label, { id, refreshToken });
+    untrack(runFile(), id);
+  } else await remember(label, { id, refreshToken });
   await resetDemo(client);
+  // Starting over keeps the day's usage of the models; the suite refills the session it reuses through the service role.
+  const refilled = await serviceClient().rpc("reset_demo_usage", { p_owner: id });
+  if (refilled.error) throw new Error(`could not refill the usage of the demo session ${label}: ${refilled.error.message}`);
   return { id, email: `demo session ${label}`, client, pooled: label };
 }
 
@@ -166,6 +180,7 @@ export async function deleteDisposableUsers(users: Array<DisposableUser | undefi
     if (user.pooled && !clearing) continue;
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) failures.push(`${user.email}: ${error.message}`);
+    else if (!user.pooled) untrack(runFile(), user.id);
     if (user.pooled && !error) await forget(user.pooled);
   }
   if (failures.length > 0) throw new Error(`test users left behind: ${failures.join("; ")}`);

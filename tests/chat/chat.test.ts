@@ -6,7 +6,7 @@ import { simulatedModel } from "@/lib/chat/simulated";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { dailyCap, takeUsage, takeUsageFor } from "@/lib/chat/usage";
 import type { ToolContext } from "@/lib/tools/context";
-import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
+import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
 // The chat against the scripted model and the real database: what a request does lands in the node with source
 // "chat", the daily cap stops at its limit, and a provider failure arrives as a readable error in the stream.
@@ -170,8 +170,8 @@ describe("the daily cap", () => {
   it("a demo session has its own small cap, and all demo sessions share the day's total", async () => {
     const service = serviceClient();
     const day = new Date("2026-02-20T12:00:00Z");
-    const demo = await serviceClient().auth.signInAnonymously();
-    const demoUser = demo.data.user!;
+    // A demo session of the pool: written down while it is this run's, and its usage refilled before each use.
+    const demoUser = await createAnonymousUser("chat-cap");
     try {
       const results = [];
       for (let i = 0; i < dailyCap("demoSession", "transcription") + 1; i++) {
@@ -184,7 +184,7 @@ describe("the daily cap", () => {
       const { error } = await user!.client.rpc("anonymous_usage", { p_kind: "transcription", p_day: "2026-02-20" });
       expect(error?.code).toBe("42501");
     } finally {
-      await service.auth.admin.deleteUser(demoUser.id);
+      await deleteDisposableUsers([demoUser]);
     }
   });
 

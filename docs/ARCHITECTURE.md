@@ -320,6 +320,11 @@ A failure comes back as data (`{ ok: false, code, message }`), never as an excep
   each one; its only filter is the caller's own owner. The tests and the probe browser keep a few demo sessions and
   reuse them, emptying each before using it, because the project's anonymous sign-ups share a rate limit and a run that
   opened one per step ran into it.
+- **The suite's users**: each user a run of the tests creates is written down the moment it exists, in a record of that
+  run named by its process and start time (`tests/support/test-users.ts`); the run's global setup (`tests/setup/users.ts`)
+  deletes first what a run that no longer lives left, counts the project's users before and after, and fails the run if
+  a user it created is still there. That record and the demo pool's file live in `DEMO_POOL_DIR`, the system's
+  temporary folder when it is not set.
 - The demo is the emulation of a real case —a small agency's week— and opens on its Overview like any workspace, with no
   banner or guide of its own; the landing says what it holds (its clients and its own projects, read from the seed's
   tree) and where to write first.
