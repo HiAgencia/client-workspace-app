@@ -526,7 +526,10 @@ the visitor's copy, and the `DELETE` empties it so the next read plants it again
    is scaled down whole, never scrolled sideways, and its height is the message's, so the viewer scrolls. «Light | Dark»
    opens in the product's theme or the last one chosen; a message with its own dark rules has them rewritten to follow
    the mode, a plain-text one takes the product's colors, and any other keeps its colors on its own paper, inset in a
-   dark frame. Another message, mode or set of images fades out before the next fades in.
+   dark frame. Another message, mode or set of images fades out before the next fades in. Its document declares the
+   language the message declares —`get_mail`'s `language`, read from its `Content-Language` when the source gives it,
+   else from the `lang` of its HTML's root before the sanitizer drops that tag (`src/lib/mail/language.ts`)— and the
+   product's when it declares none.
    **The Mail attribute of a task's detail** reads `get_item` (the mail it waits for, the messages linked to it, and the
    one the daily review decided by): where it waits —no mail, every account of its place, or one account its place
    sees—, from whom, the state and the sentence the review wrote, and «Stop waiting», all through `set_task_mail`; each

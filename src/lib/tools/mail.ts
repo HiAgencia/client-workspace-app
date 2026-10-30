@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { demoMailSource, MAIL_LIMIT, mailFailureSchema, senderMatches, type MailAccount, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
+import { messageLanguage } from "@/lib/mail/language";
 import { sanitizeMailHtml } from "@/lib/mail/sanitize";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
@@ -360,6 +361,8 @@ export const getMail = defineTool({
       text: z.string().nullable(),
       // Images on the network, which the viewer loads only when asked.
       remoteImages: z.number(),
+      // The language the message declares (a BCP 47 tag), or null when it declares none.
+      language: z.string().nullable(),
     }),
   }),
   async run(ctx, input) {
@@ -367,10 +370,13 @@ export const getMail = defineTool({
     if (isError(found)) return found;
     const context = await mailContext(ctx, found.scope, [found.account.id]);
     if (isError(context)) return context;
-    const { html, text, ...message } = found.content;
+    // A source that reads the message's headers gives its `Content-Language` beside it.
+    const { html, text, contentLanguage, ...message } = found.content;
     const [row] = toRows([message], context, new Map(found.accounts.map((account) => [account.id, account])), found.scope);
+    // Read before sanitizing: the sanitizer drops the `<html>` and `<body>` tags that carry the message's `lang`.
+    const language = messageLanguage({ contentLanguage, html });
     const clean = sanitizeMailHtml(html);
-    return ok({ message: { ...row, html: clean.html, text, remoteImages: clean.remoteImages } });
+    return ok({ message: { ...row, html: clean.html, text, remoteImages: clean.remoteImages, language } });
   },
 });
 

@@ -197,7 +197,7 @@ export function toMailMessage(message: GmailMessage, account: { id: string; emai
 }
 
 export function toMailContent(message: GmailMessage, account: { id: string; email: string }): MailContent {
-  return { ...toMailMessage(message, account), ...bodiesOf(message.payload) };
+  return { ...toMailMessage(message, account), ...bodiesOf(message.payload), contentLanguage: headerOf(message.payload, "Content-Language") };
 }
 
 export function arrived(message: GmailMessage): boolean {

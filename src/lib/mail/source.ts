@@ -29,8 +29,8 @@ export const mailMessageSchema = z.object({
 export type MailMessage = z.infer<typeof mailMessageSchema>;
 
 // A whole message, for the viewer and the daily review: the HTML as the source gave it (the tools sanitize it before it
-// leaves the server) and the plain text.
-export type MailContent = MailMessage & { html: string | null; text: string | null };
+// leaves the server), the plain text, and the language its `Content-Language` declares when the source reads headers.
+export type MailContent = MailMessage & { html: string | null; text: string | null; contentLanguage?: string | null };
 
 export type MailAccount = { id: string; email: string; isDemo: boolean; status: string; scopes: string[] };
 
