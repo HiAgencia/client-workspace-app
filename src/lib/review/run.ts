@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { capMessage } from "@/lib/chat/usage";
+import { count } from "@/lib/count";
 import { MAIL_LIMIT, type MailContent } from "@/lib/mail/source";
 import { readPreferences } from "@/lib/preferences";
 import { richTextToPlain } from "@/lib/rich-text";
@@ -211,10 +212,10 @@ async function gather(ctx: ToolContext, today: string): Promise<ToolResult<{ tas
         messages.push(...theirs.messages.filter((message) => !known.has(message.id)));
         const what = `reading the mail of ${account.email} from ${senders.join(", ")}`;
         for (const failure of theirs.failures) failed(what, failure.reason);
-        if (theirs.more.includes(id)) failed(what, `only the latest ${MAIL_LIMIT} messages were read`);
+        if (theirs.more.includes(id)) failed(what, `only the latest ${count(MAIL_LIMIT, "message", "messages")} were read`);
       }
       if (readers.length > named.length) {
-        failed(`reading the mail of ${account.email} for a task that waits for any sender`, `only the latest ${MAIL_LIMIT} messages since it waits were read`);
+        failed(`reading the mail of ${account.email} for a task that waits for any sender`, `only the latest ${count(MAIL_LIMIT, "message", "messages")} since it waits were read`);
       }
       return { messages, failures };
     }),

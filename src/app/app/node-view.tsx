@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, ViewTransition, type
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
+import { count } from "@/lib/count";
 import { firstWeekday, today } from "@/lib/dates";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { get, post, type TreeNode } from "./client-api";
@@ -28,7 +29,6 @@ import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
 import { allTasks, BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
-import { count } from "./count";
 import { useChatScope, useWorkspace } from "./workspace";
 
 // A client's or a project's boxes, in their first order: its tasks and what has no date on the left, its week, its mail,

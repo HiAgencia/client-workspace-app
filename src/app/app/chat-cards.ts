@@ -1,5 +1,5 @@
 import { post, tool } from "./client-api";
-import { count } from "./count";
+import { count } from "@/lib/count";
 import { inlinePlain } from "@/lib/inline-links";
 
 // What each write of the chat says on its card and how it is undone, from what the tool's output already carries —its

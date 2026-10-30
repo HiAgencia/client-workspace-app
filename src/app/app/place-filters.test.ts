@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { count } from "./count";
+import { count } from "@/lib/count";
 import { EVENTS, MESSAGES, TASKS, withCount } from "./place-filters";
 
 // A filter's option says its number with the word the locale's plural rules pick, the same `count` every other number of

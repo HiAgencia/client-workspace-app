@@ -357,6 +357,10 @@ describe("the Gmail source", () => {
       expect(logged).toContain(`account ${ids.mail}`);
       expect(logged).toContain("500 × 1");
       expect(logged).not.toContain("studio@example.com");
+      // One message alone is said in the singular.
+      trouble.flaky.set("m2", [500, 500]);
+      const alone = await gmailMailSource(deps).many({ db: user!.client, ownerId: user!.id, account: mailAccount(), ids: ["m2"] });
+      expect(alone.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 1 message could not be read" }]);
     } finally {
       spy.mockRestore();
       clearTrouble();

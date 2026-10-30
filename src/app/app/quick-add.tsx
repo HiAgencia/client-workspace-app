@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
+import { count } from "@/lib/count";
 import { today, type Day } from "@/lib/dates";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
@@ -288,7 +289,7 @@ function QuickAddEditor({
             look="chip"
             label={KIND_NAMES.place}
             value={placeId === undefined ? null : (placeId ?? GENERAL)}
-            placeholder={`Choose: ${candidates.length} places`}
+            placeholder={`Choose: ${count(candidates.length, "place", "places")}`}
             options={placeOptions}
             onChange={(value) => choose("place", value === GENERAL ? null : value, value === GENERAL)}
           />

@@ -1,8 +1,8 @@
 "use client";
 
 import { Select } from "@/components/ui/select";
+import { count } from "@/lib/count";
 import type { TreeNode } from "./client-api";
-import { count } from "./count";
 
 // The two filters a page of the workspace's calendar and mail carries, one per axis: the place —everything, General, a
 // client or a project— and the account. Each option says how much it brings, and one that would bring nothing is not

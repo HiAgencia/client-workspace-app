@@ -1,3 +1,4 @@
+import { count } from "@/lib/count";
 import { demoMailSource, MAIL_LIMIT, type MailAccount, type MailContent, type MailFailure, type MailMessage, type MailSource } from "@/lib/mail/source";
 import { GMAIL_READ_SCOPE, getMessage, getMessages, GoogleError, listMessageIds, type GmailFormat, type GmailMessage, type GmailPart } from "./api";
 import { withAccessToken, type GoogleDeps, type TokenRow } from "./events";
@@ -349,8 +350,8 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     if (lost.length === 0) return { messages, failure: null };
     const statuses = new Map<string, number>();
     for (const status of lost) statuses.set(status, (statuses.get(status) ?? 0) + 1);
-    console.error(`gmail: account ${account.id}: ${lost.length} of ${listed} messages could not be read (${[...statuses].map(([status, count]) => `${status} × ${count}`).join(", ")})`);
-    return { messages, failure: failureOf(account, `${lost.length} of ${listed} messages could not be read`) };
+    console.error(`gmail: account ${account.id}: ${lost.length} of ${listed} messages could not be read (${[...statuses].map(([status, times]) => `${status} × ${times}`).join(", ")})`);
+    return { messages, failure: failureOf(account, `${lost.length} of ${count(listed, "message", "messages")} could not be read`) };
   }
 
   const isDemo = (account: MailAccount) => account.isDemo;
@@ -446,7 +447,7 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
               return next;
             });
             // A count that stopped short says so instead of reading as the whole.
-            return { ids, failure: pageToken ? failureOf(account, `only the latest ${ids.length} unread messages were counted`) : null };
+            return { ids, failure: pageToken ? failureOf(account, `only the latest ${count(ids.length, "unread message", "unread messages")} were counted`) : null };
           } catch (error) {
             // What was counted before the failure stays, and the failure says the count is not whole.
             return { ids, failure: because(account, error) };

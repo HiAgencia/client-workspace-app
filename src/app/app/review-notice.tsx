@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { count } from "@/lib/count";
 import { LOCALE, today, untilAgain } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { browserClient } from "@/lib/supabase/browser";
 import { post } from "./client-api";
-import { count } from "./count";
 import { useWorkspace } from "./workspace";
 
 // The daily review on screen. The first time the person opens the workspace in their day, the browser asks the server
