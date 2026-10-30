@@ -15,6 +15,7 @@ import { AccountFilter, ALL, branchOf, lineOf, MESSAGES, PlaceFilter, placeFromU
 import { openTaskDetail, PlaceName, type TaskData } from "../task-row";
 import { useChatScope, useWorkspace } from "../workspace";
 import { MailViewer } from "./mail-viewer";
+import { subjectOf } from "./subject";
 import "../../styles/mail.css";
 
 // The mail beside the work: what a task waits for first, then what is unread, then the rest, each message with its
@@ -298,7 +299,7 @@ function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: b
       </span>
       <span className="mail-row-subject">
         {unread && <span className="sr-only">Unread: </span>}
-        {row.subject || "(No subject)"}
+        {subjectOf(row)}
       </span>
       <span className="t-meta mail-row-where">
         {waiting ? (

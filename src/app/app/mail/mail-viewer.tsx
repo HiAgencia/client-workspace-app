@@ -8,6 +8,7 @@ import { currentTheme, subscribeTheme, type Theme } from "@/lib/theme";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { tool } from "../client-api";
 import { documentFor } from "./mail-document";
+import { subjectOf } from "./subject";
 import { PlaceName } from "../task-row";
 import { useSwap } from "../use-swap";
 
@@ -105,7 +106,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded
       <header className="mail-head">
         <div className="mail-head-top">
           <h2 id="mail-subject" className="t-title mail-subject" tabIndex={-1}>
-            {row.subject || "(No subject)"}
+            {subjectOf(row)}
           </h2>
           <div className="mail-head-tools">
             <ModeSwitch value={mode} onChange={setMode} />

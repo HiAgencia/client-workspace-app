@@ -13,6 +13,7 @@ import { inlinePlain } from "@/lib/inline-links";
 import { richTextToPlain } from "@/lib/rich-text";
 import { get, post, tool, type Item } from "./client-api";
 import { PRIORITIES, sourceName } from "./item-parts";
+import { subjectOf } from "./mail/subject";
 import {
   dayName,
   InlineText,
@@ -551,7 +552,7 @@ function MailAttribute({ task }: { task: Item }) {
                 {read.messages.map((message) => (
                   <li key={`${message.accountId}:${message.id}`}>
                     <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(`${message.accountId}:${message.id}`)}`}>
-                      <span className="t-value">{message.subject || "(No subject)"}</span>
+                      <span className="t-value">{subjectOf(message)}</span>
                       <span className="t-meta">
                         {message.from.name ?? message.from.email}, {stamp(message.receivedAt)}
                       </span>
