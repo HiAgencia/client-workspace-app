@@ -491,7 +491,8 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
             return { ids, failure: pageToken ? partOf(account, `only the latest ${count(ids.length, "unread message", "unread messages")} were counted`) : null };
           } catch (error) {
             
-            return { ids, failure: because(account, error) };
+            const failure = because(account, error);
+            return { ids, failure: ids.length > 0 ? partOf(account, `only ${count(ids.length, "unread message", "unread messages")} could be counted before the read failed`) : failure };
           }
         }),
       );

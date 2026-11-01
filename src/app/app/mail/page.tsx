@@ -14,7 +14,7 @@ import { mailFailureText } from "@/lib/mail/failure-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { useMailRead } from "../box-kinds";
 import { post, tool, type Item, type TreeNode } from "../client-api";
-import { accountsSeenFrom } from "../mail-store";
+import { accountsSeenFrom, figureWords } from "../mail-store";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, MESSAGES, PlaceFilter, placeFromUrl } from "../place-filters";
 import { TaskOutcome, useCompleteTask } from "../task-outcome";
@@ -99,6 +99,7 @@ function Mail() {
   
   const replies = useTaskReplies({}, mounted ? today() : null, tree, REPLIES);
   
+  
   const [opened, setOpened] = useState<Set<string>>(new Set());
   
   
@@ -124,13 +125,6 @@ function Mail() {
     },
     [params, pathname, router],
   );
-
-  
-  const [versionSeen, setVersionSeen] = useState(version);
-  if (versionSeen !== version) {
-    setVersionSeen(version);
-    setOpened(new Set());
-  }
 
   useEffect(() => {
     let live = true;
@@ -187,7 +181,6 @@ function Mail() {
   const linkedToTasks = groups.find((group) => group.key === "forTasks")?.messages ?? [];
   const forTasks = once([...waiting.flatMap((entry) => entry.replies), ...linkedToTasks]).length;
   const isUnread = (row: MailRow) => row.unread && !opened.has(keyOf(row));
-  const unread = shown.filter(isUnread).length;
   
   const failures = [...(mail?.failures ?? []), ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures)].filter(
     (failure, index, list) => list.findIndex((other) => other.accountId === failure.accountId) === index,
@@ -198,8 +191,27 @@ function Mail() {
   const accountCounts = new Map<string, number>([[ALL, all.filter((row) => inPlace(row, place)).length]]);
   for (const entry of mail?.accounts ?? []) accountCounts.set(entry.id, all.filter((row) => row.accountId === entry.id && inPlace(row, place)).length);
 
-  const current = selected ? (shown.find((row) => keyOf(row) === selected) ?? all.find((row) => keyOf(row) === selected) ?? null) : null;
+  const listedRow = selected ? (shown.find((row) => keyOf(row) === selected) ?? all.find((row) => keyOf(row) === selected) ?? null) : null;
+  
+  
+  const [apart, setApart] = useState<{ key: string; row: MailRow | null; error: string | null } | null>(null);
+  const listsDone = mail !== null && mail.waiting === 0;
+  useEffect(() => {
+    if (!selected?.includes(":") || listedRow || !listsDone) return;
+    const at = selected.indexOf(":");
+    let live = true;
+    void tool<{ message: MailRow }>("get_mail", { account: selected.slice(0, at), id: selected.slice(at + 1) }).then((answer) => {
+      if (live) setApart({ key: selected, row: answer.ok ? answer.message : null, error: answer.ok ? null : answer.message });
+    });
+    return () => {
+      live = false;
+    };
+  }, [selected, Boolean(listedRow), listsDone]); // eslint-disable-line react-hooks/exhaustive-deps
+  const apartHere = apart?.key === selected && !listedRow ? apart : null;
+  const current = listedRow ?? apartHere?.row ?? null;
   const index = current ? shown.findIndex((row) => keyOf(row) === keyOf(current)) : -1;
+  
+  const unreadWords = figureWords(mail ? mailStore.figure(mail.accounts.filter((entry) => (account === ALL || entry.id === account) && seenFrom(entry.id, place))) : null);
 
   
   const countAgain = useCallback(
@@ -264,7 +276,7 @@ function Mail() {
               ? "Reading the mail…"
               : noAccounts
                 ? "No account connected"
-                : `${unread} unread, ${mail.groups.earlier.count + mail.groups.unread.count + mail.groups.forTasks.count} in all${mail.waiting > 0 ? `, ${count(mail.waiting, "account", "accounts")} still reading` : ""}`
+                : `What may answer your tasks, then what is unread. ${[unreadWords, `${shown.length} listed`, mail.waiting > 0 ? `${count(mail.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.`
           }
           filters={
             mail && !noAccounts ? (
@@ -292,6 +304,11 @@ function Mail() {
             {mailFailureText(failure)}
           </p>
         ))}
+        {apartHere?.error && (
+          <p role="alert" className="inline-note" data-tone="alert" data-mail-not-opened>
+            That message could not be opened: {apartHere.error}.
+          </p>
+        )}
 
         {noAccounts ? (
           <section className="card mail-empty" aria-labelledby="mail-empty-title">

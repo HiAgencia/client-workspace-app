@@ -71,9 +71,16 @@ export type MailSource = {
 const OPTIONAL_MARKS = /([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}])\p{M}+/gu;
 
 
+const OWN_LETTERS = new Set(["ñ", "Ñ", "й", "Й", "ў", "Ў", "ї", "Ї"]);
+
+
 
 export function folded(text: string): string {
-  return text.normalize("NFD").replace(OPTIONAL_MARKS, "$1").normalize("NFC").toLowerCase();
+  return text
+    .normalize("NFD")
+    .replace(OPTIONAL_MARKS, (marked: string, letter: string) => (OWN_LETTERS.has(marked) ? marked : letter))
+    .normalize("NFC")
+    .toLowerCase();
 }
 
 

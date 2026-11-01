@@ -57,7 +57,8 @@ async function mailIndexOf(ctx: ToolContext, scope: Scope, place: ReadPlace, ope
   const seen = place.kind === "node" ? mapped.map.seenFrom(place.node.id) : null;
   const accounts = [...mapped.map.accounts.values()]
     .filter((account) => !seen || seen.has(account.id))
-    .map(({ id, email, isDemo, status, nodeId }) => ({ id, email, isDemo, status, nodeId, nodeIds: mapped.map.hangsFrom.get(id) ?? [] }));
+
+    .map(({ id, email, isDemo, status, nodeId }) => ({ id, email, isDemo, status, nodeId: nodeId && scope.reachable.has(nodeId) ? nodeId : null, nodeIds: (mapped.map.hangsFrom.get(id) ?? []).filter((node) => scope.reachable.has(node)) }));
   const { data, error } = await ctx.db.from("task_mail").select("item_id, account_id, waits_for").eq("owner_id", ctx.ownerId);
   if (error) return dbFail("reading what the tasks wait for", error);
   const waits = new Map(data.map((row) => [row.item_id, row]));
@@ -68,7 +69,7 @@ async function mailIndexOf(ctx: ToolContext, scope: Scope, place: ReadPlace, ope
     .map((row) => {
       const node = row.node_id ? scope.all.get(row.node_id) : undefined;
       const wait = waits.get(row.id)!;
-      return { id: row.id, title: row.title, nodeId: row.node_id, path: node?.path ?? null, color: node?.color ?? null, accountId: wait.account_id, waitsFor: wait.waits_for ?? "" };
+      return { id: row.id, title: row.title, nodeId: row.node_id, path: node?.path ?? null, color: node?.color ?? null, accountId: wait.account_id, waitsFor: wait.waits_for };
     });
   return ok({ accounts, waiting });
 }

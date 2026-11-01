@@ -105,6 +105,9 @@ function subscribeStorage(onChange: () => void) {
   };
 }
 
+
+const AWAY_MS = 5 * 60_000;
+
 export function WorkspaceShell({ config, children }: { config: PublicConfig; children: ReactNode }) {
   const [tree, setTree] = useState<TreeNode[] | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
@@ -168,18 +171,36 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   
   
   
+  
   const accountsKey = mailAccounts?.map((account) => account.id).join() ?? "";
   useEffect(() => {
     for (const account of mailAccounts ?? []) mailStore.count(account);
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountsKey, mailStore]);
+  }, [accountsKey, mailStore, version]);
 
   const touch = useCallback(() => {
     mailStore.forget();
     setVersion((v) => v + 1);
     void refreshTree();
   }, [refreshTree, mailStore]);
+
+  
+  useEffect(() => {
+    let hiddenAt = document.hidden ? Date.now() : null;
+    const onChange = () => {
+      if (document.hidden) hiddenAt = Date.now();
+      else {
+        if (hiddenAt !== null && Date.now() - hiddenAt >= AWAY_MS) {
+          mailStore.aged();
+          touch();
+        }
+        hiddenAt = null;
+      }
+    };
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, [mailStore, touch]);
 
   
   const shown = useRef<Notice | null>(null);

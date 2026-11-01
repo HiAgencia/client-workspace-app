@@ -198,15 +198,17 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   const searching = query.trim().length > 0;
   
+  const accountsSearching = !words ? 0 : mail.words === words ? mailNow.waiting : (mailAccounts?.length ?? 0);
+  
   const note =
-    flat.length === 0 && mailNow.waiting === 0
+    flat.length === 0 && accountsSearching === 0
       ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
       : searching && items === null
         ? "Reading tasks and notes…"
         : itemsFailed
           ? "Some tasks and notes could not be read; projects and actions still work."
-          : searching && mailNow.waiting > 0
-            ? `Searching the mail of ${count(mailNow.waiting, "account", "accounts")}…`
+          : accountsSearching > 0
+            ? `Searching the mail of ${count(accountsSearching, "account", "accounts")}…`
             : "";
   return (
     <div className="palette-inner">

@@ -39,6 +39,8 @@ const trouble = {
   
   endlessUnread: false,
   
+  unreadCut: false,
+  
   leakSent: false,
   
   flaky: new Map<string, number[]>(),
@@ -182,6 +184,10 @@ const fakeGoogle: Fetch = async (input, init) => {
       const listed = page === 0 ? search(q).map(({ id, threadId }) => ({ id, threadId })) : [{ id: `older-${page}`, threadId: `older-${page}` }];
       return json(200, { messages: listed, nextPageToken: String(page + 1) });
     }
+    if (trouble.unreadCut && q.includes("is:unread")) {
+      if (page > 0) return json(500, { error: { code: 500, status: "INTERNAL" } });
+      return json(200, { messages: search(q).map(({ id, threadId }) => ({ id, threadId })), nextPageToken: "1" });
+    }
     const found = search(q);
     const listed = found.slice(page * size, (page + 1) * size).map(({ id, threadId }) => ({ id, threadId }));
     if (trouble.ghost) listed.push({ id: "ghost", threadId: "tg" });
@@ -208,7 +214,7 @@ const fakeGoogle: Fetch = async (input, init) => {
 };
 
 function clearTrouble() {
-  Object.assign(trouble, { ghost: false, search: null, unreadSearch: null, endlessUnread: false, leakSent: false });
+  Object.assign(trouble, { ghost: false, search: null, unreadSearch: null, endlessUnread: false, unreadCut: false, leakSent: false });
   trouble.flaky.clear();
 }
 
@@ -510,6 +516,19 @@ describe("the tools over Gmail", () => {
       const counted = (await callTool("count_unread_mail", context(), { account: ids.mail })) as unknown as { unread: number | null; failures: Array<{ accountId: string }> };
       expect(counted.unread).toBeNull();
       expect(counted.failures.map((failure) => failure.accountId)).toEqual([ids.mail]);
+    } finally {
+      spy.mockRestore();
+      clearTrouble();
+    }
+  });
+
+  it("says a count cut halfway as a part, with what it counted before the read failed", async () => {
+    trouble.unreadCut = true;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const counted = (await callTool("count_unread_mail", context(), { account: ids.mail })) as unknown as { unread: number | null; failures: Array<{ accountId: string; reason: string; partial?: boolean }> };
+      expect(counted.unread).toBeGreaterThan(0);
+      expect(counted.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringMatching(/^only \d+ unread messages? could be counted before the read failed$/), partial: true }]);
     } finally {
       spy.mockRestore();
       clearTrouble();

@@ -135,10 +135,10 @@ export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded
           )}
         </p>
         <div className="mail-steps" role="group" aria-label="Move through the list">
-          <Button size="sm" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: this is the first one"}>
+          <Button size="sm" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}>
             Previous
           </Button>
-          <Button size="sm" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: this is the last one"}>
+          <Button size="sm" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
             Next
           </Button>
           {onClose && (

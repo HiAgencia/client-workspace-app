@@ -31,7 +31,20 @@ export type MailFigure = { unread: number; partial: boolean; why: string | null 
 
 type Ask = (name: string, input: Record<string, unknown>) => Promise<Answer<unknown>>;
 type Counted = { unread: number | null; failures: MailFailureRow[] };
-type Entry = { listedIn: number; list: AccountMail | null; listError: string | null; counted: Counted | null; counting: boolean };
+type Entry = {
+  listedIn: number;
+  
+  listing: boolean;
+  listAgain: MailAccountRef | null;
+  list: AccountMail | null;
+  listError: string | null;
+  counted: Counted | null;
+  counting: boolean;
+  
+  countOld: boolean;
+  
+  lastAsked: number;
+};
 
 export type MailStore = ReturnType<typeof createMailStore>;
 
@@ -44,7 +57,7 @@ export function createMailStore(ask: Ask) {
   const entryOf = (id: string) => {
     let entry = entries.get(id);
     if (!entry) {
-      entry = { listedIn: 0, list: null, listError: null, counted: null, counting: false };
+      entry = { listedIn: 0, listing: false, listAgain: null, list: null, listError: null, counted: null, counting: false, countOld: false, lastAsked: 0 };
       entries.set(id, entry);
     }
     return entry;
@@ -55,7 +68,7 @@ export function createMailStore(ask: Ask) {
   };
   const failureOf = (account: MailAccountRef, reason: string): MailFailureRow => ({ accountId: account.id, accountEmail: account.email, reason });
 
-  return {
+  const store = {
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => void listeners.delete(listener);
@@ -66,36 +79,59 @@ export function createMailStore(ask: Ask) {
       round++;
     },
     
+    aged() {
+      round++;
+      for (const entry of entries.values()) entry.countOld = true;
+    },
+    
+    
     list(account: MailAccountRef) {
       const entry = entryOf(account.id);
       if (entry.listedIn === round) return;
+      if (entry.listing) {
+        entry.listAgain = account;
+        return;
+      }
       entry.listedIn = round;
+      entry.listing = true;
+      entry.countOld = false;
+      const asked = ++entry.lastAsked;
       void ask("list_mail", { account: account.id, limit: 50 }).then((answer) => {
+        entry.listing = false;
+        const again = entry.listAgain;
+        entry.listAgain = null;
+        const latest = asked === entry.lastAsked;
+        if (latest) entry.counting = false;
         if (answer.ok) {
           const read = answer as unknown as AccountMail;
           entry.list = read;
           entry.listError = null;
-          entry.counted = { unread: read.unreadByAccount[account.id] ?? null, failures: read.countFailures };
+          if (latest) entry.counted = { unread: read.unreadByAccount[account.id] ?? null, failures: read.countFailures };
         } else {
           entry.listError = answer.message;
           
-          entry.counted ??= { unread: null, failures: [failureOf(account, answer.message)] };
+          if (latest) entry.counted ??= { unread: null, failures: [failureOf(account, answer.message)] };
         }
         changed();
+        if (again) store.list(again);
       });
     },
     
+    
     count(account: MailAccountRef) {
       const entry = entryOf(account.id);
-      if (entry.listedIn === round || entry.counted) return;
-      this.recount(account);
+      if (entry.listedIn === round || entry.counting) return;
+      const stands = entry.counted !== null && !entry.countOld && entry.counted.failures.every((failure) => failure.partial);
+      if (!stands) store.recount(account);
     },
     
     recount(account: MailAccountRef) {
       const entry = entryOf(account.id);
-      if (entry.counting) return;
       entry.counting = true;
+      entry.countOld = false;
+      const asked = ++entry.lastAsked;
       void ask("count_unread_mail", { account: account.id }).then((answer) => {
+        if (asked !== entry.lastAsked) return;
         entry.counting = false;
         entry.counted = answer.ok ? (answer as unknown as Counted) : { unread: null, failures: [failureOf(account, answer.message)] };
         changed();
@@ -134,6 +170,7 @@ export function createMailStore(ask: Ask) {
       return figureOf(counts as Counted[]);
     },
   };
+  return store;
 }
 
 export function figureOf(counts: Counted[]): MailFigure {
@@ -151,6 +188,13 @@ export function figureText(figure: MailFigure): { shown: string; spoken: string 
   return figure.unread > 0
     ? { shown: `${figure.unread}+`, spoken: `at least ${figure.unread} unread. ${figure.why}` }
     : { shown: "Not counted", spoken: `the unread could not be counted. ${figure.why}` };
+}
+
+
+export function figureWords(figure: MailFigure | null): string | null {
+  if (!figure) return null;
+  if (!figure.partial) return `${figure.unread} unread`;
+  return figure.unread > 0 ? `At least ${figure.unread} unread` : "Unread not counted";
 }
 
 

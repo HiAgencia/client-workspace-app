@@ -63,6 +63,12 @@ function marksThatTellWordsApart(holds: Holds) {
   expect(holds(thai, ["ไม้"]), "«ไม้» finds «ไม้»").toBe(true);
   const elsewhere = { from: { name: "Οργανισμός", email: "info@example.gr" }, subject: "Ёлка: مُحَمَّد" };
   expect(holds(elsewhere, ["οργανισμος", "елка", "محمد"]), "an accent or a vowel point stays optional where it is").toBe(true);
+  const own = { from: { name: "Мой банк", email: "info@example.es" }, subject: "El año de la Peña" };
+  expect(holds(own, ["ano"]), "«año» is another word than «ano»").toBe(false);
+  expect(holds(own, ["año"]), "«año» finds «año»").toBe(true);
+  expect(holds(own, ["PEÑA"]), "«PEÑA» finds «Peña», capitals aside").toBe(true);
+  expect(holds(own, ["мои"]), "«мой» is another word than «мои»").toBe(false);
+  expect(holds(own, ["мой".normalize("NFD")]), "«мой» typed in its parts finds «Мой»").toBe(true);
 }
 
 
