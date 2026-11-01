@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { demoSeedTree, type Seed, type SeedAccount } from "@/lib/demo-seed";
 import { demoEventsSource } from "@/lib/google/events";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
@@ -10,11 +11,12 @@ import { createAnonymousUser, deleteDisposableUsers, type DisposableUser } from 
 const TODAY = "2026-10-27";
 const WEEK = { from: "2026-10-26T00:00:00.000Z", to: "2026-11-03T00:00:00.000Z", fromDay: "2026-10-26", toDay: "2026-11-02" };
 
-const MEETINGS = {
-  Operations: ["Weekly planning", "Accountant call"],
-  "Larkspur Bakery": ["Photo review with Maya", "Holiday menu planning"],
-  "Studio Atlas": ["Logo directions with Ana", "Brand workshop"],
-};
+const accountsOf = (node: Seed): SeedAccount[] => [...(node.accounts ?? []), ...(node.children ?? []).flatMap(accountsOf)];
+const MEETINGS: Record<string, string[]> = Object.fromEntries(
+  demoSeedTree(TODAY)
+    .flatMap(accountsOf)
+    .flatMap((account) => (account.calendar ? [[account.calendar.name, account.calendar.meetings.filter((meeting) => meeting.day >= WEEK.fromDay && meeting.day <= WEEK.toDay).map((meeting) => meeting.title)]] : [])),
+);
 const EVERY_MEETING = Object.values(MEETINGS).flat().sort();
 
 type Browsed = { ok: boolean; events: Array<{ origin: string; title: string; calendarName?: string; accountEmail?: string; fromNodeId?: string; allDay: boolean }>; failures: unknown[] };

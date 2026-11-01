@@ -4,6 +4,7 @@ import { loadHistory } from "@/lib/chat/history";
 import { demoGeneral, demoSeedTree, settleDemoTokens, type SeedAccount, type SeedChat, type SeedEvent, type SeedItem, type SeedToken } from "@/lib/demo-seed";
 import { sanitizeMailHtml } from "@/lib/mail/sanitize";
 import { inlineLink } from "@/lib/inline-links";
+import { listTrash } from "@/lib/tools/items";
 import { firstLine, noteTitle } from "@/lib/rich-text";
 import { sanitizeRichText } from "@/lib/rich-text";
 import { isWorkingTime, workingMinutesBetween } from "@/lib/working-time";
@@ -33,6 +34,7 @@ type ExpectedItem = {
   status: string;
   source: string;
   agentLabel: string | null;
+  deleted: boolean;
 };
 
 
@@ -66,6 +68,7 @@ function expectedItems(): ExpectedItem[] {
       status: item.doneAgo === undefined ? "open" : "done",
       source: item.by?.source ?? "manual",
       agentLabel: item.by?.source === "agent" ? item.by.agentLabel : null,
+      deleted: item.deletedAgo !== undefined,
     };
     if (tool === "create_task") {
       row.type = "task";
@@ -195,7 +198,7 @@ function expectedTokens(): Array<{ path: string; label: string }> {
 async function expectWorkingMoments(db: Db, zone: string) {
   const now = Date.now();
   const nodes = await db.from("nodes").select("name, created_at, updated_at");
-  const items = await db.from("items").select("id, title, created_at, updated_at, completed_at");
+  const items = await db.from("items").select("id, title, created_at, updated_at, completed_at, deleted_at");
   const events = await db.from("events").select("title, created_at, updated_at");
   const messages = await db.from("chat_messages").select("created_at");
   const renamed = new Set((await db.from("revisions").select("item_id")).data?.map((row) => row.item_id));
@@ -208,17 +211,20 @@ async function expectWorkingMoments(db: Db, zone: string) {
       [row.title, row.created_at],
       ...(renamed.has(row.id) ? [] : [[row.title, row.updated_at] as [string, string]]),
       ...(row.completed_at ? [[row.title, row.completed_at] as [string, string]] : []),
+      ...(row.deleted_at ? [[row.title, row.deleted_at] as [string, string]] : []),
     ]),
   ];
   for (const [what, stamp] of stamps) expect(isWorkingTime(stamp, zone), `${what} at ${stamp} in ${zone}`).toBe(true);
 
-  const when = new Map(everyItem().map((item) => [titleOf(item), { ago: item.ago, doneAgo: item.doneAgo }]));
+  const when = new Map(everyItem().map((item) => [titleOf(item), { ago: item.ago, doneAgo: item.doneAgo, deletedAgo: item.deletedAgo }]));
   for (const row of items.data ?? []) {
     const expected = when.get(row.title);
     expect(expected, row.title).toBeDefined();
     expect(Math.abs(workingMinutesBetween(row.created_at, now, zone) - expected!.ago), `${row.title} created`).toBeLessThanOrEqual(TOLERANCE);
     if (expected!.doneAgo === undefined) expect(row.completed_at).toBeNull();
     else expect(Math.abs(workingMinutesBetween(row.completed_at!, now, zone) - expected!.doneAgo), `${row.title} done`).toBeLessThanOrEqual(TOLERANCE);
+    if (expected!.deletedAgo === undefined) expect(row.deleted_at).toBeNull();
+    else expect(Math.abs(workingMinutesBetween(row.deleted_at!, now, zone) - expected!.deletedAgo), `${row.title} deleted`).toBeLessThanOrEqual(TOLERANCE);
   }
 }
 
@@ -257,6 +263,48 @@ afterAll(async () => {
   await deleteDisposableUsers([user]);
 }, 60_000);
 
+describe("the demo's week", () => {
+  
+  const dayOf = (start: string, offset: number) => {
+    const date = new Date(`${start}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + offset);
+    return date.toISOString().slice(0, 10);
+  };
+  const meetingDays = (today: string) => {
+    const days: string[] = [];
+    const walk = (nodes: Tree) => {
+      for (const node of nodes) {
+        for (const account of node.accounts ?? []) days.push(...(account.calendar?.meetings ?? []).map((meeting) => meeting.day));
+        walk(node.children ?? []);
+      }
+    };
+    walk(demoSeedTree(today));
+    return new Set(days);
+  };
+
+  it("holds a meeting on every working day ahead, whichever day the visitor arrives on", () => {
+    for (let arrival = 0; arrival < 7; arrival++) {
+      const today = dayOf(TODAY, arrival);
+      const held = meetingDays(today);
+      for (let ahead = 0; ahead < 7; ahead++) {
+        const day = dayOf(today, ahead);
+        const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+        if (weekday >= 1 && weekday <= 5) expect(held.has(day), `arriving on ${today}, nothing on ${day}`).toBe(true);
+      }
+    }
+  });
+
+  it("does not land a meeting on a weekend, other than today's", () => {
+    for (let arrival = 0; arrival < 7; arrival++) {
+      const today = dayOf(TODAY, arrival);
+      for (const day of meetingDays(today)) {
+        const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+        if (day !== today) expect(weekday >= 1 && weekday <= 5, `arriving on ${today}, a meeting on ${day}`).toBe(true);
+      }
+    }
+  });
+});
+
 describe("the demo seed", () => {
   it("plants the whole tree in one call and leaves the same workspace demoSeedTree describes", async () => {
     if (!user) throw new Error("the test user was not created");
@@ -272,7 +320,7 @@ describe("the demo seed", () => {
 
     const items = await user.client
       .from("items")
-      .select("id, node_id, parent_item_id, type, title, body, priority, due_on, due_time, position, status, source, agent_label, created_at, completed_at");
+      .select("id, node_id, parent_item_id, type, title, body, priority, due_on, due_time, position, status, source, agent_label, created_at, completed_at, deleted_at");
     expect(items.error).toBeNull();
     const titles = new Map((items.data ?? []).map((row) => [row.id, row.title]));
     const actualItems = (items.data ?? []).map((row) => ({
@@ -287,6 +335,7 @@ describe("the demo seed", () => {
       status: row.status,
       source: row.source,
       agentLabel: row.agent_label,
+      deleted: row.deleted_at !== null,
     }));
 
     expect(actualNodes.sort((a, b) => a.path.localeCompare(b.path))).toEqual(expectedNodes().sort((a, b) => a.path.localeCompare(b.path)));
@@ -307,7 +356,7 @@ describe("the demo seed", () => {
 
     
     const undated = (items.data ?? [])
-      .filter((row) => row.type === "task" && row.status === "open" && row.due_on === null && row.parent_item_id === null)
+      .filter((row) => row.type === "task" && row.status === "open" && row.due_on === null && row.parent_item_id === null && row.deleted_at === null)
       .sort((x, y) => Number(x.position) - Number(y.position))
       .map((row) => row.title);
     const ranked = everyItem()
@@ -316,6 +365,14 @@ describe("the demo seed", () => {
       .map(titleOf);
     expect(ranked.length).toBeGreaterThan(1);
     expect(undated).toEqual(ranked);
+
+    
+    const trash = await listTrash({ db: user.client, ownerId: user.id, source: "manual" });
+    if (!trash.ok) throw new Error(trash.message);
+    expect(trash.items.map((entry) => ({ title: entry.title, branch: entry.branch }))).toEqual([
+      { title: "Order new business cards", branch: 1 },
+      { title: "Draft the post on hosting costs", branch: 2 },
+    ]);
 
     
     
@@ -419,6 +476,14 @@ describe("the demo seed", () => {
       })),
     );
     expect(actualMeetings.sort((a, b) => a.title.localeCompare(b.title))).toEqual(declaredMeetings.sort((a, b) => a.title.localeCompare(b.title)));
+    
+    const calendars = await user.client.from("account_calendars").select("account_id, summary, selected");
+    expect(calendars.error).toBeNull();
+    expect((calendars.data ?? []).map((row) => ({ account: row.account_id, calendar: row.summary, selected: row.selected })).sort((a, b) => a.calendar.localeCompare(b.calendar))).toEqual(
+      expectedAccounts()
+        .flatMap(({ account }) => (account.calendar ? [{ account: accountId.get(account.email), calendar: account.calendar.name, selected: true }] : []))
+        .sort((a, b) => a.calendar.localeCompare(b.calendar)),
+    );
     expect(new Set(declaredMeetings.map((meeting) => meeting.account)).size).toBeGreaterThan(1);
     expect(expectedAccounts().some(({ account }) => !account.calendar)).toBe(true);
     
@@ -557,6 +622,7 @@ describe("the demo seed", () => {
       ["google_accounts", "id"],
       ["demo_mail", "id"],
       ["demo_events", "id"],
+      ["account_calendars", "account_id"],
       ["mail_links", "id"],
       ["task_mail", "item_id"],
       ["chat_messages", "id"],

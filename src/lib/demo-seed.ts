@@ -15,6 +15,7 @@ import { workingMinutesBefore } from "@/lib/working-time";
 
 
 
+
 export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
 
 
@@ -32,6 +33,8 @@ export type SeedItem = {
   
   ago: number;
   doneAgo?: number;
+  
+  deletedAgo?: number;
   
   by?: SeedSource;
   chat?: SeedChat;
@@ -103,11 +106,19 @@ function dayCounter(today: string) {
 
 
 
+function workdayCounter(today: string) {
+  const day = dayCounter(today);
+  const sinceMonday = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7;
+  return (week: number, weekday: number): string => day(week * 7 + weekday - sinceMonday);
+}
+
+
+
 export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEvent[] } {
   const day = dayCounter(today);
   return {
     items: [
-      task({ title: "Call the bank about the card limit", priority: 3, dueOn: day(0), dueTime: "11:30" }, { ago: 212 }),
+      task({ title: "Call the bank about the card limit", priority: 3, dueOn: day(1), dueTime: "11:30" }, { ago: 212 }),
       task({ title: "Book the dentist appointment", priority: 3, dueOn: day(3) }, { ago: 1388 }),
       task({ title: "Renew the passport before the trip", priority: 3 }, { ago: 2954, rank: 1 }),
       task({ title: "Check the flight prices to Lisbon", priority: 4 }, { ago: 1730, rank: 3 }),
@@ -124,7 +135,10 @@ export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEve
         },
       ),
       note("<p><strong>Ideas for the November newsletter</strong></p><ul><li>The Larkspur launch</li><li>Three tips for a faster site</li></ul>", 604),
+      note("<p>Try a shorter weekly planning: thirty minutes, the same agenda.</p>", 842),
       note("<p>Ask the accountant whether the new laptop counts as an expense.</p>", 1975),
+      decision("Invoices go out on the last working day", "<p>Clients get them before their own month closes.</p>", 2716),
+      note("<p>Renew the design tool licences before January.</p>", 3340),
     ],
     events: [{ title: "Call with Studio Atlas", day: day(1), at: "15:30", until: "16:00", linkedTo: ["Studio Atlas / Brand refresh"] }],
   };
@@ -133,6 +147,7 @@ export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEve
 
 export function demoSeedTree(today: string): Seed[] {
   const day = dayCounter(today);
+  const workday = workdayCounter(today);
   return [
     {
       name: "Larkspur Bakery",
@@ -165,7 +180,10 @@ export function demoSeedTree(today: string): Seed[] {
             name: "Larkspur Bakery",
             meetings: [
               { title: "Photo review with Maya", day: day(0), at: "14:00", until: "14:30", location: "Video call" },
-              { title: "Holiday menu planning", day: day(3), at: "10:00", until: "11:00", location: "Larkspur Bakery" },
+              { title: "Holiday menu planning", day: workday(0, 1), at: "10:00", until: "11:00", location: "Larkspur Bakery" },
+              { title: "Site speed review", day: workday(0, 3), at: "11:30", until: "12:00", location: "Video call" },
+              { title: "Copy review with Maya", day: workday(1, 1), at: "11:00", until: "11:45", location: "Video call" },
+              { title: "Launch checklist", day: workday(1, 4), at: "14:30", until: "15:00", location: "Video call" },
             ],
           },
         },
@@ -259,7 +277,8 @@ export function demoSeedTree(today: string): Seed[] {
             name: "Studio Atlas",
             meetings: [
               { title: "Logo directions with Ana", day: day(0), at: "17:00", until: "17:30", location: "Video call" },
-              { title: "Brand workshop", day: day(4), at: "09:00", until: "11:00", location: "Studio Atlas" },
+              { title: "Brand workshop", day: workday(0, 2), at: "11:00", until: "13:00", location: "Studio Atlas" },
+              { title: "Logo presentation", day: workday(1, 2), at: "15:00", until: "16:00", location: "Studio Atlas" },
             ],
           },
         },
@@ -268,7 +287,7 @@ export function demoSeedTree(today: string): Seed[] {
         {
           name: "Brand refresh",
           items: [
-            task({ title: "Send the moodboard", priority: 3, dueOn: day(0) }, { ago: 1913 }),
+            task({ title: "Send the moodboard", priority: 3, dueOn: day(1) }, { ago: 1913 }),
             task({ title: "Book the photo session", priority: 3, dueOn: day(3) }, { ago: 1529 }),
             decision("Keep the current color palette", "<p>Printed stock is already ordered.</p>", 2283),
             task({ title: "Read the stakeholder survey results", priority: 3, dueOn: day(1) }, { ago: 742 }),
@@ -323,7 +342,18 @@ export function demoSeedTree(today: string): Seed[] {
         linkNote("https://analytics.google.com/analytics/web/", "Site analytics", 6351),
         note("<p><strong>Ideas for the about page</strong></p><ul><li>How we work, in four steps</li><li>The team, with real photos</li></ul>", 1262),
       ],
-      children: [{ name: "Blog", items: [task({ title: "Draft the post on pricing small sites", priority: 3, dueOn: day(6) }, { ago: 958 })] }],
+      children: [
+        {
+          name: "Blog",
+          items: [
+            task({ title: "Draft the post on pricing small sites", priority: 3, dueOn: day(6) }, { ago: 958 }),
+            task(
+              { title: "Draft the post on hosting costs", priority: 4 },
+              { ago: 4021, deletedAgo: 1244, children: [task({ title: "Compare three hosting plans", priority: 4 }, { ago: 4018, deletedAgo: 1244 })] },
+            ),
+          ],
+        },
+      ],
     },
     {
       name: "Operations",
@@ -364,7 +394,10 @@ export function demoSeedTree(today: string): Seed[] {
             name: "Operations",
             meetings: [
               { title: "Weekly planning", day: day(0), at: "09:30", until: "10:00", location: null },
-              { title: "Accountant call", day: day(2), at: "15:00", until: "15:30", location: "Video call" },
+              { title: "Accountant call", day: workday(0, 0), at: "15:00", until: "15:30", location: "Video call" },
+              { title: "Invoice run", day: workday(0, 4), at: "16:00", until: "16:30", location: null },
+              { title: "Team retrospective", day: workday(1, 0), at: "16:00", until: "16:45", location: null },
+              { title: "Quarterly taxes review", day: workday(1, 3), at: "10:30", until: "11:00", location: "Video call" },
             ],
           },
         },
@@ -396,6 +429,7 @@ export function demoSeedTree(today: string): Seed[] {
         
         task({ title: "Wait for the app review approval", priority: 3 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", words: "Developer Platform" } }),
         task({ title: "Wait for the bank transfer", priority: 3, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", words: "Bayside Bank" } }),
+        task({ title: "Order new business cards", priority: 3 }, { ago: 3560, deletedAgo: 512 }),
         note("<p><strong>Payment terms</strong></p><p>Half up front, half on delivery; invoices due in 15 days.</p>", 7942),
       ],
     },
@@ -431,7 +465,7 @@ export function demoOverview(today: string): DemoOverview {
   const count = (items: SeedItem[]) => {
     for (const item of items) {
       const due = item.tool === "request_review" ? today : item.tool === "create_task" && typeof item.input.dueOn === "string" ? item.input.dueOn : null;
-      if (due !== null && due <= today && item.doneAgo === undefined) figures[due < today ? "overdue" : "today"]++;
+      if (due !== null && due <= today && item.doneAgo === undefined && item.deletedAgo === undefined) figures[due < today ? "overdue" : "today"]++;
       count(item.children ?? []);
     }
   };
