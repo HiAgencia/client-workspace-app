@@ -241,6 +241,8 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
   }, []);
   const [first, second, row] = board.columns;
   const shown = (ids: string[]) => ids.filter((id) => boxes[id] && id !== wide?.id);
+  
+  const lone = (shown(first).length === 0) !== (shown(second).length === 0);
   const inView = [...first, ...second, ...row, ...(wide ? [wide.id] : [])].filter((id) => boxes[id]);
   const [entered, setEntered] = useState(false);
   if (!entered && (capped || inView.every((id) => settled[id]))) setEntered(true);
@@ -323,11 +325,15 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
       const ids = shown(board.columns[zone]);
       const at = ids.indexOf(target.dataset.box!);
       
-      const ahead = zone === 2 && spread ? event.clientX < box.left + box.width / 2 : event.clientY < box.top + box.height / 2;
+      const ahead = (zone === 2 || lone) && spread ? event.clientX < box.left + box.width / 2 : event.clientY < box.top + box.height / 2;
       before = ahead ? ids[at] : (ids[at + 1] ?? null);
     } else if (target) return;
     if (before === boxDrag.id) return;
     if (drop?.before !== before || drop?.zone !== zone) setDrop({ before, zone });
+  }
+
+  function onDragLeave(event: DragEvent<HTMLElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
   }
 
   function onDrop(event: DragEvent<HTMLElement>) {
@@ -347,9 +353,7 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
         className={className}
         data-column={zone + 1}
         onDragOver={(event) => onDragOver(event, zone)}
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
-        }}
+        onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
         {ids.map((id, index) => (
@@ -382,7 +386,13 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
         </div>
       )}
       {}
-      <div className="boxes-cols" data-lone={(shown(first).length === 0) !== (shown(second).length === 0) || undefined}>
+      <div
+        className="boxes-cols"
+        data-lone={lone || undefined}
+        onDragOver={lone ? (event) => onDragOver(event, shown(first).length > 0 ? 0 : 1) : undefined}
+        onDragLeave={lone ? onDragLeave : undefined}
+        onDrop={lone ? onDrop : undefined}
+      >
         {renderZone("boxes-col", 0)}
         {renderZone("boxes-col", 1)}
       </div>

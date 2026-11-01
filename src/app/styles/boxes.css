@@ -247,8 +247,13 @@
   .boxes-cols[data-lone] > .boxes-col {
     display: contents;
   }
+  .boxes-cols[data-lone] {
+    position: relative;
+  }
   .boxes-cols[data-lone] .boxes-end {
-    display: none;
+    position: absolute;
+    inset: 100% 0 auto;
+    margin-top: 0;
   }
   .boxes-cols[data-lone] > .boxes-col:not(:has(.box)) {
     display: none;
@@ -259,7 +264,7 @@
   :is(.boxes-foot, .boxes-cols[data-lone] > .boxes-col) > .box:nth-child(odd of .box):nth-last-child(1 of .box) {
     grid-column: 1 / -1;
   }
-  .boxes-foot > .box[data-drop-before]::before {
+  :is(.boxes-foot, .boxes-cols[data-lone] > .boxes-col) > .box[data-drop-before]::before {
     inset: 0.5rem auto 0.5rem calc(var(--gap-cards) / -2 - 1px);
     width: 2px;
     height: auto;
