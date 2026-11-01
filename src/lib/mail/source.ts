@@ -65,8 +65,13 @@ export type MailSource = {
 };
 
 
+
+const OPTIONAL_MARKS = /([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}])\p{M}+/gu;
+
+
+
 export function folded(text: string): string {
-  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  return text.normalize("NFD").replace(OPTIONAL_MARKS, "$1").normalize("NFC").toLowerCase();
 }
 
 
@@ -74,7 +79,7 @@ export function folded(text: string): string {
 export function waitWords(text: string): string[] {
   return text
     .split(/\s+/)
-    .map((word) => word.replace(/[^\p{L}\p{N}@._-]/gu, "").replace(/^[-@._]+|[-@._]+$/g, ""))
+    .map((word) => word.replace(/[^\p{L}\p{M}\p{N}@._-]/gu, "").replace(/^[-@._]+|[-@._]+$/g, ""))
     .filter((word) => /[\p{L}\p{N}]/u.test(word));
 }
 
@@ -88,7 +93,8 @@ export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, w
   return words.every((word) => holdsWhole(fields, folded(word)));
 }
 
-const LETTER_OR_FIGURE = /[\p{L}\p{N}]/u;
+
+const LETTER_OR_FIGURE = /[\p{L}\p{M}\p{N}]/u;
 
 
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;

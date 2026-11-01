@@ -52,6 +52,26 @@ function wholeAcrossPlanes(holds: Holds) {
 }
 
 
+
+function marksThatTellWordsApart(holds: Holds) {
+  const gas = { from: { name: "東京ガス", email: "info@example.jp" }, subject: "ガス料金のお知らせ" };
+  expect(holds(gas, ["カス"]), "«カス» is another word than «ガス»").toBe(false);
+  expect(holds(gas, ["ガス"]), "«ガス» finds «ガス»").toBe(true);
+  expect(holds(gas, ["ガス".normalize("NFD")]), "«ガス» typed in its parts finds «ガス» whole").toBe(true);
+  const thai = { from: { name: "ธนาคาร", email: "info@example.th" }, subject: "ไม้สัก ราคาใหม่" };
+  expect(holds(thai, ["ไม่"]), "«ไม่» is another word than «ไม้»").toBe(false);
+  expect(holds(thai, ["ไม้"]), "«ไม้» finds «ไม้»").toBe(true);
+  const elsewhere = { from: { name: "Οργανισμός", email: "info@example.gr" }, subject: "Ёлка: مُحَمَّد" };
+  expect(holds(elsewhere, ["οργανισμος", "елка", "محمد"]), "an accent or a vowel point stays optional where it is").toBe(true);
+}
+
+
+function aMarkMakesAWordLonger(holds: Holds) {
+  const message = { from: { name: "कि", email: "info@example.in" }, subject: "" };
+  expect(holds(message, ["क"]), "«क» is not found whole in «कि»").toBe(false);
+}
+
+
 function failsWith(control: (holds: Holds) => void, broken: Holds, phrase: string) {
   let failure: unknown = null;
   try {
@@ -76,6 +96,32 @@ describe("a possible reply to what a task waits for", () => {
     wholeWords(holdsEveryWord);
     unspacedScripts(holdsEveryWord);
     wholeAcrossPlanes(holdsEveryWord);
+    marksThatTellWordsApart(holdsEveryWord);
+    aMarkMakesAWordLonger(holdsEveryWord);
+  });
+
+  it("its twins for the marks: a fold that takes every mark off, and a word that ends at a mark, fail their control", () => {
+    const everyMarkOff = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+    const foldedOff: Holds = (message, words) => words.length > 0 && words.every((word) => everyMarkOff(fieldsOf(message, ["name", "address", "subject"])).includes(everyMarkOff(word)));
+    failsWith(marksThatTellWordsApart, foldedOff, "«カス» is another word than «ガス»");
+    const noneOff: Holds = (message, words) => words.length > 0 && words.every((word) => fieldsOf(message, ["name", "address", "subject"]).toLowerCase().includes(word.toLowerCase()));
+    failsWith(marksThatTellWordsApart, noneOff, "typed in its parts");
+    const endsAtMark: Holds = (message, words) =>
+      words.length > 0 &&
+      words.every((word) => {
+        const text = folded(fieldsOf(message, ["name", "address", "subject"]));
+        const target = folded(word);
+        for (let at = text.indexOf(target); at !== -1; at = text.indexOf(target, at + 1)) {
+          if (!/[\p{L}\p{N}]/u.test(text[at - 1] ?? "") && !/[\p{L}\p{N}]/u.test(text[at + target.length] ?? "")) return true;
+        }
+        return false;
+      });
+    failsWith(aMarkMakesAWordLonger, endsAtMark, "is not found whole in");
+  });
+
+  it("keeps a word's marks when it cleans what a task waits for", () => {
+    expect(waitWords("ไม่ (ガス)")).toEqual(["ไม่", "ガス"]);
+    expect(waitWords("ガス".normalize("NFD"))).toEqual(["ガス".normalize("NFD")]);
   });
 
   it("its twins: each broken piece fails its own control", () => {
