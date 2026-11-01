@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { cx } from "@/lib/utils";
+import { columnsOf, isMark, orderDropped, orderMovedTo, settleLayout, steppedOrder, type BoardLayout, type Zone } from "./board-layout";
 import { get, post, tool } from "./client-api";
 import { useWorkspace } from "./workspace";
 import "../styles/boxes.css";
@@ -23,32 +24,8 @@ import "../styles/boxes.css";
 
 
 
-
-
-export const SPLIT = "split";
-
-export type BoardLayout = { order: string[]; hidden: string[] };
-
-
-
-export function settleLayout(saved: BoardLayout | null, defaults: string[]): BoardLayout {
-  const known = new Set(defaults);
-  if (!saved) return { order: defaults, hidden: [] };
-  const order = saved.order.filter((id, index, all) => known.has(id) && all.indexOf(id) === index);
-  if (!order.includes(SPLIT)) order.push(SPLIT);
-  for (const id of defaults) {
-    if (order.includes(id)) continue;
-    const second = defaults.indexOf(id) > defaults.indexOf(SPLIT);
-    if (second) order.push(id);
-    else order.splice(order.indexOf(SPLIT), 0, id);
-  }
-  return { order, hidden: saved.hidden.filter((id) => known.has(id) && id !== SPLIT) };
-}
-
-export function columnsOf(layout: BoardLayout): [string[], string[]] {
-  const at = layout.order.indexOf(SPLIT);
-  return [layout.order.slice(0, at), layout.order.slice(at + 1)];
-}
+const MOVE_ON = ["Move to the second column", "Move to the row below", "Move to the first column"];
+const ZONE_NAMES = ["the first column", "the second column", "the row below"];
 
 
 
@@ -111,41 +88,28 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   );
 
   
-  const visible = (order: string[]) => order.filter((id) => id === SPLIT || (!layout.hidden.includes(id) && id !== apart));
+  const visible = (order: string[]) => order.filter((id) => isMark(id) || (!layout.hidden.includes(id) && id !== apart));
 
   
-  
-  function step(id: string, by: -1 | 1, name: string) {
-    const shown = visible(layout.order);
-    const at = shown.indexOf(id);
-    const target = at + by;
-    if (target < 0 || target >= shown.length) return;
-    const swapWith = shown[target];
-    const order = [...layout.order];
-    const from = order.indexOf(id);
-    const to = order.indexOf(swapWith);
-    order.splice(from, 1);
-    order.splice(to, 0, id);
+  function step(id: string, by: -1 | 1, name: string, spread: boolean) {
+    const order = steppedOrder(layout.order, visible(layout.order), id, by, spread);
+    if (!order) return;
     commit({ ...layout, order }, `${name} moved ${by < 0 ? "up" : "down"}.`);
     refocus(id);
   }
 
   
-  function otherColumn(id: string, name: string) {
-    const [first] = columnsOf(layout);
-    const order = layout.order.filter((entry) => entry !== id);
-    if (first.includes(id)) order.push(id);
-    else order.splice(order.indexOf(SPLIT), 0, id);
-    commit({ ...layout, order }, `${name} moved to the ${first.includes(id) ? "second" : "first"} column.`);
+  function moveOn(id: string, name: string, spread: boolean) {
+    const [first, second] = columnsOf(layout);
+    const from: Zone = first.includes(id) ? 0 : second.includes(id) ? 1 : 2;
+    const to = spread ? (((from + 1) % 3) as Zone) : 2;
+    commit({ ...layout, order: orderMovedTo(layout.order, id, to) }, `${name} moved to ${spread ? ZONE_NAMES[to] : "the end"}.`);
     refocus(id);
   }
 
   
-  function place(id: string, before: string | null, column: 0 | 1) {
-    const order = layout.order.filter((entry) => entry !== id);
-    if (before) order.splice(order.indexOf(before), 0, id);
-    else if (column === 0) order.splice(order.indexOf(SPLIT), 0, id);
-    else order.push(id);
+  function place(id: string, before: string | null, zone: Zone) {
+    const order = orderDropped(layout.order, id, before, zone);
     if (order.join() === layout.order.join()) return;
     commit({ ...layout, order });
   }
@@ -165,7 +129,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     commit({ order: defaults, hidden: [] }, "The boxes are back in their first order.");
   }
 
-  return { layout, step, otherColumn, place, hide, show, reset, columns: columnsOf({ ...layout, order: visible(layout.order) }) };
+  return { layout, step, moveOn, place, hide, show, reset, columns: columnsOf({ ...layout, order: visible(layout.order) }) };
 }
 
 export type Board = ReturnType<typeof useBoardLayout>;
@@ -224,6 +188,10 @@ export type BoxSpec = {
   
   surface?: "rest";
   
+  action?: ReactNode;
+  
+  unfold?: ReactNode;
+  
   menu?: MenuEntry[];
   
   busy?: boolean;
@@ -243,21 +211,6 @@ function useFinePointer(): boolean {
     },
     () => window.matchMedia(fineQuery).matches,
     () => false,
-  );
-}
-
-
-
-const wideQuery = "(width >= 40rem)";
-function useWideBoard(): boolean {
-  return useSyncExternalStore(
-    (change) => {
-      const query = window.matchMedia(wideQuery);
-      query.addEventListener("change", change);
-      return () => query.removeEventListener("change", change);
-    },
-    () => window.matchMedia(wideQuery).matches,
-    () => true,
   );
 }
 
@@ -286,7 +239,9 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
     const timer = setTimeout(() => setCapped(true), ENTRY_CAP_MS);
     return () => clearTimeout(timer);
   }, []);
-  const inView = [...board.columns[0], ...board.columns[1], ...(wide ? [wide.id] : [])].filter((id) => boxes[id]);
+  const [first, second, row] = board.columns;
+  const shown = (ids: string[]) => ids.filter((id) => boxes[id] && id !== wide?.id);
+  const inView = [...first, ...second, ...row, ...(wide ? [wide.id] : [])].filter((id) => boxes[id]);
   const [entered, setEntered] = useState(false);
   if (!entered && (capped || inView.every((id) => settled[id]))) setEntered(true);
   const ready = entered;
@@ -296,18 +251,19 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
   if (entered) inView.forEach((id) => revealed.add(id));
   else if (!wide || settled[wide.id]) {
     if (wide) revealed.add(wide.id);
-    for (const column of board.columns) {
-      for (const id of column.filter((entry) => boxes[entry] && entry !== wide?.id)) {
+    for (const column of [first, second]) {
+      for (const id of shown(column)) {
         if (!settled[id]) break;
         revealed.add(id);
       }
     }
+    if ([...shown(first), ...shown(second)].every((id) => settled[id])) shown(row).filter((id) => settled[id]).forEach((id) => revealed.add(id));
   }
-  const [drop, setDrop] = useState<{ before: string | null; column: 0 | 1 } | null>(null);
+  const [drop, setDrop] = useState<{ before: string | null; zone: Zone } | null>(null);
   const [said, setSaid] = useState("");
   const fine = useFinePointer();
-  const [first, second] = board.columns;
-  const shown = (ids: string[]) => ids.filter((id) => boxes[id] && id !== wide?.id);
+  
+  const [spread, setSpread] = useState(true);
 
   useEffect(() => {
     announcer = setSaid;
@@ -349,12 +305,14 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
       const next = new Map<string, DOMRect>();
       element.querySelectorAll<HTMLElement>("[data-box]").forEach((node) => next.set(node.dataset.box!, node.getBoundingClientRect()));
       rects.current = next;
+      const columns = element.querySelector<HTMLElement>(".boxes-cols");
+      if (columns) setSpread(getComputedStyle(columns).getPropertyValue("--spread").trim() === "1");
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
-  function onDragOver(event: DragEvent<HTMLElement>, column: 0 | 1) {
+  function onDragOver(event: DragEvent<HTMLElement>, zone: Zone) {
     if (!boxDrag) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
@@ -362,63 +320,73 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
     let before: string | null = null;
     if (target && target.dataset.box !== boxDrag.id) {
       const box = target.getBoundingClientRect();
-      const ids = column === 0 ? shown(first) : shown(second);
+      const ids = shown(board.columns[zone]);
       const at = ids.indexOf(target.dataset.box!);
-      before = event.clientY < box.top + box.height / 2 ? ids[at] : (ids[at + 1] ?? null);
+      
+      const ahead = zone === 2 && spread ? event.clientX < box.left + box.width / 2 : event.clientY < box.top + box.height / 2;
+      before = ahead ? ids[at] : (ids[at + 1] ?? null);
     } else if (target) return;
     if (before === boxDrag.id) return;
-    if (drop?.before !== before || drop?.column !== column) setDrop({ before, column });
+    if (drop?.before !== before || drop?.zone !== zone) setDrop({ before, zone });
   }
 
   function onDrop(event: DragEvent<HTMLElement>) {
     if (!boxDrag || !drop) return;
     event.preventDefault();
-    board.place(boxDrag.id, drop.before, drop.column);
+    board.place(boxDrag.id, drop.before, drop.zone);
     boxDrag = null;
     setDrop(null);
   }
 
-  const renderColumn = (ids: string[], column: 0 | 1) => (
-    <div
-      className="boxes-col"
-      data-column={column + 1}
-      onDragOver={(event) => onDragOver(event, column)}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
-      }}
-      onDrop={onDrop}
-    >
-      {ids.map((id, index) => (
-        <Box
-          key={id}
-          spec={boxes[id]}
-          index={index + (column === 1 ? first.length : 0)}
-          board={board}
-          draggable={fine}
-          dropBefore={drop?.before === id && drop.column === column}
-          isFirst={board.columns[0].concat(board.columns[1]).filter((entry) => boxes[entry])[0] === id}
-          isLast={board.columns[0].concat(board.columns[1]).filter((entry) => boxes[entry]).at(-1) === id}
-          column={column}
-          shown={revealed.has(id)}
-        />
-      ))}
-      {}
-      <div className="boxes-end" data-drop={(drop && drop.before === null && drop.column === column) || undefined} aria-hidden="true" />
-    </div>
-  );
+  const every = [...shown(first), ...shown(second), ...shown(row)];
+  const renderZone = (className: string, zone: Zone) => {
+    const ids = shown(board.columns[zone]);
+    const before = zone === 0 ? 0 : zone === 1 ? shown(first).length : shown(first).length + shown(second).length;
+    return (
+      <div
+        className={className}
+        data-column={zone + 1}
+        onDragOver={(event) => onDragOver(event, zone)}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDrop(null);
+        }}
+        onDrop={onDrop}
+      >
+        {ids.map((id, index) => (
+          <Box
+            key={id}
+            spec={boxes[id]}
+            index={index + before}
+            board={board}
+            draggable={fine}
+            dropBefore={drop?.before === id && drop.zone === zone}
+            isFirst={every[0] === id}
+            isLast={every.at(-1) === id}
+            zone={zone}
+            spread={spread}
+            shown={revealed.has(id)}
+          />
+        ))}
+        {}
+        <div className="boxes-end" data-drop={(drop && drop.before === null && drop.zone === zone) || undefined} aria-hidden="true" />
+      </div>
+    );
+  };
 
   return (
     <SettledContext.Provider value={report}>
     <div ref={host} className="boxes" data-ready={ready || undefined} aria-label={label} role="region">
       {wide && (
         <div className="boxes-wide">
-          <Box spec={wide} index={0} board={board} draggable={false} dropBefore={false} isFirst isLast column={0} fixed shown={revealed.has(wide.id)} />
+          <Box spec={wide} index={0} board={board} draggable={false} dropBefore={false} isFirst isLast zone={0} spread={spread} fixed shown={revealed.has(wide.id)} />
         </div>
       )}
-      <div className="boxes-cols">
-        {renderColumn(shown(first), 0)}
-        {renderColumn(shown(second), 1)}
+      {}
+      <div className="boxes-cols" data-lone={(shown(first).length === 0) !== (shown(second).length === 0) || undefined}>
+        {renderZone("boxes-col", 0)}
+        {renderZone("boxes-col", 1)}
       </div>
+      {renderZone("boxes-foot", 2)}
       <p className="sr-only" role="status" aria-live="polite">
         {said}
       </p>
@@ -440,7 +408,8 @@ function Box({
   dropBefore,
   isFirst,
   isLast,
-  column,
+  zone,
+  spread,
   fixed = false,
   shown,
 }: {
@@ -451,7 +420,9 @@ function Box({
   dropBefore: boolean;
   isFirst: boolean;
   isLast: boolean;
-  column: 0 | 1;
+  zone: Zone;
+  
+  spread: boolean;
   
   fixed?: boolean;
   
@@ -459,13 +430,14 @@ function Box({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const titleId = `box-${spec.id}-title`;
-  const wide = useWideBoard();
   const moves: MenuEntry[] = fixed
     ? []
     : [
-        { kind: "action", label: "Move up", disabled: isFirst, detail: isFirst ? "First already" : undefined, onSelect: () => board.step(spec.id, -1, spec.title) },
-        { kind: "action", label: "Move down", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.step(spec.id, 1, spec.title) },
-        { kind: "action", label: wide ? (column === 0 ? "Move to the second column" : "Move to the first column") : "Move to the end", onSelect: () => board.otherColumn(spec.id, spec.title) },
+        { kind: "action", label: "Move up", disabled: isFirst, detail: isFirst ? "First already" : undefined, onSelect: () => board.step(spec.id, -1, spec.title, spread) },
+        { kind: "action", label: "Move down", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.step(spec.id, 1, spec.title, spread) },
+        spread
+          ? { kind: "action", label: MOVE_ON[zone], onSelect: () => board.moveOn(spec.id, spec.title, spread) }
+          : { kind: "action", label: "Move to the end", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.moveOn(spec.id, spec.title, spread) },
         { kind: "separator" },
       ];
   const entries: MenuEntry[] = [...(spec.menu?.length ? [...spec.menu, { kind: "separator" } as const] : []), ...moves, { kind: "action", label: "Hide this box", onSelect: () => board.hide(spec.id, spec.title) }];
@@ -486,7 +458,7 @@ function Box({
         className={cx("box-head", draggable && !fixed && "box-head-drag")}
         draggable={draggable && !fixed}
         onDragStart={(event) => {
-          if ((event.target as HTMLElement).closest(".box-more")) return event.preventDefault();
+          if ((event.target as HTMLElement).closest(".box-more, .box-action")) return event.preventDefault();
           boxDrag = { id: spec.id };
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", spec.title);
@@ -503,11 +475,15 @@ function Box({
           {spec.title}
         </h2>
         {spec.count !== undefined && spec.count !== null && <span className="pill box-count">{spec.count}</span>}
-        <div className="box-more">
-          <Menu label="More" about={`for ${spec.title}`} entries={entries} onOpenChange={setMenuOpen} />
+        <div className="box-tools">
+          <div className="box-more">
+            <Menu label="More" about={`for ${spec.title}`} entries={entries} onOpenChange={setMenuOpen} />
+          </div>
+          {spec.action && <div className="box-action">{spec.action}</div>}
         </div>
       </header>
       <p className="box-purpose">{spec.purpose}</p>
+      {spec.unfold}
       <div className="box-body">
         <BoxIdContext.Provider value={spec.id}>{spec.content}</BoxIdContext.Provider>
       </div>

@@ -15,6 +15,7 @@ export type PageLayout = "list" | "board";
 type PageHeaderProps = {
   
   title: ReactNode;
+  mark?: ReactNode;
   
   count?: ReactNode;
   
@@ -37,7 +38,7 @@ type PageHeaderProps = {
 
 
 
-export function PageHeader({ title, count, trail, filters, filtersSet = 0, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
+export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
   const hasTools = Boolean(filters || layout || views || chat || more);
   const heading = useRef<HTMLHeadingElement>(null);
   const sheeted = useSyncExternalStore(subscribeSheeted, () => window.matchMedia(SHEETED_QUERY).matches, () => false);
@@ -85,9 +86,12 @@ export function PageHeader({ title, count, trail, filters, filtersSet = 0, layou
             </ol>
           </nav>
         )}
-        <h1 ref={heading} className="t-h1 page-title" tabIndex={-1} data-page-title {...titleProps}>
-          {title}
-        </h1>
+        <div className="page-title-line">
+          {mark}
+          <h1 ref={heading} className="t-h1 page-title" tabIndex={-1} data-page-title {...titleProps}>
+            {title}
+          </h1>
+        </div>
         {count !== undefined && count !== null && count !== false && <p className="page-count">{count}</p>}
       </div>
       {hasTools && (

@@ -1,9 +1,11 @@
 "use client";
 
 import { Link } from "@/components/ui/link";
-import { useEffect, useId, useMemo, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
+import { Fold } from "@/components/ui/fold";
+import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
@@ -21,9 +23,8 @@ import { PathText } from "./item-parts";
 import { accountsSeenFrom, figureWords, type MailList } from "./mail-store";
 import { subjectOf } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
-import { QuickAddInline } from "./quick-add";
-import { Fold, NewNode } from "./side-nav";
-import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
+import { useQuickAddInline } from "./quick-add";
+import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, placeOnPage, TaskList, timeLabel, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
 
@@ -49,6 +50,15 @@ export function readPlace(value: string | null, tree: TreeNode[] | null): Place 
 
 export function placeValue(place: Place): string | null {
   return place.kind === "all" ? null : place.kind === "general" ? "general" : place.id;
+}
+
+
+export function HeadLink({ href, name, children }: { href: string; name: string; children: string }) {
+  return (
+    <Link className={buttonClass({ variant: "quiet", size: "sm", className: "head-action" })} href={href} aria-label={name}>
+      <span className="btn-label">{children}</span>
+    </Link>
+  );
 }
 
 
@@ -114,7 +124,6 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       count: view.groups.overdue.count,
       dropDay: undefined,
       
-      add: mode === "page" ? now : undefined,
       empty: "Nothing is overdue.",
       action: view.groups.overdue.count > 0 ? <Reschedule count={view.groups.overdue.count} place={place} now={now} /> : undefined,
     },
@@ -138,6 +147,12 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       add: mode === "box" && !folded ? addDays(now, 1) : undefined,
       empty: "Nothing is coming up.",
       days: upcomingDays,
+      action:
+        mode === "box" && allHref && view.groups.upcoming.count > 0 ? (
+          <HeadLink href={allHref} name="Show all upcoming">
+            Show all
+          </HeadLink>
+        ) : undefined,
     },
     ...(mode === "page"
       ? [
@@ -185,48 +200,88 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
 
   return (
     <div className="groups" data-layout={layout} data-mode={mode}>
-      {shown.map((group) => (
-        <section key={group.key} className="group" data-group={group.key} aria-labelledby={`group-${group.key}`}>
-          <div className="group-head">
-            <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
-              {group.label}
-            </h3>
-            {group.count > 0 && <span className="group-count">{count(group.count, "task", "tasks")}</span>}
-            {group.action && <div className="group-action">{group.action}</div>}
-          </div>
-          {group.days ? (
-            <>
-              {group.days.length === 0 && <p className="t-help group-empty">{group.empty}</p>}
-              {group.days.map((day) =>
-                folded ? (
-                  <UpcomingDay key={day.key} day={day} tasks={allTasks(view)} now={now}>
-                    {list(day)}
-                  </UpcomingDay>
+      {ZONES.map((zone) => (
+        <div key={zone} className="groups-zone" data-zone={zone}>
+          {shown
+            .filter((group) => zoneOf(group.key) === zone)
+            .map((group) => (
+              <GroupSection key={group.key} group={group} placeId={placeId}>
+                {group.days ? (
+                  <>
+                    {group.days.length === 0 && <p className="t-help group-empty">{group.empty}</p>}
+                    {group.days.map((day) =>
+                      folded ? (
+                        <UpcomingDay key={day.key} day={day} tasks={allTasks(view)} now={now}>
+                          {list(day)}
+                        </UpcomingDay>
+                      ) : (
+                        <DaySection key={day.key} day={day} placeId={placeId}>
+                          {list(day)}
+                        </DaySection>
+                      ),
+                    )}
+                  </>
                 ) : (
-                  <div key={day.key} className="group-day" data-day={day.key}>
-                    <h4 className="group-day-title" data-when={day.tone}>
-                      {day.label}
-                    </h4>
-                    {list(day)}
-                    {day.add !== undefined && <QuickAddInline day={day.add} placeId={placeId} />}
-                  </div>
-                ),
-              )}
-              {mode === "box" && view.groups.upcoming.hidden > 0 && allHref && (
-                <Link className="link group-more" href={allHref}>
-                  Show all upcoming
-                </Link>
-              )}
-            </>
-          ) : (
-            <>
-              {list(group)}
-              {group.tasks.length === 0 && <p className="t-help group-empty">{group.empty}</p>}
-            </>
-          )}
-          {group.add !== undefined && <QuickAddInline day={group.add} placeId={placeId} />}
-        </section>
+                  <>
+                    {list(group)}
+                    {group.tasks.length === 0 && <p className="t-help group-empty">{group.empty}</p>}
+                  </>
+                )}
+              </GroupSection>
+            ))}
+        </div>
       ))}
+    </div>
+  );
+}
+
+
+
+const ZONES = ["now", "ahead", "rest"] as const;
+const zoneOf = (group: string) => (group === "overdue" || group === "today" ? "now" : group === "upcoming" ? "ahead" : "rest");
+
+
+function GroupSection({ group, placeId, children }: { group: Group; placeId: string | null; children: ReactNode }) {
+  const add = useQuickAddInline({ day: group.add ?? null, placeId });
+  const adds = group.add !== undefined;
+  return (
+    <section className="group" data-group={group.key} aria-labelledby={`group-${group.key}`}>
+      <div className="group-top">
+        <div className="group-head">
+          <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
+            {group.label}
+          </h3>
+          {group.count > 0 && <span className="group-count">{count(group.count, "task", "tasks")}</span>}
+          {(group.action || adds) && (
+            <div className="group-action">
+              {group.action}
+              {adds && add.trigger}
+            </div>
+          )}
+        </div>
+        {adds && add.editor}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+
+function DaySection({ day, placeId, children }: { day: Group; placeId: string | null; children: ReactNode }) {
+  const add = useQuickAddInline({ day: day.add ?? null, placeId });
+  const adds = day.add !== undefined;
+  return (
+    <div className="group-day" data-day={day.key}>
+      <div className="group-top">
+        <div className="group-day-head">
+          <h4 className="group-day-title" data-when={day.tone}>
+            {day.label}
+          </h4>
+          {adds && <div className="group-action">{add.trigger}</div>}
+        </div>
+        {adds && add.editor}
+      </div>
+      {children}
     </div>
   );
 }
@@ -305,7 +360,7 @@ function Reschedule({ count: overdue, place, now }: { count: number; place: Plac
       undo: () => void saving(Promise.all(back.map((task) => tool("update_item", { id: task.id, dueOn: task.previousDueOn }))).then((all) => all.find((one) => !one.ok) ?? { ok: true })),
     });
   }
-  return <DatePicker look="chip" className="reschedule" label={`Reschedule the ${count(overdue, "overdue task", "overdue tasks")}`} value={null} display="Reschedule" onChange={(day) => void move(day)} />;
+  return <DatePicker look="chip" className="reschedule head-action" label={`Reschedule the ${count(overdue, "overdue task", "overdue tasks")}`} value={null} display="Reschedule" onChange={(day) => void move(day)} />;
 }
 
 
@@ -344,17 +399,32 @@ export function notesCount(total: number | undefined): string | undefined {
 }
 
 
-export function NoDateBoxContent({ read, placeId, showPlace, pageNode }: { read: BoxRead<TasksView>; placeId: string | null; showPlace: boolean; pageNode?: string | null }) {
+const FIRST_SHOWN = 5;
+
+
+
+export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<TasksView>; showPlace: boolean; pageNode?: string | null }) {
   const { data, error, stale, retry } = read;
+  const [all, setAll] = useState(false);
+  const rowsId = useId();
+  const landing = useTaskLanding("noDate");
+  if (landing && !all) setAll(true);
   useBoxSettled(read.settled);
   if (!data) return error ? <BoxFailed what="The tasks without a date" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the tasks without a date…" rows={2} />;
   const group = data.groups.noDate;
+  const folds = group.tasks.length > FIRST_SHOWN;
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
       {error && <BoxFailed what="The tasks without a date" message={error} kept onRetry={retry} />}
-      <TaskList group="noDate" label="No date" tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
+      <div id={rowsId} className="first-rows" data-open={all || !folds}>
+        <TaskList group="noDate" label="No date" tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
+      </div>
       {group.tasks.length === 0 && <p className="t-help group-empty">Nothing waits without a date. One added here stays without one, in the order you give it.</p>}
-      <QuickAddInline day={null} placeId={placeId} />
+      {folds && (
+        <button type="button" className="task-add" aria-controls={rowsId} aria-expanded={all} onClick={() => setAll((value) => !value)}>
+          {all ? `Show the first ${FIRST_SHOWN}` : `Show all ${group.tasks.length}`}
+        </button>
+      )}
     </div>
   );
 }
@@ -404,7 +474,6 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
     place.kind !== "general",
   );
   const [chosen, setChosen] = useState<Day>(now);
-  const [over, setOver] = useState<Day | null>(null);
   const days = Array.from({ length: 7 }, (_, index) => addDays(week.from, index));
   
   const events = (read.data?.events ?? []).filter((event) => place.kind !== "general" || (event.origin === "local" && event.nodeId === null));
@@ -413,7 +482,6 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   useBoxSettled(read.settled);
 
   function onDrop(event: DragEvent<HTMLElement>, day: Day) {
-    setOver(null);
     const task = tasks.find((entry) => entry.id === draggedTask);
     if (!task) return;
     event.preventDefault();
@@ -441,39 +509,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
           </p>
         );
       })}
-      <div className="week" role="group" aria-label={`The week of ${longDay(week.from)}`}>
-        {days.map((day) => {
-          const many = ofDay(day).length;
-          const date = new Date(`${day}T00:00:00`);
-          
-          const shown = `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`;
-          return (
-            <button
-              key={day}
-              type="button"
-              className="week-day"
-              data-day={day}
-              aria-pressed={day === chosen}
-              aria-current={day === now ? "date" : undefined}
-              aria-label={`${shown}, ${longDay(day)}, ${count(many, "event", "events")}`}
-              data-over={over === day || undefined}
-              onClick={() => setChosen(day)}
-              onDragOver={(event) => {
-                if (!draggedTask) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                if (over !== day) setOver(day);
-              }}
-              onDragLeave={() => setOver((value) => (value === day ? null : value))}
-              onDrop={(event) => onDrop(event, day)}
-            >
-              <span className="week-name">{shown.split(" ")[0]}</span>{" "}
-              <span className="week-number">{date.getDate()}</span>
-              <span className="week-mark" data-some={many > 0 || undefined} aria-hidden="true" />
-            </button>
-          );
-        })}
-      </div>
+      <WeekStrip label={`The week of ${longDay(week.from)}`} days={days} chosen={chosen} now={now} eventsOn={(day) => ofDay(day).length} onChoose={setChosen} onDrop={onDrop} />
       <div className="day-events">
         <h3 className="group-title" data-when={chosen === now ? "today" : undefined}>
           {chosen === now ? "Today" : dayHeading(chosen, now)}
@@ -506,11 +542,67 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
           </ul>
         )}
       </div>
-      {chosenEvents.length > 0 && (
-        <Link className="link box-foot-link" href={calendarHref}>
-          Open the calendar
-        </Link>
-      )}
+    </div>
+  );
+}
+
+
+
+function WeekStrip({
+  label,
+  days,
+  chosen,
+  now,
+  eventsOn,
+  onChoose,
+  onDrop,
+}: {
+  label: string;
+  days: Day[];
+  chosen: Day;
+  now: Day;
+  eventsOn: (day: Day) => number;
+  onChoose: (day: Day) => void;
+  onDrop: (event: DragEvent<HTMLElement>, day: Day) => void;
+}) {
+  const rail = useRef<HTMLDivElement>(null);
+  const [over, setOver] = useState<Day | null>(null);
+  usePiece(rail, '[aria-pressed="true"]');
+  return (
+    <div ref={rail} className="seg week" role="group" aria-label={label}>
+      {days.map((day) => {
+        const many = eventsOn(day);
+        const date = new Date(`${day}T00:00:00`);
+        
+        const shown = `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`;
+        return (
+          <button
+            key={day}
+            type="button"
+            className="seg-option week-day"
+            data-day={day}
+            aria-pressed={day === chosen}
+            aria-current={day === now ? "date" : undefined}
+            aria-label={`${shown}, ${longDay(day)}, ${count(many, "event", "events")}`}
+            data-over={over === day || undefined}
+            onClick={() => onChoose(day)}
+            onDragOver={(event) => {
+              if (!draggedTask) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              if (over !== day) setOver(day);
+            }}
+            onDragLeave={() => setOver((value) => (value === day ? null : value))}
+            onDrop={(event) => {
+              setOver(null);
+              onDrop(event, day);
+            }}
+          >
+            <span className="week-name">{shown.split(" ")[0]}</span> <span className="week-number">{date.getDate()}</span>
+            <span className="week-mark" data-some={many > 0 || undefined} aria-hidden="true" />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -557,7 +649,8 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
 }
 
 const noRevision = () => 0;
-const MAIL_ROWS = 5;
+
+const MAIL_ROWS = 3;
 
 
 export function useMailCount(read: BoxRead<MailList>): string | undefined {
@@ -615,6 +708,7 @@ export function MailBoxContent({
   place: Place;
   connectHref: string;
 }) {
+  const { tree } = useWorkspace();
   const { data, error, stale, retry } = read;
   useBoxSettled(read.settled && replies.settled);
   if (!data) return error ? <BoxFailed what="The mail" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the mail…" rows={3} />;
@@ -629,7 +723,7 @@ export function MailBoxContent({
       return place.kind === "general" ? (
         <BoxEmpty text="General has no mail account: the mail lives in the accounts of each client and project." reason="general">
           <Link className={buttonClass({ size: "sm" })} href="/app/mail">
-            <span className="btn-label">Show all mail</span>
+            <span className="btn-label">Open all mail</span>
           </Link>
         </BoxEmpty>
       ) : (
@@ -645,45 +739,42 @@ export function MailBoxContent({
       return (
         <BoxEmpty text="Nothing unread, and nothing arrived for a task that waits for mail." reason="nothing-unread">
           <Link className={buttonClass({ size: "sm" })} href="/app/mail">
-            <span className="btn-label">Show all mail</span>
+            <span className="btn-label">Open all mail</span>
           </Link>
         </BoxEmpty>
       );
     }
     return (
-      <>
-        <ul className="mail-list">
-          {rows.map(({ message, label }) => {
-            const linked = message.tasks.find((task) => task.status === "open") ?? message.tasks[0];
-            return (
-              <li key={mailKey(message)}>
-                <Link className="mail-row" href={`/app/mail?account=${message.accountId}&message=${encodeURIComponent(message.id)}`} data-unread={message.unread || undefined}>
-                  <span className="mail-from">{message.from.name || message.from.email}</span>
-                  <span className="mail-side">
-                    {message.important && <span className="pill mail-important">Important</span>}
-                    <span className="mail-when">{mailWhen(message.receivedAt, now)}</span>
-                  </span>
-                  <span className="mail-subject">{subjectOf(message)}</span>
-                  <span className="mail-for">
-                    {label ? (
-                      label
-                    ) : linked ? (
-                      `For: ${inlinePlain(linked.title)}`
-                    ) : message.place ? (
-                      <PlaceName path={message.place.path} color={message.place.color} />
-                    ) : (
-                      message.accountEmail
-                    )}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-        <Link className="link box-foot-link" href="/app/mail">
-          Show all mail
-        </Link>
-      </>
+      <ul className="mail-list">
+        {rows.map(({ message, label }) => {
+          const linked = message.tasks.find((task) => task.status === "open") ?? message.tasks[0];
+          
+          const where = message.place ? placeOnPage(message.place, true, place.kind === "node" ? place.id : null, tree) : null;
+          return (
+            <li key={mailKey(message)}>
+              <Link className="mail-row" href={`/app/mail?account=${message.accountId}&message=${encodeURIComponent(message.id)}`} data-unread={message.unread || undefined}>
+                <span className="mail-from">{message.from.name || message.from.email}</span>
+                <span className="mail-side">
+                  {message.important && <span className="pill mail-important">Important</span>}
+                  <span className="mail-when">{mailWhen(message.receivedAt, now)}</span>
+                </span>
+                <span className="mail-subject">{subjectOf(message)}</span>
+                <span className="mail-for">
+                  {label ? (
+                    label
+                  ) : linked ? (
+                    `For: ${inlinePlain(linked.title)}`
+                  ) : where?.shown ? (
+                    <PlaceName path={where.path} color={message.place?.color ?? null} />
+                  ) : (
+                    message.accountEmail
+                  )}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     );
   };
   return (
@@ -729,7 +820,7 @@ function noteItem(note: NoteRow): Item {
 }
 
 export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: Place }) {
-  const { openItem } = useWorkspace();
+  const { openItem, tree } = useWorkspace();
   const { data, error, stale, retry } = read;
   const node = place.kind === "node" ? place.id : null;
   useBoxSettled(read.settled);
@@ -741,34 +832,41 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
         <p className="t-help group-empty">{node ? "No notes here yet: a note keeps in view what is not something to do." : "No loose notes yet: write one here, and give it a place later."}</p>
       ) : (
         <ul className="note-list">
-          {data.notes.map((note) => (
-            <li key={note.id} className="note-row" data-item={note.id}>
-              <button type="button" className="note-open" data-item-title aria-label={`Open “${inlinePlain(note.title)}”`} onClick={() => openItem(noteItem(note))} />
-              <span className="note-title">
-                <InlineText text={note.title} />
-              </span>
-              {note.decision && <span className="pill note-decision">Decision</span>}
-              {note.nodeId !== node && note.path && (
-                <span className="note-where">
-                  <PlaceName path={note.path} color={note.color} />
+          {data.notes.map((note) => {
+            
+            const where = placeOnPage({ nodeId: note.nodeId, path: note.path }, note.path !== null, node, tree);
+            return (
+              <li key={note.id} className="note-row" data-item={note.id}>
+                <button type="button" className="note-open" data-item-title aria-label={`Open “${inlinePlain(note.title)}”`} onClick={() => openItem(noteItem(note))} />
+                <span className="note-title">
+                  <InlineText text={note.title} />
                 </span>
-              )}
-            </li>
-          ))}
+                {note.decision && <span className="pill note-decision">Decision</span>}
+                {where.shown && (
+                  <span className="note-where">
+                    <PlaceName path={where.path} color={note.color} />
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {data.total > data.notes.length && <p className="t-meta">{`The latest ${data.notes.length} of ${data.total}. Search finds the others.`}</p>}
-      <AddNote node={node} />
     </div>
   );
 }
 
 
-function AddNote({ node }: { node: string | null }) {
+
+export function useAddNote(node: string | null) {
   const { saving, notify } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [round, setRound] = useState(0);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const foldId = useId();
 
   async function add() {
     const value = text.trim();
@@ -789,42 +887,62 @@ function AddNote({ node }: { node: string | null }) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      setOpen(false);
-      setText("");
+      close();
     }
   }
 
-  if (!open) {
-    return (
-      <button type="button" className="task-add" onClick={() => setOpen(true)}>
-        Add note
-      </button>
-    );
+  function close() {
+    setOpen(false);
+    requestAnimationFrame(() => button.current?.focus({ preventScroll: true }));
   }
-  return (
-    <div className="task-add-line note-add">
-      <Field
-        autoFocus
-        aria-label="New note"
-        placeholder="Write a note, and press Enter"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={onKey}
-        onPaste={(event) => {
-          const next = pasteLinkOver(event.currentTarget, event.clipboardData.getData("text"));
-          if (next === null) return;
-          event.preventDefault();
-          setText(next);
-        }}
-      />
-      <Button size="sm" onClick={() => setOpen(false)}>
-        Cancel
-      </Button>
-      <Button size="sm" variant="primary" onClick={() => void add()} disabled={!text.trim() || busy}>
-        Add note
-      </Button>
-    </div>
+
+  const trigger = (
+    <Button
+      ref={button}
+      variant="quiet"
+      size="sm"
+      className="head-action"
+      aria-expanded={open}
+      aria-controls={foldId}
+      onClick={() => {
+        if (open) return setOpen(false);
+        setText("");
+        setRound((value) => value + 1);
+        setOpen(true);
+      }}
+    >
+      Add note
+    </Button>
   );
+  const editor = (
+    <Fold open={open} id={foldId}>
+      {round > 0 && (
+        <div key={round} className="task-add-line note-add">
+          <Field
+            autoFocus
+            aria-label="New note"
+            placeholder="Write a note, and press Enter"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={onKey}
+            onPaste={(event) => {
+              const next = pasteLinkOver(event.currentTarget, event.clipboardData.getData("text"));
+              if (next === null) return;
+              event.preventDefault();
+              setText(next);
+            }}
+          />
+          <Button size="sm" onClick={close}>
+            Cancel
+          </Button>
+          <Button size="sm" variant="primary" onClick={() => void add()} disabled={!text.trim() || busy}>
+            Add note
+          </Button>
+        </div>
+      )}
+    </Fold>
+  );
+  return { trigger, editor };
 }
 
 
@@ -845,7 +963,6 @@ type Entry = {
 };
 
 const ACTIVITY_DAYS = 7;
-const FIRST_SHOWN = 5;
 
 function actor(source: Item["source"], label: string | null): string {
   if (source === "chat") return "The chat";
@@ -915,7 +1032,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
             {entries.slice(0, all ? entries.length : FIRST_SHOWN).map((entry) => (
               <li key={entry.key} className="activity-entry" data-activity={entry.key.split(":")[0]}>
                 <span className="activity-what">{entry.what}</span>
-                <Button size="sm" variant="quiet" className="activity-undo" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
+                <Button size="sm" variant="quiet" className="activity-undo head-action" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
                   Undo
                 </Button>
                 {entry.open ? (
@@ -988,41 +1105,4 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   if (fields.includes("due_on")) input.dueOn = before.due_on;
   if (fields.includes("due_time") && before.due_on) input.dueTime = hour(before.due_time);
   return tool("update_item", input);
-}
-
-
-
-export function SubprojectsBoxContent({ node, adding, setAdding }: { node: TreeNode; adding: boolean; setAdding: (value: boolean) => void }) {
-  const { tree } = useWorkspace();
-  const children = (tree ?? []).filter((entry) => entry.parentId === node.id);
-  const one = node.kind === "client" ? "project" : "subproject";
-  useBoxSettled(true);
-  return (
-    <div className="box-read">
-      {children.length === 0 && !adding && <p className="t-help group-empty">{`No ${one}s in ${node.name} yet.`}</p>}
-      {children.length > 0 && (
-        <ul className="child-list">
-          {children.map((child) => (
-            <li key={child.id}>
-              <Link className="child-row" href={`/app/node/${child.id}`}>
-                <span className="child-name task-place-name" data-color={child.color ?? undefined}>
-                  {child.name}
-                </span>
-                <span className="child-count">{child.openTasks === 0 ? "No open tasks" : count(child.openTasks, "open task", "open tasks")}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {adding ? (
-        <div className="child-new">
-          <NewNode parent={node} idPrefix="box-new" onDone={() => setAdding(false)} />
-        </div>
-      ) : (
-        <button type="button" className="task-add" data-add-child onClick={() => setAdding(true)}>
-          {`Add ${one}`}
-        </button>
-      )}
-    </div>
-  );
 }

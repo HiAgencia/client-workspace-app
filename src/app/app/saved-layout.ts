@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { LAYOUT_COOKIE, readLayoutCookie } from "@/lib/preferences";
 import { sessionOwner } from "@/lib/supabase/session-owner";
-import type { BoardLayout } from "./boxes";
+import type { BoardLayout } from "./board-layout";
 
 
 

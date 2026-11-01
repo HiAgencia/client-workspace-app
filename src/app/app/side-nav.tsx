@@ -2,10 +2,11 @@
 
 import { Link } from "@/components/ui/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Fold } from "@/components/ui/fold";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { PRODUCT_NAME } from "@/lib/product";
@@ -340,29 +341,6 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
         </Fold>
       )}
     </li>
-  );
-}
-
-
-export function Fold({ open, id, children }: { open: boolean; id: string; children: ReactNode }) {
-  const [settled, setSettled] = useState(open);
-  const [seen, setSeen] = useState(open);
-  if (seen !== open) {
-    setSeen(open);
-    setSettled(false);
-  }
-  return (
-    <div
-      className="fold"
-      id={id}
-      data-open={open}
-      data-settled={(open && settled) || undefined}
-      onTransitionEnd={(event) => {
-        if (event.target === event.currentTarget && event.propertyName === "grid-template-rows") setSettled(open);
-      }}
-    >
-      <div>{children}</div>
-    </div>
   );
 }
 

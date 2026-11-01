@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Fold } from "@/components/ui/fold";
 import type { Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
@@ -9,7 +10,6 @@ import { repliesTally } from "@/lib/mail/replies-text";
 import { mailWhen } from "./box-kinds";
 import { BoxFailed, type BoxRead } from "./boxes";
 import { subjectOf } from "./mail/subject";
-import { Fold } from "./side-nav";
 import type { TaskReplies } from "./task-replies";
 import { openTaskDetail } from "./task-row";
 
@@ -40,7 +40,7 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
         </h2>
         <p className="reply-strip-purpose">What may answer the tasks that wait for mail. You decide which one does.</p>
         {folded.length > 0 && (
-          <Button size="sm" className="reply-strip-more" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
+          <Button size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
             {noneArrived ? `Show ${waiting === 1 ? "it" : "them"}` : `${folded.length} more`}
           </Button>
         )}

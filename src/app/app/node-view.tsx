@@ -2,45 +2,53 @@
 
 import { Link } from "@/components/ui/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { Fold } from "@/components/ui/fold";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { firstWeekday, today } from "@/lib/dates";
 import { NODE_COLORS } from "@/lib/node-colors";
+import { cx } from "@/lib/utils";
 import { get, post, type TreeNode } from "./client-api";
 import {
+  ActivityBoxContent,
   allTasks,
   CalendarBoxContent,
+  HeadLink,
   MailBoxContent,
   NoDateBoxContent,
   noDateCount,
   NotesBoxContent,
   notesCount,
-  SubprojectsBoxContent,
   TasksBoxContent,
   tasksCountLabel,
+  useAddNote,
   useMailCount,
   useMailRead,
   useNotesRead,
   useTasksRead,
   type Place,
 } from "./box-kinds";
-import { BoxBoard, customizeEntries, savePreference, SPLIT, useBoardLayout, useBoxRead, type BoardLayout, type BoxSpec } from "./boxes";
+import { FOOT, SPLIT, type BoardLayout } from "./board-layout";
+import { BoxBoard, customizeEntries, savePreference, useBoardLayout, useBoxRead, type BoxSpec } from "./boxes";
 import type { ConnectBlocked } from "./connect-blocked";
 import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
+import { accountsSeenFrom, figureWords } from "./mail-store";
 import { BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
+import { useQuickAddInline } from "./quick-add";
+import { NewNode } from "./side-nav";
 import { useTaskReplies } from "./task-replies";
 import { useChatScope, useWorkspace } from "./workspace";
 
 
 
-export const NODE_BOXES = ["tasks", "no_date", SPLIT, "calendar", "mail", "notes", "subprojects"];
+export const NODE_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
-type Account = { id: string; email: string; status: string; nodeIds: string[] };
+type Account = { id: string; email: string; status: string; nodeIds: string[]; calendars: Array<{ selected: boolean }> };
 type Accounts = { accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked };
 
 const COLOR_NAMES: Record<(typeof NODE_COLORS)[number], string> = {
@@ -86,7 +94,11 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const mailCount = useMailCount(mail);
   const replies = useTaskReplies({ node: nodeId }, now, tree, 5);
   const accounts = useBoxRead<Accounts>(() => get<Accounts>("/api/accounts"), "accounts");
+  const noDateAdd = useQuickAddInline({ day: null, placeId: nodeId });
+  const noteAdd = useAddNote(nodeId);
   const [adding, setAdding] = useState(false);
+  
+  const [addRound, setAddRound] = useState(0);
   const [renaming, setRenaming] = useState(false);
   const google = params.get("google");
 
@@ -126,7 +138,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const connectHref = accounts.data?.canConnect ? `/api/google/connect?node=${nodeId}` : "/app/settings#google-accounts";
   const one = node.kind === "client" ? "project" : "subproject";
   const childName = node.kind === "client" ? "Projects" : "Subprojects";
-  const names: Record<string, string> = { tasks: "Tasks", no_date: "No date", calendar: "Calendar", mail: "Mail", notes: "Notes", subprojects: childName };
+  const names: Record<string, string> = { tasks: "Tasks", no_date: "No date", calendar: "Calendar", mail: "Mail", notes: "Notes", activity: "Activity" };
   
   const view = tasks.data;
   const tasksRead = tasks;
@@ -154,9 +166,8 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   }
 
   function addChild() {
-    if (board.layout.hidden.includes("subprojects")) board.show("subprojects", childName);
+    setAddRound((value) => value + 1);
     setAdding(true);
-    requestAnimationFrame(() => document.querySelector("[data-box='subprojects']")?.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" }));
   }
 
   const more: MenuEntry[] = [
@@ -191,7 +202,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const tasksBox: BoxSpec = {
     id: "tasks",
     title: "Tasks",
-    purpose: "What is overdue and what is for today",
+    purpose: "Overdue, today and the days ahead",
     count: tasksCountLabel(view),
     content: <TasksBoxContent read={tasksRead} now={now} place={place} placeId={nodeId} showPlace pageNode={nodeId} layout={layout} allHref={`/app/tasks?place=${nodeId}`} />,
   };
@@ -203,12 +214,19 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       purpose: "Tasks you can do whenever",
       surface: "rest",
       count: noDateCount(view),
-      content: <NoDateBoxContent read={tasksRead} placeId={nodeId} showPlace pageNode={nodeId} />,
+      action: noDateAdd.trigger,
+      unfold: noDateAdd.editor,
+      content: <NoDateBoxContent read={tasksRead} showPlace pageNode={nodeId} />,
     },
     calendar: {
       id: "calendar",
       title: "Calendar",
       purpose: "This week in the calendars it sees",
+      action: (
+        <HeadLink href={`/app/calendar?scope=${nodeId}`} name="Open the calendar">
+          Open
+        </HeadLink>
+      ),
       content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?scope=${nodeId}`} />,
     },
     mail: {
@@ -216,23 +234,29 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       title: "Mail",
       purpose: "What may answer its tasks, then what is unread",
       count: mailCount,
+      action: (
+        <HeadLink href="/app/mail" name="Open all mail">
+          Open
+        </HeadLink>
+      ),
       content: <MailBoxContent read={mail} replies={replies} account={null} now={now} place={place} connectHref={connectHref} />,
     },
     notes: {
       id: "notes",
       title: "Notes",
-      purpose: "What to keep in view without it being something to do",
+      purpose: "What to keep in view, apart from the tasks",
       surface: "rest",
       count: notesCount(notes.data?.total),
+      action: noteAdd.trigger,
+      unfold: noteAdd.editor,
       content: <NotesBoxContent read={notes} place={place} />,
     },
-    subprojects: {
-      id: "subprojects",
-      title: childName,
-      purpose: `What hangs from ${node.name}`,
+    activity: {
+      id: "activity",
+      title: "Activity",
+      purpose: "What the chat and your agents did here",
       surface: "rest",
-      count: children.length > 0 ? count(children.length, one, `${one}s`) : undefined,
-      content: <SubprojectsBoxContent node={node} adding={adding} setAdding={setAdding} />,
+      content: <ActivityBoxContent place={place} />,
     },
   };
 
@@ -242,26 +266,157 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       <PageHeader
         trail={trail}
         title={node.name}
+        mark={<NodeMark node={node} />}
         titleProps={{ "data-node-title": "" }}
-        count={
-          <span className="node-facts">
-            <span data-node-count={node.openTasks}>{node.openTasks === 0 ? "No open tasks" : count(node.openTasks, "open task", "open tasks")}</span>
-            {seen.map((account) => (
-              <span key={account.id} className="t-name node-account">
-                {account.email}
-              </span>
-            ))}
-          </span>
-        }
+        count={<span data-node-count={node.openTasks}>{node.openTasks === 0 ? "No open tasks" : count(node.openTasks, "open task", "open tasks")}</span>}
         layout={{ value: layout, onChange: chooseLayout }}
         chat
         more={<Menu label="More" about={`for ${node.name}`} entries={more} />}
       />
       {google && <GoogleOutcome outcome={google} />}
+      <NodeStrip
+        node={node}
+        below={children}
+        name={childName}
+        one={one}
+        connectHref={connectHref}
+        calendars={accounts.data?.accounts ?? null}
+        adding={adding}
+        addRound={addRound}
+        onAdd={addChild}
+        onAddDone={() => setAdding(false)}
+      />
       <BoxBoard board={board} boxes={boxes} label={`The boxes of ${node.name}`} wide={layout === "board" ? tasksBox : null} />
       <RenameDialog open={renaming} name={node.name} nodeId={nodeId} onClose={() => setRenaming(false)} />
     </div>
     </ViewTransition>
+  );
+}
+
+
+function NodeMark({ node }: { node: TreeNode }) {
+  return (
+    <span className="page-mark" data-color={node.color ?? undefined} aria-hidden="true">
+      <span>{Array.from(node.name.trim())[0]?.toUpperCase()}</span>
+    </span>
+  );
+}
+
+
+function accountFacts(unread: string | null, calendars: number | null): string {
+  const shown = calendars === null ? null : calendars === 0 ? "no calendars" : count(calendars, "calendar", "calendars");
+  const words = [unread, shown].filter(Boolean).join(", ");
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "Reading…";
+}
+
+
+
+function NodeStrip({
+  node,
+  below,
+  name,
+  one,
+  connectHref,
+  calendars,
+  adding,
+  addRound,
+  onAdd,
+  onAddDone,
+}: {
+  node: TreeNode;
+  below: TreeNode[];
+  name: string;
+  one: string;
+  connectHref: string;
+  calendars: Account[] | null;
+  adding: boolean;
+  addRound: number;
+  onAdd: () => void;
+  onAddDone: () => void;
+}) {
+  const { tree, mailAccounts, mailStore } = useWorkspace();
+  const addButton = useRef<HTMLButtonElement>(null);
+  const fold = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const seen = new Set(accountsSeenFrom(tree, mailAccounts ?? [], node.id));
+  const accounts = (mailAccounts ?? []).filter((account) => seen.has(account.id));
+  return (
+    <div className="node-strip">
+      <section className="node-strip-group" aria-labelledby={`${id}below`}>
+        <h2 id={`${id}below`} className="t-label named-label">
+          {name}
+        </h2>
+        <ul className="node-chips">
+          {below.map((child) => (
+            <li key={child.id}>
+              <Link className={cx(buttonClass({}), "node-chip")} href={`/app/node/${child.id}`}>
+                <span className="node-chip-name task-place-name" data-color={child.color ?? undefined}>
+                  {child.name}
+                </span>
+                <span className="node-chip-detail">{child.openTasks === 0 ? "No open tasks" : count(child.openTasks, "open task", "open tasks")}</span>
+              </Link>
+            </li>
+          ))}
+          <li>
+            <Button ref={addButton} data-add-child aria-expanded={adding} aria-controls={`${id}new`} onClick={onAdd}>
+              {`Add ${one}`}
+            </Button>
+          </li>
+        </ul>
+        <div ref={fold}>
+          <Fold open={adding} id={`${id}new`}>
+            {addRound > 0 && (
+              <div key={addRound} className="node-new">
+                <NewNode
+                  parent={node}
+                  idPrefix="strip-new"
+                  onDone={() => {
+                    onAddDone();
+                    
+                    requestAnimationFrame(() => {
+                      const held = document.activeElement;
+                      if (held === document.body || fold.current?.contains(held)) addButton.current?.focus({ preventScroll: true });
+                    });
+                  }}
+                />
+              </div>
+            )}
+          </Fold>
+        </div>
+      </section>
+      <section className="node-strip-group" aria-labelledby={`${id}accounts`}>
+        <h2 id={`${id}accounts`} className="t-label named-label">
+          Accounts
+        </h2>
+        <ul className="node-chips">
+          {accounts.map((account) => {
+            const known = calendars?.find((entry) => entry.id === account.id);
+            const lost = account.status !== "active" && !account.isDemo;
+            return (
+              <li key={account.id}>
+                <Link className={cx(buttonClass({}), "node-chip")} href={lost ? "/app/settings#google-accounts" : `/app/mail?account=${account.id}`}>
+                  <span className="node-chip-name t-name">{account.email}</span>
+                  {lost ? (
+                    <span className="node-chip-detail" data-tone="alert">
+                      {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
+                    </span>
+                  ) : (
+                    <span className="node-chip-detail">{accountFacts(figureWords(mailStore.figure([account])), known ? known.calendars.filter((calendar) => calendar.selected).length : null)}</span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+          {mailAccounts && accounts.length === 0 && (
+            <li>
+              <Link className={buttonClass({})} href={connectHref}>
+                <span className="btn-label">Connect Google account</span>
+              </Link>
+            </li>
+          )}
+        </ul>
+      </section>
+    </div>
   );
 }
 

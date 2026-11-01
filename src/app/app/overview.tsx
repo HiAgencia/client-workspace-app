@@ -8,6 +8,7 @@ import {
   ActivityBoxContent,
   allTasks,
   CalendarBoxContent,
+  HeadLink,
   MailBoxContent,
   NoDateBoxContent,
   noDateCount,
@@ -17,14 +18,17 @@ import {
   placeValue,
   TasksBoxContent,
   tasksCountLabel,
+  useAddNote,
   useMailCount,
   useMailRead,
   useNotesRead,
   useTasksRead,
 } from "./box-kinds";
-import { BoxBoard, customizeEntries, SPLIT, useBoardLayout, type BoardLayout, type BoxSpec } from "./boxes";
+import { FOOT, SPLIT, type BoardLayout } from "./board-layout";
+import { BoxBoard, customizeEntries, useBoardLayout, type BoxSpec } from "./boxes";
 import { GoogleOutcome } from "./node-view";
 import { PageHeader } from "./page-header";
+import { useQuickAddInline } from "./quick-add";
 import { MailAccountFilter, TasksPlaceFilter, useAddress, usePlaceParam } from "./page-filters";
 import { ReplyStrip } from "./reply-strip";
 import { useTaskReplies } from "./task-replies";
@@ -32,7 +36,7 @@ import { useChatScope, useWorkspace } from "./workspace";
 
 
 
-export const OVERVIEW_BOXES = ["tasks", "activity", SPLIT, "calendar", "mail", "no_date", "notes"];
+export const OVERVIEW_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
 const NAMES: Record<string, string> = { tasks: "Tasks", calendar: "Calendar", mail: "Mail", no_date: "No date", activity: "Activity", notes: "Notes" };
 
@@ -64,18 +68,20 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
   
   
   const replies = useTaskReplies(placeInput(place), now, tree, 5);
+  const placeId = place.kind === "node" ? place.id : null;
+  const noDateAdd = useQuickAddInline({ day: null, placeId });
+  const noteAdd = useAddNote(placeId);
 
   const query = placeValue(place);
   const tasksHref = `/app/tasks${query ? `?place=${query}` : ""}`;
   const calendarHref = place.kind === "node" ? `/app/calendar?scope=${place.id}` : "/app/calendar";
-  const placeId = place.kind === "node" ? place.id : null;
 
   const boxes: Record<string, BoxSpec> = now
     ? {
         tasks: {
           id: "tasks",
           title: NAMES.tasks,
-          purpose: "What is overdue and what is for today",
+          purpose: "Overdue, today and the days ahead",
           count: tasksCountLabel(tasks.data),
           menu: [{ kind: "action", label: "Open Tasks", onSelect: () => router.push(tasksHref) }],
           content: <TasksBoxContent read={tasks} now={now} place={place} placeId={placeId} showPlace layout="list" allHref={tasksHref} />,
@@ -84,6 +90,11 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           id: "calendar",
           title: NAMES.calendar,
           purpose: "This week in your connected calendars",
+          action: (
+            <HeadLink href={calendarHref} name="Open the calendar">
+              Open
+            </HeadLink>
+          ),
           content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(tasks.data)} calendarHref={calendarHref} />,
         },
         mail: {
@@ -91,6 +102,11 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           title: NAMES.mail,
           purpose: "What may answer your tasks, then what is unread",
           count: mailCount,
+          action: (
+            <HeadLink href="/app/mail" name="Open all mail">
+              Open
+            </HeadLink>
+          ),
           content: <MailBoxContent read={mail} replies={replies} account={account} now={now} place={place} connectHref="/app/settings#google-accounts" />,
         },
         no_date: {
@@ -99,12 +115,14 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           purpose: "Tasks you can do whenever",
           surface: "rest",
           count: noDateCount(tasks.data),
-          content: <NoDateBoxContent read={tasks} placeId={placeId} showPlace />,
+          action: noDateAdd.trigger,
+          unfold: noDateAdd.editor,
+          content: <NoDateBoxContent read={tasks} showPlace />,
         },
         activity: {
           id: "activity",
           title: NAMES.activity,
-          purpose: "What the chat and your agents did, each with its undo",
+          purpose: "What the chat and your agents did",
           surface: "rest",
           content: <ActivityBoxContent place={place} />,
         },
@@ -114,6 +132,8 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           purpose: "Loose notes, before they find their place",
           surface: "rest",
           count: notesCount(notes.data?.total),
+          action: noteAdd.trigger,
+          unfold: noteAdd.editor,
           content: <NotesBoxContent read={notes} place={place} />,
         },
       }

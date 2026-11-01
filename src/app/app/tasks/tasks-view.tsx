@@ -5,7 +5,6 @@ import { useEffect, useSyncExternalStore, ViewTransition } from "react";
 import { Menu } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { today } from "@/lib/dates";
-import { cx } from "@/lib/utils";
 import { BoxFailed, BoxWait, savePreference } from "../boxes";
 import { placeValue, TaskGroups, useTasksRead, type Sort } from "../box-kinds";
 import { PageHeader, type PageLayout } from "../page-header";
@@ -86,13 +85,13 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
             />
           }
         />
-        <section className={cx("tasks-page", layout === "list" && "card")} aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
+        <section className="tasks-page" aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
           {}
           <h2 id="tasks-page-title" className="sr-only">
             Every task
           </h2>
           {!data ? (
-            error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading every task…" rows={5} />
+            <div className="card">{error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading every task…" rows={5} />}</div>
           ) : (
             <div className="box-read fade-enter" data-stale={stale || undefined}>
               {error && <BoxFailed what="The tasks" message={error} kept onRetry={retry} />}

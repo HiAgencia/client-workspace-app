@@ -255,10 +255,13 @@
   grid-template-columns: subgrid;
   align-items: start;
   min-height: 0;
-  padding: 0.5rem 0.6rem;
+  padding: 0.25rem 0.6rem;
   border-radius: var(--radius-control);
   background: transparent;
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), padding var(--dur) var(--ease-in);
+  @media (pointer: coarse) {
+    padding-block: 0.5rem;
+  }
 
   & > :not(.task-open, .task-more) {
     position: relative;
@@ -350,6 +353,9 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.box .task:not([data-layout="board"]) .task-desc {
+  display: none;
+}
 .task-meta {
   grid-column: 2;
   display: flex;
@@ -357,11 +363,22 @@
   align-items: center;
   gap: 0.2rem 0.8rem;
   min-height: 0;
-  margin-top: 0.15rem;
-  padding-right: 4.5rem;
 
   &:empty {
     display: none;
+  }
+}
+@media (hover: hover) {
+  .task-meta::after {
+    content: "";
+    flex: 0 0 4.5rem;
+  }
+}
+.task-mail {
+  margin-block: -0.1em;
+
+  &:first-child {
+    margin-left: -0.7em;
   }
 }
 .task-priority {
@@ -390,6 +407,9 @@
 .task-when {
   display: inline-flex;
 }
+.task-when .picker {
+  padding-block: 0;
+}
 .task-when:not([data-when]) {
   --when: var(--due-later);
 }
@@ -417,14 +437,28 @@
 }
 @media (pointer: coarse) {
   .task-when .picker {
-    --chip: 0.8625rem;
-    --target: 1.5rem;
+    --chip: calc(1.4em + 2px);
+    --target: max(1.5rem, var(--chip));
+    position: relative;
+    isolation: isolate;
     min-height: var(--target);
     margin-block: calc((var(--chip) - var(--target)) / 2);
   }
+  .task-when[data-when="overdue"] .picker {
+    background: transparent;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: calc((var(--target) - var(--chip)) / 2 - 1px) -1px;
+      z-index: -1;
+      border-radius: inherit;
+      background: color-mix(in srgb, var(--when) 8%, transparent);
+    }
+  }
 }
 .task-subtasks-toggle {
-  --chip: calc(1.7em + 2px);
+  --chip: calc(1.25em + 2px);
   --target: max(1.5rem, var(--chip));
   position: relative;
   isolation: isolate;
@@ -581,6 +615,22 @@
 .task-title .inline-link,
 .note-title .inline-link {
   padding-block: max(0px, (1.5rem - 1em) / 2);
+}
+@media (pointer: fine) {
+  .task:not([data-layout="board"]):where(:has(.task-title .inline-link)) {
+    grid-template-rows: auto minmax(1.5rem, auto);
+    padding-block: 0;
+
+    & .task-title {
+      line-height: 1.5rem;
+    }
+    & .task-title .inline-link {
+      padding-block: max(0px, (1.5rem - 1.25em) / 2);
+    }
+    & .task-check {
+      margin-top: calc((1.5rem - var(--hit)) / 2);
+    }
+  }
 }
 .task-drop-mark {
   grid-column: 1 / -1;
@@ -989,7 +1039,7 @@
   padding: 1rem;
 }
 .qa-inline {
-  margin-top: 0.35rem;
+  margin-block: 0.35rem 0.5rem;
   border: 1px solid var(--card-rim);
   border-radius: calc(var(--radius-card) * 0.75);
   background: var(--card);

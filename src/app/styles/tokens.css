@@ -102,6 +102,7 @@
   --control-h: 2.75rem;
   --control-h-sm: 2.375rem;
   --target-min: 24px;
+  --opacity-stale: 0.87;
   --content-w: 76rem;
   --chat-w: clamp(21rem, 15rem + 8vw, 27rem);
   --radius-card: 1rem;

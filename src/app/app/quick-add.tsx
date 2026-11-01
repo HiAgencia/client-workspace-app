@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Fold } from "@/components/ui/fold";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { count } from "@/lib/count";
@@ -381,29 +382,44 @@ export function QuickAddDialog() {
 
 
 
-export function QuickAddInline({ day, placeId, parentId, label = "Add task" }: { day?: Day | null; placeId?: string | null; parentId?: string | null; label?: string }) {
+export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }: { day?: Day | null; placeId?: string | null; parentId?: string | null; label?: string }) {
   const [open, setOpen] = useState(false);
   const [round, setRound] = useState(0);
   const button = useRef<HTMLButtonElement>(null);
-  if (!open) {
-    return (
-      <button ref={button} type="button" className="task-add qa-open" onClick={() => setOpen(true)}>
-        {label}
-      </button>
-    );
-  }
-  return (
-    <div className="qa-inline">
-      <QuickAddEditor
-        key={round}
-        inline
-        start={{ day: day ?? null, placeId, parentId }}
-        onDone={(reason) => {
-          if (reason === "added") return setRound((value) => value + 1);
-          setOpen(false);
-          requestAnimationFrame(() => button.current?.focus({ preventScroll: true }));
-        }}
-      />
-    </div>
+  const foldId = useId();
+  const trigger = (
+    <Button
+      ref={button}
+      variant="quiet"
+      size="sm"
+      className="head-action"
+      aria-expanded={open}
+      aria-controls={foldId}
+      onClick={() => {
+        if (!open) setRound((value) => value + 1);
+        setOpen((value) => !value);
+      }}
+    >
+      {label}
+    </Button>
   );
+  const editor = (
+    <Fold open={open} id={foldId}>
+      {round > 0 && (
+        <div className="qa-inline">
+          <QuickAddEditor
+            key={round}
+            inline
+            start={{ day: day ?? null, placeId, parentId }}
+            onDone={(reason) => {
+              if (reason === "added") return setRound((value) => value + 1);
+              setOpen(false);
+              requestAnimationFrame(() => button.current?.focus({ preventScroll: true }));
+            }}
+          />
+        </div>
+      )}
+    </Fold>
+  );
+  return { trigger, editor };
 }
