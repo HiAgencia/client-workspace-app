@@ -43,6 +43,10 @@ const GROUPS = [
 
 const REPLIES = 20;
 
+
+const LIST_WAIT = 4000;
+const PURPOSE = "What may answer your tasks, then what is unread.";
+
 const keyOf = (row: Pick<MailRow, "accountId" | "id">) => `${row.accountId}:${row.id}`;
 
 
@@ -99,6 +103,17 @@ function Mail() {
   
   
   const replies = useTaskReplies({}, mounted ? today() : null, tree, REPLIES);
+  
+  const [revealed, setRevealed] = useState(false);
+  const repliesRead = replies.data !== null || replies.error !== null;
+  const readWhole = mail !== null && mail.waiting === 0 && repliesRead;
+  if (readWhole && !revealed) setRevealed(true);
+  const holding = mail !== null && !revealed;
+  useEffect(() => {
+    if (!holding) return;
+    const timer = setTimeout(() => setRevealed(true), LIST_WAIT);
+    return () => clearTimeout(timer);
+  }, [holding]);
   
   
   const [opened, setOpened] = useState<Set<string>>(new Set());
@@ -277,11 +292,11 @@ function Mail() {
         <PageHeader
           title="Mail"
           count={
-            !mail
-              ? "Reading the mail…"
-              : noAccounts
-                ? "No account connected"
-                : `What may answer your tasks, then what is unread. ${[unreadWords, `${shown.length} listed`, mail.waiting > 0 ? `${count(mail.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.`
+            noAccounts
+              ? "No account connected"
+              : !mail || holding
+                ? `${PURPOSE} Reading the mail…`
+                : `${PURPOSE} ${[unreadWords, `${shown.length} listed`, mail.waiting > 0 ? `${count(mail.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.`
           }
           filters={
             mail && !noAccounts ? (
@@ -328,8 +343,8 @@ function Mail() {
           </section>
         ) : (
           <div className="mail-layout" data-reading={current ? "" : undefined}>
-            <section className="card mail-list" aria-label="Messages" aria-busy={!mail || mail.waiting > 0}>
-              {!mail || (mail.waiting > 0 && shown.length === 0) ? (
+            <section className="card mail-list" aria-label="Messages" aria-busy={!readWhole}>
+              {!mail || holding || (mail.waiting > 0 && shown.length === 0) ? (
                 <div className="mail-list-wait" role="status" aria-label="Reading the mail">
                   {Array.from({ length: 5 }, (_, i) => (
                     <span key={i} className="mail-row-wait">
