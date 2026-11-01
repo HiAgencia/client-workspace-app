@@ -991,7 +991,7 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
       }}
       onDrop={onDrop}
     >
-      <ul ref={list} className="task-list" data-layout={layout} data-place={showPlace || undefined} aria-label={`${label}, ${count(visible.length, "task", "tasks")}`}>
+      <ul ref={list} className="task-list" data-layout={layout} aria-label={`${label}, ${count(visible.length, "task", "tasks")}`}>
         {rows}
       </ul>
       {visible.length === 0 && dropAt === null && empty}

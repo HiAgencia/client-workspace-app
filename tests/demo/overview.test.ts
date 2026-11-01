@@ -37,13 +37,10 @@ describe("the demo's Overview figures", () => {
     expect({
       overdue: groups.overdue.count,
       today: groups.today.count,
-      upcoming: groups.upcoming.count,
-      
-      scheduled: groups.overdue.count + groups.today.count + groups.upcoming.count,
       unread: inboxes.reduce((sum, inbox) => sum + ((inbox as unknown as { unread: number | null }).unread ?? 0), 0),
     }).toEqual(figures);
     
-    expect(figures.scheduled).toBeGreaterThan(0);
+    expect(figures.overdue + figures.today).toBeGreaterThan(0);
     expect(figures.unread).toBeGreaterThan(0);
   });
 

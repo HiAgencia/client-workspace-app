@@ -46,12 +46,9 @@ function PlaceName({ path, color }: { path: string; color: string | null }) {
 function PreviewRow({ row }: { row: Row }) {
   return (
     <li className="task-item">
-      <div className="task" data-layout="list" data-place="">
+      <div className="task" data-layout="list">
         <span className="task-circle task-check" role="checkbox" aria-checked={false} data-priority={row.priority} />
         <p className="task-title t-value">{row.title}</p>
-        <p className="task-place t-meta">
-          <PlaceName path={row.place.path} color={row.place.color} />
-        </p>
         <div className="task-meta t-meta">
           {row.when && (
             <span className="task-when" data-when={row.when.tone}>
@@ -74,6 +71,9 @@ function PreviewRow({ row }: { row: Row }) {
               Waiting for mail
             </span>
           )}
+          <span className="task-place">
+            <PlaceName path={row.place.path} color={row.place.color} />
+          </span>
         </div>
       </div>
     </li>
@@ -89,7 +89,7 @@ function Group({ title, tone, rows, count }: { title: string; tone: "overdue" | 
         </p>
         <span className="group-count">{count}</span>
       </div>
-      <ul className="task-list" data-layout="list" data-place="">
+      <ul className="task-list" data-layout="list">
         {rows.map((row) => (
           <PreviewRow key={row.title} row={row} />
         ))}
@@ -122,7 +122,7 @@ export function LandingPreview({ figures }: { figures: DemoOverview }) {
           <section className="box preview-box" data-preview-box="tasks" data-shown="" style={{ "--enter-delay": "140ms" } as CSSProperties}>
             <header className="box-head">
               <p className="t-title box-title">Tasks</p>
-              <span className="box-count">{figures.scheduled} scheduled</span>
+              <span className="box-count">{figures.overdue + figures.today} due</span>
             </header>
             <div className="box-body">
               <div className="groups">
