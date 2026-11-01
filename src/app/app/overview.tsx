@@ -74,7 +74,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
 
   const query = placeValue(place);
   const tasksHref = `/app/tasks${query ? `?place=${query}` : ""}`;
-  const calendarHref = place.kind === "node" ? `/app/calendar?place=${place.id}` : "/app/calendar";
+  const calendarHref = `/app/calendar${query ? `?place=${query}` : ""}`;
 
   const boxes: Record<string, BoxSpec> = now
     ? {
