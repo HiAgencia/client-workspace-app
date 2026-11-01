@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@/components/ui/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { usePiece } from "@/components/ui/use-piece";
@@ -40,6 +40,7 @@ type PageHeaderProps = {
 export function PageHeader({ title, count, trail, filters, filtersSet = 0, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
   const hasTools = Boolean(filters || layout || views || chat || more);
   const heading = useRef<HTMLHeadingElement>(null);
+  const sheeted = useSyncExternalStore(subscribeSheeted, () => window.matchMedia(SHEETED_QUERY).matches, () => false);
   
   
   useEffect(() => {
@@ -91,8 +92,8 @@ export function PageHeader({ title, count, trail, filters, filtersSet = 0, layou
       </div>
       {hasTools && (
         <div className="page-tools" role="group" aria-label="This page's controls">
-          {filters && <div className="page-filters">{filters}</div>}
-          {filters && <FilterSheet set={filtersSet}>{filters}</FilterSheet>}
+          {filters && !sheeted && <div className="page-filters">{filters}</div>}
+          {filters && <FilterSheet set={filtersSet} sheeted={sheeted}>{filters}</FilterSheet>}
           {layout && <ViewSwitch label="View" value={layout.value} options={LAYOUTS} onChange={(value) => layout.onChange(value as PageLayout)} />}
           {!layout && views && <ViewSwitch label={views.label} value={views.value} options={views.options} onChange={views.onChange} />}
           {chat && <ChatButton />}
@@ -105,18 +106,30 @@ export function PageHeader({ title, count, trail, filters, filtersSet = 0, layou
 
 
 
+const SHEETED_QUERY = "(width < 40rem)";
 
-function FilterSheet({ set, children }: { set: number; children: ReactNode }) {
+function subscribeSheeted(onChange: () => void) {
+  const query = window.matchMedia(SHEETED_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+
+
+
+function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  
+  const shown = open && sheeted;
   useEffect(() => {
     const el = dialog.current;
     if (!el) return;
-    if (open && !el.open) el.showModal();
-    if (!open && el.open) el.close();
-  }, [open]);
+    if (shown && !el.open) el.showModal();
+    if (!shown && el.open) el.close();
+  }, [shown]);
   return (
     <>
       <Button
@@ -162,7 +175,7 @@ function FilterSheet({ set, children }: { set: number; children: ReactNode }) {
                 Close
               </Button>
             </div>
-            {everOpened && <div className="filter-sheet-fields">{children}</div>}
+            {everOpened && sheeted && <div className="filter-sheet-fields">{children}</div>}
           </div>
         </PopupLayerProvider>
       </dialog>
