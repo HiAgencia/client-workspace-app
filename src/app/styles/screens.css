@@ -160,6 +160,9 @@
   gap: 0.4rem 0.6rem;
   min-height: 2.5rem;
 }
+.settings-places .account-line:not(:has(.btn)) {
+  min-height: 0;
+}
 .stack {
   display: flex;
   flex-direction: column;

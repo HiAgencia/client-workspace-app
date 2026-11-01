@@ -167,6 +167,11 @@
   min-height: 2.25rem;
   margin-bottom: 0.875rem;
 }
+.code-line {
+  display: block;
+  padding-inline-start: calc((var(--indent, 0) + 2) * 1ch);
+  text-indent: calc((var(--indent, 0) + 2) * -1ch);
+}
 .read-block {
   display: block;
   padding: 0.85em 1em;
@@ -846,7 +851,11 @@ textarea.field {
   font-size: var(--text-body);
   font-weight: 600;
   white-space: nowrap;
+  user-select: none;
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out);
+  @media (pointer: coarse) {
+    min-height: var(--control-h);
+  }
 
   @media (hover: hover) {
     &:hover {
@@ -861,7 +870,7 @@ textarea.field {
   flex: none;
   width: 2.75em;
   height: 1.5em;
-  border: 1px solid var(--control-rim);
+  border: 1px solid var(--field-rim);
   border-radius: var(--radius-pill);
   background: var(--rail);
   box-shadow: var(--shadow-field);
@@ -876,8 +885,8 @@ textarea.field {
   width: calc(1.5em - 6px);
   height: calc(1.5em - 6px);
   border-radius: 50%;
-  background: var(--piece);
-  box-shadow: var(--shadow-piece), inset 0 0 0 1px var(--piece-rim);
+  background: var(--accent-fill);
+  box-shadow: var(--shadow-piece);
   translate: 0 -50%;
   transition: translate var(--dur) var(--ease-std), box-shadow var(--dur-hover-out) var(--ease-hover-out),
     background-color var(--dur) var(--ease-std);
@@ -886,8 +895,8 @@ textarea.field {
     width: 0.5em;
     height: 0.5em;
     border-radius: 50%;
-    background: var(--accent);
-    box-shadow: inset 0 0 0 0 var(--accent);
+    background: var(--on-accent);
+    box-shadow: inset 0 0 0 0 var(--on-accent);
     transition: background-color var(--dur) var(--ease-std), box-shadow var(--dur) var(--ease-std);
   }
 }
@@ -896,7 +905,7 @@ textarea.field {
 }
 :root[data-theme="dark"] .switch-thumb::after {
   background: transparent;
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--on-accent);
 }
 @media (hover: hover) {
   .switch:hover .switch-rail {
@@ -904,7 +913,7 @@ textarea.field {
     transition-duration: var(--dur-hover);
   }
   .switch:hover .switch-thumb {
-    box-shadow: var(--shadow-control-hover), inset 0 0 0 1px var(--piece-rim);
+    box-shadow: var(--shadow-control-hover);
     transition-duration: var(--dur), var(--dur-hover), var(--dur);
   }
 }

@@ -6,6 +6,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Field } from "@/components/ui/field";
+import { Fold } from "@/components/ui/fold";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { LOCALE } from "@/lib/dates";
@@ -45,7 +46,7 @@ export default function SettingsPage() {
     <Suspense fallback={null}>
       <ViewTransition enter="page-in" exit="page-out" default="none">
         <div className="page page-settings">
-          <PageHeader title="Settings" />
+          <PageHeader title="Settings" count="How the workspace looks, the Google accounts it reads, and the tokens your coding agents use." />
           <SettledContext.Provider value={{ ready: entered, report }}>
             <div className="settings-boxes" data-ready={entered || undefined} aria-busy={!entered || undefined}>
               <ThemeSection />
@@ -154,19 +155,18 @@ function AccountsSection() {
     const unread = mail?.unreadByAccount[account.id];
     if (unread === undefined && !listed) return { text: "Reading its mail…" };
     if (!listed && unread === 0) return { text: "No mail in this account yet." };
-    const sample = account.isDemo ? ": sample mail, read-only" : "";
-    return { text: !unread ? `Nothing unread${sample}.` : `${unread} unread${sample}.` };
+    return { text: !unread ? "Nothing unread." : `${unread} unread.` };
   }
 
   return (
-    <SettingsBox id="accounts-settings" title="Google accounts" order={1} count={accounts && accounts.length > 0 ? accounts.length : undefined}>
+    <SettingsBox id="accounts-settings" title="Google accounts" order={1} count={accounts && accounts.length > 0 ? `${accounts.length} connected` : undefined}>
       <p className="t-help">
         Connect an account to a client or a project to see its calendars and its mail there, and in its projects and subprojects.
       </p>
       {canConnect ? (
         <div className="settings-form" aria-label="Connect an account" role="group">
           <div className="settings-where">
-            <Select id="connect-where" label="Where the account connects" placeholder="Client or project…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
+            <Select id="connect-where" label="Where the account connects" placeholder="Pick a client or a project…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
           </div>
           {connectNode ? (
             <a className={buttonClass({ variant: "primary" })} href={`/api/google/connect?node=${connectNode}`}>
@@ -213,7 +213,6 @@ function AccountsSection() {
                           {lostWords(account.status)}
                         </span>
                       )}
-                      {account.isDemo && <span className="pill">Sample account, read-only</span>}
                     </div>
                     <div className="settings-account-grid">
                       <div className="stack settings-part">
@@ -241,8 +240,10 @@ function AccountsSection() {
                           />
                         )}
                       </div>
-                      <fieldset className="stack settings-part">
-                        <legend className="t-label">Calendars shown</legend>
+                      <div className="stack settings-part" role="group" aria-labelledby={`calendars-${account.id}`}>
+                        <h4 className="t-label" id={`calendars-${account.id}`}>
+                          Calendars shown
+                        </h4>
                         {account.calendars.length === 0 && <p className="t-help">This account shares no calendars.</p>}
                         {account.calendars.map((calendar) => (
                           <span key={calendar.id} className="check-row">
@@ -258,15 +259,17 @@ function AccountsSection() {
                             </span>
                           </span>
                         ))}
-                      </fieldset>
+                      </div>
                       <div className="stack settings-part">
                         <h4 className="t-label">Mail</h4>
-                        <p className={line.tone ? "inline-note" : "t-value"} data-tone={line.tone} data-account-mail data-mail-failure={line.failed ? "" : undefined}>
-                          {line.text}
-                        </p>
-                        <a className="link" href={`/app/mail?account=${account.id}`}>
-                          Show its mail
-                        </a>
+                        <div className="settings-mail-line">
+                          <p className={line.tone ? "inline-note" : "t-value"} data-tone={line.tone} data-account-mail data-mail-failure={line.failed ? "" : undefined}>
+                            {line.text}
+                          </p>
+                          <a className="link" href={`/app/mail?account=${account.id}`}>
+                            Show its mail
+                          </a>
+                        </div>
                       </div>
                     </div>
                     {!account.isDemo && (
@@ -296,6 +299,16 @@ type Tokens = { tokens: Token[]; mcpJson: string; tokenEnv: string };
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 
+function CodeLines({ text }: { text: string }) {
+  return text.split("\n").map((line, index) => (
+    <span key={index} className="code-line" style={{ "--indent": line.length - line.trimStart().length } as CSSProperties}>
+      {line}
+      {"\n"}
+    </span>
+  ));
+}
+
+
 
 function AgentTokensSection() {
   const { tree, saving } = useWorkspace();
@@ -307,6 +320,7 @@ function AgentTokensSection() {
   const [missing, setMissing] = useState<"node" | "label" | null>(null);
   const [issued, setIssued] = useState<{ token: string; path: string } | null>(null);
   const [reads, setReads] = useState(0);
+  const [blockOpen, setBlockOpen] = useState(false);
   useSettled("agent-tokens", data !== null || error !== null);
 
   useEffect(() => {
@@ -419,12 +433,17 @@ function AgentTokensSection() {
             <p className="t-help">
               Add this to the repository&apos;s .mcp.json. The token stays in the {data.tokenEnv} environment variable, out of the repository.
             </p>
-            <pre id="mcp-json-block" className="read-block t-code" data-mcp-json tabIndex={0} aria-label="The .mcp.json block">
-              {data.mcpJson}
-            </pre>
-            <div>
-              <CopyButton text={data.mcpJson} target="mcp-json-block" label="Copy the block" />
+            <div className="inline settings-mcp-tools">
+              <CopyButton text={data.mcpJson} target="mcp-json-block" label="Copy the block" onSelecting={() => setBlockOpen(true)} />
+              <Button size="sm" aria-expanded={blockOpen} aria-controls="mcp-json-fold" onClick={() => setBlockOpen((open) => !open)}>
+                {blockOpen ? "Hide the block" : "Show the block"}
+              </Button>
             </div>
+            <Fold open={blockOpen} id="mcp-json-fold">
+              <pre id="mcp-json-block" className="read-block t-code" data-mcp-json tabIndex={blockOpen ? 0 : -1} aria-label="The .mcp.json block">
+                <CodeLines text={data.mcpJson} />
+              </pre>
+            </Fold>
           </div>
           <div className="stack">
             <h3 className="t-label">Issued tokens</h3>

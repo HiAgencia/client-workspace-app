@@ -31,6 +31,13 @@
     max-width: 44rem;
     margin: 0;
   }
+  & > .switch {
+    margin-inline: -0.35em -0.7em;
+  }
+}
+.settings-box .box-empty .inline-note {
+  padding: 0;
+  background: transparent;
 }
 .settings-form {
   display: flex;
@@ -54,8 +61,12 @@
 .settings-accounts {
   display: flex;
   flex-direction: column;
-  gap: 1.6rem;
+  gap: 1.1rem;
   margin-top: 0.35rem;
+}
+.settings-account + .settings-account {
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--division);
 }
 .settings-account {
   display: flex;
@@ -90,11 +101,37 @@
 .settings-places {
   gap: 0.2rem;
 }
+.settings-mail-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.85rem;
+}
+@media (width < 40rem) {
+  .settings-account-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+  .settings-part {
+    display: grid;
+    grid-template-columns: minmax(6rem, 34%) minmax(0, 1fr);
+    gap: 0.25rem 0.75rem;
+    align-items: baseline;
+
+    & > :not(h4) {
+      grid-column: 2;
+    }
+  }
+}
+.settings-mcp-tools {
+  gap: 0.4rem 0.6rem;
+}
 .settings-tokens,
 .trash-list {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  margin-inline: -0.6rem;
 }
 .settings-token,
 .trash-row {

@@ -30,7 +30,7 @@ export function ConnectBlockedNote({ reason }: { reason: ConnectBlocked }) {
 
   return (
     <div className="inline-note connect-blocked" data-connect-blocked={reason}>
-      <p>To connect a Google calendar, sign in with Google. This workspace was opened without an account; signing in opens one of your own.</p>
+      <p>The accounts here are samples, read-only. To connect your own, sign in with Google: it opens a workspace of your own.</p>
       <div>
         <Button size="sm" onClick={() => void signIn()} disabled={busy} aria-busy={busy}>
           Sign in with Google

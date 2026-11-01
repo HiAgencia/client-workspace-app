@@ -19,6 +19,7 @@ const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "sh
 
 
 const FOLD_MS = 220;
+const PURPOSE = "What was deleted, by hand, by the chat, or by an agent. Restoring an item brings back everything deleted with it.";
 
 
 
@@ -54,15 +55,9 @@ export default function TrashPage() {
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-settings">
-        <PageHeader title="Trash" count={items === null || items.length === 0 ? undefined : count(items.length, "deleted item", "deleted items")} />
-        <section className="box settings-box" aria-labelledby="trash-title" data-settings="trash" data-shown="">
-          <header className="box-head">
-            <h2 id="trash-title" className="t-title box-title">
-              Deleted
-            </h2>
-          </header>
+        <PageHeader title="Trash" count={items === null || items.length === 0 ? PURPOSE : `${count(items.length, "deleted item", "deleted items")}. ${PURPOSE}`} />
+        <section className="box settings-box" aria-label="Deleted items" data-settings="trash" data-shown="">
           <div className="box-body">
-            <p className="t-help">What was deleted, by hand, by the chat, or by an agent. Restoring an item brings back everything deleted with it.</p>
             {items === null ? (
               error ? (
                 <BoxFailed what="The trash" message={error} kept={false} onRetry={() => setRound((n) => n + 1)} />
