@@ -233,6 +233,18 @@
       box-shadow var(--dur-hover-out) var(--ease-hover-out);
   }
 }
+@media (forced-colors: active) {
+  .side-pieces::before {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .sidebar {
+    border-inline-end: 1px solid CanvasText;
+  }
+  .topbar {
+    border-block-end: 1px solid CanvasText;
+  }
+}
 @media (hover: hover) {
   .side-pieces:has(.side-link[aria-current="page"]:hover)::before {
     background: var(--accent-tint-hover);

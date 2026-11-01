@@ -804,6 +804,20 @@ textarea.field {
 .seg::before {
   transition: box-shadow var(--dur-hover-out) var(--ease-hover-out);
 }
+@media (forced-colors: active) {
+  .seg::before,
+  .seg:not([data-piece-ready]) > .seg-option:is([aria-selected="true"], [aria-pressed="true"]),
+  [data-over],
+  [data-drop-over],
+  .task-group-body[data-drop] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .boxes-end[data-drop]::before,
+  .box[data-drop-before]::before {
+    background: Highlight;
+  }
+}
 .seg:not([data-piece-ready]) > .seg-option:is([aria-selected="true"], [aria-pressed="true"]) {
   background: var(--piece);
   box-shadow: var(--shadow-piece);

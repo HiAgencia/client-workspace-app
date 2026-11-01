@@ -457,6 +457,18 @@
     }
   }
 }
+@media (forced-colors: active) {
+  .task-when .picker {
+    padding: 1px calc(0.5em + 1px);
+    border: 0;
+
+    @media (hover: hover) {
+      &:hover {
+        outline: 1px solid Highlight;
+      }
+    }
+  }
+}
 .task-subtasks-toggle {
   --chip: calc(1.25em + 2px);
   --target: max(1.5rem, var(--chip));
