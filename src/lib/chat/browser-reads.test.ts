@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { describe, expect, it } from "vitest";
-import { continuedTurn, stepsTaken, turnGoesOn } from "./browser-reads";
+import { continuedTurn, leftAtARead, openCall, stepsTaken, turnGoesOn } from "./browser-reads";
 
 const read = (toolCallId: string, extra: Record<string, unknown> = { state: "input-available" }) => ({ type: "tool-list_mail", toolCallId, input: { account: "a" }, ...extra }) as unknown as UIMessage["parts"][number];
 const written = (toolCallId: string) => ({ type: "tool-create_task", toolCallId, input: {}, state: "output-available", output: { ok: true } }) as UIMessage["parts"][number];
@@ -39,6 +39,25 @@ describe("the turn the browser continues", () => {
     expect(continuedTurn(undefined, assistant("s", answer("1")))).toBeNull();
     const writeOpen = assistant("r", { type: "tool-create_task", toolCallId: "w", input: {}, state: "input-available" } as UIMessage["parts"][number]);
     expect(continuedTurn(writeOpen, assistant("s", { type: "tool-create_task", toolCallId: "w", input: {}, state: "output-available", output: { ok: true } } as UIMessage["parts"][number]))).toBeNull();
+  });
+
+  it("names the call left open as the database holds it, and a turn with nothing open has none to take", () => {
+    expect(openCall(stored)).toEqual({ toolCallId: "1", state: "input-available" });
+    expect(() => openCall(assistant("r", written("w")))).toThrow();
+  });
+});
+
+describe("a turn left at a read", () => {
+  it("is one whose last step asked for a read, answered or not", () => {
+    expect(leftAtARead(assistant("m", { type: "step-start" }, read("1")))).toBe(true);
+    expect(leftAtARead(assistant("m", { type: "step-start" }, answer("1")))).toBe(true);
+    expect(leftAtARead(assistant("m", { type: "step-start" }, written("w"), { type: "step-start" }, answer("1")))).toBe(true);
+  });
+
+  it("is not one that went on past it, one that read nothing from the browser, nor a person's message", () => {
+    expect(leftAtARead(assistant("m", { type: "step-start" }, answer("1"), { type: "step-start" }, { type: "text", text: "Done" }))).toBe(false);
+    expect(leftAtARead(assistant("m", { type: "step-start" }, written("w")))).toBe(false);
+    expect(leftAtARead({ id: "u", role: "user", parts: [{ type: "text", text: "Hi" }] })).toBe(false);
   });
 });
 

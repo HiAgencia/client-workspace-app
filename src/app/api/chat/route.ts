@@ -1,7 +1,7 @@
 import { createUIMessageStreamResponse, validateUIMessages, type UIMessage } from "ai";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
-import { continuedTurn } from "@/lib/chat/browser-reads";
+import { continuedTurn, openCall } from "@/lib/chat/browser-reads";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { AI_OFF_MESSAGE, chatModel, chatProvider } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
@@ -23,6 +23,8 @@ const body = z.object({
   timeZone: z.string().min(1).max(64).default("UTC"),
   message: z.unknown(),
 });
+
+const storable = (message: UIMessage) => JSON.parse(JSON.stringify(message.parts));
 
 function validTimeZone(value: string): string {
   try {
@@ -110,8 +112,14 @@ export async function POST(request: Request) {
   if (continuing && !continued) return problem(409, NOTHING_WAITING);
   
   
-  if (stored) {
-    const taken = await ctx.db.from("chat_messages").delete().eq("id", stored.id).select("id");
+  
+  if (stored && continued) {
+    const taken = await ctx.db
+      .from("chat_messages")
+      .update({ parts: storable(continued) })
+      .eq("id", stored.id)
+      .contains("parts", JSON.stringify([openCall(stored)]))
+      .select("id");
     if (taken.error) {
       console.error("chat: taking the turn failed", taken.error.message);
       return problem(500, "the conversation could not be read");
@@ -131,12 +139,9 @@ export async function POST(request: Request) {
     onEnd: async ({ responseMessage, isAborted }) => {
       
       if (isAborted) return;
-      const rows = (continued ? [responseMessage] : [message, responseMessage]).map((entry) => ({
-        node_id: nodeId,
-        role: entry.role,
-        parts: JSON.parse(JSON.stringify(entry.parts)),
-      }));
-      const saved = await ctx.db.from("chat_messages").insert(rows);
+      const saved = stored
+        ? await ctx.db.from("chat_messages").update({ parts: storable(responseMessage) }).eq("id", stored.id)
+        : await ctx.db.from("chat_messages").insert([message, responseMessage].map((entry) => ({ node_id: nodeId, role: entry.role, parts: storable(entry) })));
       if (saved.error) console.error("chat: storing the turn failed", saved.error.message);
     },
   });

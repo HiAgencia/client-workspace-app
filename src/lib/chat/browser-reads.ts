@@ -33,6 +33,19 @@ export function turnGoesOn({ messages }: { messages: UIMessage[] }): boolean {
 }
 
 
+
+export function leftAtARead(message: UIMessage): boolean {
+  return message.role === "assistant" && lastStep(message).some(isBrowserRead);
+}
+
+
+export function openCall(stored: UIMessage): { toolCallId: string; state: string } {
+  const open = stored.parts.find((part) => isToolUIPart(part) && !isAnswered(part));
+  if (!open || !isToolUIPart(open)) throw new Error("this turn left no read open");
+  return { toolCallId: open.toolCallId, state: open.state };
+}
+
+
 export function stepsTaken(messages: UIMessage[]): number {
   const last = messages.at(-1);
   return last?.role === "assistant" ? last.parts.filter((part) => part.type === "step-start").length : 0;
