@@ -9,7 +9,8 @@ SUPABASE_SECRET_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 TOKEN_ENCRYPTION_KEY=
-# The chat: `simulated` runs without spend; `meta` calls Meta Model API with MODEL_API_KEY.
+# The AI's one switch: `simulated` runs without spend; `meta` calls Meta Model API with MODEL_API_KEY; without a value it is
+# off, and the chat, the voice and the images say they are not available without calling any model.
 MODEL_PROVIDER=simulated
 MODEL_API_KEY=
 # Optional daily caps (defaults in src/lib/chat/usage.ts): per person, per demo session, and for all demo sessions.

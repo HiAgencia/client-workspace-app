@@ -2,7 +2,7 @@ import { createUIMessageStreamResponse, validateUIMessages, type UIMessage } fro
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
-import { chatModel } from "@/lib/chat/model";
+import { AI_OFF_MESSAGE, chatModel, chatProvider } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
 import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
 import { json, problem, sameOrigin, SESSION_HEADERS } from "@/lib/http";
@@ -32,6 +32,7 @@ function validTimeZone(value: string): string {
 }
 
 
+
 export async function GET(request: NextRequest) {
   const asked = request.nextUrl.searchParams.get("node");
   if (asked !== null && !isUuid(asked)) return problem(400, "no such node");
@@ -39,7 +40,8 @@ export async function GET(request: NextRequest) {
   const session = await sessionContext("chat", nodeId ?? undefined);
   if (!session.ok) return session.response;
   try {
-    return json({ ok: true, messages: await loadHistory(session.ctx.db, nodeId, SHOWN_MESSAGES) });
+    const off = chatProvider() === "off" ? AI_OFF_MESSAGE : null;
+    return json({ ok: true, messages: await loadHistory(session.ctx.db, nodeId, SHOWN_MESSAGES), off });
   } catch (error) {
     console.error("chat history:", error instanceof Error ? error.message : error);
     return problem(500, "the conversation could not be read");
@@ -51,6 +53,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
+  const provider = chatProvider();
+  if (provider === "off") return json({ ok: false, code: "off", message: AI_OFF_MESSAGE }, 503);
   const text = await request.text();
   if (text.length > MAX_BODY) return problem(413, "the message is too large: attach a smaller image");
   let parsed;
@@ -96,7 +100,7 @@ export async function POST(request: Request) {
   }
   const messages = withoutEarlierFiles([...history, message]);
 
-  const { model, providerOptions } = chatModel();
+  const { model, providerOptions } = chatModel(provider);
   const stream = await runChat({
     ctx,
     model,

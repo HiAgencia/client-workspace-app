@@ -7,15 +7,22 @@ import { simulatedModel } from "./simulated";
 export const META_BASE_URL = "https://api.meta.ai/v1";
 const META_CHAT_MODEL = "muse-spark-1.3";
 
-export type ChatProvider = "meta" | "simulated";
+export type ChatProvider = "meta" | "simulated" | "off";
+export type LiveProvider = Exclude<ChatProvider, "off">;
+
+
+
 
 export function chatProvider(): ChatProvider {
-  return serverEnv("MODEL_PROVIDER") === "meta" ? "meta" : "simulated";
+  const value = serverEnv("MODEL_PROVIDER");
+  return value === "meta" || value === "simulated" ? value : "off";
 }
 
 
+export const AI_OFF_MESSAGE = "The assistant is not available right now: messages, dictation and images cannot be sent to it. Everything else works as usual.";
 
-export function chatModel(provider = chatProvider()): { model: LanguageModel; providerOptions?: ProviderOptions } {
+
+export function chatModel(provider: LiveProvider): { model: LanguageModel; providerOptions?: ProviderOptions } {
   if (provider === "simulated") return { model: simulatedModel() };
   const meta = createOpenAI({ baseURL: META_BASE_URL, apiKey: requireServerEnv("MODEL_API_KEY") });
   return {

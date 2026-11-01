@@ -40,7 +40,7 @@ The app runs as a Cloudflare Worker built with OpenNext, against a Supabase proj
 1. `pnpm install --frozen-lockfile`
 2. Create `.dev.vars` from `.dev.vars.example`: the Supabase URL and keys, a Google OAuth client to connect
    calendars, a 32-byte base64 `TOKEN_ENCRYPTION_KEY`, and `MODEL_PROVIDER` (`simulated` runs the chat with no API
-   spend; `meta` calls Meta Model API with `MODEL_API_KEY`).
+   spend; `meta` calls Meta Model API with `MODEL_API_KEY`; without a value the AI is off and the rest of the app works).
 3. Apply the schema: `pnpm db:push` (Supabase CLI linked to the project).
 4. `pnpm preview` builds the Worker and serves it at `http://localhost:8787`, exactly as it is deployed.
 5. To connect a coding agent, open a client, project, or subproject, choose "Issue an agent token" (it opens Settings

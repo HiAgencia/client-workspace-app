@@ -4,9 +4,11 @@ import { healthStatus } from "@/lib/health";
 describe("healthStatus", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("reports the app as up, with the simulated chat unless the server is set to Meta", () => {
+  it("reports the app as up, with the AI off unless the server names a model, a value mistyped included", () => {
     vi.stubEnv("MODEL_PROVIDER", "");
-    expect(healthStatus()).toEqual({ ok: true, chat: "simulated" });
+    expect(healthStatus()).toEqual({ ok: true, chat: "off" });
+    vi.stubEnv("MODEL_PROVIDER", "Meta");
+    expect(healthStatus()).toEqual({ ok: true, chat: "off" });
     vi.stubEnv("MODEL_PROVIDER", "simulated");
     expect(healthStatus()).toEqual({ ok: true, chat: "simulated" });
   });

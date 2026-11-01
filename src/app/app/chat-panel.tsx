@@ -80,7 +80,7 @@ const MAX_IMAGE = 4 * 1024 * 1024;
 
 
 export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
-  const [initial, setInitial] = useState<UIMessage[] | null>(null);
+  const [initial, setInitial] = useState<{ messages: UIMessage[]; off: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
@@ -88,8 +88,8 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
   const reach = nodeId === null ? "It works on every client and project." : node ? `It works on ${node.path}${below}.` : "It works on this page's client or project.";
 
   useEffect(() => {
-    void get<{ messages: UIMessage[] }>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat").then((answer) => {
-      if (answer.ok) setInitial(answer.messages);
+    void get<{ messages: UIMessage[]; off: string | null }>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat").then((answer) => {
+      if (answer.ok) setInitial({ messages: answer.messages, off: answer.off });
       else setError(answer.message);
     });
   }, [nodeId]);
@@ -122,13 +122,14 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
           )}
         </div>
       ) : (
-        <Conversation nodeId={nodeId} initial={initial} />
+        <Conversation nodeId={nodeId} initial={initial.messages} off={initial.off} />
       )}
     </section>
   );
 }
 
-function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIMessage[] }) {
+
+function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial: UIMessage[]; off: string | null }) {
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
   const [image, setImage] = useState<FileUIPart | null>(null);
@@ -185,7 +186,7 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
   return (
     <>
       <ol className="chat-log" ref={log} aria-live="polite">
-        {messages.length === 0 && (
+        {messages.length === 0 && !off && (
           <li className="inline-note">
             {nodeId === null
               ? "Ask what is pending across every client and project, to add a task to one of them by its name, or what arrived for the tasks that wait for mail. Attach an image of a message and it turns it into tasks."
@@ -233,47 +234,55 @@ function Conversation({ nodeId, initial }: { nodeId: string | null; initial: UIM
           </li>
         )}
       </ol>
-      <form onSubmit={send} className="chat-compose">
-        {error && (
-          <p role="alert" className="inline-note" data-tone="alert" data-chat-error>
-            {error.message.includes("limit") ? error.message : `The assistant could not answer: ${readable(error.message)}`}
+      {off ? (
+        <div className="chat-compose">
+          <p role="status" className="inline-note" data-chat-off>
+            {off}
           </p>
-        )}
-        {notice && (
-          <p role="status" className="inline-note">
-            {notice}
-          </p>
-        )}
-        {image && (
-          <p className="inline" data-attached>
-            <span className="pill">Attached: {image.filename}</span>
-            <Button variant="quiet" size="sm" onClick={() => setImage(null)}>
-              Remove
+        </div>
+      ) : (
+        <form onSubmit={send} className="chat-compose">
+          {error && (
+            <p role="alert" className="inline-note" data-tone="alert" data-chat-error>
+              {error.message.includes("limit") ? error.message : `The assistant could not answer: ${readable(error.message)}`}
+            </p>
+          )}
+          {notice && (
+            <p role="status" className="inline-note">
+              {notice}
+            </p>
+          )}
+          {image && (
+            <p className="inline" data-attached>
+              <span className="pill">Attached: {image.filename}</span>
+              <Button variant="quiet" size="sm" onClick={() => setImage(null)}>
+                Remove
+              </Button>
+            </p>
+          )}
+          <div className="compose-line">
+            <TextArea
+              aria-label="Message to the assistant"
+              placeholder="Create a task to…"
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKey}
+            />
+            <Button type="submit" variant="primary" disabled={busy}>
+              Send
             </Button>
-          </p>
-        )}
-        <div className="compose-line">
-          <TextArea
-            aria-label="Message to the assistant"
-            placeholder="Create a task to…"
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKey}
-          />
-          <Button type="submit" variant="primary" disabled={busy}>
-            Send
-          </Button>
-        </div>
-        <div className="compose-actions">
-          {}
-          <label className={`${buttonClass({ size: "sm" })} file-button`}>
-            <span className="btn-label">Attach an image</span>
-            <input id="chat-image" name="chat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
-          </label>
-          <VoiceNote onText={(text) => setInput((current) => (current ? `${current} ${text}` : text))} onNotice={setNotice} />
-        </div>
-      </form>
+          </div>
+          <div className="compose-actions">
+            {}
+            <label className={`${buttonClass({ size: "sm" })} file-button`}>
+              <span className="btn-label">Attach an image</span>
+              <input id="chat-image" name="chat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
+            </label>
+            <VoiceNote onText={(text) => setInput((current) => (current ? `${current} ${text}` : text))} onNotice={setNotice} />
+          </div>
+        </form>
+      )}
     </>
   );
 }
