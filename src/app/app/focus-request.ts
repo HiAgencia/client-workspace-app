@@ -62,10 +62,13 @@ export function plainClick(event: MouseEvent): boolean {
 
 export type Landing = "landed" | "busy" | "missing" | "hidden";
 
+const nextFrame = () => new Promise((done) => requestAnimationFrame(done));
 
 
 
-export function land(target: FocusTarget, { acted = false }: { acted?: boolean } = {}): Landing {
+
+
+export async function land(target: FocusTarget, { acted = false }: { acted?: boolean } = {}): Promise<Landing> {
   const active = document.activeElement as HTMLElement | null;
   const inUse =
     active !== null &&
@@ -78,8 +81,15 @@ export function land(target: FocusTarget, { acted = false }: { acted?: boolean }
   if (target.kind === "quick-add") element = document.querySelector<HTMLElement>(`[data-quick-add="${target.type}"] input`);
   if (target.kind === "item") element = document.querySelector<HTMLElement>(`[data-item="${target.itemId}"] [data-item-title]`);
   if (!element) return "missing";
+  const fold = element.closest<HTMLElement>('.fold[data-open="false"]');
+  if (fold) {
+    document.querySelector<HTMLElement>(`[aria-controls="${fold.id}"]`)?.click();
+    for (let frames = 0; fold.dataset.open !== "true" && frames < 10; frames++) await nextFrame();
+  }
   element.focus({ preventScroll: true });
   if (document.activeElement !== element) return "hidden";
+  
+  if (fold) await Promise.allSettled(fold.getAnimations().map((animation) => animation.finished));
   element.scrollIntoView({ block: target.kind === "node" ? "start" : "center", behavior: reduced ? "instant" : "smooth" });
   if (target.kind === "item") {
     const row = element.closest<HTMLElement>("[data-item]");

@@ -104,8 +104,11 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       if (!request) return;
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
-          const landing = land(request.target, { acted: request.acted });
-          if (landing === "missing" && request.target.kind === "item") notify({ text: `“${request.target.title}” is not on this page.`, tone: "status" });
+          void land(request.target, { acted: request.acted }).then((landing) => {
+            if (request.target.kind !== "item") return;
+            if (landing === "missing") notify({ text: `“${request.target.title}” is not on this page.`, tone: "status" });
+            if (landing === "hidden") notify({ text: `“${request.target.title}” could not be shown on this page.`, tone: "status" });
+          });
         }),
       );
     };
