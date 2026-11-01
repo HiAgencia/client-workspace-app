@@ -21,7 +21,7 @@ import { useEventsRead } from "./use-events-read";
 import { get, post, tool, type CalendarEvent, type Item, type TreeNode } from "./client-api";
 import { PathText } from "./item-parts";
 import { accountsSeenFrom, figureWords, type MailList } from "./mail-store";
-import { subjectOf } from "./mail/subject";
+import { subjectOf, taskLine } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
 import { useQuickAddInline } from "./quick-add";
 import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, placeOnPage, TaskList, timeLabel, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
@@ -671,6 +671,7 @@ const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
 
 
 
+
 export function mailBoxRows(mail: MailList, replies: TaskReplies[], account: string | null): Array<{ message: MailRow; label: string | null }> {
   const inAccount = (message: MailRow) => account === null || message.accountId === account;
   const seen = new Set<string>();
@@ -684,7 +685,8 @@ export function mailBoxRows(mail: MailList, replies: TaskReplies[], account: str
     const more = entry.more.some((id) => account === null || id === account);
     rows.push({ message: shown, label: `${repliesText(own.length, more)} for “${inlinePlain(entry.task.title)}”` });
   }
-  for (const message of [...mail.groups.forTasks.messages, ...mail.groups.unread.messages]) {
+  const toDone = mail.groups.earlier.messages.filter((message) => message.tasks.length > 0);
+  for (const message of [...mail.groups.forTasks.messages, ...mail.groups.unread.messages, ...toDone]) {
     if (!inAccount(message) || seen.has(mailKey(message))) continue;
     seen.add(mailKey(message));
     rows.push({ message, label: null });
@@ -747,7 +749,7 @@ export function MailBoxContent({
     return (
       <ul className="mail-list">
         {rows.map(({ message, label }) => {
-          const linked = message.tasks.find((task) => task.status === "open") ?? message.tasks[0];
+          const line = taskLine(message);
           
           const where = message.place ? placeOnPage(message.place, true, place.kind === "node" ? place.id : null, tree) : null;
           return (
@@ -762,8 +764,8 @@ export function MailBoxContent({
                 <span className="mail-for">
                   {label ? (
                     label
-                  ) : linked ? (
-                    `For: ${inlinePlain(linked.title)}`
+                  ) : line ? (
+                    line.text
                   ) : where?.shown ? (
                     <PlaceName path={where.path} color={message.place?.color ?? null} />
                   ) : (

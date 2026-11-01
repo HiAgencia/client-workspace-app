@@ -2,7 +2,7 @@
 
 import { Menu as Base } from "@base-ui/react/menu";
 import type { ReactNode } from "react";
-import { cx } from "@/lib/utils";
+import { buttonClass } from "./button";
 import { usePopupContainer } from "./popup-layer";
 import "@/app/styles/task.css";
 
@@ -24,6 +24,8 @@ type MenuProps = {
   
   name?: string;
   entries: MenuEntry[];
+  
+  variant?: "quiet" | "control" | "primary";
   className?: string;
   onOpenChange?: (open: boolean) => void;
   
@@ -33,11 +35,11 @@ type MenuProps = {
 
 
 
-export function Menu({ label, about, name, entries, className, onOpenChange, finalFocus }: MenuProps) {
+export function Menu({ label, about, name, entries, variant = "quiet", className, onOpenChange, finalFocus }: MenuProps) {
   const container = usePopupContainer();
   return (
     <Base.Root modal={false} onOpenChange={(open) => onOpenChange?.(open)}>
-      <Base.Trigger className={cx("btn btn-quiet btn-sm menu-trigger", className)} aria-label={name ?? (about ? `${label} ${about}` : undefined)}>
+      <Base.Trigger className={buttonClass({ variant, size: "sm", className: className ? `menu-trigger ${className}` : "menu-trigger" })} aria-label={name ?? (about ? `${label} ${about}` : undefined)}>
         <span className="btn-label">{label}</span>
       </Base.Trigger>
       <Base.Portal container={container}>

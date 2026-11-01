@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { useMedia } from "@/components/ui/use-media";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { LOCALE } from "@/lib/dates";
@@ -51,6 +52,16 @@ function remember(key: string, value: string) {
 }
 
 
+export function useMailMode(): { mode: Theme; setMode: (next: Theme) => void } {
+  const productTheme = useSyncExternalStore(subscribeTheme, currentTheme, () => "light" as Theme);
+  const chosen = useSyncExternalStore(subscribeStore, storedMode, () => null);
+  return { mode: chosen ?? productTheme, setMode: (next) => remember(MODE_KEY, next) };
+}
+
+
+export const MAIL_PHONE = "(width < 40rem)";
+
+
 
 const fullTime = (iso: string) =>
   new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
@@ -63,19 +74,19 @@ type ViewerProps = {
   onNext: (() => void) | null;
   
   actions: ReactNode;
+  below: ReactNode;
+  
+  more: ReactNode;
   
   onClose?: () => void;
-  
-  onLoaded?: (message: MailContent | null) => void;
 };
 
-export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded }: ViewerProps) {
+export function MailViewer({ row, onPrevious, onNext, actions, below, more, onClose }: ViewerProps) {
   const key = `${row.accountId}:${row.id}`;
   const [read, setRead] = useState<{ key: string; message: MailContent | null; error: string | null } | null>(null);
-  const productTheme = useSyncExternalStore(subscribeTheme, currentTheme, () => "light" as Theme);
-  const chosen = useSyncExternalStore(subscribeStore, storedMode, () => null);
+  const { mode, setMode } = useMailMode();
+  const phone = useMedia(MAIL_PHONE);
   const senders = useSyncExternalStore(subscribeStore, () => localStorage.getItem(IMAGES_KEY) ?? "[]", () => "[]");
-  const mode: Theme = chosen ?? productTheme;
   const sender = row.from.email.toLowerCase();
   const imagesOn = imageSenders().includes(sender);
   void senders;
@@ -92,61 +103,76 @@ export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded
   }, [key, row.accountId, row.id]);
 
   const message = read?.key === key ? read.message : null;
-  useEffect(() => {
-    onLoaded?.(message);
-  }, [message, onLoaded]);
-
-  const setMode = (next: Theme) => remember(MODE_KEY, next);
   const setImages = (on: boolean) => {
     const list = imageSenders().filter((entry) => entry !== sender);
     remember(IMAGES_KEY, JSON.stringify(on ? [...list, sender] : list));
   };
 
+  const moving = (
+    <div className="mail-bar-move">
+      <div className="mail-steps" role="group" aria-label="Move through the list">
+        {onClose && (
+          <Button size="sm" onClick={onClose} aria-label="Back to the list">
+            Back
+          </Button>
+        )}
+        <Button size="sm" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}>
+          Previous
+        </Button>
+        <Button size="sm" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
+          Next
+        </Button>
+      </div>
+      {phone ? more : <ModeSwitch value={mode} onChange={setMode} />}
+    </div>
+  );
+  const acting = <div className="mail-actions">{actions}</div>;
+
   return (
     <article className="mail-viewer" aria-labelledby="mail-subject" data-mail-viewer={key}>
+      <div className="mail-bar">
+        {onClose ? (
+          <>
+            {moving}
+            {acting}
+          </>
+        ) : (
+          <>
+            {acting}
+            {moving}
+          </>
+        )}
+      </div>
       <header className="mail-head">
-        <div className="mail-head-top">
-          <h2 id="mail-subject" className="t-title mail-subject" tabIndex={-1}>
-            {subjectOf(row)}
-          </h2>
-          <div className="mail-head-tools">
-            <ModeSwitch value={mode} onChange={setMode} />
-          </div>
-        </div>
+        <h2 id="mail-subject" className="t-title mail-head-subject" tabIndex={-1}>
+          {subjectOf(row)}
+        </h2>
         <p className="mail-from-line">
-          <span className="t-name">{row.from.name ?? row.from.email}</span>
-          {row.from.name && <span className="t-meta mail-address">{row.from.email}</span>}
+          <span className="mail-from-who">
+            <span className="t-name">{row.from.name ?? row.from.email}</span>
+            {row.from.name && <span className="t-meta mail-address">{row.from.email}</span>}
+          </span>
+          <span className="t-meta mail-head-when">{fullTime(row.receivedAt)}</span>
         </p>
-        <p className="t-meta mail-to-line">
-          To <span className="mail-address">{row.accountEmail}</span>, {fullTime(row.receivedAt)}
-        </p>
-        <p className="t-meta mail-place-line">
-          {row.place ? (
-            <>
-              In <PlaceName path={row.place.path} color={row.place.color} />
-            </>
-          ) : (
-            "In no client or project"
-          )}
+        <p className="t-meta mail-where-line">
+          <span>
+            To <span className="mail-address">{row.accountEmail}</span>
+          </span>
+          <span className="mail-where-place">
+            {row.place ? (
+              <>
+                In <PlaceName path={row.place.path} color={row.place.color} />
+              </>
+            ) : (
+              "In no client or project"
+            )}
+          </span>
           {row.important && (
             <span className="pill" data-tone="warn">
               Important
             </span>
           )}
         </p>
-        <div className="mail-steps" role="group" aria-label="Move through the list">
-          <Button size="sm" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}>
-            Previous
-          </Button>
-          <Button size="sm" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
-            Next
-          </Button>
-          {onClose && (
-            <Button size="sm" onClick={onClose}>
-              Back to the list
-            </Button>
-          )}
-        </div>
       </header>
 
       {message && message.remoteImages > 0 && (
@@ -162,7 +188,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded
         </div>
       )}
 
-      <div className="mail-actions">{actions}</div>
+      {below}
 
       {read?.key === key && read.error ? (
         <p role="alert" className="inline-note" data-tone="alert">
@@ -223,8 +249,11 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
       doc.addEventListener(
         "wheel",
         (event) => {
+          
+          const down = event.deltaY > 0;
+          const moves = (box: HTMLElement) => box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY) && (down ? box.scrollTop + box.clientHeight < box.scrollHeight - 1 : box.scrollTop > 0);
           let scroller: HTMLElement | null = element.parentElement;
-          while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+          while (scroller && !moves(scroller)) scroller = scroller.parentElement;
           const target = scroller ?? document.scrollingElement;
           if (!target) return;
           event.preventDefault();

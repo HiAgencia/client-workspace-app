@@ -17,8 +17,14 @@
 .mail-layout {
   display: grid;
   grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr);
+  flex: 1 1 auto;
   gap: var(--gap-cards);
-  align-items: start;
+}
+@media (width >= 64rem) {
+  .mail-page {
+    --mail-air: calc(var(--gutter) * 3.4);
+    min-height: calc(100svh - var(--mail-air));
+  }
 }
 @media (width < 64rem) {
   .mail-layout {
@@ -31,8 +37,7 @@
   gap: 1rem;
   padding: 0.6rem;
 }
-.mail-none,
-.mail-view-none {
+.mail-none {
   margin: 0;
   padding: 0.6rem;
 }
@@ -63,15 +68,18 @@
 }
 .mail-task-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.25rem 0.75rem;
   padding: 0.3rem 0.65rem 0;
 }
 .mail-task-title {
   display: flex;
+  flex: 1 1 11rem;
   flex-direction: column;
   min-width: 0;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 .mail-page .mail-row {
@@ -102,13 +110,19 @@
   }
   &[aria-current="true"] {
     background: var(--accent-tint);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
   @media (hover: hover) {
     &[aria-current="true"]:hover {
       background: var(--accent-tint-hover);
-      box-shadow: inset 0 0 0 1px var(--accent);
+      box-shadow: inset 0 0 0 2px var(--accent);
     }
+  }
+}
+@media (forced-colors: active) {
+  .mail-page .mail-row[aria-current="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
   }
 }
 .mail-row-top {
@@ -144,14 +158,43 @@
   font-weight: 650;
 }
 .mail-row-where {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 0.75rem;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+  & > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  & > .task-place-name {
+    display: block;
+
+    &[data-color]::before {
+      display: inline-block;
+      margin-inline-end: 0.4em;
+      vertical-align: 0.1em;
+      translate: none;
+    }
+  }
 }
-.mail-row-for {
+.mail-row-where > .mail-row-for {
+  display: -webkit-box;
   color: var(--mail-waiting);
   font-weight: 650;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+
+  &[data-done] {
+    color: var(--muted);
+    font-weight: 500;
+  }
 }
 .mail-list-wait {
   display: flex;
@@ -164,20 +207,99 @@
   flex-direction: column;
   gap: 0.4rem;
 }
-
+.mail-view-column {
+  display: flex;
+  flex-direction: column;
+  height: 0;
+  min-width: 0;
+  min-height: 100%;
+}
 .mail-view {
   position: sticky;
-  top: calc(var(--header-h) + var(--gutter));
-  max-height: calc(100svh - var(--header-h) - 2 * var(--gutter));
+  top: calc(var(--gutter) * 1.4);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100svh - var(--mail-air));
+  padding: 0;
+  overflow: hidden;
+}
+.mail-view-in {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 var(--pad-card) var(--pad-card);
   overflow-y: auto;
-  overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+.mail-view-none {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding-top: var(--pad-card);
+  text-align: center;
+
+  & h2,
+  & p {
+    margin: 0;
+  }
+  & p {
+    max-width: 44ch;
+  }
+}
+.mail-view-go {
+  min-height: var(--control-h);
+  margin-top: 0.5rem;
 }
 .mail-viewer {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
   min-width: 0;
+}
+.mail-bar {
+  --control-h: var(--control-h-sm);
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding-block: calc(var(--pad-card) * 0.75) 0.7rem;
+  background: var(--card);
+  box-shadow: 0 1px 0 var(--division);
+}
+.mail-actions,
+.mail-action-row,
+.mail-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.mail-bar-move {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+@media (width < 40rem) {
+  .mail-actions,
+  .mail-action-row {
+    flex: 1 1 100%;
+  }
+  .mail-action-row > .btn {
+    flex: 1 1 0;
+  }
 }
 .mail-head {
   display: flex;
@@ -188,47 +310,42 @@
     margin: 0;
   }
 }
-.mail-head-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  margin-bottom: 0.3rem;
-}
-.mail-subject {
-  flex: 1 1 16rem;
-  margin: 0;
+.mail-head-subject {
+  margin: 0 0 0.2rem;
   overflow-wrap: anywhere;
-}
-.mail-head-tools {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.mail-mode .seg-option {
-  min-height: 2em;
 }
 .mail-from-line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.15rem 0.6rem;
+  justify-content: space-between;
+  gap: 0.1rem 1rem;
+}
+.mail-from-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.6rem;
+  min-width: 0;
+}
+.mail-head-when {
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 .mail-address {
   overflow-wrap: anywhere;
 }
-.mail-place-line {
+.mail-where-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem 0.6rem;
+  gap: 0.25rem 1rem;
 }
-.mail-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.4rem;
+.mail-where-place {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  min-width: 0;
 }
 .mail-images {
   display: flex;
@@ -243,24 +360,6 @@
     flex: 1 1 16rem;
     margin: 0;
   }
-}
-.mail-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.mail-action-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-}
-.btn.mail-link-menu,
-.btn.mail-answers-menu {
-  --btn-fill: var(--control);
-  --btn-rim: var(--control-rim);
-  --btn-ink: var(--ink);
-  --btn-shadow: var(--shadow-control);
 }
 .mail-why {
   margin: 0;
@@ -312,16 +411,12 @@
 .mail-frame {
   position: relative;
   min-width: 0;
-  padding: 0;
+  padding: clamp(0.4rem, 0.1rem + 1vw, 0.9rem);
   border-radius: var(--radius-control);
+  background: var(--interior);
   opacity: 1;
-  transition: opacity var(--dur) var(--ease-out), background-color var(--dur) var(--ease-std);
+  transition: opacity var(--dur) var(--ease-out);
 
-  &[data-mode="dark"]:not([data-adapts]) {
-    padding: 0.75rem;
-    background: var(--interior);
-    box-shadow: inset 0 0 0 1px var(--division);
-  }
   &[data-loading],
   &[data-leaving] {
     opacity: 0;
@@ -333,7 +428,7 @@
   position: relative;
   overflow: hidden;
   border-radius: calc(var(--radius-control) * 0.8);
-  box-shadow: inset 0 0 0 1px var(--division);
+  box-shadow: 0 0 0 1px var(--card-rim), var(--shadow-card);
 }
 .mail-iframe {
   display: block;
@@ -347,9 +442,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  padding: 1rem;
-  border-radius: var(--radius-control);
-  background: var(--interior);
+  padding: 0.6rem;
 }
 .mail-sheet {
   width: 100vw;
@@ -361,7 +454,11 @@
   border-radius: 0;
 }
 .mail-sheet-in {
-  padding: calc(var(--gutter) + env(safe-area-inset-top)) var(--gutter) calc(var(--gutter) + env(safe-area-inset-bottom));
+  padding: 0 var(--gutter) calc(var(--gutter) + env(safe-area-inset-bottom));
+
+  & .mail-bar {
+    padding-top: calc(0.7rem + env(safe-area-inset-top));
+  }
 }
 .task-mail-body {
   display: flex;
@@ -453,15 +550,6 @@
     &:hover .t-value {
       color: var(--accent-ink);
     }
-  }
-}
-@media (hover: hover) {
-  .btn.mail-link-menu:hover:not(:disabled, [aria-disabled="true"]),
-  .btn.mail-answers-menu:hover:not(:disabled, [aria-disabled="true"]) {
-    --btn-fill: var(--control-hover);
-    --btn-rim: color-mix(in srgb, var(--accent) 45%, var(--control-rim));
-    --btn-ink: var(--ink);
-    --btn-shadow: var(--shadow-control-hover);
   }
 }
 .mail-linked-open .t-value,

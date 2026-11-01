@@ -7,6 +7,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
+import { useMedia } from "@/components/ui/use-media";
 import { count } from "@/lib/count";
 import { LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
@@ -23,8 +24,8 @@ import { useTaskReplies, type TaskReplies } from "../task-replies";
 import { openTaskDetail, PlaceName, type TaskData } from "../task-row";
 import { useChatScope, useWorkspace } from "../workspace";
 import { tasksMatching } from "./link-task";
-import { MailViewer } from "./mail-viewer";
-import { subjectOf } from "./subject";
+import { MAIL_PHONE, MailViewer, useMailMode } from "./mail-viewer";
+import { subjectOf, taskLine } from "./subject";
 import "../../styles/mail.css";
 
 
@@ -69,12 +70,6 @@ export default function MailPage() {
   );
 }
 
-const NARROW = "(width < 64rem)";
-function subscribeNarrow(onChange: () => void) {
-  const query = window.matchMedia(NARROW);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
 const noSubscription = () => () => {};
 
 
@@ -88,7 +83,7 @@ function shortWhen(iso: string): string {
 
 function Mail() {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
-  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
+  const narrow = useMedia("(width < 64rem)");
   const { version, tree, mailAccounts, mailStore } = useWorkspace();
   useChatScope(null);
   const params = useSearchParams();
@@ -192,7 +187,13 @@ function Mail() {
     }))
     .filter((entry) => entry.replies.length > 0);
   const possible = new Set(waiting.flatMap((entry) => entry.replies.map(keyOf)));
-  const groups = GROUPS.map((group) => ({ ...group, messages: (mail?.groups[group.key].messages ?? []).filter((row) => keep(row) && !possible.has(keyOf(row))) }));
+  
+  const toDone = mail ? [...mail.groups.unread.messages, ...mail.groups.earlier.messages].filter((row) => row.tasks.length > 0) : [];
+  const groups = GROUPS.map((group) => {
+    const own = mail?.groups[group.key].messages ?? [];
+    const messages = group.key === "forTasks" ? [...own, ...toDone] : own.filter((row) => row.tasks.length === 0);
+    return { ...group, messages: messages.filter((row) => keep(row) && !possible.has(keyOf(row))) };
+  });
   const shown = once([...waiting.flatMap((entry) => entry.replies), ...groups.flatMap((group) => group.messages)]);
   const linkedToTasks = groups.find((group) => group.key === "forTasks")?.messages ?? [];
   const forTasks = once([...waiting.flatMap((entry) => entry.replies), ...linkedToTasks]).length;
@@ -251,6 +252,29 @@ function Mail() {
   }
 
   
+  
+  const newest = (rows: MailRow[]) => rows.reduce<MailRow | null>((best, row) => (!best || Date.parse(row.receivedAt) > Date.parse(best.receivedAt) ? row : best), null);
+  const newestReply = newest(waiting.flatMap((entry) => entry.replies));
+  const newestUnread = newest(shown.filter(isUnread));
+  const offered: { row: MailRow; label: string } | null = !revealed
+    ? null
+    : newestReply
+      ? { row: newestReply, label: "Read the newest possible reply" }
+      : newestUnread
+        ? { row: newestUnread, label: "Read the newest unread" }
+        : shown.length > 0
+          ? { row: newest(shown) as MailRow, label: "Read the newest message" }
+          : null;
+  
+  const focusSubject = useRef(false);
+  const currentKey = current ? keyOf(current) : null;
+  useEffect(() => {
+    if (!focusSubject.current || !currentKey) return;
+    focusSubject.current = false;
+    document.getElementById("mail-subject")?.focus({ preventScroll: true });
+  }, [currentKey]);
+
+  
   const landed = current && current.unread && !opened.has(keyOf(current)) ? current : null;
   useEffect(() => {
     if (!landed) return;
@@ -269,20 +293,16 @@ function Mail() {
     </li>
   );
   const viewer = current && (
-    <MailViewer
-      row={{ ...current, unread: isUnread(current) }}
+    <OpenMessage
+      row={current}
+      unread={isUnread(current)}
+      tree={tree}
+      tasks={tasks}
+      replies={replies.data?.tasks ?? null}
+      isDemo={Boolean(mail?.accounts.find((entry) => entry.id === current.accountId)?.isDemo)}
       onPrevious={index > 0 ? () => open(shown[index - 1]) : null}
       onNext={index >= 0 && index < shown.length - 1 ? () => open(shown[index + 1]) : null}
       onClose={narrow ? () => set({ message: null }) : undefined}
-      actions={
-        <MailActions
-          row={current}
-          tree={tree}
-          tasks={tasks}
-          replies={replies.data?.tasks ?? null}
-          isDemo={Boolean(mail?.accounts.find((entry) => entry.id === current.accountId)?.isDemo)}
-        />
-      }
     />
   );
 
@@ -296,7 +316,7 @@ function Mail() {
               ? "No account connected"
               : !mail || holding
                 ? `${PURPOSE} Reading the mail…`
-                : `${PURPOSE} ${[unreadWords, `${shown.length} listed`, mail.waiting > 0 ? `${count(mail.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.`
+                : `${PURPOSE} ${[unreadWords, `${shown.length} listed`, mail.waiting > 0 ? `${count(mail.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ").replace(/(\d) /g, "$1\u00a0")}.`
           }
           filters={
             mail && !noAccounts ? (
@@ -364,7 +384,7 @@ function Mail() {
                     <div key={group.key} className="mail-group" role="group" aria-labelledby={`mail-group-${group.key}`}>
                       <h2 id={`mail-group-${group.key}`} className="mail-group-head">
                         <span className="t-label">{group.label}</span>
-                        <span className="t-meta">{group.key === "forTasks" ? forTasks : group.messages.length}</span>
+                        <span className="t-meta">{count(group.key === "forTasks" ? forTasks : group.messages.length, "message", "messages")}</span>
                       </h2>
                       {group.key === "forTasks" && waiting.map((entry) => <TaskRepliesGroup key={entry.task.id} entry={entry} listed={listed} />)}
                       {group.messages.length > 0 && <ul className="mail-rows">{group.messages.map(listed)}</ul>}
@@ -373,11 +393,30 @@ function Mail() {
               )}
             </section>
             {!narrow && (
-              <section className="card mail-view" aria-label="The open message">
-                {viewer ?? (
-                  <p className="t-help mail-view-none">{shown.length > 0 ? "Choose a message to read it here." : "A message opens here."}</p>
-                )}
-              </section>
+              <div className="mail-view-column">
+                <section className="card mail-view" aria-label="The open message">
+                  <div className="mail-view-in">
+                    {viewer ?? (
+                      <div className="mail-view-none">
+                        <h2 className="t-title">{shown.length > 0 || !revealed ? "Choose a message to read it here" : "A message opens here"}</h2>
+                        <p className="t-help">It opens with its real design, beside what you can do with it: make it a task, link it, or say which task it answers. Gmail stays where you reply.</p>
+                        <div className="mail-view-go">
+                          {offered && (
+                            <Button
+                              onClick={() => {
+                                focusSubject.current = true;
+                                open(offered.row);
+                              }}
+                            >
+                              {offered.label}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
             )}
           </div>
         )}
@@ -399,7 +438,7 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
           <span className="t-meta">{`${repliesText(entry.replies.length, entry.more.length > 0)} for`}</span>
           <span className="t-value">{title}</span>
         </h3>
-        <Button size="sm" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
+        <Button size="sm" variant="quiet" className="head-action" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
           Open the task
         </Button>
       </div>
@@ -410,7 +449,7 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
 
 
 function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: boolean; current: boolean; onOpen: () => void }) {
-  const linked = row.tasks.find((task) => task.status === "open");
+  const line = taskLine(row);
   return (
     <button type="button" className="mail-row" data-unread={unread ? "" : undefined} aria-current={current ? "true" : undefined} onClick={onOpen} data-mail-row={keyOf(row)}>
       <span className="mail-row-top">
@@ -427,13 +466,14 @@ function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: b
         {subjectOf(row)}
       </span>
       <span className="t-meta mail-row-where">
-        {linked ? (
-          <span className="mail-row-for">For: {inlinePlain(linked.title)}</span>
-        ) : row.place ? (
-          <PlaceName path={row.place.path} color={row.place.color} />
+        {line ? (
+          <span className="mail-row-for" data-done={line.done ? "" : undefined}>
+            {line.text}
+          </span>
         ) : (
-          row.accountEmail
+          row.place && <PlaceName path={row.place.path} color={row.place.color} />
         )}
+        <span className="mail-row-account">{row.accountEmail}</span>
       </span>
     </button>
   );
@@ -441,8 +481,30 @@ function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: b
 
 
 
-function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree: TreeNode[] | null; tasks: TaskData[]; replies: TaskReplies[] | null; isDemo: boolean }) {
+function OpenMessage({
+  row,
+  unread,
+  tree,
+  tasks,
+  replies,
+  isDemo,
+  onPrevious,
+  onNext,
+  onClose,
+}: {
+  row: MailRow;
+  unread: boolean;
+  tree: TreeNode[] | null;
+  tasks: TaskData[];
+  replies: TaskReplies[] | null;
+  isDemo: boolean;
+  onPrevious: (() => void) | null;
+  onNext: (() => void) | null;
+  onClose?: () => void;
+}) {
   const { notify, touch, saving } = useWorkspace();
+  const phone = useMedia(MAIL_PHONE);
+  const { mode, setMode } = useMailMode();
   const closeTask = useCompleteTask();
   
   const [answering, setAnswering] = useState<{ message: string; task: { id: string; title: string } } | null>(null);
@@ -481,6 +543,8 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
   async function answer(task: { id: string; title: string }, result: string) {
     if (await closeTask(task, row, result)) setAnswering(null);
   }
+  
+  const focusLink = () => actions.current?.closest("[data-mail-viewer]")?.querySelector<HTMLElement>(".mail-link-menu, .mail-more-menu")?.focus();
   
   function stopAnswering() {
     setAnswering(null);
@@ -529,46 +593,70 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
           ...(rest.length > 0 ? [{ kind: "group" as const, label: first.length > 0 ? "Other tasks that wait for mail" : "Tasks that wait for mail", entries: rest.map(answerEntry) }] : []),
         ];
   const gmail = `https://mail.google.com/mail/?authuser=${encodeURIComponent(row.accountEmail)}#all/${encodeURIComponent(row.threadId || row.id)}`;
+  
+  const answersFirst = first.length > 0;
+  
+  const linkFocus = () => {
+    const target = findingTask.current ? finder.current?.querySelector<HTMLElement>("input") : null;
+    findingTask.current = false;
+    return target;
+  };
+  
+  const mayAnswer = first.filter((task) => !row.tasks.some((linked) => linked.id === task.id));
+  const moreEntries: MenuEntry[] = [
+    { kind: "submenu", label: "Link to…", entries },
+    isDemo
+      ? { kind: "action", label: "Open in Gmail", disabled: true, detail: "A sample account has no Gmail", onSelect: () => undefined }
+      : { kind: "action", label: "Open in Gmail", onSelect: () => void window.open(gmail, "_blank", "noopener,noreferrer") },
+    {
+      kind: "choice",
+      label: "Colors",
+      value: mode,
+      options: [
+        { value: "light", label: "Light" },
+        { value: "dark", label: "Dark" },
+      ],
+      onChoose: (value) => setMode(value === "dark" ? "dark" : "light"),
+    },
+  ];
 
-  return (
+  const bar = (
+    <div ref={actions} className="mail-action-row">
+      <Button size="sm" variant={answersFirst ? "control" : "primary"} onClick={() => void createTask()}>
+        Create task
+      </Button>
+      <Menu
+        label="Answers a task…"
+        name={`Answers a task… “${row.subject}”`}
+        entries={answers}
+        variant={answersFirst ? "primary" : "control"}
+        className="mail-answers-menu"
+        finalFocus={() => {
+          const target = picked.current ? outcome.current?.querySelector<HTMLElement>("button") : null;
+          picked.current = false;
+          return target;
+        }}
+      />
+      {!phone && (
+        <>
+          <Menu label="Link to…" name={`Link to… “${row.subject}”`} entries={entries} variant="control" className="mail-link-menu" finalFocus={linkFocus} />
+          {isDemo ? (
+            <Button size="sm" disabled aria-describedby="mail-gmail-why">
+              Open in Gmail
+            </Button>
+          ) : (
+            <a className={buttonClass({ size: "sm" })} href={gmail} target="_blank" rel="noopener noreferrer">
+              <span className="btn-label">Open in Gmail</span>
+            </a>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  const below = (
     <>
-      <div ref={actions} className="mail-action-row">
-        <Button size="sm" variant="primary" onClick={() => void createTask()}>
-          Create task
-        </Button>
-        <Menu
-          label="Link to…"
-          name={`Link to… “${row.subject}”`}
-          entries={entries}
-          className="mail-link-menu"
-          finalFocus={() => {
-            const target = findingTask.current ? finder.current?.querySelector<HTMLElement>("input") : null;
-            findingTask.current = false;
-            return target;
-          }}
-        />
-        <Menu
-          label="Answers a task…"
-          name={`Answers a task… “${row.subject}”`}
-          entries={answers}
-          className="mail-answers-menu"
-          finalFocus={() => {
-            const target = picked.current ? outcome.current?.querySelector<HTMLElement>("button") : null;
-            picked.current = false;
-            return target;
-          }}
-        />
-        {isDemo ? (
-          <Button size="sm" disabled aria-describedby="mail-gmail-why">
-            Open in Gmail
-          </Button>
-        ) : (
-          <a className={buttonClass({ size: "sm" })} href={gmail} target="_blank" rel="noopener noreferrer">
-            <span className="btn-label">Open in Gmail</span>
-          </a>
-        )}
-      </div>
-      {isDemo && (
+      {isDemo && !phone && (
         <p id="mail-gmail-why" className="t-help mail-why">
           A sample account has no Gmail to open: its messages live only in this demo.
         </p>
@@ -581,11 +669,11 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
             onPick={(task) => {
               setLinking(null);
               void link({ task: task.id }, `“${inlinePlain(task.title)}”`);
-              actions.current?.querySelector<HTMLElement>(".mail-link-menu")?.focus();
+              focusLink();
             }}
             onCancel={() => {
               setLinking(null);
-              requestAnimationFrame(() => actions.current?.querySelector<HTMLElement>(".mail-link-menu")?.focus());
+              requestAnimationFrame(focusLink);
             }}
           />
         </div>
@@ -601,12 +689,20 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
           />
         </div>
       )}
-      {(row.tasks.length > 0 || row.nodes.length > 0) && (
+      {(mayAnswer.length > 0 || row.tasks.length > 0 || row.nodes.length > 0) && (
         <ul className="mail-linked" aria-label="What the message is linked to">
+          {mayAnswer.map((task) => (
+            <li key={`reply-${task.id}`} className="mail-linked-row">
+              <button type="button" className="mail-linked-open" onClick={() => openTaskDetail({ id: task.id })}>
+                <span className="t-meta">May answer the task</span>
+                <span className="t-value">{inlinePlain(task.title)}</span>
+              </button>
+            </li>
+          ))}
           {row.tasks.map((task) => (
             <li key={`task-${task.id}`} className="mail-linked-row">
               <button type="button" className="mail-linked-open" onClick={() => openTaskDetail({ id: task.id })}>
-                <span className="t-meta">Linked to the task</span>
+                <span className="t-meta">{task.status === "done" ? "Linked to the task, done" : "Linked to the task"}</span>
                 <span className="t-value">{inlinePlain(task.title)}</span>
               </button>
               <Button size="sm" variant="quiet" onClick={() => void unlink({ task: task.id }, `“${inlinePlain(task.title)}”`)} aria-label={`Take the message off “${inlinePlain(task.title)}”`}>
@@ -629,6 +725,10 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
       )}
     </>
   );
+
+  const more = phone ? <Menu label="More" about={`for “${row.subject}”`} entries={moreEntries} variant="control" className="mail-more-menu" finalFocus={linkFocus} /> : null;
+
+  return <MailViewer row={{ ...row, unread }} onPrevious={onPrevious} onNext={onNext} onClose={onClose} actions={bar} below={below} more={more} />;
 }
 
 
