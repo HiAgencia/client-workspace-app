@@ -31,7 +31,7 @@ function waitingIn(waiting: WaitingRead[], tree: TreeNode[], place: Record<strin
 
 
 export function useTaskReplies(place: Record<string, unknown>, today: Day | null, tree: TreeNode[] | null, perAccount: number): BoxRead<{ tasks: TaskReplies[] }> {
-  const { mailAccounts, mailWaiting } = useWorkspace();
+  const { mailAccounts, mailWaiting, treeError, refreshTree } = useWorkspace();
   const known = tree && today && mailAccounts && mailWaiting ? { tree, accounts: mailAccounts, waiting: waitingIn(mailWaiting, tree, place) } : null;
   
   
@@ -41,7 +41,7 @@ export function useTaskReplies(place: Record<string, unknown>, today: Day | null
     return (row.accountId ? seen.filter((account) => account === row.accountId) : seen).map((account) => ({ row, account }));
   });
   const key = `task-replies:${perAccount}:${known ? JSON.stringify([known.waiting.map((row) => [row.id, row.waitsFor]), reads.map((read) => read.account)]) : "off"}`;
-  return useBoxRead<{ tasks: TaskReplies[] }>(
+  const read = useBoxRead<{ tasks: TaskReplies[] }>(
     known
       ? async () => {
           const emails = new Map(known.accounts.map((account) => [account.id, account.email]));
@@ -67,4 +67,6 @@ export function useTaskReplies(place: Record<string, unknown>, today: Day | null
       : null,
     key,
   );
+  
+  return !known && treeError ? { ...read, error: treeError, retry: () => void refreshTree() } : read;
 }

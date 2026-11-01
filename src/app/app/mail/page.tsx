@@ -11,6 +11,7 @@ import { count } from "@/lib/count";
 import { LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
+import { repliesText } from "@/lib/mail/replies-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { useMailRead } from "../box-kinds";
 import { post, tool, type Item, type TreeNode } from "../client-api";
@@ -211,7 +212,11 @@ function Mail() {
   const current = listedRow ?? apartHere?.row ?? null;
   const index = current ? shown.findIndex((row) => keyOf(row) === keyOf(current)) : -1;
   
-  const unreadWords = figureWords(mail ? mailStore.figure(mail.accounts.filter((entry) => (account === ALL || entry.id === account) && seenFrom(entry.id, place))) : null);
+  
+  const seenHere = mail ? mail.accounts.filter((entry) => (account === ALL || entry.id === account) && seenFrom(entry.id, place)) : [];
+  const figure = mail ? mailStore.figure(seenHere) : null;
+  const unreadApart = shown.filter((row) => isUnread(row) && !seenHere.some((entry) => entry.id === row.accountId)).length;
+  const unreadWords = figureWords(figure && { ...figure, unread: figure.unread + unreadApart });
 
   
   const countAgain = useCallback(
@@ -295,7 +300,7 @@ function Mail() {
             The mail could not be read{mail ? " again" : ""}: {readError}.{mail ? " What shows is from the last read." : ""}
           </p>
         )}
-        {replies.error && (
+        {replies.error && replies.error !== readError && (
           <p role="alert" className="inline-note" data-tone="alert">
             The possible replies of the tasks could not be read{replies.data ? " again" : ""}: {replies.error}.{replies.data ? " What shows is from the last read." : ""}
           </p>
@@ -376,7 +381,7 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
     <div className="mail-task" role="group" aria-labelledby={headId}>
       <div className="mail-task-head">
         <h3 id={headId} className="mail-task-title">
-          <span className="t-meta">{`${count(entry.replies.length, "possible reply", "possible replies")}${entry.more.length > 0 ? " and more" : ""} for`}</span>
+          <span className="t-meta">{`${repliesText(entry.replies.length, entry.more.length > 0)} for`}</span>
           <span className="t-value">{title}</span>
         </h3>
         <Button size="sm" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>

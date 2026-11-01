@@ -8,6 +8,7 @@ import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
+import { repliesText } from "@/lib/mail/replies-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import type { NoteRow } from "@/lib/tools/notes";
 import type { TasksView } from "@/lib/tools/tasks";
@@ -516,7 +517,7 @@ export type { MailList };
 
 
 export function useMailRead(place: Place, account: string | null): BoxRead<MailList> {
-  const { tree, treeError, mailAccounts, mailStore, version } = useWorkspace();
+  const { tree, treeError, refreshTree, mailAccounts, mailStore, version } = useWorkspace();
   useSyncExternalStore(mailStore.subscribe, mailStore.revision, noRevision);
   const [round, setRound] = useState(0);
   const inPlace = useMemo(() => {
@@ -540,9 +541,11 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
     stale: false,
     
     settled: data ? data.accounts.length === 0 || data.waiting < data.accounts.length : treeError !== null,
+    
     retry: () => {
       mailStore.forget();
       setRound((value) => value + 1);
+      if (!mailAccounts) void refreshTree();
     },
   };
 }
@@ -580,7 +583,7 @@ export function mailBoxRows(mail: MailList, replies: TaskReplies[], account: str
     if (!shown) continue;
     seen.add(mailKey(shown));
     const more = entry.more.some((id) => account === null || id === account);
-    rows.push({ message: shown, label: `${count(own.length, "possible reply", "possible replies")}${more ? " and more" : ""} for “${inlinePlain(entry.task.title)}”` });
+    rows.push({ message: shown, label: `${repliesText(own.length, more)} for “${inlinePlain(entry.task.title)}”` });
   }
   for (const message of [...mail.groups.forTasks.messages, ...mail.groups.unread.messages]) {
     if (!inAccount(message) || seen.has(mailKey(message))) continue;

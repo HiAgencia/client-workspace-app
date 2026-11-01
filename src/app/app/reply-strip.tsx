@@ -2,10 +2,10 @@
 
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { count } from "@/lib/count";
 import type { Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
+import { repliesTally } from "@/lib/mail/replies-text";
 import { mailWhen } from "./box-kinds";
 import { BoxFailed, type BoxRead } from "./boxes";
 import { subjectOf } from "./mail/subject";
@@ -95,16 +95,11 @@ function ReplyEntry({ entry, now }: { entry: TaskReplies; now: Day | null }) {
   const newest = entry.replies[0];
   const failure = entry.failures[0];
   const unread = entry.replies.length === 0 && failure;
-  const tally =
-    entry.replies.length > 0
-      ? `${count(entry.replies.length, "possible reply", "possible replies")}${entry.more.length > 0 || failure ? " and more" : ""}`
-      : failure
-        ? "Its mail could not be read"
-        : "Nothing arrived yet";
+  const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? "Its mail could not be read" : "Nothing arrived yet";
   return (
     <button type="button" className="reply-entry" data-reply-task={entry.task.id} onClick={() => openTaskDetail({ id: entry.task.id })}>
       <span className="reply-entry-title">{inlinePlain(entry.task.title)}</span>
-      <span className="pill reply-entry-tally" data-tone={unread ? "alert" : entry.replies.length > 0 ? "accent" : undefined}>
+      <span className="pill reply-entry-tally" data-tone={unread ? "alert" : entry.replies.length === 0 ? undefined : failure ? "warn" : "accent"}>
         {tally}
       </span>
       {newest ? (
