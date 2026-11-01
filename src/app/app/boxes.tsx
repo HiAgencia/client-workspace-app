@@ -328,6 +328,14 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
       const ahead = (zone === 2 || lone) && spread ? event.clientX < box.left + box.width / 2 : event.clientY < box.top + box.height / 2;
       before = ahead ? ids[at] : (ids[at + 1] ?? null);
     } else if (target) return;
+    else {
+      
+      const next = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-box]")].find((el) => {
+        const r = el.getBoundingClientRect();
+        return event.clientY < r.top || (event.clientY <= r.bottom && event.clientX < r.left);
+      });
+      before = next?.dataset.box ?? null;
+    }
     if (before === boxDrag.id) return;
     if (drop?.before !== before || drop?.zone !== zone) setDrop({ before, zone });
   }
