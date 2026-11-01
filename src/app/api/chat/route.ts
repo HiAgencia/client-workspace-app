@@ -15,6 +15,7 @@ import { isUuid } from "@/lib/tools/tree";
 const MAX_BODY = 6 * 1024 * 1024;
 
 const SHOWN_MESSAGES = 100;
+const NOTHING_WAITING = "this turn has no read waiting for that answer: send the message again";
 
 
 const body = z.object({
@@ -106,7 +107,17 @@ export async function POST(request: Request) {
   }
   const stored = continuing ? history.at(-1) : undefined;
   const continued = continuing ? continuedTurn(stored, message) : null;
-  if (continuing && !continued) return problem(409, "this turn has no read waiting for that answer: send the message again");
+  if (continuing && !continued) return problem(409, NOTHING_WAITING);
+  
+  
+  if (stored) {
+    const taken = await ctx.db.from("chat_messages").delete().eq("id", stored.id).select("id");
+    if (taken.error) {
+      console.error("chat: taking the turn failed", taken.error.message);
+      return problem(500, "the conversation could not be read");
+    }
+    if (taken.data.length === 0) return problem(409, NOTHING_WAITING);
+  }
   const messages = withoutEarlierFiles(continued ? [...history.slice(0, -1), continued] : [...history, message]);
 
   const { model, providerOptions } = chatModel(provider);
@@ -126,12 +137,7 @@ export async function POST(request: Request) {
         parts: JSON.parse(JSON.stringify(entry.parts)),
       }));
       const saved = await ctx.db.from("chat_messages").insert(rows);
-      if (saved.error) return console.error("chat: storing the turn failed", saved.error.message);
-      
-      if (stored) {
-        const gone = await ctx.db.from("chat_messages").delete().eq("id", stored.id);
-        if (gone.error) console.error("chat: replacing the turn failed", gone.error.message);
-      }
+      if (saved.error) console.error("chat: storing the turn failed", saved.error.message);
     },
   });
   return createUIMessageStreamResponse({ stream, headers: SESSION_HEADERS });

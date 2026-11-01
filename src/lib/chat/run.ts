@@ -85,7 +85,7 @@ export async function runChat(options: {
     tools: chatTools(options.ctx),
     stopWhen: isStepCount(Math.max(1, MAX_STEPS - taken)),
     
-    ...(taken >= MAX_STEPS ? { toolChoice: "none" as const } : {}),
+    prepareStep: ({ stepNumber }) => (taken + stepNumber >= MAX_STEPS - 1 ? { toolChoice: "none" as const } : undefined),
     providerOptions: options.providerOptions,
     abortSignal: options.abortSignal,
   });

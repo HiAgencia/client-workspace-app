@@ -236,6 +236,12 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
               }
               return null;
             })}
+            {}
+            {!busy && message.role === "assistant" && message.parts.some((part) => isToolUIPart(part) && part.state === "input-available") && (
+              <p className="inline-note" data-chat-unfinished>
+                This answer was left unfinished. Ask again to finish it.
+              </p>
+            )}
           </li>
         ))}
         {}
