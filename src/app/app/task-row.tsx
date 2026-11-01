@@ -176,7 +176,7 @@ export async function readTaskItem(id: string): Promise<Item | null> {
 
 type Op =
   | { kind: "hide"; id: string; gone: boolean; settled: boolean }
-  | { kind: "move"; id: string; to: string; task: TaskData; settled: boolean }
+  | { kind: "move"; id: string; to: string; task: TaskData; at?: number; settled: boolean }
   | { kind: "patch"; id: string; patch: Partial<TaskData>; settled: boolean }
   | { kind: "order"; id: string; ids: string[]; settled: boolean };
 
@@ -272,6 +272,15 @@ function groupsInOrder(): GroupEntry[] {
 }
 
 
+type RowPlace = { group: string; at: number };
+function placeOfRow(id: string): RowPlace | null {
+  const row = document.querySelector<HTMLElement>(`[data-key="${id}"]`);
+  const entry = [...groups.values()].find((each) => each.element === row?.parentElement);
+  if (!row || !entry) return null;
+  return { group: entry.group, at: [...entry.element.querySelectorAll(":scope > [data-key]")].indexOf(row) };
+}
+
+
 
 export type TaskActions = ReturnType<typeof useTaskActions>;
 type Actions = TaskActions;
@@ -318,11 +327,22 @@ export function useTaskActions() {
 
   
   
+  async function bringBack(task: TaskData, place: RowPlace | null, takesFocus: boolean, write: Promise<{ ok: boolean; message?: string }>) {
+    if (takesFocus) focusWhenBack(task.id);
+    if (place) putOp({ kind: "move", id: task.id, to: place.group, task, at: place.at, settled: false });
+    dropOp("hide", task.id);
+    if (await saving(write)) settleOp("move", task.id);
+    else dropOp("move", task.id);
+  }
+
+  
+  
   async function complete(task: TaskData): Promise<boolean> {
     const reopening = task.status === "done";
     const was = task.status;
     const title = inlinePlain(task.title);
     const focusAfter = focusAfterRow(task.id);
+    const place = placeOfRow(task.id);
     hideRow(task.id);
     const answer = await tool("update_item", { id: task.id, status: reopening ? "open" : "done" });
     if (!answer.ok) {
@@ -337,17 +357,14 @@ export function useTaskActions() {
       text: reopening ? `Reopened “${title}”` : `Completed “${title}”`,
       tone: "status",
       focusAfter,
-      undo: () => {
-        dropOp("hide", task.id);
-        if (focusAfter) focusWhenBack(task.id);
-        void saving(tool("update_item", { id: task.id, status: was }));
-      },
+      undo: () => void bringBack(task, place, Boolean(focusAfter), tool("update_item", { id: task.id, status: was })),
     });
     return true;
   }
 
   async function remove(task: TaskData) {
     const focusAfter = focusAfterRow(task.id);
+    const place = placeOfRow(task.id);
     hideRow(task.id);
     const answer = await tool("delete_item", { id: task.id });
     if (!answer.ok) {
@@ -362,11 +379,7 @@ export function useTaskActions() {
       text: `Deleted “${inlinePlain(task.title)}”`,
       tone: "status",
       focusAfter,
-      undo: () => {
-        dropOp("hide", task.id);
-        if (focusAfter) focusWhenBack(task.id);
-        void saving(post(`/api/items/${task.id}/restore`, {}));
-      },
+      undo: () => void bringBack(task, place, Boolean(focusAfter), post(`/api/items/${task.id}/restore`, {})),
     });
   }
 
@@ -790,7 +803,9 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     shown.push({ task: patch ? { ...task, ...patch.patch } : task, leaving: Boolean(hide) });
   }
   for (const op of ops.values()) {
-    if (op.kind === "move" && op.to === group && !tasks.some((task) => task.id === op.id)) shown.push({ task: op.task, leaving: false });
+    if (op.kind !== "move" || op.to !== group || tasks.some((task) => task.id === op.id)) continue;
+    const hide = ops.get(`hide:${op.id}`) as Extract<Op, { kind: "hide" }> | undefined;
+    if (!hide?.gone) shown.splice(op.at ?? shown.length, 0, { task: op.task, leaving: Boolean(hide) });
   }
   if (order) {
     const at = new Map(order.ids.map((id, index) => [id, index]));
