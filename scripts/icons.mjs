@@ -1,12 +1,15 @@
 // Draws the site's icons from the brand mark's geometry (src/components/brand-geometry.json) and the accent's colors in
-// the light theme (src/app/styles/tokens.css): `src/app/icon.svg`, `src/app/favicon.ico` (16, 32 and 48 px), and
-// `src/app/apple-icon.png` (180 px, square: the system rounds it). Each pixel is the average of an 8 × 8 grid of
-// samples, so the rounded ends read smooth at 16 px. `brand-mark.test.ts` fails when the written icons no longer match
-// what this draws.
+// the light theme (src/app/styles/tokens.css), and writes the web manifest that names them, all in public/: a file there is
+// served before the app runs, so a page's icons spend none of the Worker's CPU. `icon.svg`, `favicon.ico` (16, 32 and 48
+// px), `apple-icon.png` (180 px, square: the system rounds it). Each pixel is the average of an 8 × 8 grid of samples, so
+// the rounded ends read smooth at 16 px. `brand-mark.test.ts` and `manifest.test.ts` fail when what is written no longer
+// matches what this draws.
 // Usage: node scripts/icons.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
+import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "../src/lib/product.ts";
+import { BROWSER_BAR, MANIFEST_BACKGROUND } from "../src/lib/theme.ts";
 
 const geometry = JSON.parse(readFileSync(new URL("../src/components/brand-geometry.json", import.meta.url), "utf8"));
 const lightTokens = readFileSync(new URL("../src/app/styles/tokens.css", import.meta.url), "utf8").split(':root[data-theme="dark"]')[0];
@@ -145,8 +148,8 @@ export function iconFiles() {
   };
 }
 
-// The manifest's icons, in public/: installable sizes, and the maskable one — its own file, the mark inside the
-// central circle a system may crop to (80% of the width), on the canvas the manifest declares as its background.
+// The manifest's icons: installable sizes, and the maskable one — its own file, the mark inside the central circle a
+// system may crop to (80% of the width), on the canvas the manifest declares as its background.
 export function manifestIconFiles() {
   return {
     "icon-192.png": png(192, draw(192, { rounded: true })),
@@ -155,10 +158,29 @@ export function manifestIconFiles() {
   };
 }
 
+// The web manifest every page links: the name a system installs the site by, where it starts, and the icons it asks for. Its
+// theme color is the light theme's browser bar; its background, the light canvas behind the maskable mark.
+export function webManifest() {
+  return {
+    name: PRODUCT_NAME,
+    short_name: PRODUCT_NAME,
+    description: PRODUCT_DESCRIPTION,
+    start_url: "/",
+    display: "standalone",
+    background_color: MANIFEST_BACKGROUND,
+    theme_color: BROWSER_BAR.light,
+    icons: [
+      { src: "/icon.svg", type: "image/svg+xml", sizes: "any", purpose: "any" },
+      { src: "/icon-192.png", type: "image/png", sizes: "192x192", purpose: "any" },
+      { src: "/icon-512.png", type: "image/png", sizes: "512x512", purpose: "any" },
+      { src: "/icon-maskable-512.png", type: "image/png", sizes: "512x512", purpose: "maskable" },
+    ],
+  };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const root = new URL("../src/app/", import.meta.url);
-  for (const [name, data] of Object.entries(iconFiles())) writeFileSync(new URL(name, root), data);
   const publicDir = new URL("../public/", import.meta.url);
-  for (const [name, data] of Object.entries(manifestIconFiles())) writeFileSync(new URL(name, publicDir), data);
-  console.log("icon.svg, favicon.ico (16, 32, 48) and apple-icon.png (180) written in src/app/; icon-192.png, icon-512.png and icon-maskable-512.png in public/");
+  for (const [name, data] of Object.entries({ ...iconFiles(), ...manifestIconFiles() })) writeFileSync(new URL(name, publicDir), data);
+  writeFileSync(new URL("manifest.webmanifest", publicDir), `${JSON.stringify(webManifest(), null, 2)}\n`);
+  console.log("icon.svg, favicon.ico (16, 32, 48), apple-icon.png (180), icon-192.png, icon-512.png, icon-maskable-512.png and manifest.webmanifest written in public/");
 }

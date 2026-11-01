@@ -1,0 +1,35 @@
+{
+  "name": "Client Workspace",
+  "short_name": "Client Workspace",
+  "description": "Every task, note, calendar, and message of each client and project in one place, with a chat that acts on it when you ask.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f1f4f9",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}
