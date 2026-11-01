@@ -365,6 +365,7 @@ export const completeTask = defineTool({
 
 
 
+
 async function leftByClosing(ctx: ToolContext, task: ItemRow): Promise<ToolResult<{ decision: { id: string; title: string; body: string | null } | null; link: { account_id: string; message_id: string } | null }>> {
   if (!task.completed_at) return ok({ decision: null, link: null });
   const decisions = await ctx.db

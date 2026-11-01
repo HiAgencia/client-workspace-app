@@ -140,11 +140,26 @@ export function ItemPanel({
   }
 
   
-  async function markDecision(decision: boolean) {
+  
+  function markDecision(decision: boolean) {
     const itemId = id.current;
     if (!itemId) return;
-    const ok = await saving(tool("update_item", { id: itemId, decision }));
-    if (ok && id.current === itemId) setShown((known) => known && { ...known, type: decision ? "decision" : "note" });
+    void flush();
+    setStatus("saving");
+    queue.current = queue.current.then(async () => {
+      const answer = await tool<{ item: Item }>("update_item", { id: itemId, decision });
+      const ok = await saving(Promise.resolve(answer));
+      if (id.current !== itemId) return;
+      if (!ok || !answer.ok) return setStatus("failed");
+      const typedMeanwhile = latest.current.trim() !== confirmed.current;
+      confirmed.current = answer.item.body ?? "";
+      if (!typedMeanwhile) {
+        latest.current = confirmed.current;
+        setNotes(confirmed.current);
+      }
+      setShown(answer.item);
+      setStatus("saved");
+    });
   }
 
   const fieldName = current?.type === "note" ? "Note" : current?.type === "decision" ? "Why" : "Notes";
@@ -211,7 +226,7 @@ export function ItemPanel({
           <Versions revisions={revisions} onRestore={restore} />
           <div className="panel-foot">
             {current.type !== "task" && (
-              <Button size="sm" data-panel-mark onClick={() => void markDecision(current.type === "note")}>
+              <Button size="sm" data-panel-mark onClick={() => markDecision(current.type === "note")}>
                 {current.type === "note" ? "Mark as a decision" : "Make it a note again"}
               </Button>
             )}

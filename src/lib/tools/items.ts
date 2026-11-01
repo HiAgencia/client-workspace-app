@@ -546,6 +546,11 @@ export async function restoreRevision(ctx: ToolContext, revisionId: string): Pro
   const photo = snapshot.data;
   
   
+  
+  const asNote = found.row.type === "note";
+  const body = asNote && noteTitle(photo.body) !== photo.title ? `<p>${inlineToHtml(photo.title)}</p>${photo.body ?? ""}` : photo.body;
+  
+  
   let parentId = found.row.parent_item_id;
   if (photo.parent_item_id !== found.row.parent_item_id) {
     if (photo.parent_item_id === null) parentId = null;
@@ -564,13 +569,13 @@ export async function restoreRevision(ctx: ToolContext, revisionId: string): Pro
     .from("items")
     .update({
       title: photo.title,
-      body: photo.body,
-      status: photo.status,
+      body,
+      status: asNote ? "open" : photo.status,
       priority: photo.priority,
       due_on: photo.due_on,
       due_time: photo.due_on === null ? null : photo.due_time,
       parent_item_id: parentId,
-      completed_at: photo.completed_at,
+      completed_at: asNote ? null : photo.completed_at,
       changed_source: mark.source,
       changed_agent_label: mark.agent_label,
     })

@@ -768,6 +768,29 @@ describe("versions", () => {
     expect(same.ok && same.revisions).toHaveLength(3);
   });
 
+  it("a version taken while it was a decision comes back on the note with the decision's words, and the mark stays as it is", async () => {
+    const { item } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.mobile, decision: "Use the shorter form", rationale: "<p>It reads faster</p>" });
+    await run("update_item", userCtx(a), { id: item.id, status: "done" });
+    const back = await run<{ item: ItemOut & { type: string } }>("update_item", userCtx(a), { id: item.id, decision: false });
+    expect(back.item).toMatchObject({ type: "note", title: "Use the shorter form", body: "<p>Use the shorter form</p><p>It reads faster</p>", status: "open" });
+    const listed = await listRevisions(userCtx(a), item.id);
+    if (!listed.ok) throw new Error(listed.message);
+    expect(listed.revisions[0].snapshot).toMatchObject({ title: "Use the shorter form", body: "<p>It reads faster</p>", status: "done" });
+
+    const restored = await restoreRevision(userCtx(a), listed.revisions[0].id);
+    if (!restored.ok) throw new Error(restored.message);
+    expect(restored.item).toMatchObject({ type: "note", title: "Use the shorter form", body: "<p>Use the shorter form</p><p>It reads faster</p>", status: "open", completedAt: null });
+
+    
+    const { item: decision } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.mobile, decision: "Keep the mark", rationale: "<p>First reason</p>" });
+    await run("update_item", userCtx(a), { id: decision.id, notes: "<p>Second reason</p>" });
+    const versions = await listRevisions(userCtx(a), decision.id);
+    if (!versions.ok) throw new Error(versions.message);
+    const kept = await restoreRevision(userCtx(a), versions.revisions[0].id);
+    if (!kept.ok) throw new Error(kept.message);
+    expect(kept.item).toMatchObject({ type: "decision", title: "Keep the mark", body: "<p>First reason</p>" });
+  });
+
   it("restoring a subtask deleted before its parent brings the parent back too: no live item under a deleted one", async () => {
     const { item: parent } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Orphan parent" });
     const { item: child } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: parent.id, title: "Orphan child" });
