@@ -24,6 +24,9 @@ import { SideNav, startTask, useCurrentNode } from "./side-nav";
 type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
 
 
+const noticeLife = (notice: Notice) => (notice.undo ? 6000 : 3000);
+
+
 
 
 type Chat = { scope: string | null | undefined; open: boolean; setOpen: (open: boolean) => void };
@@ -161,7 +164,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     
     if (notice.tone === "status") {
       clearTimeout(timer.current);
-      timer.current = setTimeout(dismiss, notice.undo ? 6000 : 3000);
+      timer.current = setTimeout(dismiss, noticeLife(notice));
     }
   }, [notice, leaving, dismiss]);
 
@@ -389,6 +392,13 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
               data-leaving={leaving ? "" : undefined}
               inert={leaving}
               data-notice
+              
+              onPointerEnter={() => {
+                if (!leaving && notice.tone === "status") clearTimeout(timer.current);
+              }}
+              onPointerLeave={() => {
+                if (!leaving && notice.tone === "status") timer.current = setTimeout(dismiss, noticeLife(notice));
+              }}
             >
               <span className="t-value notice-text">{notice.text}</span>
               {notice.undo && (
