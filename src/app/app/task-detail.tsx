@@ -11,11 +11,12 @@ import { Select, type SelectOption } from "@/components/ui/select";
 import { addDays, instantsOf, LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { richTextToPlain } from "@/lib/rich-text";
-import { get, post, tool, type Answer, type Item } from "./client-api";
+import { get, post, tool, type Answer, type EventsFailure, type Item } from "./client-api";
 import { dueTimeOptions, NO_TIME } from "./due-times";
 import { readEvents } from "./events-read";
 import { PRIORITIES, sourceName } from "./item-parts";
 import { subjectOf } from "./mail/subject";
+import { startRound, withAccountMail, type ItemMail, type LinkedMail, type LinkedMessage, type MailFailure } from "./task-mail-read";
 import { TaskOutcome, useCompleteTask } from "./task-outcome";
 import { accountsSeenFrom } from "./task-replies";
 import {
@@ -424,10 +425,8 @@ export function TaskDetail() {
 
 
 type TaskWait = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
-type MailMessageRow = { id: string; accountId: string; accountEmail: string; from: { name: string | null; email: string }; subject: string; receivedAt: string };
-type MailFailure = { accountEmail: string; reason: string };
-type MailDetail = { mail: TaskWait | null; messages: MailMessageRow[]; mailFailures: MailFailure[] };
-type ItemMail = { messages: MailMessageRow[]; failures: MailFailure[] };
+type MailMessageRow = LinkedMessage;
+type MailDetail = LinkedMail & { mail: TaskWait | null };
 type MailAccount = { id: string; email: string; nodeIds: string[] };
 
 type RepliesRead = { replies: MailMessageRow[]; next: Record<string, string>; failures: MailFailure[] };
@@ -461,19 +460,15 @@ function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: st
   return { replies: rows.sort(newestFirst), next, failures };
 }
 
-
-function withItemMail(read: MailDetail, mail: Answer<ItemMail>, email: string | undefined): MailDetail {
-  if (!mail.ok) return { ...read, mailFailures: [...read.mailFailures, { accountEmail: email ?? "one account", reason: mail.message }] };
-  return { ...read, messages: [...read.messages, ...mail.messages].sort(newestFirst), mailFailures: [...read.mailFailures, ...mail.failures] };
-}
-
 function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   const { tree, notify, touch, saving, version } = useWorkspace();
-  const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null } | null>(null);
+  
+  const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null; reading: number } | null>(null);
   const [accounts, setAccounts] = useState<MailAccount[] | null>(null);
   
   const [pending, setPending] = useState<{ id: string; account: string | null } | null>(null);
   const [words, setWords] = useState<{ id: string; value: string } | null>(null);
+  
   const [replies, setReplies] = useState<{ key: string; read: RepliesRead | null } | null>(null);
   const [readingMore, setReadingMore] = useState(false);
   
@@ -487,13 +482,20 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
     let live = true;
     void Promise.all([tool<MailDetail & { mailToRead: string[] }>("get_item", { id: task.id }), get<{ accounts: MailAccount[] }>("/api/accounts")]).then(([answer, listed]) => {
       if (!live) return;
-      setDetail({ id: task.id, read: answer.ok ? { mail: answer.mail, messages: answer.messages, mailFailures: answer.mailFailures } : null, error: answer.ok ? null : answer.message });
       if (listed.ok) setAccounts(listed.accounts);
-      if (!answer.ok) return;
+      
+      if (!answer.ok) return setDetail((now) => ({ id: task.id, read: now?.id === task.id ? now.read : null, error: answer.message, reading: 0 }));
+      setDetail((now) => {
+        const shown = now?.id === task.id ? now.read : null;
+        const first = { messages: answer.messages, mailFailures: answer.mailFailures };
+        return { id: task.id, read: { mail: answer.mail, ...startRound(shown, first, answer.mailToRead) }, error: null, reading: answer.mailToRead.length };
+      });
       
       for (const account of answer.mailToRead) {
+        const email = (listed.ok ? listed.accounts.find((entry) => entry.id === account)?.email : undefined) ?? "one account";
         void tool<ItemMail>("list_item_mail", { id: task.id, account }).then((mail) => {
-          if (live) setDetail((now) => (now?.id === task.id && now.read ? { ...now, read: withItemMail(now.read, mail, listed.ok ? listed.accounts.find((entry) => entry.id === account)?.email : undefined) } : now));
+          if (!live) return;
+          setDetail((now) => (now?.id === task.id && now.read ? { ...now, read: { ...now.read, ...withAccountMail(now.read, { id: account, email }, mail) }, reading: now.reading - 1 } : now));
         });
       }
     });
@@ -520,21 +522,27 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
   
   const lookIn = mail ? visible.filter((account) => mail.accountId === null || account.id === mail.accountId) : [];
   const unseen = mail !== null && accounts !== null && lookIn.length === 0;
-  const repliesKey =
-    mail && task.status === "open" && !unseen ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((account) => account.id).join(",")}:${version}` : null;
+  const repliesKey = mail && task.status === "open" && !unseen ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((account) => account.id).join(",")}` : null;
 
   useEffect(() => {
     if (!repliesKey) return;
     let live = true;
     void Promise.all(lookIn.map((account) => tool<RepliesRead>("list_task_replies", { task: task.id, account: account.id, limit: REPLIES }))).then((answers) => {
-      if (live) setReplies({ key: repliesKey, read: joinReads(answers, lookIn) });
+      if (!live) return;
+      setReplies((now) => {
+        
+        const read = joinReads(answers, lookIn);
+        const failed = new Set(read.failures.map((failure) => failure.accountEmail));
+        const kept = now?.key === repliesKey && now.read ? now.read.replies.filter((reply) => failed.has(reply.accountEmail)) : [];
+        return { key: repliesKey, read: kept.length > 0 ? joinReads(answers, lookIn, kept) : read };
+      });
     });
     return () => {
       live = false;
     };
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repliesKey]);
+  }, [repliesKey, version]);
   const shown = replies?.key === repliesKey ? replies.read : null;
 
   
@@ -626,12 +634,17 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
       <dd className="task-mail-body">
         {!read && !detail?.error ? (
           <span className="skeleton" aria-label="Reading the mail it waits for" />
-        ) : detail?.error ? (
+        ) : !read ? (
           <p className="inline-note" data-tone="alert">
-            Its mail could not be read: {detail.error}
+            Its mail could not be read: {detail?.error}
           </p>
         ) : (
           <>
+            {detail?.error && (
+              <p className="inline-note" data-tone="alert">
+                Its mail could not be refreshed: {detail.error}. What you see is the last version read.
+              </p>
+            )}
             {options.length > 1 ? (
               
               <Select label="Waits for mail in" value={value} options={options} onChange={choose} />
@@ -699,7 +712,7 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
                 ) : !shown ? (
                   <span className="skeleton" aria-label="Reading its possible replies" />
                 ) : shown.replies.length === 0 ? (
-                  <p className="t-help">Nothing has arrived with these words yet.</p>
+                  shown.failures.length === 0 && <p className="t-help">Nothing has arrived with these words yet.</p>
                 ) : (
                   <ul className="task-reply-list">
                     {shown.replies.map((reply, index) => {
@@ -746,10 +759,11 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
                 Stop waiting
               </Button>
             )}
-            {read && read.messages.length > 0 && (
-              <ul className="task-mail-list" aria-label="Its mail">
+            {read.messages.length === 0 && (detail?.reading ?? 0) > 0 && <span className="skeleton" role="status" aria-label="Reading its mail" />}
+            {read.messages.length > 0 && (
+              <ul className="task-mail-list" aria-label="Its mail" aria-busy={(detail?.reading ?? 0) > 0 || undefined}>
                 {read.messages.map((message) => (
-                  <li key={replyKey(message)}>
+                  <li key={replyKey(message)} className="fade-enter">
                     <Link className="task-mail-link" href={`/app/mail?message=${encodeURIComponent(replyKey(message))}`} onClick={onLeave}>
                       <span className="t-value">{subjectOf(message)}</span>
                       <span className="t-meta">
@@ -760,7 +774,7 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
                 ))}
               </ul>
             )}
-            {read?.mailFailures.map((failure) => (
+            {read.mailFailures.map((failure) => (
               <p key={failure.accountEmail} className="inline-note" data-tone="alert">
                 The mail of {failure.accountEmail} could not be read: {failure.reason}
               </p>
@@ -1195,6 +1209,9 @@ function EventField({ task }: { task: Item }) {
   const [state, setState] = useState<EventLink | null>(null);
   const [events, setEvents] = useState<BrowsedEvent[] | null>(null);
   const [eventsFailed, setEventsFailed] = useState(false);
+  
+  const [failures, setFailures] = useState<EventsFailure[]>([]);
+  const reading = useRef(false);
 
   const read = useCallback(() => {
     void get<EventLink>(`/api/items/${task.id}/event`).then((answer) => answer.ok && setState({ link: answer.link, event: answer.event }));
@@ -1202,13 +1219,18 @@ function EventField({ task }: { task: Item }) {
   useEffect(read, [read]);
 
   function loadEvents() {
-    if (events) return;
+    if ((events && failures.length === 0) || reading.current) return;
+    reading.current = true;
+    setEventsFailed(false);
     const from = today();
     const to = addDays(from, 30);
     const range = instantsOf(from, to);
     void readEvents<BrowsedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }).then((answer) => {
-      if (answer.ok) setEvents(answer.events);
-      else setEventsFailed(true);
+      reading.current = false;
+      if (answer.ok) {
+        setEvents(answer.events);
+        setFailures(answer.failures);
+      } else setEventsFailed(true);
     });
   }
 
@@ -1233,16 +1255,23 @@ function EventField({ task }: { task: Item }) {
   }
 
   const linked = state?.link ? (state.event ? `${state.event.title}, ${eventWhen(state.event)}` : "A Google event") : "No event";
+  const said = (label: string): MenuEntry => ({ kind: "action", label, disabled: true, onSelect: () => {} });
+  
+  
+  const notRead = [...new Set(failures.map((failure) => failure.accountEmail || "the workspace's calendar"))].map((who) => said(`Not read: ${who}`));
   const entries: MenuEntry[] = [
     {
       kind: "group",
       label: "Coming events",
       entries:
         events === null
-          ? [{ kind: "action", label: eventsFailed ? "The events could not be read" : "Reading the events…", disabled: true, onSelect: () => {} }]
-          : events.length === 0
-            ? [{ kind: "action", label: "No events in the next 30 days", disabled: true, onSelect: () => {} }]
-            : events.slice(0, 40).map((event): MenuEntry => ({ kind: "action", label: event.title, detail: eventWhen(event), onSelect: () => void link(event) })),
+          ? [said(eventsFailed ? "The events could not be read" : "Reading the events…")]
+          : [
+              ...notRead,
+              ...(events.length === 0 && notRead.length === 0
+                ? [said("No events in the next 30 days")]
+                : events.slice(0, 40).map((event): MenuEntry => ({ kind: "action", label: event.title, detail: eventWhen(event), onSelect: () => void link(event) }))),
+            ],
     },
     { kind: "separator" },
     { kind: "action", label: "New event", detail: task.dueOn ? whenLabel(task.dueOn, task.dueTime ?? null) : "Today", onSelect: () => void createAndLink() },
