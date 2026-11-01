@@ -5,7 +5,9 @@ import { cx } from "@/lib/utils";
 import { usePopupContainer } from "./popup-layer";
 
 type Tone = "neutral" | "accent" | "alert" | "warn" | "muted";
-export type SelectOption = { value: string; label: string; tone?: Tone };
+
+
+export type SelectOption = { value: string; label: string; tone?: Tone; detail?: string };
 
 type SelectProps = {
   value: string | null;
@@ -23,12 +25,13 @@ type SelectProps = {
 
 
 
+
 export function Select({ value, onChange, options, label, placeholder = "Chooseâ€¦", look = "field", id }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
   const container = usePopupContainer();
   return (
     <Base.Root
-      value={value}
+      value={chosen?.value ?? null}
       onValueChange={(next) => {
         if (typeof next === "string") onChange(next);
       }}
@@ -50,7 +53,8 @@ export function Select({ value, onChange, options, label, placeholder = "Chooseâ
             <Base.List>
               {options.map((option) => (
                 <Base.Item key={option.value} value={option.value} className="option">
-                  <Base.ItemText>{option.label}</Base.ItemText>
+                  <Base.ItemText className="option-text">{option.label}</Base.ItemText>
+                  {option.detail && <span className="option-detail">{option.detail}</span>}
                 </Base.Item>
               ))}
             </Base.List>

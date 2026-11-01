@@ -12,6 +12,7 @@ import { addDays, instantsOf, LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { richTextToPlain } from "@/lib/rich-text";
 import { get, post, tool, type Answer, type Item } from "./client-api";
+import { dueTimeOptions, NO_TIME } from "./due-times";
 import { PRIORITIES, sourceName } from "./item-parts";
 import { subjectOf } from "./mail/subject";
 import { TaskOutcome, useCompleteTask } from "./task-outcome";
@@ -26,7 +27,6 @@ import {
   readTaskItem,
   TaskCircle,
   taskFromItem,
-  timeLabel,
   useTaskActions,
   whenLabel,
   type TaskData,
@@ -41,16 +41,6 @@ type EventLink = { link: { eventId: string | null; googleEventId: string | null 
 type BrowsedEvent = { id: string; title: string; start: string; allDay: boolean; origin: "google" | "local"; localId: string | null; accountId: string; calendarId: string };
 
 const SAVE: Record<"saving" | "saved" | "failed", string> = { saving: "Saving…", saved: "Saved", failed: "Not saved" };
-
-
-const NO_TIME = "none";
-const TIMES: SelectOption[] = [
-  { value: NO_TIME, label: "No time" },
-  ...Array.from({ length: 48 }, (_, i) => {
-    const value = `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`;
-    return { value, label: timeLabel(value) };
-  }),
-];
 
 const stamp = (iso: string) => new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric" }).format(new Date(iso));
 const stampTime = (iso: string) => new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
@@ -375,7 +365,7 @@ export function TaskDetail() {
                         onChange={(dueOn) => void change({ dueOn })}
                       />
                       {item.dueOn ? (
-                        <Select label="Time" value={item.dueTime ?? NO_TIME} options={TIMES} onChange={(value) => void change({ dueTime: value === NO_TIME ? null : value })} />
+                        <Select label="Time" value={item.dueTime ?? NO_TIME} options={dueTimeOptions(item.dueTime)} onChange={(value) => void change({ dueTime: value === NO_TIME ? null : value })} />
                       ) : (
                         <p className="t-meta">A time goes with a day.</p>
                       )}
@@ -629,7 +619,7 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
           <>
             {options.length > 1 ? (
               
-              <Select label="Waits for mail in" value={options.some((option) => option.value === value) ? value : null} options={options} onChange={choose} />
+              <Select label="Waits for mail in" value={value} options={options} onChange={choose} />
             ) : !mail ? (
               <p className="t-help">No account is connected where this task lives, so it waits for no mail.</p>
             ) : null}
