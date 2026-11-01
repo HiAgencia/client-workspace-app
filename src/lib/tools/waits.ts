@@ -322,7 +322,7 @@ export const completeTask = defineTool({
     
     const { data, error } = await ctx.db
       .from("items")
-      .update({ status: "done", completed_at: new Date().toISOString(), changed_source: mark.source, changed_agent_label: mark.agent_label })
+      .update({ status: "done", completed_at: null, changed_source: mark.source, changed_agent_label: mark.agent_label })
       .eq("id", row.id)
       .eq("owner_id", ctx.ownerId)
       .eq("status", "open")

@@ -267,7 +267,8 @@ export const updateItem = defineTool({
     if (input.dueOn === null && row.due_time !== null) patch.due_time = null;
     if (input.status !== undefined && input.status !== row.status) {
       patch.status = input.status;
-      patch.completed_at = input.status === "done" ? new Date().toISOString() : null;
+      
+      patch.completed_at = null;
     }
     const previous = {
       title: row.title,

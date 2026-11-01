@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ToolContext, EventsSource } from "@/lib/tools/context";
 import { listRevisions, listTrash, restoreItem, restoreRevision } from "@/lib/tools/items";
 import { changeNode, createNode } from "@/lib/tools/tree-writes";
@@ -378,6 +378,22 @@ describe("reads", () => {
     expect(updates.changed.map((i) => i.id)).toEqual([changed.item.id]);
     expect(updates.completed.map((i) => i.id)).toEqual([completed.item.id]);
     expect(updates.deleted.map((i) => i.id)).toEqual([deleted.item.id]);
+  });
+
+  it("get_updates_since reads a completion as one whatever the clock of whoever wrote it says", async () => {
+    const task = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "To finish late" });
+    const since = new Date(Date.parse(task.item.updatedAt) + 1).toISOString();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() - 60_000 });
+    try {
+      await run("update_item", userCtx(a), { id: task.item.id, status: "done" });
+    } finally {
+      vi.useRealTimers();
+    }
+    const updates = await run<Record<"completed" | "changed", ItemOut[]>>("get_updates_since", userCtx(a), { since, node: treeA.mobileLanding });
+    expect(updates.completed.map((i) => i.id)).toContain(task.item.id);
+    expect(updates.changed.map((i) => i.id)).not.toContain(task.item.id);
   });
 
   it("get_updates_since takes the access's last use when no moment is given, and asks for one otherwise", async () => {
