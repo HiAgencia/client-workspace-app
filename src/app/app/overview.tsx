@@ -6,14 +6,18 @@ import { Menu } from "@/components/ui/menu";
 import { firstWeekday, longDay, today } from "@/lib/dates";
 import {
   ActivityBoxContent,
+  allTasks,
   CalendarBoxContent,
   MailBoxContent,
   NoDateBoxContent,
+  noDateCount,
   NotesBoxContent,
+  notesCount,
   placeInput,
   placeValue,
   TasksBoxContent,
   tasksCountLabel,
+  useMailCount,
   useMailRead,
   useNotesRead,
   useTasksRead,
@@ -22,6 +26,7 @@ import { BoxBoard, customizeEntries, SPLIT, useBoardLayout, type BoardLayout, ty
 import { GoogleOutcome } from "./node-view";
 import { PageHeader } from "./page-header";
 import { MailAccountFilter, TasksPlaceFilter, useAddress, usePlaceParam } from "./page-filters";
+import { ReplyStrip } from "./reply-strip";
 import { useTaskReplies } from "./task-replies";
 import { useChatScope, useWorkspace } from "./workspace";
 
@@ -32,6 +37,7 @@ export const OVERVIEW_BOXES = ["tasks", "activity", SPLIT, "calendar", "mail", "
 const NAMES: Record<string, string> = { tasks: "Tasks", calendar: "Calendar", mail: "Mail", no_date: "No date", activity: "Activity", notes: "Notes" };
 
 const noSubscription = () => () => {};
+
 
 
 export function Overview({ saved }: { saved: BoardLayout | null }) {
@@ -53,6 +59,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
   
   
   const mail = useMailRead(place, account);
+  const mailCount = useMailCount(mail);
   const mailOfPlace = useMailRead(place, null);
   
   
@@ -68,6 +75,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
         tasks: {
           id: "tasks",
           title: NAMES.tasks,
+          purpose: "What is overdue and what is for today",
           count: tasksCountLabel(tasks.data),
           menu: [{ kind: "action", label: "Open Tasks", onSelect: () => router.push(tasksHref) }],
           content: <TasksBoxContent read={tasks} now={now} place={place} placeId={placeId} showPlace layout="list" allHref={tasksHref} />,
@@ -75,22 +83,39 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
         calendar: {
           id: "calendar",
           title: NAMES.calendar,
+          purpose: "This week in your connected calendars",
           content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(tasks.data)} calendarHref={calendarHref} />,
         },
         mail: {
           id: "mail",
           title: NAMES.mail,
-          count: mail.data ? `${mail.data.unread} unread` : undefined,
+          purpose: "What may answer your tasks, then what is unread",
+          count: mailCount,
           content: <MailBoxContent read={mail} replies={replies} account={account} now={now} place={place} connectHref="/app/settings#google-accounts" />,
         },
         no_date: {
           id: "no_date",
           title: NAMES.no_date,
-          count: tasks.data?.groups.noDate.count,
+          purpose: "Tasks you can do whenever",
+          surface: "rest",
+          count: noDateCount(tasks.data),
           content: <NoDateBoxContent read={tasks} placeId={placeId} showPlace />,
         },
-        activity: { id: "activity", title: NAMES.activity, content: <ActivityBoxContent place={place} /> },
-        notes: { id: "notes", title: NAMES.notes, count: notes.data?.total, content: <NotesBoxContent read={notes} place={place} /> },
+        activity: {
+          id: "activity",
+          title: NAMES.activity,
+          purpose: "What the chat and your agents did, each with its undo",
+          surface: "rest",
+          content: <ActivityBoxContent place={place} />,
+        },
+        notes: {
+          id: "notes",
+          title: NAMES.notes,
+          purpose: "Loose notes, before they find their place",
+          surface: "rest",
+          count: notesCount(notes.data?.total),
+          content: <NotesBoxContent read={notes} place={place} />,
+        },
       }
     : {};
 
@@ -99,27 +124,23 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
       <div className="page page-boxes" data-overview data-today={now ?? undefined}>
         <PageHeader
           title="Overview"
-          count={now ? longDay(now) : <span className="page-count-wait" aria-hidden="true" />}
+          count={now ? `${longDay(now)}. What is due, what is on the calendar and what arrived.` : <span className="page-count-wait" aria-hidden="true" />}
           filters={
             <>
               <TasksPlaceFilter place={place} onChange={(next) => set({ place: placeValue(next), account: null })} tree={tree} now={now} />
               <MailAccountFilter account={account} onChange={(next) => set({ account: next })} mail={mailOfPlace.data} replies={replies.data?.tasks ?? []} />
             </>
           }
+          filtersSet={(place.kind === "all" ? 0 : 1) + (account ? 1 : 0)}
           chat
           more={<Menu label="More" about="for the Overview" entries={customizeEntries(board, NAMES)} />}
         />
         {google && <GoogleOutcome outcome={google} />}
+        <ReplyStrip read={replies} now={now} />
         {now ? <BoxBoard board={board} boxes={boxes} label="The Overview's boxes" /> : <BoardShell />}
       </div>
     </ViewTransition>
   );
-}
-
-
-export function allTasks(view: ReturnType<typeof useTasksRead>["data"]) {
-  if (!view) return [];
-  return [...view.groups.overdue.tasks, ...view.groups.today.tasks, ...view.groups.upcoming.days.flatMap((day) => day.tasks), ...view.groups.noDate.tasks];
 }
 
 

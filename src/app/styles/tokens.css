@@ -14,7 +14,8 @@
   --control: #e6ebf2;
   --control-hover: #d9e0ea;
   --control-rim: #c7d0dd;
-  --rail: #e3e8ef;
+  --rail: #d9e0ea;
+  --rail-page: #d9e0ea;
   --piece: #ffffff;
   --piece-rim: #d5dce7;
   --scrim: color-mix(in srgb, var(--shadow-ink) 36%, transparent);
@@ -22,9 +23,12 @@
   --ink-soft: #2a3a52;
   --muted: #526078;
   --accent: #0b67aa;
-  --accent-fill: #6fc2f3;
-  --accent-fill-hover: #4cb0ec;
-  --on-accent: #0a1c31;
+  --accent-fill: #0b67aa;
+  --accent-fill-hover: #095a96;
+  --on-accent: #ffffff;
+  --brand-tile: #6fc2f3;
+  --brand-tile-hover: #4cb0ec;
+  --brand-ink: #0a1c31;
   --accent-tint: #ddf0fd;
   --accent-tint-hover: #c8e6fb;
   --accent-ink: #0a4c80;
@@ -47,16 +51,16 @@
   --node-violet: #7640b3;
   --node-pink: #b02f74;
   --node-gray: #5d697b;
-  --due-overdue: var(--node-red);
-  --due-today: var(--node-green);
-  --due-tomorrow: var(--node-amber);
-  --due-week: var(--node-violet);
+  --due-overdue: var(--alert);
+  --due-today: var(--accent-ink);
+  --due-tomorrow: var(--ink-soft);
+  --due-week: var(--ink-soft);
   --due-later: var(--muted);
-  --prio-urgent: var(--node-red);
-  --prio-high: var(--node-orange);
-  --prio-normal: var(--node-blue);
-  --prio-low: var(--node-gray);
-  --mail-waiting: var(--node-indigo);
+  --prio-urgent: #bb3d0b;
+  --prio-high: #a8660a;
+  --prio-normal: var(--accent);
+  --prio-low: #667389;
+  --mail-waiting: var(--accent-ink);
   --tone-red: var(--node-red);
   --tone-amber: var(--node-amber);
   --tone-green: var(--node-green);
@@ -84,15 +88,19 @@
     8px 0 24px -16px color-mix(in srgb, var(--shadow-ink) 18%, transparent);
   --text-meta: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem);
   --text-body: clamp(0.875rem, 0.85rem + 0.1vw, 0.9375rem);
-  --text-lead: clamp(1rem, 0.95rem + 0.2vw, 1.1875rem);
+  --text-group: clamp(0.9375rem, 0.9rem + 0.14vw, 1.0625rem);
+  --text-lead: clamp(1.0625rem, 1rem + 0.28vw, 1.3125rem);
   --text-h1: clamp(1.5rem, 1.25rem + 0.85vw, 2.125rem);
   --gutter: clamp(0.875rem, 0.55rem + 1.1vw, 1.75rem);
-  --pad-card: clamp(1rem, 0.82rem + 0.55vw, 1.5rem);
+  --pad-card: clamp(1rem, 0.95rem + 0.6vw, 1.625rem);
   --gap-cards: clamp(0.875rem, 0.68rem + 0.55vw, 1.375rem);
   --gap-rows: 0.25rem;
   --header-h: 3.5rem;
   --sidebar-w: clamp(15.5rem, 12rem + 5vw, 18.5rem);
-  --nav-row: 2.125rem;
+  --nav-row: 2.375rem;
+  --nav-view: 3.25rem;
+  --control-h: 2.75rem;
+  --control-h-sm: 2.375rem;
   --target-min: 24px;
   --content-w: 76rem;
   --chat-w: clamp(21rem, 15rem + 8vw, 27rem);
@@ -116,6 +124,7 @@
 @media (pointer: coarse) {
   :root {
     --nav-row: 2.75rem;
+    --nav-view: 3.5rem;
   }
 }
 @media (width >= 64rem) {
@@ -141,6 +150,7 @@
   --control-hover: #2e3a4d;
   --control-rim: #3d4a60;
   --rail: #0b1018;
+  --rail-page: #1e2735;
   --piece: #2e3a4e;
   --piece-rim: #46546c;
   --scrim: color-mix(in srgb, var(--shadow-ink) 60%, transparent);
@@ -153,6 +163,9 @@
   --accent-fill: #6cbcf1;
   --accent-fill-hover: #8fd0f8;
   --on-accent: #061729;
+  --brand-tile: #6cbcf1;
+  --brand-tile-hover: #8fd0f8;
+  --brand-ink: #061729;
   --accent-tint: #13304a;
   --accent-tint-hover: #1a3e5d;
   --accent-ink: #b6defb;
@@ -177,6 +190,10 @@
   --node-violet: #caa8f5;
   --node-pink: #f59bc9;
   --node-gray: #a8b3c4;
+
+  --prio-urgent: #ff9d5c;
+  --prio-high: #e6c15f;
+  --prio-low: #a8b3c4;
 
   --focus: #7cc6f5;
   --focus-halo: color-mix(in srgb, var(--accent) 30%, transparent);

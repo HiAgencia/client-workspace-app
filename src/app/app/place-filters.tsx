@@ -88,7 +88,7 @@ type PlaceOptions = {
   value: string;
   tree: TreeNode[] | null;
   
-  counts: Map<string, number>;
+  counts: Map<string, number> | null;
   
   unit: FilterUnit;
   
@@ -100,11 +100,12 @@ type PlaceOptions = {
 
 
 export function placeOptions({ value, tree, counts, unit, noGeneral = false, shows }: PlaceOptions): SelectOption[] {
-  const option = (id: string, label: string) => ({ value: id, label, detail: whatItBrings(counts.get(id) ?? 0, unit) });
+  const brings = (id: string) => counts?.get(id) ?? 0;
+  const option = (id: string, label: string) => ({ value: id, label, ...(counts ? { detail: whatItBrings(brings(id), unit) } : {}) });
   return [
     option(ALL, "All places"),
-    ...(!noGeneral && ((counts.get(GENERAL) ?? 0) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [option(GENERAL, "General")] : []),
-    ...(tree ?? []).filter((node) => (counts.get(node.id) ?? 0) > 0 || shows?.has(node.id) || node.id === value).map((node) => option(node.id, node.path)),
+    ...(!noGeneral && (brings(GENERAL) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [option(GENERAL, "General")] : []),
+    ...(tree ?? []).filter((node) => brings(node.id) > 0 || shows?.has(node.id) || node.id === value).map((node) => option(node.id, node.path)),
   ];
 }
 

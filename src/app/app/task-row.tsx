@@ -61,7 +61,7 @@ export function dayHeading(day: Day, now: Day = today()): string {
     day < addDays(now, 7)
       ? `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`
       : new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric" }).format(date);
-  return day === addDays(now, 1) ? `${base} · Tomorrow` : base;
+  return day === addDays(now, 1) ? `Tomorrow, ${base}` : base;
 }
 
 export function whenTone(day: Day, now: Day = today()): WhenTone {
@@ -208,6 +208,15 @@ function forgetSettled() {
   let changed = false;
   for (const [key, op] of ops) if (op.settled) changed = ops.delete(key) || changed;
   if (changed) emit();
+}
+
+
+export function useTaskLanding(group: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => [...ops.values()].some((op) => op.kind === "move" && op.to === group),
+    () => false,
+  );
 }
 
 const LEAVE_MS = 260;
@@ -595,9 +604,9 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
   const tone = task.dueOn ? whenTone(task.dueOn, now) : null;
   const mail = mailState(task.mail);
   const plain = inlinePlain(task.title);
-  const hasMeta = Boolean(when || task.subtasks.total || task.priority === 1 || task.priority === 2 || task.notes || mail || task.source !== "manual");
   const groupFor = (day: Day | null) => groupOfDay(day, now);
   const place = placeOnPage(task, showPlace, pageNode, tree);
+  const hasMeta = Boolean(when || task.subtasks.total || task.priority === 1 || task.notes || mail || task.source !== "manual" || place.shown);
 
   useEffect(() => {
     if (returning !== task.id) return;
@@ -612,7 +621,6 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
       data-item={task.id}
       data-done={task.status === "done" || leaving || undefined}
       data-menu-open={menuOpen || undefined}
-      data-place={place.shown || undefined}
     >
       <button
         type="button"
@@ -630,13 +638,8 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
       <p className="task-title t-value">
         <InlineText text={task.title} />
       </p>
-      {place.shown && (
-        <p className="task-place t-meta">
-          <PlaceName path={place.path} color={task.color} />
-        </p>
-      )}
       {task.description && <p className="task-desc t-help">{task.description}</p>}
-      {(hasMeta || layout === "list") && (
+      {hasMeta && (
         <div className="task-meta t-meta">
           {when && (
             <span className="task-when" data-when={tone ?? undefined}>
@@ -665,18 +668,24 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
               {task.subtasks.done}/{task.subtasks.total}
             </button>
           )}
-          {(task.priority === 1 || task.priority === 2) && (
+          {}
+          {task.priority === 1 && (
             <span className="task-priority" data-priority={task.priority}>
               {priorityName(task.priority)}
             </span>
           )}
-          {task.notes > 0 && <span className="task-notes">{count(task.notes, "note", "notes")}</span>}
           {mail && (
-            <span className="task-mail" data-mail={mail}>
+            <span className="pill task-mail" data-tone="accent" data-mail={mail}>
               Waiting for mail
             </span>
           )}
+          {task.notes > 0 && <span className="task-notes">{count(task.notes, "note", "notes")}</span>}
           {task.source !== "manual" && <span className="task-source">{sourceName(task.source, task.agentLabel)}</span>}
+          {place.shown && (
+            <span className="task-place">
+              <PlaceName path={place.path} color={task.color} />
+            </span>
+          )}
         </div>
       )}
       <div className="task-more">

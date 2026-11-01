@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@/components/ui/link";
-import { useEffect, useMemo, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { count } from "@/lib/count";
@@ -17,12 +17,12 @@ import { BoxEmpty, BoxFailed, BoxWait, useBoxSettled, useToolRead, type BoxRead 
 import { useEventsRead } from "./use-events-read";
 import { get, post, tool, type CalendarEvent, type Item, type TreeNode } from "./client-api";
 import { PathText } from "./item-parts";
-import { accountsSeenFrom, type MailList } from "./mail-store";
+import { accountsSeenFrom, figureWords, type MailList } from "./mail-store";
 import { subjectOf } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
 import { QuickAddInline } from "./quick-add";
-import { NewNode } from "./side-nav";
-import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, type TaskData } from "./task-row";
+import { Fold, NewNode } from "./side-nav";
+import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, TaskList, timeLabel, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
 
@@ -90,6 +90,9 @@ type Group = {
 
 export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace, pageNode, sort = "date", allHref }: GroupsProps) {
   const manual = sort === "manual";
+  
+  
+  const folded = mode === "box" && layout === "list";
   const upcomingDays: Group[] = view.groups.upcoming.days.map((entry) => ({
     key: entry.day,
     label: dayHeading(entry.day, now),
@@ -131,7 +134,7 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       tasks: [],
       count: view.groups.upcoming.count,
       dropDay: undefined,
-      add: mode === "box" ? addDays(now, 1) : undefined,
+      add: mode === "box" && !folded ? addDays(now, 1) : undefined,
       empty: "Nothing is coming up.",
       days: upcomingDays,
     },
@@ -187,21 +190,27 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
             <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
               {group.label}
             </h3>
-            {group.count > 0 && <span className="group-count">{group.count}</span>}
+            {group.count > 0 && <span className="group-count">{count(group.count, "task", "tasks")}</span>}
             {group.action && <div className="group-action">{group.action}</div>}
           </div>
           {group.days ? (
             <>
               {group.days.length === 0 && <p className="t-help group-empty">{group.empty}</p>}
-              {group.days.map((day) => (
-                <div key={day.key} className="group-day" data-day={day.key}>
-                  <h4 className="group-day-title" data-when={day.tone}>
-                    {day.label}
-                  </h4>
-                  {list(day)}
-                  {day.add !== undefined && <QuickAddInline day={day.add} placeId={placeId} />}
-                </div>
-              ))}
+              {group.days.map((day) =>
+                folded ? (
+                  <UpcomingDay key={day.key} day={day} tasks={allTasks(view)} now={now}>
+                    {list(day)}
+                  </UpcomingDay>
+                ) : (
+                  <div key={day.key} className="group-day" data-day={day.key}>
+                    <h4 className="group-day-title" data-when={day.tone}>
+                      {day.label}
+                    </h4>
+                    {list(day)}
+                    {day.add !== undefined && <QuickAddInline day={day.add} placeId={placeId} />}
+                  </div>
+                ),
+              )}
               {mode === "box" && view.groups.upcoming.hidden > 0 && allHref && (
                 <Link className="link group-more" href={allHref}>
                   Show all upcoming
@@ -219,6 +228,65 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       ))}
     </div>
   );
+}
+
+
+
+function UpcomingDay({ day, tasks, now, children }: { day: Group; tasks: TaskData[]; now: Day; children: ReactNode }) {
+  const actions = useTaskActions();
+  const [open, setOpen] = useState(false);
+  const [over, setOver] = useState(false);
+  const foldId = useId();
+  const landing = useTaskLanding(day.key);
+  if (landing && !open) setOpen(true);
+  const others = day.count - 1;
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    setOver(false);
+    const task = tasks.find((entry) => entry.id === draggedTask);
+    if (!task) return;
+    event.preventDefault();
+    void actions.moveToDay(task, day.key, day.key, dayName(day.key, now));
+  }
+
+  return (
+    <div className="group-day" data-day={day.key}>
+      <h4 className="upcoming-day-head">
+        <button
+          type="button"
+          className="upcoming-day"
+          data-upcoming-day
+          data-over={over || undefined}
+          aria-expanded={open}
+          aria-controls={foldId}
+          onClick={() => setOpen((value) => !value)}
+          onDragOver={(event) => {
+            if (!draggedTask) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={onDrop}
+        >
+          <span className="upcoming-day-name" data-when={day.tone}>
+            {day.label}
+          </span>
+          {day.tasks[0] && <span className="upcoming-day-first">{inlinePlain(day.tasks[0].title)}</span>}
+          {others > 0 && <span className="upcoming-day-more">{`+${others} more`}</span>}
+        </button>
+      </h4>
+      <Fold open={open} id={foldId}>
+        {children}
+      </Fold>
+    </div>
+  );
+}
+
+
+export function allTasks(view: TasksView | null): TaskData[] {
+  if (!view) return [];
+  return [...view.groups.overdue.tasks, ...view.groups.today.tasks, ...view.groups.upcoming.days.flatMap((day) => day.tasks), ...view.groups.noDate.tasks];
 }
 
 
@@ -257,17 +325,21 @@ export function TasksBoxContent({ read, now, place, placeId, showPlace, pageNode
   );
 }
 
-export function tasksCount(view: TasksView | null): number | undefined {
-  if (!view) return undefined;
-  return view.groups.overdue.count + view.groups.today.count + view.groups.upcoming.count;
-}
-
-
 
 
 export function tasksCountLabel(view: TasksView | null): string | undefined {
-  const dated = tasksCount(view);
-  return dated === undefined ? undefined : `${dated} scheduled`;
+  const due = view ? view.groups.overdue.count + view.groups.today.count : 0;
+  return due > 0 ? `${due} due` : undefined;
+}
+
+
+export function noDateCount(view: TasksView | null): string | undefined {
+  const tasks = view?.groups.noDate.count ?? 0;
+  return tasks > 0 ? count(tasks, "task", "tasks") : undefined;
+}
+
+export function notesCount(total: number | undefined): string | undefined {
+  return total ? count(total, "note", "notes") : undefined;
 }
 
 
@@ -475,7 +547,14 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
 const noRevision = () => 0;
 const MAIL_ROWS = 5;
 
-function mailWhen(iso: string, now: Day): string {
+
+export function useMailCount(read: BoxRead<MailList>): string | undefined {
+  const { mailStore } = useWorkspace();
+  if (!read.data || read.data.accounts.length === 0) return undefined;
+  return figureWords(mailStore.figure(read.data.accounts)) ?? undefined;
+}
+
+export function mailWhen(iso: string, now: Day): string {
   const date = new Date(iso);
   const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const time = new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(date);

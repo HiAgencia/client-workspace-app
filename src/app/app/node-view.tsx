@@ -11,13 +11,17 @@ import { firstWeekday, today } from "@/lib/dates";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { get, post, type TreeNode } from "./client-api";
 import {
+  allTasks,
   CalendarBoxContent,
   MailBoxContent,
   NoDateBoxContent,
+  noDateCount,
   NotesBoxContent,
+  notesCount,
   SubprojectsBoxContent,
   TasksBoxContent,
   tasksCountLabel,
+  useMailCount,
   useMailRead,
   useNotesRead,
   useTasksRead,
@@ -26,7 +30,7 @@ import {
 import { BoxBoard, customizeEntries, savePreference, SPLIT, useBoardLayout, useBoxRead, type BoardLayout, type BoxSpec } from "./boxes";
 import type { ConnectBlocked } from "./connect-blocked";
 import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
-import { allTasks, BoardShell } from "./overview";
+import { BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
 import { useTaskReplies } from "./task-replies";
@@ -79,6 +83,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const tasks = useTasksRead(place, now, { upcomingDays: 3 });
   const notes = useNotesRead(place);
   const mail = useMailRead(place, null);
+  const mailCount = useMailCount(mail);
   const replies = useTaskReplies({ node: nodeId }, now, tree, 5);
   const accounts = useBoxRead<Accounts>(() => get<Accounts>("/api/accounts"), "accounts");
   const [adding, setAdding] = useState(false);
@@ -183,16 +188,49 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const tasksBox: BoxSpec = {
     id: "tasks",
     title: "Tasks",
+    purpose: "What is overdue and what is for today",
     count: tasksCountLabel(view),
     content: <TasksBoxContent read={tasksRead} now={now} place={place} placeId={nodeId} showPlace pageNode={nodeId} layout={layout} allHref={`/app/tasks?place=${nodeId}`} />,
   };
   const boxes: Record<string, BoxSpec> = {
     tasks: tasksBox,
-    no_date: { id: "no_date", title: "No date", count: view?.groups.noDate.count, content: <NoDateBoxContent read={tasksRead} placeId={nodeId} showPlace pageNode={nodeId} /> },
-    calendar: { id: "calendar", title: "Calendar", content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?scope=${nodeId}`} /> },
-    mail: { id: "mail", title: "Mail", count: mail.data ? `${mail.data.unread} unread` : undefined, content: <MailBoxContent read={mail} replies={replies} account={null} now={now} place={place} connectHref={connectHref} /> },
-    notes: { id: "notes", title: "Notes", count: notes.data?.total, content: <NotesBoxContent read={notes} place={place} /> },
-    subprojects: { id: "subprojects", title: childName, count: children.length, content: <SubprojectsBoxContent node={node} adding={adding} setAdding={setAdding} /> },
+    no_date: {
+      id: "no_date",
+      title: "No date",
+      purpose: "Tasks you can do whenever",
+      surface: "rest",
+      count: noDateCount(view),
+      content: <NoDateBoxContent read={tasksRead} placeId={nodeId} showPlace pageNode={nodeId} />,
+    },
+    calendar: {
+      id: "calendar",
+      title: "Calendar",
+      purpose: "This week in the calendars it sees",
+      content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?scope=${nodeId}`} />,
+    },
+    mail: {
+      id: "mail",
+      title: "Mail",
+      purpose: "What may answer its tasks, then what is unread",
+      count: mailCount,
+      content: <MailBoxContent read={mail} replies={replies} account={null} now={now} place={place} connectHref={connectHref} />,
+    },
+    notes: {
+      id: "notes",
+      title: "Notes",
+      purpose: "What to keep in view without it being something to do",
+      surface: "rest",
+      count: notesCount(notes.data?.total),
+      content: <NotesBoxContent read={notes} place={place} />,
+    },
+    subprojects: {
+      id: "subprojects",
+      title: childName,
+      purpose: `What hangs from ${node.name}`,
+      surface: "rest",
+      count: children.length > 0 ? count(children.length, one, `${one}s`) : undefined,
+      content: <SubprojectsBoxContent node={node} adding={adding} setAdding={setAdding} />,
+    },
   };
 
   return (

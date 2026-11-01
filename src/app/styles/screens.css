@@ -45,7 +45,7 @@
       transition-duration: var(--dur-hover);
     }
     &:hover .brand-mark > rect {
-      fill: var(--accent-fill-hover);
+      fill: var(--brand-tile-hover);
       transition-duration: var(--dur-hover);
     }
   }

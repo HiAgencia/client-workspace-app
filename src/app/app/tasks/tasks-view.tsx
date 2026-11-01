@@ -5,6 +5,7 @@ import { useEffect, useSyncExternalStore, ViewTransition } from "react";
 import { Menu } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { today } from "@/lib/dates";
+import { cx } from "@/lib/utils";
 import { BoxFailed, BoxWait, savePreference } from "../boxes";
 import { placeValue, TaskGroups, useTasksRead, type Sort } from "../box-kinds";
 import { PageHeader, type PageLayout } from "../page-header";
@@ -65,12 +66,13 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
               <span className="page-count-wait" aria-hidden="true" />
             ) : (
               <>
-                {count(open, "open task", "open tasks")}
-                {due === 0 ? " · nothing overdue or due today" : ` · ${count(due ?? 0, "task", "tasks")} overdue or due today`}
+                {count(open, "open task", "open tasks")}.{" "}
+                {due === 0 ? "Nothing is overdue or due today." : `${due === 1 ? "1 is" : `${due} are`} overdue or due today.`}
               </>
             )
           }
           filters={<TasksPlaceFilter place={place} onChange={(next) => set({ place: placeValue(next) })} tree={tree} now={now} />}
+          filtersSet={place.kind === "all" ? 0 : 1}
           layout={{ value: layout, onChange: chooseLayout }}
           chat
           more={
@@ -84,7 +86,7 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
             />
           }
         />
-        <section className="tasks-page card" aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
+        <section className={cx("tasks-page", layout === "list" && "card")} aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
           {}
           <h2 id="tasks-page-title" className="sr-only">
             Every task

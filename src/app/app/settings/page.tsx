@@ -85,7 +85,7 @@ function SettingsBox({ id, title, count: figure, order, children }: { id: string
         <h2 id={`${id}-title`} className="t-title box-title" tabIndex={-1}>
           {title}
         </h2>
-        {figure !== undefined && figure !== null && <span className="box-count">{figure}</span>}
+        {figure !== undefined && figure !== null && <span className="pill box-count">{figure}</span>}
       </header>
       <div className="box-body">{children}</div>
     </section>

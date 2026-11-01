@@ -18,6 +18,7 @@ import { createMailStore, type MailAccountRef, type MailFigure, type MailStore }
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
 import { TaskDetail } from "./task-detail";
+import { SCREEN_TITLES } from "./screen-titles";
 import { openTaskDetail } from "./task-row";
 import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
@@ -328,7 +329,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   
   useEffect(() => {
     const id = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1];
-    const name = id ? tree?.find((node) => node.id === id)?.name : undefined;
+    const name = id ? tree?.find((node) => node.id === id)?.name : SCREEN_TITLES[pathname];
     if (name) document.title = `${name} · ${PRODUCT_NAME}`;
   }, [pathname, tree]);
 

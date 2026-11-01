@@ -1,8 +1,9 @@
 "use client";
 
 import { Link } from "@/components/ui/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { usePiece } from "@/components/ui/use-piece";
 import { PRODUCT_NAME } from "@/lib/product";
 import { cx } from "@/lib/utils";
@@ -20,6 +21,8 @@ type PageHeaderProps = {
   trail?: Crumb[];
   
   filters?: ReactNode;
+  
+  filtersSet?: number;
   layout?: { value: PageLayout; onChange: (value: PageLayout) => void };
   
   views?: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void };
@@ -34,7 +37,7 @@ type PageHeaderProps = {
 
 
 
-export function PageHeader({ title, count, trail, filters, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
+export function PageHeader({ title, count, trail, filters, filtersSet = 0, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
   const hasTools = Boolean(filters || layout || views || chat || more);
   const heading = useRef<HTMLHeadingElement>(null);
   
@@ -89,13 +92,81 @@ export function PageHeader({ title, count, trail, filters, layout, views, chat, 
       {hasTools && (
         <div className="page-tools" role="group" aria-label="This page's controls">
           {filters && <div className="page-filters">{filters}</div>}
-          {layout && <ViewSwitch label="Layout" value={layout.value} options={LAYOUTS} onChange={(value) => layout.onChange(value as PageLayout)} />}
+          {filters && <FilterSheet set={filtersSet}>{filters}</FilterSheet>}
+          {layout && <ViewSwitch label="View" value={layout.value} options={LAYOUTS} onChange={(value) => layout.onChange(value as PageLayout)} />}
           {!layout && views && <ViewSwitch label={views.label} value={views.value} options={views.options} onChange={views.onChange} />}
           {chat && <ChatButton />}
           {more}
         </div>
       )}
     </header>
+  );
+}
+
+
+
+
+function FilterSheet({ set, children }: { set: number; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [everOpened, setEverOpened] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const el = dialog.current;
+    if (!el) return;
+    if (open && !el.open) el.showModal();
+    if (!open && el.open) el.close();
+  }, [open]);
+  return (
+    <>
+      <Button
+        className="page-filter-open"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-filter-open
+        onClick={() => {
+          setEverOpened(true);
+          setOpen(true);
+        }}
+      >
+        <span className="btn-label">Filter</span>
+        {set > 0 && (
+          <span className="pill page-filter-set" data-tone="accent">
+            {set}
+            <span className="sr-only"> set</span>
+          </span>
+        )}
+      </Button>
+      <dialog
+        ref={dialog}
+        className="dialog filter-sheet"
+        aria-labelledby={titleId}
+        data-filter-sheet
+        onClose={() => setOpen(false)}
+        
+        onPointerDown={(event) => {
+          if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
+        }}
+        onClick={(event) => {
+          if (event.target === dialog.current && dialog.current.dataset.downOutside !== undefined) setOpen(false);
+          if (dialog.current) delete dialog.current.dataset.downOutside;
+        }}
+      >
+        <PopupLayerProvider container={dialog}>
+          <div className="filter-sheet-in">
+            <div className="filter-sheet-head">
+              <h2 id={titleId} className="t-title">
+                Filter
+              </h2>
+              <Button size="sm" onClick={() => setOpen(false)}>
+                Close
+              </Button>
+            </div>
+            {everOpened && <div className="filter-sheet-fields">{children}</div>}
+          </div>
+        </PopupLayerProvider>
+      </dialog>
+    </>
   );
 }
 
@@ -110,12 +181,17 @@ function ViewSwitch({ label, value, options, onChange }: { label: string; value:
   const rail = useRef<HTMLDivElement>(null);
   usePiece(rail, '[aria-pressed="true"]');
   return (
-    <div ref={rail} role="group" aria-label={label} className="seg page-layout" data-page-layout={value}>
-      {options.map((option) => (
-        <button key={option.value} type="button" className="seg-option" aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
-          {option.label}
-        </button>
-      ))}
+    <div className="named page-layout-named">
+      <span className="t-label named-label" aria-hidden="true">
+        {label}
+      </span>
+      <div ref={rail} role="group" aria-label={label} className="seg page-layout" data-page-layout={value}>
+        {options.map((option) => (
+          <button key={option.value} type="button" className="seg-option" aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
+            {option.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -124,7 +200,7 @@ function ViewSwitch({ label, value, options, onChange }: { label: string; value:
 function ChatButton() {
   const { chat } = useWorkspace();
   return (
-    <Button size="sm" aria-expanded={chat.open} data-chat-toggle onClick={() => chat.setOpen(!chat.open)}>
+    <Button aria-expanded={chat.open} data-chat-toggle onClick={() => chat.setOpen(!chat.open)}>
       Chat
     </Button>
   );

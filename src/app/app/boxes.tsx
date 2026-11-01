@@ -218,7 +218,11 @@ export type BoxSpec = {
   
   title: string;
   
+  purpose: ReactNode;
+  
   count?: ReactNode;
+  
+  surface?: "rest";
   
   menu?: MenuEntry[];
   
@@ -470,6 +474,7 @@ function Box({
     <section
       className="box"
       data-box={spec.id}
+      data-surface={spec.surface}
       data-menu-open={menuOpen || undefined}
       data-drop-before={dropBefore || undefined}
       aria-labelledby={titleId}
@@ -497,11 +502,12 @@ function Box({
         <h2 id={titleId} className="t-title box-title" tabIndex={-1}>
           {spec.title}
         </h2>
-        {spec.count !== undefined && spec.count !== null && <span className="box-count">{spec.count}</span>}
+        {spec.count !== undefined && spec.count !== null && <span className="pill box-count">{spec.count}</span>}
         <div className="box-more">
           <Menu label="More" about={`for ${spec.title}`} entries={entries} onOpenChange={setMenuOpen} />
         </div>
       </header>
+      <p className="box-purpose">{spec.purpose}</p>
       <div className="box-body">
         <BoxIdContext.Provider value={spec.id}>{spec.content}</BoxIdContext.Provider>
       </div>

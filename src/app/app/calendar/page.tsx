@@ -379,7 +379,7 @@ function Calendar() {
       <div className="page cal-page" data-calendar={view}>
         <PageHeader
           title="Calendar"
-          count={loaded ? counted : "Reading the calendar…"}
+          count={loaded ? `Your connected calendars and the tasks with a date. ${counted}.` : "Reading the calendar…"}
           filters={
             <>
               <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
@@ -392,6 +392,7 @@ function Calendar() {
               />
             </>
           }
+          filtersSet={(place === ALL ? 0 : 1) + (account === ALL ? 0 : 1)}
           views={{ label: "Calendar view", value: view, options: VIEWS, onChange: (value) => set({ view: value === "week" ? null : value }) }}
           chat
         />

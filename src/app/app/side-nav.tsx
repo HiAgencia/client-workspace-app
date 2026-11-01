@@ -46,9 +46,9 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
         </div>
       )}
       <div className="side-actions">
-        <button
-          type="button"
-          className="side-link side-action"
+        <Button
+          variant="primary"
+          className="side-add-task"
           data-side-action="add-task"
           aria-keyshortcuts="Q"
           onClick={() => {
@@ -56,14 +56,14 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
             startTask(current);
           }}
         >
-          <span className="side-link-name">Add task</span>
+          <span className="btn-label side-link-name">Add task</span>
           <kbd className="kbd side-key" aria-hidden="true">
             Q
           </kbd>
-        </button>
+        </Button>
         <button
           type="button"
-          className="side-link side-action"
+          className="field side-search"
           data-side-action="search"
           aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
           onClick={() => {
@@ -81,25 +81,25 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
         <div ref={main} className="side-main side-pieces">
           <ul className="side-list" aria-label="Views">
             <li>
-              <Link href="/app" className="side-link" aria-current={here("/app")}>
-                <span className="side-link-name">Overview</span>
+              <Link href="/app" className="side-link side-view" aria-current={here("/app")}>
+                <ViewName name="Overview" detail="Your day on one page" />
               </Link>
             </li>
             <li>
-              <Link href="/app/tasks" className="side-link" aria-current={here("/app/tasks")}>
-                <span className="side-link-name">Tasks</span>
+              <Link href="/app/tasks" className="side-link side-view" aria-current={here("/app/tasks")}>
+                <ViewName name="Tasks" detail="All your tasks, by date" />
                 {due > 0 && <Count value={due} unit="due" spoken={`${due} overdue or due today`} />}
               </Link>
             </li>
             <li>
-              <Link href="/app/calendar" className="side-link" aria-current={here("/app/calendar")}>
-                <span className="side-link-name">Calendar</span>
+              <Link href="/app/calendar" className="side-link side-view" aria-current={here("/app/calendar")}>
+                <ViewName name="Calendar" detail="Events and dated tasks" />
               </Link>
             </li>
             <li>
               {}
-              <Link href="/app/mail" className="side-link" aria-current={here("/app/mail")}>
-                <span className="side-link-name">Mail</span>
+              <Link href="/app/mail" className="side-link side-view" aria-current={here("/app/mail")}>
+                <ViewName name="Mail" detail="For your tasks, then unread" />
                 {mailNumber && <Count value={mailNumber.shown} spoken={mailNumber.spoken} />}
               </Link>
               {mailFigure?.why && (
@@ -148,6 +148,16 @@ const noSubscription = () => () => {};
 
 export function useMac(): boolean {
   return useSyncExternalStore(noSubscription, () => /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent), () => false);
+}
+
+
+function ViewName({ name, detail }: { name: string; detail: string }) {
+  return (
+    <span className="side-view-text">
+      <span className="side-link-name">{name}</span>
+      <span className="side-view-detail">{detail}</span>
+    </span>
+  );
 }
 
 

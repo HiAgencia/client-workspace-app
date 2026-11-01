@@ -53,9 +53,8 @@ function useShows(now: Day | null): Set<string> {
 export function TasksPlaceFilter({ place, onChange, tree, now }: { place: Place; onChange: (place: Place) => void; tree: TreeNode[] | null; now: Day | null }) {
   const { generalTasks } = useWorkspace();
   const shows = useShows(now);
-  const generalCount = generalTasks ?? 0;
-  const counts = new Map<string, number>([[ALL, (tree ?? []).filter((node) => node.parentId === null).reduce((sum, node) => sum + node.openTasks, 0) + generalCount], ["general", generalCount]]);
-  for (const node of tree ?? []) counts.set(node.id, node.openTasks);
+  
+  const counts = tree === null || generalTasks === null ? null : new Map<string, number>([[ALL, tree.filter((node) => node.parentId === null).reduce((sum, node) => sum + node.openTasks, 0) + generalTasks], ["general", generalTasks], ...tree.map((node): [string, number] => [node.id, node.openTasks])]);
   return <PlaceFilter value={placeValue(place) ?? ALL} tree={tree} counts={counts} unit={TASKS} shows={shows} onChange={(value) => onChange(value === ALL ? { kind: "all" } : readPlace(value, tree))} />;
 }
 

@@ -286,6 +286,7 @@ function Mail() {
               </>
             ) : undefined
           }
+          filtersSet={(place === ALL ? 0 : 1) + (account === ALL ? 0 : 1)}
           chat
         />
 

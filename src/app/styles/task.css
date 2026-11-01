@@ -226,7 +226,7 @@
 .task-list {
   container: task-list / inline-size;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: 0.7rem;
   margin: 0;
   padding: 0;
@@ -255,7 +255,7 @@
   grid-template-columns: subgrid;
   align-items: start;
   min-height: 0;
-  padding: 0.55rem 0.6rem;
+  padding: 0.5rem 0.6rem;
   border-radius: var(--radius-control);
   background: transparent;
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), padding var(--dur) var(--ease-in);
@@ -322,17 +322,9 @@
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
-.task:not([data-place]) .task-title {
-  grid-column: 2 / -1;
-}
 .task-place {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-  margin: 0;
-  padding-top: calc((var(--text-body) * 1.45 - var(--text-meta) * 1.4) / 2);
+  min-width: 0;
   color: var(--muted);
-  text-align: right;
   transition: color var(--dur-hover-out) var(--ease-hover-out);
 }
 .task-place-name {
@@ -351,7 +343,7 @@
   translate: 0 -0.05em;
 }
 .task-desc {
-  grid-column: 2 / -1;
+  grid-column: 2;
   margin: 0.1rem 0 0;
   min-width: 0;
   overflow: hidden;
@@ -359,7 +351,7 @@
   text-overflow: ellipsis;
 }
 .task-meta {
-  grid-column: 2 / -1;
+  grid-column: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -379,10 +371,6 @@
 .task-notes,
 .task-source {
   color: var(--muted);
-}
-.task-mail[data-mail="waiting"] {
-  color: var(--mail-waiting);
-  font-weight: 650;
 }
 .task-when .picker,
 .task-subtasks-toggle {
@@ -406,7 +394,7 @@
   --when: var(--due-later);
 }
 .task-when .picker {
-  background: color-mix(in srgb, var(--when) 6%, transparent);
+  background: transparent;
   color: var(--when);
   box-shadow: 0 1px 2px transparent, 0 1px 1px transparent;
   transition-property: background-color, border-color, color, box-shadow;
@@ -423,6 +411,9 @@
       transition-duration: var(--dur-hover);
     }
   }
+}
+.task-when[data-when="overdue"] .picker {
+  background: color-mix(in srgb, var(--when) 8%, transparent);
 }
 @media (pointer: coarse) {
   .task-when .picker {
@@ -521,7 +512,7 @@
   }
 }
 .task-subtasks {
-  grid-column: 2 / -1;
+  grid-column: 2;
 }
 .task-subtask-list {
   display: flex;
@@ -603,32 +594,6 @@
   border-radius: var(--radius-control);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
-@container task-list (width < 30rem) {
-  .task[data-place] .task-title {
-    grid-column: 2 / -1;
-  }
-  .task-place {
-    grid-column: 2 / -1;
-    grid-row: auto;
-    order: 3;
-    justify-self: start;
-    padding-top: 0.15rem;
-    padding-right: 4.5rem;
-    text-align: left;
-  }
-  .task[data-place] .task-meta {
-    padding-right: 0;
-  }
-  .task-desc {
-    order: 1;
-  }
-  .task-meta {
-    order: 2;
-  }
-  .task-subtasks {
-    order: 4;
-  }
-}
 .task-list[data-layout="board"] {
   display: flex;
   flex-direction: column;
@@ -649,35 +614,6 @@
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), box-shadow var(--dur-hover-out) var(--ease-hover-out),
     border-color var(--dur-hover-out) var(--ease-hover-out), padding var(--dur) var(--ease-in);
 
-  & .task-title {
-    grid-column: 2;
-  }
-  & .task-place {
-    grid-column: 2;
-    grid-row: auto;
-    order: 3;
-    justify-self: start;
-    padding-top: 0.2rem;
-    text-align: left;
-  }
-  & .task-desc {
-    grid-column: 2;
-    order: 1;
-  }
-  & .task-meta {
-    grid-column: 2;
-    order: 2;
-  }
-  & .task-subtasks {
-    grid-column: 2;
-    order: 4;
-  }
-  &[data-place] .task-meta {
-    padding-right: 0;
-  }
-  &[data-place] .task-place {
-    padding-right: 4.5rem;
-  }
   @media (hover: hover) {
     &:hover {
       background: var(--card);

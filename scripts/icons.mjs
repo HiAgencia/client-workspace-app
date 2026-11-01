@@ -19,8 +19,8 @@ function token(name) {
   return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
 }
 
-const ACCENT = token("--accent-fill");
-const ON_ACCENT = token("--on-accent");
+const ACCENT = token("--brand-tile");
+const ON_ACCENT = token("--brand-ink");
 const CANVAS = token("--canvas");
 // In a square of `size` units: the tile, then three bars stepping in.
 const UNITS = geometry.size;
