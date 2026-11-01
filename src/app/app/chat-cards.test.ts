@@ -102,11 +102,8 @@ describe("the chat's cards", () => {
     await closed(true)?.undo?.();
     await closed(false)?.undo?.();
     expect(sent).toEqual([
-      { url: "/api/tools/update_item", body: { id: "t6", status: "open" } },
-      { url: "/api/tools/delete_item", body: { id: "d6" } },
-      { url: "/api/tools/unlink_mail", body: { account: "a1", id: "m6", task: "t6" } },
-      { url: "/api/tools/update_item", body: { id: "t6", status: "open" } },
-      { url: "/api/tools/delete_item", body: { id: "d6" } },
+      { url: "/api/tools/reopen_task", body: { task: "t6", decision: "d6", reply: { account: "a1", id: "m6" } } },
+      { url: "/api/tools/reopen_task", body: { task: "t6", decision: "d6" } },
     ]);
   });
 });

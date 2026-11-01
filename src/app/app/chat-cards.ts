@@ -124,6 +124,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
     };
   },
   
+  
   complete_task: (o) => {
     const reply = o.link as ReplyLink | null | undefined;
     if (!o.item || !o.decision) return null;
@@ -131,15 +132,10 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
     const decision = o.decision;
     return {
       what: `Closed ${quoted(task.title)}: ${decision.title}`,
-      undo: async () => {
-        const reopened = await tool("update_item", { id: task.id, status: "open" });
-        if (!reopened.ok) return reopened;
-        const gone = await tool("delete_item", { id: decision.id });
-        if (!gone.ok) return gone;
-        return reply?.created ? tool("unlink_mail", { account: reply.accountId, id: reply.messageId, task: task.id }) : { ok: true };
-      },
+      undo: () => tool("reopen_task", { task: task.id, decision: decision.id, ...(reply?.created ? { reply: { account: reply.accountId, id: reply.messageId } } : {}) }),
     };
   },
+  reopen_task: (o) => (o.item ? { what: `Opened ${quoted(o.item.title)} again` } : null),
 };
 
 function created(verb: string, output: WriteOutput): Card {

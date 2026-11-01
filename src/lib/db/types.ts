@@ -122,50 +122,52 @@ export type Database = {
           },
         ]
       }
-      daily_reviews: {
+      demo_events: {
         Row: {
-          attempt_started_at: string | null
+          account_id: string
+          calendar_name: string
           created_at: string
-          day: string
-          failures: number
-          finished_at: string | null
-          heartbeat_at: string | null
+          ends_at: string
+          google_id: string
           id: string
-          instruction: string
+          location: string | null
           owner_id: string
-          provider: string
-          requested: boolean
-          task_ids: string[]
+          starts_at: string
+          title: string
         }
         Insert: {
-          attempt_started_at?: string | null
+          account_id: string
+          calendar_name: string
           created_at?: string
-          day: string
-          failures?: number
-          finished_at?: string | null
-          heartbeat_at?: string | null
+          ends_at: string
+          google_id?: string
           id?: string
-          instruction: string
-          owner_id?: string
-          provider: string
-          requested?: boolean
-          task_ids?: string[]
+          location?: string | null
+          owner_id: string
+          starts_at: string
+          title: string
         }
         Update: {
-          attempt_started_at?: string | null
+          account_id?: string
+          calendar_name?: string
           created_at?: string
-          day?: string
-          failures?: number
-          finished_at?: string | null
-          heartbeat_at?: string | null
+          ends_at?: string
+          google_id?: string
           id?: string
-          instruction?: string
+          location?: string | null
           owner_id?: string
-          provider?: string
-          requested?: boolean
-          task_ids?: string[]
+          starts_at?: string
+          title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "demo_events_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       demo_mail: {
         Row: {
@@ -692,8 +694,6 @@ export type Database = {
         Row: {
           boards: Json
           created_at: string
-          daily_review: boolean
-          daily_review_instruction: string
           layouts: Json
           owner_id: string
           updated_at: string
@@ -701,8 +701,6 @@ export type Database = {
         Insert: {
           boards?: Json
           created_at?: string
-          daily_review?: boolean
-          daily_review_instruction?: string
           layouts?: Json
           owner_id?: string
           updated_at?: string
@@ -710,64 +708,11 @@ export type Database = {
         Update: {
           boards?: Json
           created_at?: string
-          daily_review?: boolean
-          daily_review_instruction?: string
           layouts?: Json
           owner_id?: string
           updated_at?: string
         }
         Relationships: []
-      }
-      review_actions: {
-        Row: {
-          after: Json
-          before: Json
-          created_at: string
-          id: string
-          item_id: string
-          kind: string
-          owner_id: string
-          review_id: string
-          undone_at: string | null
-        }
-        Insert: {
-          after: Json
-          before: Json
-          created_at?: string
-          id?: string
-          item_id: string
-          kind: string
-          owner_id?: string
-          review_id: string
-          undone_at?: string | null
-        }
-        Update: {
-          after?: Json
-          before?: Json
-          created_at?: string
-          id?: string
-          item_id?: string
-          kind?: string
-          owner_id?: string
-          review_id?: string
-          undone_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "review_actions_item_id_fkey"
-            columns: ["item_id"]
-            isOneToOne: false
-            referencedRelation: "items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "review_actions_review_id_fkey"
-            columns: ["review_id"]
-            isOneToOne: false
-            referencedRelation: "daily_reviews"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       revisions: {
         Row: {
@@ -817,60 +762,35 @@ export type Database = {
       task_mail: {
         Row: {
           account_id: string | null
-          checked_at: string | null
           created_at: string
-          decided_account_id: string | null
-          decided_message_id: string | null
           dismissed: string[]
-          expect_from: string | null
           item_id: string
           owner_id: string
-          sentence: string | null
-          status: string
           updated_at: string
-          waits_for: string | null
+          waits_for: string
         }
         Insert: {
           account_id?: string | null
-          checked_at?: string | null
           created_at?: string
-          decided_account_id?: string | null
-          decided_message_id?: string | null
           dismissed?: string[]
-          expect_from?: string | null
           item_id: string
           owner_id?: string
-          sentence?: string | null
-          status?: string
           updated_at?: string
-          waits_for?: string | null
+          waits_for: string
         }
         Update: {
           account_id?: string | null
-          checked_at?: string | null
           created_at?: string
-          decided_account_id?: string | null
-          decided_message_id?: string | null
           dismissed?: string[]
-          expect_from?: string | null
           item_id?: string
           owner_id?: string
-          sentence?: string | null
-          status?: string
           updated_at?: string
-          waits_for?: string | null
+          waits_for?: string
         }
         Relationships: [
           {
             foreignKeyName: "task_mail_account_id_fkey"
             columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "google_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "task_mail_decided_account_id_fkey"
-            columns: ["decided_account_id"]
             isOneToOne: false
             referencedRelation: "google_accounts"
             referencedColumns: ["id"]
@@ -913,6 +833,19 @@ export type Database = {
       anonymous_usage: {
         Args: { p_day: string; p_kind: string }
         Returns: number
+      }
+      complete_task: {
+        Args: {
+          p_account: string
+          p_agent_label: string
+          p_body: string
+          p_item: string
+          p_message: string
+          p_outcome: string
+          p_owner: string
+          p_source: Database["public"]["Enums"]["item_source"]
+        }
+        Returns: Json
       }
       delete_item_branch: {
         Args: {
@@ -1008,7 +941,20 @@ export type Database = {
           email: string
         }[]
       }
+      plant_demo_events: { Args: { p_events: Json }; Returns: number }
       plant_demo_mail: { Args: { p_messages: Json }; Returns: number }
+      reopen_task: {
+        Args: {
+          p_account: string
+          p_agent_label: string
+          p_decision: string
+          p_item: string
+          p_message: string
+          p_owner: string
+          p_source: Database["public"]["Enums"]["item_source"]
+        }
+        Returns: Json
+      }
       reorder_item_positions: {
         Args: { p_items: string[] }
         Returns: {
@@ -1077,79 +1023,53 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      review_complete_task: {
-        Args: { p_item: string; p_review: string }
-        Returns: {
-          after: Json
-          before: Json
-          created_at: string
-          id: string
-          item_id: string
-          kind: string
-          owner_id: string
-          review_id: string
-          undone_at: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "review_actions"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      review_write_mail_status: {
-        Args: {
-          p_account: string
-          p_item: string
-          p_message: string
-          p_review: string
-          p_sentence: string
-          p_status: string
-        }
-        Returns: {
-          after: Json
-          before: Json
-          created_at: string
-          id: string
-          item_id: string
-          kind: string
-          owner_id: string
-          review_id: string
-          undone_at: string | null
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "review_actions"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
-      save_preferences: {
-        Args: {
-          p_board: Json
-          p_board_clear: boolean
-          p_daily_review: boolean
-          p_instruction: string
-          p_layout: string
-          p_layout_clear: boolean
-          p_page: string
-        }
-        Returns: {
-          boards: Json
-          created_at: string
-          daily_review: boolean
-          daily_review_instruction: string
-          layouts: Json
-          owner_id: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "preferences"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      save_preferences:
+        | {
+            Args: {
+              p_board: Json
+              p_board_clear: boolean
+              p_layout: string
+              p_layout_clear: boolean
+              p_page: string
+            }
+            Returns: {
+              boards: Json
+              created_at: string
+              layouts: Json
+              owner_id: string
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "preferences"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: {
+              p_board: Json
+              p_board_clear: boolean
+              p_daily_review: boolean
+              p_instruction: string
+              p_layout: string
+              p_layout_clear: boolean
+              p_page: string
+            }
+            Returns: {
+              boards: Json
+              created_at: string
+              layouts: Json
+              owner_id: string
+              updated_at: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "preferences"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       seed_demo: {
         Args: { p_today: string; p_zone?: string }
         Returns: boolean

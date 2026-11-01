@@ -1,13 +1,17 @@
 import { z } from "zod";
+import type { Database } from "@/lib/db/types";
+import { withInitialCapital } from "@/lib/initial-capital";
 import { mailFailureSchema, waitWords, type MailFailure, type MailMessage } from "@/lib/mail/source";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
-import { insertItem, origin, reachableItem } from "./items";
-import { accountsOf, failuresByAccount, mailOf, reachableMessage, rowsOf, type ReachedAccount } from "./mail";
+import { origin, reachableItem } from "./items";
+import { accountsOf, failuresByAccount, mailOf, rowsOf, type ReachedAccount } from "./mail";
 import { mailRowSchema, taskMailSchema, type TaskMail } from "./mail-schema";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
-import { ITEM_COLUMNS, itemSchema, toItem } from "./rows";
+import { itemSchema, toItem } from "./rows";
 import type { ReadPlace, Scope } from "./tree";
+
+type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 
 
 
@@ -16,10 +20,10 @@ import type { ReadPlace, Scope } from "./tree";
 
 const TASK_MAIL_COLUMNS = "item_id, account_id, waits_for, dismissed, created_at";
 
-type TaskMailRow = { item_id: string; account_id: string | null; waits_for: string | null; dismissed: string[]; created_at: string };
+type TaskMailRow = { item_id: string; account_id: string | null; waits_for: string; dismissed: string[]; created_at: string };
 
 function toTaskMail(row: TaskMailRow): TaskMail {
-  return { accountId: row.account_id, waitsFor: row.waits_for ?? "", since: row.created_at, dismissed: row.dismissed };
+  return { accountId: row.account_id, waitsFor: row.waits_for, since: row.created_at, dismissed: row.dismissed };
 }
 
 
@@ -278,6 +282,28 @@ function escaped(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+
+
+async function answeringMessage(ctx: ToolContext, scope: Scope, accountId: string, id: string): Promise<ToolResult<{ message: MailMessage }>> {
+  const place: ReadPlace = scope.root ? { kind: "node", node: scope.root } : { kind: "all" };
+  const reached = await accountsOf(ctx, scope, place);
+  if (isError(reached)) return reached;
+  const account = reached.accounts.find((entry) => entry.id === accountId);
+  if (!account) return fail("not_found", `no account with id ${accountId} is reachable here`);
+  let read;
+  try {
+    read = await mailOf(ctx).many({ db: ctx.db, ownerId: ctx.ownerId, account, ids: [id] });
+  } catch (error) {
+    return fail("internal", error instanceof Error ? error.message : "the message could not be read");
+  }
+  const [message] = read.messages;
+  if (message) return ok({ message });
+  if (read.failures.length > 0) return fail("internal", read.failures[0].reason);
+  return fail("not_found", `no message with id ${id} in that account`);
+}
+
+type ClosedRows = { item: ItemRow; decision: ItemRow; linked: boolean };
+
 export const completeTask = defineTool({
   name: "complete_task",
   description:
@@ -311,36 +337,65 @@ export const completeTask = defineTool({
     const mark = origin(ctx);
     if (!mark) return fail("internal", "an agent write needs its token's label");
     
-    let said = "";
+    let said: string | null = null;
     if (input.reply) {
-      const message = await reachableMessage(ctx, input.reply.account, input.reply.id);
-      if (isError(message)) return message;
-      const sender = message.content.from.name ?? message.content.from.email;
-      said = `<p>${escaped(`From ${sender}: ${message.content.subject || "(no subject)"} · ${message.content.receivedAt.slice(0, 10)}`)}</p>`;
+      const answer = await answeringMessage(ctx, scope, input.reply.account, input.reply.id);
+      if (isError(answer)) return answer;
+      const { message } = answer;
+      said = `<p>${escaped(`From ${message.from.name ?? message.from.email}: ${message.subject || "(no subject)"} · ${message.receivedAt.slice(0, 10)}`)}</p>`;
     }
     
     
-    const { data, error } = await ctx.db
-      .from("items")
-      .update({ status: "done", completed_at: null, changed_source: mark.source, changed_agent_label: mark.agent_label })
-      .eq("id", row.id)
-      .eq("owner_id", ctx.ownerId)
-      .eq("status", "open")
-      .is("deleted_at", null)
-      .select(ITEM_COLUMNS)
-      .maybeSingle();
-    if (error) return dbFail("marking the task done", error);
+    const { data, error } = await ctx.db.rpc("complete_task", {
+      p_owner: ctx.ownerId,
+      p_item: row.id,
+      p_outcome: withInitialCapital(input.outcome),
+      p_body: said as string,
+      p_account: (input.reply?.account ?? null) as string,
+      p_message: (input.reply?.id ?? null) as string,
+      p_source: mark.source,
+      p_agent_label: mark.agent_label as string,
+    });
+    if (error) return dbFail("closing the task", error);
     if (!data) return fail("not_found", `task ${row.id} was deleted or done meanwhile`);
-    const decision = await insertItem(ctx, { parent: row.id }, { type: "decision", title: input.outcome, body: said || null });
-    if (isError(decision)) return fail(decision.code, `the task is done, but its result was not saved: ${decision.message}`);
-    let link: { accountId: string; messageId: string; created: boolean } | null = null;
-    if (input.reply) {
-      const linked = await ctx.db
-        .from("mail_links")
-        .insert({ owner_id: ctx.ownerId, account_id: input.reply.account, message_id: input.reply.id, item_id: row.id });
-      if (linked.error && linked.error.code !== "23505") return dbFail("the task is done with its result, but linking the reply failed", linked.error);
-      link = { accountId: input.reply.account, messageId: input.reply.id, created: !linked.error };
-    }
-    return ok({ item: toItem(data, scope), decision: decision.item, link });
+    const closed = data as unknown as ClosedRows;
+    const link = input.reply ? { accountId: input.reply.account, messageId: input.reply.id, created: closed.linked } : null;
+    return ok({ item: toItem(closed.item, scope), decision: toItem(closed.decision, scope), link });
+  },
+});
+
+export const reopenTask = defineTool({
+  name: "reopen_task",
+  description:
+    "Take back a closing made with complete_task, whole: the task opens again, the decision with its result goes, and the " +
+    "message comes off the task when that closing linked it. Use it when the person says a task was closed by mistake.",
+  readOnly: false,
+  input: z.strictObject({
+    task: z.uuid(),
+    decision: z.uuid().describe("The decision with the result, as complete_task gave it."),
+    reply: z
+      .strictObject({ account: z.uuid(), id: z.string().min(1).max(200) })
+      .optional()
+      .describe("The message to take off the task, only when that closing linked it (its link says created)."),
+  }),
+  output: z.object({ item: itemSchema }),
+  async run(ctx, input) {
+    const found = await reachableItem(ctx, input.task);
+    if (isError(found)) return found;
+    if (found.row.type !== "task") return fail("invalid_input", `a ${found.row.type} is not closed with a result: a task is`);
+    const mark = origin(ctx);
+    if (!mark) return fail("internal", "an agent write needs its token's label");
+    const { data, error } = await ctx.db.rpc("reopen_task", {
+      p_owner: ctx.ownerId,
+      p_item: found.row.id,
+      p_decision: input.decision,
+      p_account: (input.reply?.account ?? null) as string,
+      p_message: (input.reply?.id ?? null) as string,
+      p_source: mark.source,
+      p_agent_label: mark.agent_label as string,
+    });
+    if (error) return dbFail("opening the task again", error);
+    if (!data) return fail("not_found", `task ${found.row.id} was deleted meanwhile`);
+    return ok({ item: toItem(data as unknown as ItemRow, found.scope) });
   },
 });

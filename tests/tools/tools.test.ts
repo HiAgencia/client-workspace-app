@@ -111,6 +111,7 @@ describe("the registry", () => {
         "list_task_replies",
         "list_tree",
         "move_item",
+        "reopen_task",
         "reorder_items",
         "request_review",
         "reschedule_overdue",

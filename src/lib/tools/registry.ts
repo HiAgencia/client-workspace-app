@@ -14,7 +14,7 @@ import { listNotes } from "./notes";
 import { fail, type ToolError, type ToolResult } from "./result";
 import { getTasks, moveItem, reorderItems, requestReview, rescheduleOverdue } from "./tasks";
 import { getUpdatesSince } from "./updates";
-import { completeTask, dismissReply, listTaskReplies, setTaskMail } from "./waits";
+import { completeTask, dismissReply, listTaskReplies, reopenTask, setTaskMail } from "./waits";
 
 
 export const tools: Tool[] = [
@@ -58,6 +58,7 @@ export const tools: Tool[] = [
   listTaskReplies,
   dismissReply,
   completeTask,
+  reopenTask,
 ];
 
 export function findTool(name: string): Tool | undefined {
