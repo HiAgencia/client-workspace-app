@@ -79,9 +79,6 @@ export async function savePreferences(
       p_board_clear: change.board === null,
       p_layout: change.layout ?? none,
       p_layout_clear: change.layout === null,
-      
-      p_daily_review: null as unknown as boolean,
-      p_instruction: none,
     })
     .single();
   if (error) return { ok: false, message: error.message };

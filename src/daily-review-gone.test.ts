@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 
 const SRC = fileURLToPath(new URL(".", import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
-const TRACE = /\b(?:ReviewJudge|reviewJudge|judgeFor|metaJudge|simulatedJudge|run_daily_review|dailyReview)\b|lib\/review\//;
+const TRACE =
+  /\b(?:ReviewJudge|reviewJudge|judgeFor|metaJudge|simulatedJudge|run_daily_review|dailyReview|daily_reviews?|daily_review_instruction|review_actions|review_write_mail_status|review_complete_task|expect_from|decided_account_id|decided_message_id|checked_at)\b|lib\/review\//;
 
 const FOLDER = /^lib\/review\//;
 
@@ -49,6 +50,10 @@ describe("the daily review", () => {
 
   it("its twin: a file that still runs the review fails the check with its own words", () => {
     failsWith({ path: join(SRC, "lib", "elsewhere.ts"), text: "export async function run_daily_review() {}" });
+  });
+
+  it("its twin: generated types that still read a column it left fail the check too", () => {
+    failsWith({ path: join(SRC, "lib", "db", "elsewhere.ts"), text: "type Row = { expect_from: string | null };" });
   });
 
   it("its twin: a file left in the review's folder, naming nothing, fails the check too", () => {
