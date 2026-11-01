@@ -35,7 +35,7 @@ export function sourceName(source: Item["source"], agentLabel: string | null): s
   if (source === "manual") return "By hand";
   if (source === "chat") return "By the chat";
   if (source === "review") return "By the daily review";
-  return agentLabel ? `By an agent · ${agentLabel}` : "By an agent";
+  return agentLabel ? `By an agent: ${agentLabel}` : "By an agent";
 }
 
 
