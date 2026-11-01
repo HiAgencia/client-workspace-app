@@ -1023,53 +1023,28 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      save_preferences:
-        | {
-            Args: {
-              p_board: Json
-              p_board_clear: boolean
-              p_layout: string
-              p_layout_clear: boolean
-              p_page: string
-            }
-            Returns: {
-              boards: Json
-              created_at: string
-              layouts: Json
-              owner_id: string
-              updated_at: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "preferences"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
-        | {
-            Args: {
-              p_board: Json
-              p_board_clear: boolean
-              p_daily_review: boolean
-              p_instruction: string
-              p_layout: string
-              p_layout_clear: boolean
-              p_page: string
-            }
-            Returns: {
-              boards: Json
-              created_at: string
-              layouts: Json
-              owner_id: string
-              updated_at: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "preferences"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
+      save_preferences: {
+        Args: {
+          p_board: Json
+          p_board_clear: boolean
+          p_layout: string
+          p_layout_clear: boolean
+          p_page: string
+        }
+        Returns: {
+          boards: Json
+          created_at: string
+          layouts: Json
+          owner_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "preferences"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       seed_demo: {
         Args: { p_today: string; p_zone?: string }
         Returns: boolean
