@@ -121,9 +121,11 @@ function titleOf(item: SeedItem): string {
   return String(item.input.title ?? item.input.decision);
 }
 
-function expectedEvents(): Array<{ path: string; title: string; day: string; linkedTo: string[] }> {
-  const rows: Array<{ path: string; title: string; day: string; linkedTo: string[] }> = [];
-  const push = (path: string, event: SeedEvent) => rows.push({ path, title: event.title, day: event.day, linkedTo: event.linkedTo ?? [] });
+type ExpectedEvent = { path: string; title: string; day: string; at: string | null; until: string | null; linkedTo: string[] };
+
+function expectedEvents(): ExpectedEvent[] {
+  const rows: ExpectedEvent[] = [];
+  const push = (path: string, event: SeedEvent) => rows.push({ path, title: event.title, day: event.day, at: event.at ?? null, until: event.until ?? null, linkedTo: event.linkedTo ?? [] });
   const walk = (nodes: Tree, parent: string) => {
     for (const node of nodes) {
       const path = parent ? `${parent} / ${node.name}` : node.name;
@@ -218,6 +220,13 @@ async function expectWorkingMoments(db: Db, zone: string) {
     if (expected!.doneAgo === undefined) expect(row.completed_at).toBeNull();
     else expect(Math.abs(workingMinutesBetween(row.completed_at!, now, zone) - expected!.doneAgo), `${row.title} done`).toBeLessThanOrEqual(TOLERANCE);
   }
+}
+
+
+function inZone(instant: string): { day: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(instant));
+  const part = (type: string) => parts.find((entry) => entry.type === type)!.value;
+  return { day: `${part("year")}-${part("month")}-${part("day")}`, time: `${part("hour")}:${part("minute")}` };
 }
 
 type NodeRow = { id: string; parent_id: string | null; kind: string; name: string; position: number; color: string | null };
@@ -367,18 +376,55 @@ describe("the demo seed", () => {
       expect(workingMinutesBetween(ask.created_at, answer.created_at, ZONE)).toBeCloseTo(1, 3);
     }
 
-    const events = await user.client.from("events").select("id, node_id, title, all_day, starts_on, ends_on");
+    const events = await user.client.from("events").select("id, node_id, title, all_day, starts_on, ends_on, starts_at, ends_at");
     const links = await user.client.from("node_events").select("node_id, event_id");
     expect(links.error).toBeNull();
     const actualEvents = (events.data ?? []).map((row) => ({
       path: placeOf(row.node_id, byId),
       title: row.title,
-      day: row.starts_on!,
+      day: row.all_day ? row.starts_on! : inZone(row.starts_at!).day,
+      at: row.all_day ? null : inZone(row.starts_at!).time,
+      until: row.all_day ? null : inZone(row.ends_at!).time,
       linkedTo: (links.data ?? []).filter((link) => link.event_id === row.id).map((link) => placeOf(link.node_id, byId)),
     }));
     expect(actualEvents.sort((a, b) => a.title.localeCompare(b.title))).toEqual(expectedEvents().sort((a, b) => a.title.localeCompare(b.title)));
     expect(expectedEvents().some((event) => event.linkedTo.length > 0)).toBe(true);
-    expect((events.data ?? []).every((row) => row.all_day && row.starts_on === row.ends_on)).toBe(true);
+    
+    expect(expectedEvents().some((event) => event.at === null) && expectedEvents().some((event) => event.at !== null)).toBe(true);
+    expect((events.data ?? []).filter((row) => row.all_day).every((row) => row.starts_on === row.ends_on)).toBe(true);
+
+    
+    const meetings = await user.client.from("demo_events").select("account_id, calendar_name, title, location, starts_at, ends_at");
+    expect(meetings.error).toBeNull();
+    const actualMeetings = (meetings.data ?? []).map((row) => ({
+      account: row.account_id,
+      calendar: row.calendar_name,
+      title: row.title,
+      location: row.location,
+      day: inZone(row.starts_at).day,
+      at: inZone(row.starts_at).time,
+      until: inZone(row.ends_at).time,
+    }));
+    const accountRows = await user.client.from("google_accounts").select("id, email");
+    const accountId = new Map((accountRows.data ?? []).map((row) => [row.email, row.id]));
+    const declaredMeetings = expectedAccounts().flatMap(({ account }) =>
+      (account.calendar?.meetings ?? []).map((meeting) => ({
+        account: accountId.get(account.email),
+        calendar: account.calendar!.name,
+        title: meeting.title,
+        location: meeting.location,
+        day: meeting.day,
+        at: meeting.at,
+        until: meeting.until,
+      })),
+    );
+    expect(actualMeetings.sort((a, b) => a.title.localeCompare(b.title))).toEqual(declaredMeetings.sort((a, b) => a.title.localeCompare(b.title)));
+    expect(new Set(declaredMeetings.map((meeting) => meeting.account)).size).toBeGreaterThan(1);
+    expect(expectedAccounts().some(({ account }) => !account.calendar)).toBe(true);
+    
+    const ofToday = everyItem().filter((item) => item.tool !== "add_note" && item.tool !== "add_decision" && (item.tool === "request_review" || item.input.dueOn === TODAY) && item.doneAgo === undefined);
+    expect(ofToday.length).toBeGreaterThan(2);
+    expect(ofToday.filter((item) => item.tool === "create_task" && Number(item.input.priority) <= 2).length * 2).toBeLessThanOrEqual(ofToday.length);
 
     
     const changed = (items.data ?? []).find((row) => row.title === "Present two logo directions")!;
@@ -510,6 +556,7 @@ describe("the demo seed", () => {
       ["events", "id"],
       ["google_accounts", "id"],
       ["demo_mail", "id"],
+      ["demo_events", "id"],
       ["mail_links", "id"],
       ["task_mail", "item_id"],
       ["chat_messages", "id"],

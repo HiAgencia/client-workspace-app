@@ -1,5 +1,5 @@
 import { googleDeps } from "@/lib/google/deps";
-import { googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
+import { demoEventsSource, googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
 import { gmailMailSource } from "@/lib/google/gmail";
 import { demoMailSource } from "@/lib/mail/source";
 import { requireUser, userClient, type SessionUser } from "@/lib/supabase/server";
@@ -23,7 +23,8 @@ export async function sessionContext(
       ownerId: who.user.id,
       source,
       scopeNodeId,
-      events: deps ? googleEventsSource(deps) : undefined,
+      
+      events: who.user.isAnonymous ? demoEventsSource() : deps ? googleEventsSource(deps) : undefined,
       calendar: deps ? googleCalendarWriter(deps) : undefined,
       mail: deps ? gmailMailSource(deps) : demoMailSource(),
     },

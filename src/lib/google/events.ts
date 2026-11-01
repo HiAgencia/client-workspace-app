@@ -161,6 +161,73 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
 
 
 
+
+
+export function demoEventsSource(): EventsSource {
+  const reads = new Map<string, ReturnType<typeof readDemoCalendars>>();
+  return async ({ db, ownerId, nodeId, from, to }) => {
+    const key = `${from}|${to}`;
+    const read = reads.get(key) ?? readDemoCalendars(db, ownerId, from, to);
+    reads.set(key, read);
+    const { rows, parents, hung, emails } = await read;
+    
+    const fromNode = new Map<string, string>();
+    for (let at: string | null | undefined = nodeId; at; at = parents.get(at)) {
+      for (const account of hung.get(at) ?? []) if (!fromNode.has(account)) fromNode.set(account, at);
+    }
+    const events = rows.flatMap((row): CalendarEvent[] => {
+      const seenFrom = fromNode.get(row.account_id);
+      if (!seenFrom) return [];
+      return [
+        {
+          id: row.google_id,
+          title: row.title,
+          start: row.starts_at,
+          end: row.ends_at,
+          allDay: false,
+          location: row.location,
+          link: null,
+          calendarId: "primary",
+          calendarName: row.calendar_name,
+          color: null,
+          accountId: row.account_id,
+          accountEmail: emails.get(row.account_id) ?? "",
+          fromNodeId: seenFrom,
+        },
+      ];
+    });
+    return { events, failures: [] };
+  };
+}
+
+async function readDemoCalendars(db: Db, ownerId: string, from: string, to: string) {
+  const [rows, nodes, attached, accounts] = await Promise.all([
+    db
+      .from("demo_events")
+      .select("google_id, account_id, calendar_name, title, location, starts_at, ends_at")
+      .eq("owner_id", ownerId)
+      .lt("starts_at", to)
+      .gt("ends_at", from)
+      .order("starts_at"),
+    db.from("nodes").select("id, parent_id").eq("owner_id", ownerId),
+    db.from("node_accounts").select("node_id, account_id"),
+    db.from("google_accounts").select("id, email").eq("owner_id", ownerId).eq("is_demo", true),
+  ]);
+  if (rows.error || nodes.error || attached.error || accounts.error) {
+    throw new Error(`reading the sample calendars: ${(rows.error ?? nodes.error ?? attached.error ?? accounts.error)!.message}`);
+  }
+  const hung = new Map<string, string[]>();
+  for (const link of attached.data) hung.set(link.node_id, [...(hung.get(link.node_id) ?? []), link.account_id]);
+  return {
+    rows: rows.data,
+    parents: new Map(nodes.data.map((node) => [node.id, node.parent_id])),
+    hung,
+    emails: new Map(accounts.data.map((account) => [account.id, account.email])),
+  };
+}
+
+
+
 export function googleCalendarWriter(deps: GoogleDeps): CalendarWriter {
   async function accountFor(ownerId: string, accountId: string) {
     const { data, error } = await deps.service

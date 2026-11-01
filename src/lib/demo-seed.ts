@@ -13,6 +13,8 @@ import { workingMinutesBefore } from "@/lib/working-time";
 
 
 
+
+
 export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
 
 
@@ -52,10 +54,15 @@ export type SeedMail = {
 };
 
 
-export type SeedAccount = { email: string; mail: SeedMail[] };
+export type SeedMeeting = { title: string; day: string; at: string; until: string; location: string | null };
 
 
-export type SeedEvent = { title: string; day: string; linkedTo?: string[] };
+
+export type SeedAccount = { email: string; mail: SeedMail[]; calendar?: { name: string; meetings: SeedMeeting[] } };
+
+
+
+export type SeedEvent = { title: string; day: string; at?: string; until?: string; linkedTo?: string[] };
 
 export type Seed = {
   name: string;
@@ -100,7 +107,7 @@ export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEve
   const day = dayCounter(today);
   return {
     items: [
-      task({ title: "Call the bank about the card limit", priority: 2, dueOn: day(0), dueTime: "11:30" }, { ago: 212 }),
+      task({ title: "Call the bank about the card limit", priority: 3, dueOn: day(0), dueTime: "11:30" }, { ago: 212 }),
       task({ title: "Book the dentist appointment", priority: 3, dueOn: day(3) }, { ago: 1388 }),
       task({ title: "Renew the passport before the trip", priority: 3 }, { ago: 2954, rank: 1 }),
       task({ title: "Check the flight prices to Lisbon", priority: 4 }, { ago: 1730, rank: 3 }),
@@ -119,7 +126,7 @@ export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEve
       note("<p><strong>Ideas for the November newsletter</strong></p><ul><li>The Larkspur launch</li><li>Three tips for a faster site</li></ul>", 604),
       note("<p>Ask the accountant whether the new laptop counts as an expense.</p>", 1975),
     ],
-    events: [{ title: "Call with Studio Atlas", day: day(1), linkedTo: ["Studio Atlas / Brand refresh"] }],
+    events: [{ title: "Call with Studio Atlas", day: day(1), at: "15:30", until: "16:00", linkedTo: ["Studio Atlas / Brand refresh"] }],
   };
 }
 
@@ -154,6 +161,13 @@ export function demoSeedTree(today: string): Seed[] {
               important: false,
             },
           ],
+          calendar: {
+            name: "Larkspur Bakery",
+            meetings: [
+              { title: "Photo review with Maya", day: day(0), at: "14:00", until: "14:30", location: "Video call" },
+              { title: "Holiday menu planning", day: day(3), at: "10:00", until: "11:00", location: "Larkspur Bakery" },
+            ],
+          },
         },
       ],
       children: [
@@ -172,7 +186,7 @@ export function demoSeedTree(today: string): Seed[] {
               {
                 ago: 2294,
                 children: [
-                  task({ title: "Write the hero copy", priority: 2, dueOn: day(0) }, { ago: 2292 }),
+                  task({ title: "Write the hero copy", priority: 3 }, { ago: 2292 }),
                   task({ title: "Pick the three featured products", priority: 3 }, { ago: 2291 }),
                   task({ title: "Compress the hero photos", priority: 3 }, { ago: 2289, doneAgo: 431 }),
                   note("<p>The client prefers a warm, plain tone.</p>", 1907),
@@ -180,7 +194,7 @@ export function demoSeedTree(today: string): Seed[] {
                 ],
               },
             ),
-            task({ title: "Collect product photos from the client", priority: 2, dueOn: day(-1) }, { ago: 3046 }),
+            task({ title: "Collect product photos from the client", priority: 3, dueOn: day(-1) }, { ago: 3046 }),
             task(
               { title: "Confirm the delivery date with the client", priority: 3, dueOn: day(1) },
               {
@@ -197,7 +211,7 @@ export function demoSeedTree(today: string): Seed[] {
             linkNote("https://docs.google.com/document/d/1Kx9vRt-Qm3LpZ7wYc2NbH8sJf5Ud0GaEo4TiWq6Vr_M/edit", "Project brief", 3812),
             note('<p><strong>Kickoff notes</strong></p><ul><li>Launch before the holidays</li><li><span class="tc-red">Orders through the POS</span></li></ul>', 3818),
           ],
-          events: [{ title: "Homepage review with the client", day: day(1) }],
+          events: [{ title: "Homepage review with the client", day: day(1), at: "11:00", until: "12:00" }],
           children: [
             {
               name: "Ordering flow",
@@ -241,17 +255,24 @@ export function demoSeedTree(today: string): Seed[] {
               important: false,
             },
           ],
+          calendar: {
+            name: "Studio Atlas",
+            meetings: [
+              { title: "Logo directions with Ana", day: day(0), at: "17:00", until: "17:30", location: "Video call" },
+              { title: "Brand workshop", day: day(4), at: "09:00", until: "11:00", location: "Studio Atlas" },
+            ],
+          },
         },
       ],
       children: [
         {
           name: "Brand refresh",
           items: [
-            task({ title: "Send the moodboard", priority: 2, dueOn: day(0) }, { ago: 1913 }),
+            task({ title: "Send the moodboard", priority: 3, dueOn: day(0) }, { ago: 1913 }),
             task({ title: "Book the photo session", priority: 3, dueOn: day(3) }, { ago: 1529 }),
             decision("Keep the current color palette", "<p>Printed stock is already ordered.</p>", 2283),
             task({ title: "Read the stakeholder survey results", priority: 3, dueOn: day(1) }, { ago: 742 }),
-            task({ title: "Present two logo directions", priority: 2, dueOn: day(0) }, { ago: 2301, was: "Present logo directions" }),
+            task({ title: "Present two logo directions", priority: 3, dueOn: day(1) }, { ago: 2301, was: "Present logo directions" }),
           ],
           events: [{ title: "Photo session", day: day(3) }],
         },
@@ -339,11 +360,18 @@ export function demoSeedTree(today: string): Seed[] {
               important: false,
             },
           ],
+          calendar: {
+            name: "Operations",
+            meetings: [
+              { title: "Weekly planning", day: day(0), at: "09:30", until: "10:00", location: null },
+              { title: "Accountant call", day: day(2), at: "15:00", until: "15:30", location: "Video call" },
+            ],
+          },
         },
       ],
       items: [
         task(
-          { title: "Send the October invoices", priority: 1, dueOn: day(-1) },
+          { title: "Send the October invoices", priority: 2, dueOn: day(-1) },
           { ago: 3171, children: [note("<p>Larkspur pays by bank transfer, not by card.</p>", 2410)] },
         ),
         task(
@@ -366,13 +394,9 @@ export function demoSeedTree(today: string): Seed[] {
         ),
         
         
-        task({ title: "Wait for the app review approval", priority: 2 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", words: "Developer Platform" } }),
-        task({ title: "Wait for the bank transfer", priority: 2, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", words: "Bayside Bank" } }),
+        task({ title: "Wait for the app review approval", priority: 3 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", words: "Developer Platform" } }),
+        task({ title: "Wait for the bank transfer", priority: 3, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", words: "Bayside Bank" } }),
         note("<p><strong>Payment terms</strong></p><p>Half up front, half on delivery; invoices due in 15 days.</p>", 7942),
-      ],
-      events: [
-        { title: "Weekly planning", day: day(0) },
-        { title: "Accountant call", day: day(2) },
       ],
     },
     {
