@@ -27,12 +27,16 @@ function wasCut(response: Response | Failure): boolean {
 
 
 
+export async function askOnceMoreIfCut(url: string, init: RequestInit): Promise<Response | Failure> {
+  const first = await ask(url, init);
+  if (!wasCut(first)) return first;
+  await new Promise((resolve) => setTimeout(resolve, SECOND_READ_PAUSE_MS));
+  return ask(url, init);
+}
+
+
 async function send<T>(url: string, init: RequestInit, kind: "read" | "write"): Promise<Answer<T>> {
-  let response = await ask(url, init);
-  if (kind === "read" && wasCut(response)) {
-    await new Promise((resolve) => setTimeout(resolve, SECOND_READ_PAUSE_MS));
-    response = await ask(url, init);
-  }
+  const response = kind === "read" ? await askOnceMoreIfCut(url, init) : await ask(url, init);
   if (!(response instanceof Response)) return response;
   if (response.status === 401) {
     

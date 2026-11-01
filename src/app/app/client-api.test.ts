@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { tools } from "@/lib/tools/registry";
 import { READ_TOOLS } from "@/lib/tools/read-tools";
-import { get, post, tool } from "./client-api";
+import { askOnceMoreIfCut, get, post, tool } from "./client-api";
 
 
 const cut = () => new Response(null, { status: 503 });
@@ -52,6 +52,21 @@ describe("what the screens do with a cut request", () => {
     const fetched = answers(ourRefusal, fine);
     expect(await tool("get_tasks", {})).toEqual({ ok: false, message: "The session could not be checked. Try again." });
     expect(fetched).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the landing page the same second chance, with the answer as it came", async () => {
+    const fetched = answers(cut, fine);
+    const answer = await askOnceMoreIfCut("/api/demo", { method: "POST" });
+    expect(answer).toBeInstanceOf(Response);
+    expect((answer as Response).ok).toBe(true);
+    expect(fetched).toHaveBeenCalledTimes(2);
+
+    const refused = answers(() => new Response(null, { status: 401 }), fine);
+    expect(((await askOnceMoreIfCut("/api/me", {})) as Response).status).toBe(401);
+    expect(refused).toHaveBeenCalledTimes(1);
+
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
+    expect(await askOnceMoreIfCut("/api/me", {})).toEqual({ ok: false, message: "No connection to the server." });
   });
 
   it("calls a read exactly what the registry calls read-only", () => {

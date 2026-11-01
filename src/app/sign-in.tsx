@@ -6,7 +6,7 @@ import type { PublicConfig } from "@/lib/env";
 import { dayOf } from "@/lib/dates";
 import { browserClient } from "@/lib/supabase/browser";
 import type { SessionUser } from "@/lib/supabase/server";
-import { forgetLayout } from "./app/client-api";
+import { askOnceMoreIfCut, forgetLayout } from "./app/client-api";
 
 type State = { kind: "loading" } | { kind: "out" } | { kind: "in"; user: SessionUser };
 
@@ -30,7 +30,8 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
   const [busy, setBusy] = useState<"google" | "demo" | "out" | null>(null);
 
   async function refresh() {
-    const response = await fetch("/api/me", { cache: "no-store" });
+    const response = await askOnceMoreIfCut("/api/me", {});
+    if (!(response instanceof Response)) return setError("The server did not answer. Reload the page.");
     if (response.status === 401) return setState({ kind: "out" });
     if (!response.ok) return setError("The server did not answer. Reload the page.");
     const body = (await response.json()) as { user: SessionUser };
@@ -70,13 +71,14 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
       }
     }
     
-    const seeded = await fetch("/api/demo", {
+    
+    const seeded = await askOnceMoreIfCut("/api/demo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ today: dayOf(new Date()), zone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     });
     setBusy(null);
-    if (!seeded.ok) return setError("The demo workspace could not be prepared. Reload to try again.");
+    if (!(seeded instanceof Response) || !seeded.ok) return setError("The demo workspace could not be prepared. Reload to try again.");
     await refresh();
   }
 
