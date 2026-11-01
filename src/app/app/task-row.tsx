@@ -774,6 +774,10 @@ const setDragging = (value: Drag | null) => {
 };
 const currentDrag = () => dragState;
 
+
+
+const placeIn = (list: HTMLElement, node: HTMLElement) => (node.offsetParent === list ? node.offsetTop : node.offsetTop - list.offsetTop);
+
 export function TaskList({ group, label, tasks, layout = "list", showPlace = true, pageNode, dayShown, dropDay, reorderable = false, empty }: ListProps) {
   const actions = useTaskActions();
   
@@ -836,19 +840,19 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     const element = list.current;
     if (!element) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const origin = element.getBoundingClientRect();
     const next = new Map<string, number>();
     const first = last.current.size === 0;
     element.querySelectorAll<HTMLElement>(":scope > [data-key]").forEach((node) => {
       const key = node.dataset.key!;
-      const top = node.getBoundingClientRect().top - origin.top;
+      const top = placeIn(element, node);
       next.set(key, top);
       if (reduced || first) return;
       const before = last.current.get(key);
       if (before === undefined) {
         node.animate([{ opacity: 0.001, translate: "0 0.4rem" }, { opacity: 1, translate: "0 0" }], { duration: 280, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" });
       } else if (Math.abs(before - top) > 1) {
-        node.animate([{ translate: `0 ${before - top}px` }, { translate: "0 0" }], { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)" });
+        
+        node.animate([{ translate: `0 ${before - top}px` }, { translate: "0 0" }], { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)", composite: "add" });
       }
     });
     last.current = next;
@@ -859,9 +863,8 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     const element = list.current;
     if (!element) return;
     const observer = new ResizeObserver(() => {
-      const origin = element.getBoundingClientRect();
       const next = new Map<string, number>();
-      element.querySelectorAll<HTMLElement>(":scope > [data-key]").forEach((node) => next.set(node.dataset.key!, node.getBoundingClientRect().top - origin.top));
+      element.querySelectorAll<HTMLElement>(":scope > [data-key]").forEach((node) => next.set(node.dataset.key!, placeIn(element, node)));
       last.current = next;
     });
     observer.observe(element);
