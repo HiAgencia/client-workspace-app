@@ -853,6 +853,20 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     });
     last.current = next;
   });
+  
+  
+  useEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      const origin = element.getBoundingClientRect();
+      const next = new Map<string, number>();
+      element.querySelectorAll<HTMLElement>(":scope > [data-key]").forEach((node) => next.set(node.dataset.key!, node.getBoundingClientRect().top - origin.top));
+      last.current = next;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const visible = shown.filter((entry) => !entry.leaving).map((entry) => entry.task);
   const ids = visible.map((task) => task.id);
