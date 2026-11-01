@@ -9,8 +9,10 @@ import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { LOCALE } from "@/lib/dates";
+import { mailFailureText } from "@/lib/mail/failure-text";
+import { useMailRead } from "../box-kinds";
 import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
-import { get, post, tool } from "../client-api";
+import { get, post } from "../client-api";
 import { ConfirmButton } from "../confirm-button";
 import { ConnectBlockedNote, type ConnectBlocked } from "../connect-blocked";
 import { PageHeader } from "../page-header";
@@ -104,11 +106,6 @@ function ThemeSection() {
 
 type Calendar = { id: string; name: string; color: string | null; selected: boolean };
 type Account = { id: string; email: string; status: string; isDemo: boolean; nodeIds: string[]; calendars: Calendar[] };
-type MailSummary = {
-  groups: Record<"forTasks" | "unread" | "earlier", { count: number; messages: Array<{ id: string; accountId: string; unread: boolean; opened: boolean }> }>;
-  failures: Array<{ accountId: string; reason: string }>;
-  unreadByAccount: Record<string, number>;
-};
 
 
 function AccountsSection() {
@@ -117,12 +114,13 @@ function AccountsSection() {
   const [canConnect, setCanConnect] = useState(false);
   const [connectBlocked, setConnectBlocked] = useState<ConnectBlocked>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mail, setMail] = useState<MailSummary | null>(null);
   const [connectNode, setConnectNode] = useState<string | null>(null);
   const [round, setRound] = useState(0);
   
-  const [mailRead, setMailRead] = useState(false);
-  useSettled("accounts-settings", (accounts !== null || error !== null) && mailRead);
+  
+  const mailRead = useMailRead({ kind: "all" }, null);
+  const mail = mailRead.data;
+  useSettled("accounts-settings", (accounts !== null || error !== null) && mailRead.settled);
 
   useEffect(() => {
     let live = true;
@@ -135,12 +133,6 @@ function AccountsSection() {
         setError(null);
       } else setError(answer.message);
     });
-    
-    void tool<MailSummary>("list_mail", {}).then((answer) => {
-      if (!live) return;
-      if (answer.ok) setMail(answer);
-      setMailRead(true);
-    });
     return () => {
       live = false;
     };
@@ -151,17 +143,18 @@ function AccountsSection() {
   const nodeOptions = (tree ?? []).map((node) => ({ value: node.id, label: node.path }));
 
   
-  function mailLine(account: Account): { text: string; tone?: "alert" } {
-    if (!mail) return { text: "Reading its mail…" };
-    const failure = mail.failures.find((entry) => entry.accountId === account.id);
-    if (failure) return { text: `Its mail could not be read: ${failure.reason}.`, tone: "alert" };
+  function mailLine(account: Account): { text: string; tone?: "alert"; failed?: boolean } {
+    const failure = mail?.failures.find((entry) => entry.accountId === account.id);
+    
+    if (failure) return failure.partial ? { text: mailFailureText(failure), failed: true } : { text: `Its mail could not be read: ${failure.reason}.`, tone: "alert", failed: true };
     
     
-    const listed = [...mail.groups.forTasks.messages, ...mail.groups.unread.messages, ...mail.groups.earlier.messages].some((message) => message.accountId === account.id);
-    const unread = mail.unreadByAccount[account.id] ?? 0;
+    const listed = [...(mail?.groups.forTasks.messages ?? []), ...(mail?.groups.unread.messages ?? []), ...(mail?.groups.earlier.messages ?? [])].some((message) => message.accountId === account.id);
+    const unread = mail?.unreadByAccount[account.id];
+    if (unread === undefined && !listed) return { text: "Reading its mail…" };
     if (!listed && unread === 0) return { text: "No mail in this account yet." };
     const sample = account.isDemo ? ": sample mail, read-only" : "";
-    return { text: unread === 0 ? `Nothing unread${sample}.` : `${unread} unread${sample}.` };
+    return { text: !unread ? `Nothing unread${sample}.` : `${unread} unread${sample}.` };
   }
 
   return (
@@ -267,7 +260,7 @@ function AccountsSection() {
                       </fieldset>
                       <div className="stack settings-part">
                         <h4 className="t-label">Mail</h4>
-                        <p className={line.tone ? "inline-note" : "t-value"} data-tone={line.tone} data-account-mail>
+                        <p className={line.tone ? "inline-note" : "t-value"} data-tone={line.tone} data-account-mail data-mail-failure={line.failed ? "" : undefined}>
                           {line.text}
                         </p>
                         <a className="link" href={`/app/mail?account=${account.id}`}>

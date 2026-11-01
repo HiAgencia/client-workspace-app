@@ -1,12 +1,13 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
+import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
+import { BROWSER_READS, turnGoesOn } from "@/lib/chat/browser-reads";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
-import { get } from "./client-api";
+import { get, tool } from "./client-api";
 import { onFocusRequest } from "./focus-request";
 import { WRITES, type WriteOutput } from "./chat-cards";
 import { useWorkspace } from "./workspace";
@@ -136,7 +137,9 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
   const [notice, setNotice] = useState<string | null>(null);
   const log = useRef<HTMLOListElement>(null);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const { messages, sendMessage, status, error, clearError } = useChat({
+  
+  const [reading, setReading] = useState(0);
+  const { messages, sendMessage, addToolOutput, status, error, clearError } = useChat({
     id: nodeId ?? "workspace",
     messages: initial,
     
@@ -145,9 +148,22 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
       prepareSendMessagesRequest: ({ messages }) => ({ body: { nodeId, timeZone, message: messages.at(-1) } }),
     }),
     
-    onFinish: () => touch(),
+    
+    onToolCall: ({ toolCall }) => {
+      if (!BROWSER_READS.has(toolCall.toolName)) return;
+      setReading((now) => now + 1);
+      void tool(toolCall.toolName, toolCall.input as Record<string, unknown>, nodeId).then((output) => {
+        setReading((now) => now - 1);
+        void addToolOutput({ tool: toolCall.toolName, toolCallId: toolCall.toolCallId, output });
+      });
+    },
+    sendAutomaticallyWhen: turnGoesOn,
+    
+    onFinish: ({ message }) => {
+      if (!message.parts.some((part) => isToolUIPart(part) && part.state === "input-available")) touch();
+    },
   });
-  const busy = status === "submitted" || status === "streaming";
+  const busy = status === "submitted" || status === "streaming" || reading > 0;
 
   
   useLayoutEffect(() => {

@@ -1,17 +1,20 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { Answer } from "@/app/app/client-api";
+import { accountsSeenFrom, createMailStore, figureOf, figureText, type MailAccountRef, type MailFigure } from "@/app/app/mail-store";
 import { loadHistory } from "@/lib/chat/history";
-import { MAX_STEPS, systemPrompt } from "@/lib/chat/run";
+import { simulatedModel } from "@/lib/chat/simulated";
 import { takeUsageFor } from "@/lib/chat/usage";
 import { CALENDAR_LIST_SCOPE, EVENTS_SCOPE, GMAIL_READ_SCOPE, type Fetch, type GmailPart } from "@/lib/google/api";
 import { decrypt, encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
 import type { GoogleDeps } from "@/lib/google/events";
 import { gmailMailSource } from "@/lib/google/gmail";
+import { mailFailureText } from "@/lib/mail/failure-text";
 import type { MailAccount, MailSource } from "@/lib/mail/source";
-import { authenticateAgent } from "@/lib/mcp/auth";
 import { readSession } from "@/lib/supabase/server";
 import type { ToolContext } from "@/lib/tools/context";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { callTool } from "@/lib/tools/registry";
+import { chatTurn } from "../support/chat-turn";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
 
@@ -150,7 +153,8 @@ function answer(id: string, query: URLSearchParams): Stored | null {
   return { ...found, payload: { mimeType: found.payload.mimeType, headers: (found.payload.headers ?? []).filter((header) => wanted.has(header.name.toLowerCase())) } };
 }
 
-const READERS = new Set(["token-mail", "token-late"]);
+
+const READERS = new Set(["token-mail", "token-late", "token-nocount"]);
 
 const fakeGoogle: Fetch = async (input, init) => {
   const url = new URL(String(input));
@@ -170,7 +174,7 @@ const fakeGoogle: Fetch = async (input, init) => {
   if (url.pathname === "/gmail/v1/users/me/messages") {
     const q = url.searchParams.get("q") ?? "";
     searches.push(q);
-    const failing = q.includes("is:unread") ? (trouble.unreadSearch ?? trouble.search) : trouble.search;
+    const failing = q.includes("is:unread") ? (trouble.unreadSearch ?? (token === "token-nocount" ? 500 : null) ?? trouble.search) : trouble.search;
     if (failing) return json(failing, { error: { code: failing, status: failing === 429 ? "RESOURCE_EXHAUSTED" : failing === 403 ? "PERMISSION_DENIED" : "INTERNAL" } });
     const page = Number(url.searchParams.get("pageToken") ?? 0);
     const size = Number(url.searchParams.get("maxResults") ?? 100);
@@ -370,7 +374,7 @@ describe("the Gmail source", () => {
     try {
       const { messages, failures } = await gmailMailSource(deps).list({ db: user!.client, ownerId: user!.id, accounts: [mailAccount()], limit: 10 });
       expect(messages.map((message) => message.id)).toEqual(["m1"]);
-      expect(failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 2 messages could not be read" }]);
+      expect(failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 2 messages could not be read", partial: true }]);
       
       const logged = spy.mock.calls.flat().join(" ");
       expect(logged).toContain(`account ${ids.mail}`);
@@ -379,7 +383,7 @@ describe("the Gmail source", () => {
       
       trouble.flaky.set("m2", [500, 500]);
       const alone = await gmailMailSource(deps).many({ db: user!.client, ownerId: user!.id, account: mailAccount(), ids: ["m2"] });
-      expect(alone.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 1 message could not be read" }]);
+      expect(alone.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 1 message could not be read", partial: true }]);
     } finally {
       spy.mockRestore();
       clearTrouble();
@@ -463,13 +467,20 @@ describe("the tools over Gmail", () => {
   };
 
   it("reaches the tools: the Mail list groups the account's messages and get_mail sanitizes what it shows", async () => {
-    const listed = (await callTool("list_mail", context(), { node: ids.client })) as unknown as Listed;
+    const listed = (await callTool("list_mail", context(), { account: ids.mail })) as unknown as Listed;
     expect(listed.ok).toBe(true);
     expect(listed.unread).toBe(1);
     expect(listed.groups.unread.messages.map((message) => message.id)).toEqual(["m1"]);
     expect(listed.groups.earlier.messages.map((message) => message.id)).toEqual(["m2"]);
+    expect(listed.failures).toEqual([]);
     
-    expect(listed.failures.map((failure) => failure.accountEmail).sort()).toEqual(["calendar@example.com", "gone@example.com"]);
+    for (const [id, email] of [
+      [ids.calendarOnly, "calendar@example.com"],
+      [ids.revoked, "gone@example.com"],
+    ]) {
+      const unread = (await callTool("list_mail", context(), { account: id })) as unknown as Listed;
+      expect(unread.failures.map((failure) => failure.accountEmail)).toEqual([email]);
+    }
     const opened = (await callTool("get_mail", context(), { account: ids.mail, id: "m1" })) as unknown as { ok: boolean; message: { html: string; text: string | null } };
     expect(opened.ok).toBe(true);
     expect(opened.message.html).toContain("approved");
@@ -480,8 +491,8 @@ describe("the tools over Gmail", () => {
   it("says an unread count that stopped short, and keeps an account whose count failed out of the figures", async () => {
     trouble.endlessUnread = true;
     try {
-      const listed = (await callTool("list_mail", context(), { node: ids.client })) as unknown as Listed;
-      expect(listed.failures).toEqual(expect.arrayContaining([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/) }]));
+      const listed = (await callTool("list_mail", context(), { account: ids.mail })) as unknown as Listed;
+      expect(listed.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/), partial: true }]);
       
       expect(listed.unreadByAccount[ids.mail]).toBeGreaterThan(0);
     } finally {
@@ -490,14 +501,15 @@ describe("the tools over Gmail", () => {
     trouble.unreadSearch = 500;
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const listed = (await callTool("list_mail", context(), { node: ids.client })) as unknown as Listed;
+      const listed = (await callTool("list_mail", context(), { account: ids.mail })) as unknown as Listed;
       
       expect(listed.groups.unread.messages.map((message) => message.id)).toEqual(["m1"]);
       expect(listed.failures).toEqual(expect.arrayContaining([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringContaining("HTTP 500") }]));
       expect(listed.unreadByAccount).not.toHaveProperty(ids.mail);
-      expect(listed.unread).toBe(0);
-      const tree = (await callTool("list_tree", context(), { withMail: true })) as unknown as { mail: { unread: number; failures: Array<{ accountId: string }> } };
-      expect(tree.mail.failures.map((failure) => failure.accountId)).toContain(ids.mail);
+      expect(listed.unread).toBeNull();
+      const counted = (await callTool("count_unread_mail", context(), { account: ids.mail })) as unknown as { unread: number | null; failures: Array<{ accountId: string }> };
+      expect(counted.unread).toBeNull();
+      expect(counted.failures.map((failure) => failure.accountId)).toEqual([ids.mail]);
     } finally {
       spy.mockRestore();
       clearTrouble();
@@ -506,20 +518,22 @@ describe("the tools over Gmail", () => {
 
   it("searches with Gmail's own search, in one search and one batch of metadata per account", async () => {
     forget();
-    const found = (await callTool("search_items", context(), { query: "approved", node: ids.client })) as unknown as {
+    const found = (await callTool("search_mail", context(), { account: ids.mail, query: "approved" })) as unknown as {
       ok: boolean;
       mail: Array<{ id: string }>;
-      mailFailures: Array<{ accountEmail: string }>;
+      failures: Array<{ accountEmail: string }>;
     };
     expect(found.ok).toBe(true);
     expect(found.mail.map((row) => row.id)).toEqual(["m1"]);
-    expect(found.mailFailures.map((failure) => failure.accountEmail).sort()).toEqual(["calendar@example.com", "gone@example.com"]);
+    expect(found.failures).toEqual([]);
+    const notSearched = (await callTool("search_mail", context(), { account: ids.calendarOnly, query: "approved" })) as unknown as { failures: Array<{ accountEmail: string }> };
+    expect(notSearched.failures.map((failure) => failure.accountEmail)).toEqual(["calendar@example.com"]);
     expect(searches).toEqual(["in:inbox -in:sent -in:draft -in:chats (approved)"]);
     expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(1);
     expect(batchFormats).toEqual(["metadata"]);
     
     forget();
-    await callTool("search_items", context(), { query: "approved) OR {in:anywhere", node: ids.client });
+    await callTool("search_mail", context(), { account: ids.mail, query: "approved) OR {in:anywhere" });
     expect(searches).toEqual(["in:inbox -in:sent -in:draft -in:chats (approved OR in:anywhere)"]);
   });
 
@@ -947,22 +961,14 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
   
   
   
-  
-  
-  
-  const BUDGET = 50;
+  const SIZES = [1, 3, 10];
   let owner: DisposableUser | undefined;
   let place = "";
   let waiting = "";
-  let readers = 0;
-  let firstReader = "";
+  
+  const readers: string[] = [];
   const ownerContext = (): ToolContext => ({ db: owner!.client, ownerId: owner!.id, source: "manual", mail: gmailMailSource(deps) });
   const today = () => new Date().toISOString().slice(0, 10);
-  
-  const mailPage = () => callTool("list_mail", ownerContext(), { limit: 50 });
-  const sidebar = () => callTool("list_tree", ownerContext(), { today: today(), withMail: true });
-  
-  const fits = (fixed: number, perAccount: number) => Math.floor((BUDGET - fixed) / perAccount);
 
   type Cost = { gmail: number; token: number; supabase: number; total: number };
 
@@ -985,32 +991,50 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     return { cost: { gmail, token, supabase: urls.length, total: gmail + token + urls.length }, result: settled.value };
   }
 
-  
-  async function tokens(state: "expired" | "valid") {
-    const stored =
-      state === "expired"
-        ? { access_token_expires_at: "2020-01-01T00:00:00Z" }
-        : { access_token: await encrypt(deps.key, "token-mail"), access_token_expires_at: new Date(Date.now() + 3_600_000).toISOString() };
-    const { error } = await serviceClient().from("google_accounts").update(stored).eq("owner_id", owner!.id);
+  async function expireTokens() {
+    const { error } = await serviceClient().from("google_accounts").update({ access_token_expires_at: "2020-01-01T00:00:00Z" }).eq("owner_id", owner!.id);
     if (error) throw new Error(error.message);
   }
 
   
   async function withReaders(count: number) {
-    for (; readers < count; readers++) {
-      const id = await insertAccount(`reader-${readers + 1}@example.com`, "refresh-mail", ALL, { owner: owner!, node: place });
-      firstReader ||= id;
+    while (readers.length < count) readers.push(await insertAccount(`reader-${readers.length + 1}@example.com`, "refresh-mail", ALL, { owner: owner!, node: place }));
+    const extra = readers.splice(count);
+    if (extra.length > 0) {
+      const { error } = await serviceClient().from("google_accounts").delete().in("id", extra);
+      if (error) throw new Error(error.message);
     }
   }
 
-  const cutCount = { accountId: expect.any(String), accountEmail: expect.any(String), reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/) };
+  
+  async function acrossSizes(read: () => Promise<unknown>): Promise<Cost[]> {
+    const measured: Cost[] = [];
+    for (const size of SIZES) {
+      await withReaders(size);
+      await expireTokens();
+      const { cost, result } = await costOf(read);
+      expect(result).toMatchObject({ ok: true, failures: expect.any(Array) });
+      expect((result as { failures: unknown[] }).failures.filter((failure) => !(failure as { partial?: boolean }).partial)).toEqual([]);
+      measured.push(cost);
+    }
+    return measured;
+  }
+
+  
+  const grew = (measured: Cost[]) => measured.some((cost) => cost.total !== measured[0].total);
+
+  const oneAccount = (): Array<[string, () => Promise<unknown>]> => [
+    ["the list of one account", () => callTool("list_mail", ownerContext(), { account: readers[0], limit: 50 })],
+    ["the unread count of one account", () => callTool("count_unread_mail", ownerContext(), { account: readers[0] })],
+    ["the search of one account", () => callTool("search_mail", ownerContext(), { account: readers[0], query: "approved" })],
+    ["the possible replies in one account", () => callTool("list_task_replies", ownerContext(), { task: waiting, account: readers[0] })],
+  ];
 
   beforeAll(async () => {
     owner = await createDisposableUser("gmail-cost");
     const node = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "client", name: "Northwind" }).select("id").single();
     if (node.error) throw new Error(node.error.message);
     place = node.data.id;
-    
     
     const task = await owner.client.from("items").insert({ owner_id: owner.id, node_id: place, type: "task", title: "Wait for the signed contract" }).select("id").single();
     if (task.error) throw new Error(task.error.message);
@@ -1023,36 +1047,59 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     if (owner) await deleteDisposableUsers([owner]);
   }, 60_000);
 
-  it("costs each account its renewal and its storing, a search, a batch, and its unread count, so a place fits eight in the list", async () => {
-    const measured: Array<{ accounts: number; page: Cost; sidebar: Cost }> = [];
-    for (let accounts = 1; accounts <= 3; accounts++) {
-      await withReaders(accounts);
-      await tokens("expired");
-      const page = await costOf(mailPage);
+  it("reads one account in a request that costs the same with 1, 3 and 10 accounts", async () => {
+    for (const [name, read] of oneAccount()) {
+      const measured = await acrossSizes(read);
+      expect({ name, measured }).toEqual({ name, measured: [measured[0], measured[0], measured[0]] });
       
-      expect(page.result).toMatchObject({ ok: true, unread: accounts, failures: [] });
-      await tokens("expired");
-      const side = await costOf(sidebar);
-      expect(side.result).toMatchObject({ ok: true, mail: { unread: accounts, failures: [] } });
-      measured.push({ accounts, page: page.cost, sidebar: side.cost });
+      expect(measured[0].gmail).toBeGreaterThan(0);
+      expect(measured[0].token).toBe(1);
     }
-    expect(measured).toEqual([
-      { accounts: 1, page: { gmail: 3, token: 1, supabase: 8, total: 12 }, sidebar: { gmail: 1, token: 1, supabase: 8, total: 10 } },
-      { accounts: 2, page: { gmail: 6, token: 2, supabase: 9, total: 17 }, sidebar: { gmail: 2, token: 2, supabase: 9, total: 13 } },
-      { accounts: 3, page: { gmail: 9, token: 3, supabase: 10, total: 22 }, sidebar: { gmail: 3, token: 3, supabase: 10, total: 16 } },
-    ]);
-    
-    await tokens("valid");
-    expect((await costOf(mailPage)).cost).toEqual({ gmail: 9, token: 0, supabase: 7, total: 16 });
-    expect((await costOf(sidebar)).cost).toEqual({ gmail: 3, token: 0, supabase: 7, total: 10 });
-    
-    
-    const per = (kind: "page" | "sidebar") => measured[2][kind].total - measured[1][kind].total;
-    const fixed = (kind: "page" | "sidebar") => measured[0][kind].total - per(kind);
-    expect({ page: fits(1 + fixed("page"), per("page")), sidebar: fits(1 + fixed("sidebar"), per("sidebar")) }).toEqual({ page: 8, sidebar: 14 });
-  });
+  }, 180_000);
 
-  it("reads a task's possible replies one account per request, so a request costs the same however many accounts its place holds", async () => {
+  it("its twin: a request that reads every account grows with them and fails the rule", async () => {
+    const measured = await acrossSizes(async () => {
+      await Promise.all(readers.map((id) => callTool("list_mail", ownerContext(), { account: id, limit: 50 })));
+      return { ok: true, failures: [] };
+    });
+    expect(grew(measured)).toBe(true);
+  }, 180_000);
+
+  it("a read that names no account, over several, reads none and lists them, at any size", async () => {
+    await withReaders(10);
+    await expireTokens();
+    const listed = await costOf(() => callTool("list_mail", ownerContext(), { limit: 50 }));
+    expect(listed.cost.gmail + listed.cost.token).toBe(0);
+    expect((listed.result as unknown as { toRead: string[] }).toRead).toHaveLength(10);
+    const replies = await costOf(() => callTool("list_task_replies", ownerContext(), { task: waiting }));
+    expect(replies.cost.gmail + replies.cost.token).toBe(0);
+    expect((replies.result as unknown as { toRead: string[] }).toRead).toHaveLength(10);
+  }, 120_000);
+
+  it("an account whose unread count runs to its last page costs the same at any size", async () => {
+    trouble.endlessUnread = true;
+    try {
+      const measured = await acrossSizes(() => callTool("count_unread_mail", ownerContext(), { account: readers[0] }));
+      expect(grew(measured)).toBe(false);
+    } finally {
+      clearTrouble();
+    }
+  }, 120_000);
+
+  it("the tree carries the accounts and what waits for mail, and asks Google nothing, at any size", async () => {
+    const measured: Cost[] = [];
+    for (const size of SIZES) {
+      await withReaders(size);
+      await expireTokens();
+      const { cost, result } = await costOf(() => callTool("list_tree", ownerContext(), { today: today(), withMail: true, withNotes: true }));
+      expect((result as unknown as { mail: { accounts: unknown[] } }).mail.accounts).toHaveLength(size);
+      measured.push(cost);
+    }
+    expect(measured.every((cost) => cost.gmail + cost.token === 0)).toBe(true);
+    expect(grew(measured)).toBe(false);
+  }, 120_000);
+
+  it("a chat turn reads each account in a request of its own, and its own requests cost the same at any size", async () => {
     
     const contract: Stored = {
       id: "contract",
@@ -1063,82 +1110,228 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
       payload: { mimeType: "text/plain", headers: headers("Northwind <legal@northwind.example>", "Signed contract"), body: { data: encode("Signed.") } },
     };
     mailbox.push(contract);
+    async function turnIn(size: number) {
+      const requests: Cost[] = [];
+      const reads: Cost[] = [];
+      await withReaders(size);
+      await expireTokens();
+      const message = await chatTurn({
+        ctx: { ...ownerContext(), source: "chat" },
+        model: simulatedModel(),
+        messages: [{ id: "asked", role: "user", parts: [{ type: "text", text: "Did anything arrive for my tasks?" }] }],
+        
+        request: async (run) => {
+          const { cost, result } = await costOf(async () => {
+            await readSession(owner!.client);
+            await takeUsageFor(serviceClient(), { id: owner!.id, isAnonymous: false }, "chat_message");
+            await loadHistory(owner!.client, null);
+            return run();
+          });
+          requests.push(cost);
+          return result;
+        },
+        read: async (run) => {
+          const { cost, result } = await costOf(run);
+          reads.push(cost);
+          return result;
+        },
+      });
+      const said = message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ");
+      return { requests, reads, said };
+    }
     try {
-      const measured: Cost[] = [];
-      for (let accounts = 1; accounts <= 3; accounts++) {
-        await withReaders(accounts);
-        await tokens("expired");
-        const read = await costOf(() => callTool("list_task_replies", ownerContext(), { task: waiting, account: firstReader }));
-        expect(read.result).toMatchObject({ ok: true, replies: [expect.objectContaining({ id: "contract" })], failures: [] });
-        measured.push(read.cost);
+      const small = await turnIn(1);
+      const medium = await turnIn(3);
+      const large = await turnIn(10);
+      expect(small.said).toContain("possible reply");
+      expect(large.said).toContain("possible repl");
+      for (const turn of [small, medium, large]) {
+        
+        expect(turn.requests.map((cost) => cost.gmail + cost.token)).toEqual(turn.requests.map(() => 0));
+        
+        expect(turn.reads.every((cost) => cost.token <= 1)).toBe(true);
       }
       
+      expect(large.requests.map((cost) => cost.total)).toEqual(medium.requests.map((cost) => cost.total));
       
-      expect(measured).toEqual([measured[0], measured[0], measured[0]]);
-      expect(measured[0]).toEqual({ gmail: 2, token: 1, supabase: 9, total: 12 });
+      expect(large.reads).toHaveLength(1 + 10);
+      expect(medium.reads).toHaveLength(1 + 3);
+      expect(small.reads).toHaveLength(1);
     } finally {
       mailbox.splice(mailbox.indexOf(contract), 1);
     }
+  }, 180_000);
+});
+
+describe("what the screens read and say of the mail", () => {
+  
+  let owner: DisposableUser | undefined;
+  let place = "";
+  let refs: MailAccountRef[] = [];
+  const ownerContext = (): ToolContext => ({ db: owner!.client, ownerId: owner!.id, source: "manual", mail: gmailMailSource(deps) });
+  const storeOf = () => createMailStore((name, input) => callTool(name, ownerContext(), input) as unknown as Promise<Answer<unknown>>);
+  const settled = (store: ReturnType<typeof createMailStore>, ready: () => boolean) => vi.waitFor(() => expect(ready()).toBe(true), { timeout: 30_000, interval: 50 }).then(() => store);
+
+  beforeAll(async () => {
+    owner = await createDisposableUser("gmail-screens");
+    const node = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "client", name: "Fabrikam" }).select("id").single();
+    if (node.error) throw new Error(node.error.message);
+    place = node.data.id;
+    await insertAccount("reads@example.com", "refresh-mail", ALL, { owner, node: place });
+    await insertAccount("uncounted@example.com", "refresh-nocount", ALL, { owner, node: place });
+    const tree = (await callTool("list_tree", ownerContext(), { withMail: true })) as unknown as { mail: { accounts: MailAccountRef[] } };
+    refs = [...tree.mail.accounts].sort((a, b) => a.email.localeCompare(b.email));
+  }, 60_000);
+
+  afterAll(async () => {
+    if (owner) await deleteDisposableUsers([owner]);
+  }, 60_000);
+
+  it("a count that failed in one account gives no false whole number: the figure is a part, and says why", async () => {
+    const store = storeOf();
+    for (const ref of refs) store.count(ref);
+    await settled(store, () => store.figure(refs) !== null);
+    const figure = store.figure(refs)!;
+    expect(figure).toMatchObject({ unread: 1, partial: true });
+    expect(figure.why).toContain("uncounted@example.com");
+    const text = figureText(figure)!;
+    expect(text.shown).toBe("1+");
+    expect(text.spoken).toContain("uncounted@example.com");
+  }, 60_000);
+
+  it("its twin: a plain sum of what answered shows the whole number the rule forbids", () => {
+    const counts = [
+      { unread: 1, failures: [] },
+      { unread: null, failures: [{ accountId: "a", accountEmail: "uncounted@example.com", reason: "HTTP 500" }] },
+    ];
+    const plainSum: MailFigure = { unread: counts.reduce((sum, counted) => sum + (counted.unread ?? 0), 0), partial: false, why: null };
+    expect(figureText(plainSum)?.shown).toBe("1");
+    expect(figureText(figureOf(counts))?.shown).not.toBe(figureText(plainSum)?.shown);
   });
 
-  it("costs an account whose unread count runs to its last page three searches more, so a place fits five in the list", async () => {
-    await withReaders(3);
+  it("a count that could not read anything says so instead of a zero", () => {
+    const text = figureText(figureOf([{ unread: null, failures: [{ accountId: "a", accountEmail: "uncounted@example.com", reason: "HTTP 500" }] }]));
+    expect(text?.shown).toBe("Not counted");
+    expect(text?.spoken).toContain("uncounted@example.com");
+  });
+
+  it("a cut reads as a cut, and an account that could not be read as that", async () => {
     trouble.endlessUnread = true;
     try {
-      await tokens("expired");
-      const page = await costOf(mailPage);
-      expect(page.result).toMatchObject({ ok: true, failures: [cutCount, cutCount, cutCount] });
-      await tokens("expired");
-      const side = await costOf(sidebar);
-      expect(side.result).toMatchObject({ ok: true, mail: { failures: [cutCount, cutCount, cutCount] } });
-      expect({ page: page.cost, sidebar: side.cost }).toEqual({
-        page: { gmail: 18, token: 3, supabase: 10, total: 31 },
-        sidebar: { gmail: 12, token: 3, supabase: 10, total: 25 },
-      });
+      const reads = refs.find((ref) => ref.email === "reads@example.com")!;
+      const cut = (await callTool("count_unread_mail", ownerContext(), { account: reads.id })) as unknown as { failures: Array<{ accountId: string; accountEmail: string; reason: string; partial?: boolean }> };
+      expect(cut.failures).toHaveLength(1);
+      expect(mailFailureText(cut.failures[0])).toMatch(/^In reads@example\.com, only the latest \d+ unread messages were counted\.$/);
       
-      const perAccount = { page: (page.cost.total - 7) / 3, sidebar: (side.cost.total - 7) / 3 };
-      expect(perAccount).toEqual({ page: 8, sidebar: 6 });
-      expect({ page: fits(1 + 7, perAccount.page), sidebar: fits(1 + 7, perAccount.sidebar) }).toEqual({ page: 5, sidebar: 7 });
+      expect(mailFailureText({ ...cut.failures[0], partial: false })).toMatch(/^The mail of reads@example\.com could not be read:/);
     } finally {
       clearTrouble();
     }
-  });
+  }, 60_000);
 
-  it("leaves room for the route that runs the call: the screens', the coding agent's, and a chat turn's with its model", async () => {
-    await withReaders(3);
+  const unreadSearches = () => searches.filter((q) => q.includes("is:unread")).length;
+
+  it("an Overview load reads each account's count once: what the sidebar and two boxes show is one read", async () => {
+    forget();
+    const store = storeOf();
     
-    
-    expect((await costOf(() => readSession(owner!.client))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
-    const agent = new Request("http://localhost/api/mcp", { headers: { authorization: `Bearer cwa_${"a".repeat(43)}` } });
-    expect((await costOf(() => authenticateAgent(agent, serviceClient()))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
-    
-    
-    
-    const turn = async () => {
-      const ctx: ToolContext = { ...ownerContext(), source: "chat" };
-      await readSession(owner!.client);
-      await takeUsageFor(serviceClient(), { id: owner!.id, isAnonymous: false }, "chat_message");
-      await loadHistory(owner!.client, null);
-      await systemPrompt(ctx, "UTC");
-      return callTool("list_mail", ctx, {});
+    for (const ref of refs) store.list(ref);
+    for (const ref of refs) store.list(ref);
+    for (const ref of refs) store.count(ref);
+    await settled(store, () => store.mailOf(refs).waiting === 0 && store.figure(refs) !== null);
+    expect(unreadSearches()).toBe(refs.length);
+  }, 60_000);
+
+  it("its twin: a page that counts apart from what it lists reads the count twice, and the same counter sees it", async () => {
+    forget();
+    const store = storeOf();
+    for (const ref of refs) store.recount(ref);
+    for (const ref of refs) store.list(ref);
+    await settled(store, () => store.mailOf(refs).waiting === 0 && store.figure(refs) !== null);
+    expect(unreadSearches()).toBe(refs.length * 2);
+  }, 60_000);
+
+  it("a read lists again only after something was written: a new round", async () => {
+    const store = storeOf();
+    for (const ref of refs) store.list(ref);
+    await settled(store, () => store.mailOf(refs).waiting === 0);
+    forget();
+    for (const ref of refs) store.list(ref);
+    expect(searches).toEqual([]);
+    store.forget();
+    for (const ref of refs) store.list(ref);
+    await vi.waitFor(() => expect(unreadSearches()).toBe(refs.length), { timeout: 30_000, interval: 50 });
+    await settled(store, () => store.mailOf(refs).waiting === 0);
+  }, 60_000);
+});
+
+describe("which accounts the place of a task sees", () => {
+  
+  
+  let owner: DisposableUser | undefined;
+  const place = { client: "", project: "", subproject: "", other: "" };
+  const account = { client: "", project: "", subproject: "", other: "" };
+  const tasks: Record<string, string> = {};
+  const ownerContext = (): ToolContext => ({ db: owner!.client, ownerId: owner!.id, source: "manual", mail: gmailMailSource(deps) });
+
+  beforeAll(async () => {
+    owner = await createDisposableUser("gmail-places");
+    const node = async (kind: "client" | "project" | "subproject", name: string, parent: string | null) => {
+      const { data, error } = await owner!.client.from("nodes").insert({ owner_id: owner!.id, kind, name, parent_id: parent }).select("id").single();
+      if (error) throw new Error(error.message);
+      return data.id as string;
     };
-    await tokens("expired");
-    const nominal = await costOf(turn);
-    expect(nominal.result).toMatchObject({ ok: true, failures: [] });
-    expect(nominal.cost).toEqual({ gmail: 9, token: 3, supabase: 15, total: 27 });
-    trouble.endlessUnread = true;
-    try {
-      await tokens("expired");
-      const full = await costOf(turn);
-      expect(full.result).toMatchObject({ ok: true, failures: [cutCount, cutCount, cutCount] });
-      expect(full.cost).toEqual({ gmail: 18, token: 3, supabase: 15, total: 36 });
-    } finally {
-      clearTrouble();
+    place.client = await node("client", "Contoso", null);
+    place.project = await node("project", "Web", place.client);
+    place.subproject = await node("subproject", "Checkout", place.project);
+    place.other = await node("client", "Tailspin", null);
+    for (const key of ["client", "project", "subproject", "other"] as const) {
+      account[key] = await insertAccount(`${key}@example.com`, "refresh-mail", ALL, { owner, node: place[key] });
     }
+    for (const [key, nodeId] of [["general", null], ...Object.entries(place)] as Array<[string, string | null]>) {
+      const task = await owner.client.from("items").insert({ owner_id: owner.id, node_id: nodeId, type: "task", title: `Wait in ${key}` }).select("id").single();
+      if (task.error) throw new Error(task.error.message);
+      tasks[key] = task.data.id;
+      const wait = await owner.client.from("task_mail").insert({ item_id: task.data.id, owner_id: owner.id, waits_for: "Nothing that arrives" });
+      if (wait.error) throw new Error(wait.error.message);
+    }
+  }, 60_000);
+
+  afterAll(async () => {
+    if (owner) await deleteDisposableUsers([owner]);
+  }, 60_000);
+
+  
+  async function answers(seen: typeof accountsSeenFrom) {
+    const tree = (await callTool("list_tree", ownerContext(), { withMail: true })) as unknown as { nodes: Parameters<typeof accountsSeenFrom>[0]; mail: { accounts: Parameters<typeof accountsSeenFrom>[1] } };
+    const out: Array<{ place: string; browser: string[]; server: string[] }> = [];
+    for (const [key, nodeId] of [["general", null], ...Object.entries(place)] as Array<[string, string | null]>) {
+      const read = (await callTool("list_task_replies", ownerContext(), { task: tasks[key] })) as unknown as { ok: boolean; accounts: Array<{ id: string }> };
+      expect(read.ok).toBe(true);
+      out.push({ place: key, browser: seen(tree.nodes, tree.mail.accounts, nodeId).sort(), server: read.accounts.map((entry) => entry.id).sort() });
+    }
+    return out;
+  }
+
+  it("gives the same answer in the browser and on the server, for every place and General", async () => {
+    const compared = await answers(accountsSeenFrom);
+    expect(compared.map((entry) => entry.browser)).toEqual(compared.map((entry) => entry.server));
     
-    const own = nominal.cost.total - 3 * 5 + MAX_STEPS + 1;
-    expect(own).toBe(19);
-    
-    expect({ nominal: fits(own, 5), full: fits(own, 8) }).toEqual({ nominal: 6, full: 3 });
-  });
+    const of = (key: string) => compared.find((entry) => entry.place === key)!.server;
+    expect(of("general")).toEqual(Object.values(account).sort());
+    expect(of("client")).toEqual([account.client].sort());
+    expect(of("project")).toEqual([account.client, account.project].sort());
+    expect(of("subproject")).toEqual([account.client, account.project, account.subproject].sort());
+    expect(of("other")).toEqual([account.other]);
+  }, 60_000);
+
+  it("its twin: a browser that lets a place see one account more disagrees with the server", async () => {
+    const generous: typeof accountsSeenFrom = (tree, accounts, nodeId) => {
+      const seen = accountsSeenFrom(tree, accounts, nodeId);
+      const extra = accounts.find((entry) => !seen.includes(entry.id));
+      return extra ? [...seen, extra.id] : seen;
+    };
+    const compared = await answers(generous);
+    expect(compared.map((entry) => entry.browser)).not.toEqual(compared.map((entry) => entry.server));
+  }, 60_000);
 });

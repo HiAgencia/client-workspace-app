@@ -14,11 +14,11 @@ import {
   placeValue,
   TasksBoxContent,
   tasksCountLabel,
+  useMailRead,
   useNotesRead,
   useTasksRead,
-  type MailList,
 } from "./box-kinds";
-import { BoxBoard, customizeEntries, SPLIT, useBoardLayout, useToolRead, type BoardLayout, type BoxSpec } from "./boxes";
+import { BoxBoard, customizeEntries, SPLIT, useBoardLayout, type BoardLayout, type BoxSpec } from "./boxes";
 import { GoogleOutcome } from "./node-view";
 import { PageHeader } from "./page-header";
 import { MailAccountFilter, TasksPlaceFilter, useAddress, usePlaceParam } from "./page-filters";
@@ -52,9 +52,8 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
   const notes = useNotesRead(place);
   
   
-  const mail = useToolRead<MailList>("list_mail", { ...placeInput(place), ...(account ? { account } : {}), limit: 50 });
-  const everyAccount = useToolRead<MailList>("list_mail", account ? { ...placeInput(place), limit: 50 } : null);
-  const mailOfPlace = account ? everyAccount : mail;
+  const mail = useMailRead(place, account);
+  const mailOfPlace = useMailRead(place, null);
   
   
   const replies = useTaskReplies(placeInput(place), now, tree, 5);

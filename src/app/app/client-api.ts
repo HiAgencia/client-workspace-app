@@ -59,6 +59,7 @@ function postAs<T>(kind: "read" | "write", url: string, body: unknown, method = 
 }
 
 export function post<T>(url: string, body: unknown, method = "POST"): Promise<Answer<T>> {
+  readsOnTheirWay.clear();
   return postAs<T>("write", url, body, method);
 }
 
@@ -69,8 +70,25 @@ export async function forgetLayout(): Promise<void> {
   if (!answer.ok) console.error("The saved order of the boxes could not be forgotten on signing out:", answer.message);
 }
 
-export function tool<T>(name: string, input: Record<string, unknown>): Promise<Answer<T>> {
-  return postAs<T>(READ_TOOLS.has(name) ? "read" : "write", `/api/tools/${name}`, input);
+
+
+const readsOnTheirWay = new Map<string, Promise<Answer<unknown>>>();
+
+
+export function tool<T>(name: string, input: Record<string, unknown>, scope?: string | null): Promise<Answer<T>> {
+  const url = scope ? `/api/tools/${name}?scope=${scope}` : `/api/tools/${name}`;
+  if (!READ_TOOLS.has(name)) {
+    readsOnTheirWay.clear();
+    return postAs<T>("write", url, input);
+  }
+  const key = `${url} ${JSON.stringify(input)}`;
+  const onItsWay = readsOnTheirWay.get(key);
+  if (onItsWay) return onItsWay as Promise<Answer<T>>;
+  const read = postAs<T>("read", url, input).finally(() => {
+    if (readsOnTheirWay.get(key) === read) readsOnTheirWay.delete(key);
+  });
+  readsOnTheirWay.set(key, read);
+  return read;
 }
 
 export type Item = {

@@ -8,9 +8,6 @@ import { defineTool } from "./define";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 import { ITEM_COLUMNS, hourOf, itemSchema, itemTypes, selectAllItems, toItem, byPriorityThenDue, newestFirst, type ItemType } from "./rows";
 import { dueOn, dueTime, priority, titleText } from "./fields";
-import { mailFailureSchema } from "@/lib/mail/source";
-import { searchMail } from "./mail";
-import { mailRowSchema } from "./mail-schema";
 import { loadScope, reachOf, reaches, resolveReadPlace, resolveWritePlace, type Scope } from "./tree";
 
 type ItemInsert = Database["public"]["Tables"]["items"]["Insert"];
@@ -441,8 +438,8 @@ export const searchItems = defineTool({
   name: "search_items",
   description:
     "Search the titles and notes of items in a node and every node below it, in General (node null), or, by default, " +
-    "everything reachable, and the mail of the accounts in reach by sender, subject, and text. Case-insensitive. " +
-    "Returns up to 50 items, newest first, and up to 20 messages.",
+    "everything reachable. Case-insensitive. Returns up to 50 items, newest first. Mail is searched with search_mail, " +
+    "one account at a time.",
   readOnly: true,
   input: z.strictObject({
     query: z.string().trim().min(1).max(200),
@@ -455,12 +452,7 @@ export const searchItems = defineTool({
     type: z.enum(itemTypes).optional(),
     status: z.enum(["open", "done", "all"]).default("all").describe("open, done, or all (default)."),
   }),
-  output: z.object({
-    items: z.array(itemSchema),
-    mail: z.array(mailRowSchema).optional(),
-    
-    mailFailures: z.array(mailFailureSchema).optional(),
-  }),
+  output: z.object({ items: z.array(itemSchema) }),
   async run(ctx, input) {
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
@@ -484,16 +476,7 @@ export const searchItems = defineTool({
       if (isError(read)) return read;
       for (const row of read.rows) found.set(row.id, toItem(row, loaded.scope));
     }
-    const items = [...found.values()].sort(newestFirst).slice(0, 50);
-    
-    if (input.type || input.status !== "all") return ok({ items });
-    const mail = await searchMail(ctx, loaded.scope, resolved.place, input.query);
-    
-    if (isError(mail)) {
-      console.error("search: the mail could not be read", mail.message);
-      return ok({ items });
-    }
-    return ok({ items, mail: mail.rows, mailFailures: mail.failures });
+    return ok({ items: [...found.values()].sort(newestFirst).slice(0, 50) });
   },
 });
 

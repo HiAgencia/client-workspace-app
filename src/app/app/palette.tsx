@@ -2,21 +2,31 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { count } from "@/lib/count";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
+import { mailFailureText } from "@/lib/mail/failure-text";
+import type { MailRow } from "@/lib/tools/mail-schema";
 import { currentTheme, setTheme } from "@/lib/theme";
 import { tool, type Item, type TreeNode } from "./client-api";
 import { requestFocus, type FocusTarget } from "./focus-request";
 import { TYPE_NAMES } from "./item-parts";
+import { subjectOf } from "./mail/subject";
+import type { MailFailureRow } from "./mail-store";
 import { useWorkspace } from "./workspace";
 
 type Entry =
   | { kind: "node"; id: string; node: TreeNode }
   | { kind: "item"; id: string; item: Item }
+  | { kind: "mail"; id: string; row: MailRow }
   | { kind: "action"; id: string; label: string; run: () => void };
 
 const KIND_NAMES: Record<TreeNode["kind"], string> = { client: "Client", project: "Project", subproject: "Subproject" };
-const LIMIT = { node: 6, item: 8 };
+const LIMIT = { node: 6, item: 8, mail: 8 };
+
+const MAIL_WAIT_MS = 400;
+const NAME = "Search clients, projects, tasks, mail, and actions";
+
 
 
 
@@ -33,7 +43,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     <dialog
       ref={dialog}
       className="dialog palette"
-      aria-label="Search clients, projects, tasks, and actions"
+      aria-label={NAME}
       onClose={onClose}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
@@ -50,7 +60,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 function PaletteBody({ onClose }: { onClose: () => void }) {
-  const { tree } = useWorkspace();
+  const { tree, mailAccounts } = useWorkspace();
   const router = useRouter();
   const pathname = usePathname();
   const [query, setQuery] = useState("");
@@ -79,6 +89,36 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       live = false;
     };
   }, [rootIds]);
+
+  
+  
+  const words = query.trim();
+  const [mail, setMail] = useState<{ words: string; rows: MailRow[]; failures: MailFailureRow[]; waiting: number }>({ words: "", rows: [], failures: [], waiting: 0 });
+  useEffect(() => {
+    const accounts = mailAccounts ?? [];
+    if (!words || accounts.length === 0) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      setMail({ words, rows: [], failures: [], waiting: accounts.length });
+      for (const account of accounts) {
+        void tool<{ mail: MailRow[]; failures: MailFailureRow[] }>("search_mail", { account: account.id, query: words }).then((answer) => {
+          if (!live) return;
+          setMail((now) => ({
+            words,
+            rows: answer.ok ? [...now.rows, ...answer.mail].sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1)) : now.rows,
+            failures: [...now.failures, ...(answer.ok ? answer.failures : [{ accountId: account.id, accountEmail: account.email, reason: answer.message }])],
+            waiting: now.waiting - 1,
+          }));
+        });
+      }
+    }, MAIL_WAIT_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [words, mailAccounts]);
+  const mailNow = useMemo(() => (mail.words === words && words ? mail : { words, rows: [], failures: [], waiting: 0 }), [mail, words]);
+  const mailRows = mailNow.rows;
 
   const actions = useMemo<Entry[]>(() => {
     const list: Entry[] = [
@@ -118,9 +158,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     return [
       { key: "projects", name: "Clients and projects", entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
       { key: "items", name: "Tasks and notes", entries: itemHits.map((item): Entry => ({ kind: "item", id: `item-${item.id}`, item })) },
+      { key: "mail", name: "Mail", entries: mailRows.slice(0, LIMIT.mail).map((row): Entry => ({ kind: "mail", id: `mail-${row.accountId}-${row.id}`, row })) },
       { key: "actions", name: "Actions", entries: actionHits },
     ].filter((group) => group.entries.length > 0);
-  }, [query, tree, nodeIndex, itemIndex, actionIndex, actions]);
+  }, [query, tree, nodeIndex, itemIndex, actionIndex, actions, mailRows]);
 
   
   
@@ -138,7 +179,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     else if (entry.kind === "item") {
       
       if (entry.item.nodeId) go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type, done: entry.item.status === "done" });
-    } else entry.run();
+    } else if (entry.kind === "mail") router.push(`/app/mail?account=${encodeURIComponent(entry.row.accountId)}&message=${encodeURIComponent(entry.row.id)}`);
+    else entry.run();
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
@@ -157,13 +199,15 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const searching = query.trim().length > 0;
   
   const note =
-    flat.length === 0
+    flat.length === 0 && mailNow.waiting === 0
       ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
       : searching && items === null
         ? "Reading tasks and notes…"
         : itemsFailed
           ? "Some tasks and notes could not be read; projects and actions still work."
-          : "";
+          : searching && mailNow.waiting > 0
+            ? `Searching the mail of ${count(mailNow.waiting, "account", "accounts")}…`
+            : "";
   return (
     <div className="palette-inner">
       <div className="palette-search">
@@ -177,8 +221,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           aria-controls={flat.length > 0 ? "palette-list" : undefined}
           aria-autocomplete="list"
           aria-activedescendant={current ? `palette-${current.id}` : undefined}
-          aria-label="Search clients, projects, tasks, and actions"
-          placeholder="Search clients, projects, tasks, and actions"
+          aria-label={NAME}
+          placeholder={NAME}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -215,6 +259,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       <p className="palette-note t-help" role="status">
         {note}
       </p>
+      {mailNow.failures.map((failure) => (
+        <p key={failure.accountId} className="palette-note t-help" data-mail-failure>
+          {`Not searched: ${mailFailureText(failure)}`}
+        </p>
+      ))}
       <p className="palette-foot t-meta">Arrows move, Enter opens, Escape closes.</p>
     </div>
   );
@@ -243,6 +292,17 @@ function EntryView({ entry }: { entry: Entry }) {
           {}
           <span className="t-value">{inlinePlain(item.title)}</span>
           <span className="t-meta">{item.nodePath}</span>
+        </span>
+      </>
+    );
+  }
+  if (entry.kind === "mail") {
+    return (
+      <>
+        <span className="pill">Mail</span>
+        <span className="stack palette-text">
+          <span className="t-value">{subjectOf(entry.row)}</span>
+          <span className="t-meta">{`${entry.row.from.name ?? entry.row.from.email} · ${entry.row.accountEmail}`}</span>
         </span>
       </>
     );

@@ -90,7 +90,7 @@ const ARRIVED = /\b(?:arriv\w*|llegó|llego)\b|\brepl(?:y|ies) (?:to|for) (?:my|
 
 type TaskRows = { groups?: { overdue?: { tasks: WaitingRow[] }; today?: { tasks: WaitingRow[] }; noDate?: { tasks: WaitingRow[] }; upcoming?: { days: Array<{ tasks: WaitingRow[] }> } } };
 type WaitingRow = { id: string; title: string; mail: { waitsFor: string } | null };
-type Replies = { task?: { title: string }; replies?: Array<{ subject: string; from: { name: string | null; email: string } }> };
+type Replies = { task?: { id: string; title: string }; accounts?: Array<{ id: string }>; toRead?: string[]; replies?: Array<{ subject: string; from: { name: string | null; email: string } }> };
 
 
 const CLOSE = /\b(?:close|complete|cerr[aá]|complet[aá])\s+(?:the task\s+|la tarea\s+)?["“«]?(.+?)["”»]?\s+(?:as|como)\s+(.+?)[.!]*$/i;
@@ -109,17 +109,28 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
   
   
   if (ARRIVED.test(request) && results.some((result) => result.toolName === "list_task_replies")) {
-    const lines = results
-      .filter((result) => result.toolName === "list_task_replies")
-      .map(({ output }) => {
-        const value = (output as { value?: Replies & { ok?: boolean; message?: string } }).value;
-        if (value?.ok === false) return `I could not read one task's mail: ${value.message}`;
-        const replies = value?.replies ?? [];
-        if (replies.length === 0) return `"${value?.task?.title}": nothing has arrived yet.`;
-        const latest = replies[0];
-        return `"${value?.task?.title}": ${count(replies.length, "possible reply", "possible replies")}, the latest "${latest.subject}" from ${latest.from.name ?? latest.from.email}.`;
-      });
-    return text(`${lines.join(" ")} Open a task to see them and say which one answers it.`);
+    const answers = results.filter((result) => result.toolName === "list_task_replies").map(({ output }) => (output as { value?: Replies & { ok?: boolean; message?: string } }).value);
+    
+    
+    const read = new Set(answers.flatMap((value) => (value?.task && !value.toRead?.length ? (value.accounts ?? []).map((account) => `${value.task!.id}:${account.id}`) : [])));
+    const toRead = answers.flatMap((value) => (value?.task ? (value.toRead ?? []).filter((account) => !read.has(`${value.task!.id}:${account}`)).map((account) => ({ toolName: "list_task_replies", input: { task: value.task!.id, account } })) : []));
+    if (toRead.length > 0) return calls(...toRead);
+    
+    const byTask = new Map<string, { title: string; replies: NonNullable<Replies["replies"]> }>();
+    const failed: string[] = [];
+    for (const value of answers) {
+      if (value?.ok === false) failed.push(`I could not read one task's mail: ${value.message}`);
+      if (!value?.task) continue;
+      const entry = byTask.get(value.task.id) ?? { title: value.task.title, replies: [] };
+      entry.replies.push(...(value.replies ?? []));
+      byTask.set(value.task.id, entry);
+    }
+    const lines = [...byTask.values()].map(({ title, replies }) => {
+      if (replies.length === 0) return `"${title}": nothing has arrived yet.`;
+      const latest = replies[0];
+      return `"${title}": ${count(replies.length, "possible reply", "possible replies")}, the latest "${latest.subject}" from ${latest.from.name ?? latest.from.email}.`;
+    });
+    return text(`${[...failed, ...lines].join(" ")} Open a task to see them and say which one answers it.`);
   }
   if (ARRIVED.test(request) && results.some((result) => result.toolName === "get_tasks")) {
     const answer = results.find((result) => result.toolName === "get_tasks")!;

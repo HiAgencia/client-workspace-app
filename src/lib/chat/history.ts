@@ -22,8 +22,9 @@ export async function loadHistory(db: Db, nodeId: string | null, limit = HISTORY
 
 
 export function withoutEarlierFiles(messages: UIMessage[]): UIMessage[] {
+  const turn = messages.map((message) => message.role).lastIndexOf("user");
   return messages.map((message, index) =>
-    index === messages.length - 1
+    index >= turn
       ? message
       : {
           ...message,

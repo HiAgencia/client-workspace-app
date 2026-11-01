@@ -14,6 +14,7 @@ import { ChatDock, useDocked } from "./chat-panel";
 import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
 import { dropFocusRequestOutside, hasFocusRequest, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
+import { createMailStore, type MailAccountRef, type MailFigure, type MailStore } from "./mail-store";
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
 import { TaskDetail } from "./task-detail";
@@ -39,7 +40,15 @@ type Workspace = {
   
   taskCounts: { overdue: number; today: number } | null;
   
-  mailUnread: number | null;
+  generalTasks: number | null;
+  
+  notePlaces: { nodes: string[]; general: boolean } | null;
+  
+  mailAccounts: MailAccountRef[] | null;
+  mailWaiting: WaitingRead[] | null;
+  
+  mailStore: MailStore;
+  mailFigure: MailFigure | null;
   
   who: string | null;
   refreshTree: () => Promise<void>;
@@ -53,6 +62,16 @@ type Workspace = {
   openItem: (item: Item) => void;
   chat: Chat;
   setChatScope: (scope: string | null | undefined) => void;
+};
+
+export type WaitingRead = { id: string; title: string; nodeId: string | null; path: string | null; color: TreeNode["color"]; accountId: string | null; waitsFor: string };
+
+type TreeRead = {
+  nodes: TreeNode[];
+  tasks: { overdue: number; today: number } | null;
+  generalTasks: number;
+  mail: { accounts: MailAccountRef[]; waiting: WaitingRead[] } | null;
+  notes: { nodes: string[]; general: boolean } | null;
 };
 
 const WorkspaceContext = createContext<Workspace | null>(null);
@@ -72,6 +91,8 @@ export function useChatScope(scope: string | null): void {
   }, [scope, setChatScope]);
 }
 
+const noRevision = () => 0;
+
 export const LAST_NODE_KEY = "client-workspace:last-node";
 const CHAT_OPEN_KEY = "client-workspace:chat-open";
 
@@ -88,7 +109,13 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const [tree, setTree] = useState<TreeNode[] | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
   const [taskCounts, setTaskCounts] = useState<Workspace["taskCounts"]>(null);
-  const [mailUnread, setMailUnread] = useState<number | null>(null);
+  const [generalTasks, setGeneralTasks] = useState<number | null>(null);
+  const [notePlaces, setNotePlaces] = useState<Workspace["notePlaces"]>(null);
+  const [mailAccounts, setMailAccounts] = useState<MailAccountRef[] | null>(null);
+  const [mailWaiting, setMailWaiting] = useState<WaitingRead[] | null>(null);
+  const [mailStore] = useState(() => createMailStore(tool));
+  useSyncExternalStore(mailStore.subscribe, mailStore.revision, noRevision);
+  const mailFigure = mailAccounts ? mailStore.figure(mailAccounts) : null;
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -123,24 +150,36 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   const refreshTree = useCallback(
     () =>
-      tool<{ nodes: TreeNode[]; tasks: { overdue: number; today: number } | null; mail: { unread: number } | null }>("list_tree", { today: today(), withMail: true }).then(
-        (answer) => {
-          
-          if (answer.ok) {
-            setTree(answer.nodes);
-            setTaskCounts(answer.tasks);
-            setMailUnread(answer.mail?.unread ?? null);
-            setTreeError(null);
-          } else setTreeError(answer.message);
-        },
-      ),
+      tool<TreeRead>("list_tree", { today: today(), withMail: true, withNotes: true }).then((answer) => {
+        
+        if (answer.ok) {
+          setTree(answer.nodes);
+          setTaskCounts(answer.tasks);
+          setGeneralTasks(answer.generalTasks);
+          setNotePlaces(answer.notes);
+          setMailAccounts(answer.mail?.accounts ?? []);
+          setMailWaiting(answer.mail?.waiting ?? []);
+          setTreeError(null);
+        } else setTreeError(answer.message);
+      }),
     [],
   );
 
+  
+  
+  
+  const accountsKey = mailAccounts?.map((account) => account.id).join() ?? "";
+  useEffect(() => {
+    for (const account of mailAccounts ?? []) mailStore.count(account);
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountsKey, mailStore]);
+
   const touch = useCallback(() => {
+    mailStore.forget();
     setVersion((v) => v + 1);
     void refreshTree();
-  }, [refreshTree]);
+  }, [refreshTree, mailStore]);
 
   
   const shown = useRef<Notice | null>(null);
@@ -362,7 +401,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     [notify, touch, saving],
   );
   const chat: Chat = { scope: chatScope, open: chatOpen, setOpen: setChatOpen };
-  const value: Workspace = { config, tree, treeError, taskCounts, mailUnread, who, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
+  const value: Workspace = { config, tree, treeError, taskCounts, generalTasks, notePlaces, mailAccounts, mailWaiting, mailStore, mailFigure, who, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
   const chatColumn = docked && chatOpen && chatScope !== undefined;
 
   return (

@@ -1,12 +1,13 @@
 "use client";
 
 import { Link } from "@/components/ui/link";
-import { useMemo, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { mailFailureText } from "@/lib/mail/failure-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import type { NoteRow } from "@/lib/tools/notes";
 import type { TasksView } from "@/lib/tools/tasks";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { BoxEmpty, BoxFailed, BoxWait, useBoxSettled, useToolRead, type BoxRead } from "./boxes";
 import { get, post, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { PathText } from "./item-parts";
+import { accountsSeenFrom, type MailList } from "./mail-store";
 import { subjectOf } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
 import { QuickAddInline } from "./quick-add";
@@ -429,17 +431,44 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
 
 
 
-export type MailList = {
-  accounts: Array<{ id: string; email: string; isDemo: boolean; status: string; nodeId: string | null }>;
-  groups: Record<"forTasks" | "unread" | "earlier", { count: number; messages: MailRow[] }>;
-  unread: number;
-  failures: Array<{ accountId: string; accountEmail: string; reason: string }>;
-};
+export type { MailList };
+
+
+
 
 export function useMailRead(place: Place, account: string | null): BoxRead<MailList> {
-  return useToolRead<MailList>("list_mail", { ...placeInput(place), ...(account ? { account } : {}), limit: 50 });
+  const { tree, treeError, mailAccounts, mailStore, version } = useWorkspace();
+  useSyncExternalStore(mailStore.subscribe, mailStore.revision, noRevision);
+  const [round, setRound] = useState(0);
+  const inPlace = useMemo(() => {
+    if (!mailAccounts) return null;
+    if (place.kind === "general") return [];
+    if (place.kind === "all") return mailAccounts;
+    const seen = new Set(accountsSeenFrom(tree, mailAccounts, place.id));
+    return mailAccounts.filter((entry) => seen.has(entry.id));
+  }, [mailAccounts, tree, place.kind, place.kind === "node" ? place.id : null]); // eslint-disable-line react-hooks/exhaustive-deps
+  const key = inPlace?.map((entry) => entry.id).join() ?? "";
+  useEffect(() => {
+    for (const entry of inPlace ?? []) mailStore.list(entry);
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, version, round, mailStore]);
+  const chosen = inPlace?.some((entry) => entry.id === account) ? inPlace.filter((entry) => entry.id === account) : inPlace;
+  const data = chosen ? mailStore.mailOf(chosen) : null;
+  return {
+    data,
+    error: chosen ? null : treeError,
+    stale: false,
+    
+    settled: data ? data.accounts.length === 0 || data.waiting < data.accounts.length : treeError !== null,
+    retry: () => {
+      mailStore.forget();
+      setRound((value) => value + 1);
+    },
+  };
 }
 
+const noRevision = () => 0;
 const MAIL_ROWS = 5;
 
 function mailWhen(iso: string, now: Day): string {
@@ -498,6 +527,8 @@ export function MailBoxContent({
   const failures = [...data.failures, ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures).filter((failure) => account === null || failure.accountId === account)].filter(
     (failure, index, all) => all.findIndex((other) => other.accountId === failure.accountId) === index,
   );
+  
+  const reading = data.waiting > 0;
   const body = () => {
     if (data.accounts.length === 0) {
       return place.kind === "general" ? (
@@ -515,6 +546,7 @@ export function MailBoxContent({
       );
     }
     if (rows.length === 0) {
+      if (reading) return <BoxWait what="Reading the mail…" rows={3} />;
       return (
         <BoxEmpty text="Nothing unread, and nothing arrived for a task that waits for mail." reason="nothing-unread">
           <Link className={buttonClass({ size: "sm" })} href="/app/mail">
@@ -564,8 +596,8 @@ export function MailBoxContent({
       {error && <BoxFailed what="The mail" message={error} kept onRetry={retry} />}
       {replies.error && <BoxFailed what="The possible replies of the tasks" message={replies.error} kept={replies.data !== null} onRetry={replies.retry} />}
       {failures.map((failure) => (
-        <p key={failure.accountId} className="inline-note" data-tone="alert">
-          {failure.accountEmail} could not be read: {failure.reason}
+        <p key={failure.accountId} className="inline-note" data-tone={failure.partial ? undefined : "alert"} data-mail-failure>
+          {mailFailureText(failure)}
         </p>
       ))}
       {body()}

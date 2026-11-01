@@ -87,6 +87,7 @@ describe("the registry", () => {
         "browse_events",
         "browse_items",
         "complete_task",
+        "count_unread_mail",
         "create_event",
         "create_google_event",
         "create_task",
@@ -116,6 +117,7 @@ describe("the registry", () => {
         "request_review",
         "reschedule_overdue",
         "search_items",
+        "search_mail",
         "set_task_mail",
         "unlink_mail",
         "unlink_node_event",
@@ -142,7 +144,9 @@ describe("the registry", () => {
         "list_notes",
         "list_task_replies",
         "list_tree",
+        "count_unread_mail",
         "search_items",
+        "search_mail",
       ].sort(),
     );
   });

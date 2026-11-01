@@ -1,16 +1,19 @@
 import { z } from "zod";
-import { mailFailureSchema, type MailFailure } from "@/lib/mail/source";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { defineTool } from "./define";
-import { browseEvents, browsedEventSchema, fromLocal } from "./browse";
+import { browsedEventSchema, fromLocal } from "./browse";
 import { eventsForNode } from "./events";
 import { localEventsIn } from "./local-events";
 import { eventsFailureSchema } from "./events-source";
 import { dbFail, isError, ok } from "./result";
 import { byPriorityThenDue, countInSubtrees, itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
-import { accountsOf, mailOf, unreadMail } from "./mail";
+import { accountMap } from "./mail";
 import { groupOf, shownAsRow } from "./tasks";
 import { loadScope, reachOf, reaches, resolveNode, subtree, type ReadPlace, type Scope } from "./tree";
+import type { Database } from "@/lib/db/types";
+import type { ToolContext } from "./context";
+
+type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -27,6 +30,67 @@ const treeNodeSchema = z.object({
   ownColor: z.enum(NODE_COLORS).nullable(),
 });
 
+const reachedAccountSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  isDemo: z.boolean(),
+  status: z.string(),
+  
+  nodeId: z.string().nullable(),
+  nodeIds: z.array(z.string()),
+});
+
+const waitingTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  nodeId: z.string().nullable(),
+  path: z.string().nullable(),
+  color: z.enum(NODE_COLORS).nullable(),
+  accountId: z.string().nullable(),
+  waitsFor: z.string(),
+});
+
+
+async function mailIndexOf(ctx: ToolContext, scope: Scope, place: ReadPlace, open: ItemRow[]) {
+  const mapped = await accountMap(ctx, scope);
+  if (isError(mapped)) return mapped;
+  const seen = place.kind === "node" ? mapped.map.seenFrom(place.node.id) : null;
+  const accounts = [...mapped.map.accounts.values()]
+    .filter((account) => !seen || seen.has(account.id))
+    .map(({ id, email, isDemo, status, nodeId }) => ({ id, email, isDemo, status, nodeId, nodeIds: mapped.map.hangsFrom.get(id) ?? [] }));
+  const { data, error } = await ctx.db.from("task_mail").select("item_id, account_id, waits_for").eq("owner_id", ctx.ownerId);
+  if (error) return dbFail("reading what the tasks wait for", error);
+  const waits = new Map(data.map((row) => [row.item_id, row]));
+  const waiting = open
+    .filter((row) => waits.has(row.id) && shownAsRow(row))
+
+    .sort((a, b) => (a.due_on ?? "9999") < (b.due_on ?? "9999") ? -1 : (a.due_on ?? "9999") > (b.due_on ?? "9999") ? 1 : 0)
+    .map((row) => {
+      const node = row.node_id ? scope.all.get(row.node_id) : undefined;
+      const wait = waits.get(row.id)!;
+      return { id: row.id, title: row.title, nodeId: row.node_id, path: node?.path ?? null, color: node?.color ?? null, accountId: wait.account_id, waitsFor: wait.waits_for ?? "" };
+    });
+  return ok({ accounts, waiting });
+}
+
+
+async function notePlacesOf(ctx: ToolContext, scope: Scope, place: ReadPlace) {
+  const { data, error } = await ctx.db.from("items").select("node_id, owner_id").eq("owner_id", ctx.ownerId).eq("type", "note").is("deleted_at", null);
+  if (error) return dbFail("reading where the notes are", error);
+  const holds = new Set<string>();
+  let general = false;
+  for (const note of data) {
+    if (!reaches(scope, ctx.ownerId, note)) continue;
+    if (note.node_id === null) general = true;
+    for (let cursor = note.node_id ? scope.all.get(note.node_id) : undefined, depth = 0; cursor && depth < 64; depth++) {
+      holds.add(cursor.id);
+      cursor = cursor.parentId ? scope.all.get(cursor.parentId) : undefined;
+    }
+  }
+  const inPlace = new Set(reachOf(scope, place).nodeIds);
+  return ok({ nodes: [...holds].filter((id) => inPlace.has(id)), general: general && place.kind === "all" });
+}
+
 export const listTree = defineTool({
   name: "list_tree",
   description:
@@ -38,27 +102,20 @@ export const listTree = defineTool({
   input: z.strictObject({
     node: z.string().min(1).optional().describe("List only this node and what is below it: its id or path."),
     today: z.iso.date().optional().describe("The person's calendar day, to count what is overdue and due today."),
-    withMail: z.boolean().default(false).describe("Also count the unread mail of the accounts in reach."),
-    withContent: z
-      .strictObject({
-        from: z.iso.datetime({ offset: true }).describe("The week's start, an ISO date-time with its offset."),
-        to: z.iso.datetime({ offset: true }).describe("The week's end."),
-        fromDay: z.iso.date().describe("The person's first calendar day of the week."),
-        toDay: z.iso.date().describe("The person's last calendar day of the week (included)."),
-      })
-      .optional()
-      .describe("Also say which places have something to show besides their tasks: mail, notes, or the week's events."),
+    withMail: z.boolean().default(false).describe("Also say the accounts in reach, and the open tasks that wait for mail. Reads no mail."),
+    withNotes: z.boolean().default(false).describe("Also say which places hold a note."),
   }),
   output: z.object({
     nodes: z.array(treeNodeSchema),
     
     tasks: z.object({ overdue: z.number(), today: z.number() }).nullable(),
     
+    generalTasks: z.number(),
     
-    mail: z.object({ unread: z.number(), failures: z.array(mailFailureSchema) }).nullable().optional(),
     
+    mail: z.object({ accounts: z.array(reachedAccountSchema), waiting: z.array(waitingTaskSchema) }).nullable().optional(),
     
-    content: z.object({ nodes: z.array(z.string()), general: z.boolean() }).nullable().optional(),
+    notes: z.object({ nodes: z.array(z.string()), general: z.boolean() }).nullable().optional(),
   }),
   async run(ctx, input) {
     const loaded = await loadScope(ctx);
@@ -106,63 +163,20 @@ export const listTree = defineTool({
           { overdue: 0, today: 0 },
         )
       : null;
-    let mail: { unread: number; failures: MailFailure[] } | null = null;
-    if (input.withMail) {
-      const reached = await accountsOf(ctx, scope, place);
-      if (isError(reached)) return reached;
-      const count = await unreadMail(ctx, reached.accounts);
-      if (isError(count)) return count;
-      mail = { unread: count.unread, failures: count.failures };
-    }
-    if (!input.withContent) return ok({ nodes, tasks, mail, content: null });
-    const shown = await contentOf(ctx, scope, place, input.withContent);
-    if (isError(shown)) return shown;
-    return ok({ nodes, tasks, mail, content: { nodes: shown.nodes, general: shown.general } });
+    const generalTasks = read.rows.filter((row) => row.node_id === null && shownAsRow(row)).length;
+    const mail = input.withMail ? await mailIndexOf(ctx, scope, place, read.rows) : null;
+    if (mail && isError(mail)) return mail;
+    const notes = input.withNotes ? await notePlacesOf(ctx, scope, place) : null;
+    if (notes && isError(notes)) return notes;
+    return ok({
+      nodes,
+      tasks,
+      generalTasks,
+      mail: mail ? { accounts: mail.accounts, waiting: mail.waiting } : null,
+      notes: notes ? { nodes: notes.nodes, general: notes.general } : null,
+    });
   },
 });
-
-
-
-
-async function contentOf(ctx: Parameters<typeof accountsOf>[0], scope: Scope, place: ReadPlace, week: { from: string; to: string; fromDay: string; toDay: string }) {
-  const shows = new Set<string>();
-  let general = false;
-  const up = (id: string | null) => {
-    for (let cursor = id ? scope.all.get(id) : undefined, depth = 0; cursor && depth < 64; depth++) {
-      shows.add(cursor.id);
-      cursor = cursor.parentId ? scope.all.get(cursor.parentId) : undefined;
-    }
-  };
-  const down = (id: string | null) => {
-    if (id && scope.all.has(id)) for (const entry of subtree(scope.all, id)) shows.add(entry);
-  };
-  const reached = await accountsOf(ctx, scope, place);
-  if (isError(reached)) return reached;
-  const [mail, notes, events] = await Promise.all([
-    
-    mailOf(ctx).list({ db: ctx.db, ownerId: ctx.ownerId, accounts: reached.accounts, limit: 1 }),
-    ctx.db.from("items").select("node_id, owner_id").eq("owner_id", ctx.ownerId).eq("type", "note").is("deleted_at", null),
-    browseEvents.run(ctx, { ...week, node: place.kind === "node" ? place.node.id : undefined }),
-  ]);
-  if (notes.error) return dbFail("reading where the notes are", notes.error);
-  if (isError(events)) return events;
-  const withMail = new Set(mail.messages.map((message) => message.accountId));
-  for (const account of reached.accounts) if (withMail.has(account.id)) down(account.nodeId);
-  for (const note of notes.data) {
-    if (!reaches(scope, ctx.ownerId, note)) continue;
-    if (note.node_id === null) general = true;
-    else up(note.node_id);
-  }
-  for (const event of events.events) {
-    if (event.origin === "local") {
-      if (event.nodeId === null && event.linkedNodeIds.length === 0) general = scope.general || general;
-      up(event.nodeId);
-      for (const id of event.linkedNodeIds) up(id);
-    } else down(event.fromNodeId || null);
-  }
-  const inPlace = new Set(reachOf(scope, place).nodeIds);
-  return ok({ nodes: [...shows].filter((id) => inPlace.has(id)), general: general && place.kind === "all" });
-}
 
 export const getOverview = defineTool({
   name: "get_overview",

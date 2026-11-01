@@ -1,6 +1,7 @@
 "use client";
 
-import { Select } from "@/components/ui/select";
+import type { ReactNode } from "react";
+import { Select, type SelectOption } from "@/components/ui/select";
 import { count } from "@/lib/count";
 import type { TreeNode } from "./client-api";
 
@@ -37,6 +38,34 @@ export function lineOf(tree: TreeNode[] | null, nodeId: string): Set<string> {
 }
 
 
+export type ShownEvent = { origin: "google" | "local"; nodeId: string | null; linkedNodeIds: string[]; fromNodeId: string };
+
+
+
+
+export function placesThatShow(tree: TreeNode[] | null, accounts: Array<{ nodeIds: string[] }>, notes: { nodes: string[]; general: boolean } | null, events: ShownEvent[]): Set<string> {
+  const shows = new Set<string>(notes?.nodes ?? []);
+  if (notes?.general) shows.add(GENERAL);
+  const down = (id: string) => {
+    for (const entry of branchOf(tree, id)) shows.add(entry);
+  };
+  const up = (id: string) => {
+    for (const entry of lineOf(tree, id)) shows.add(entry);
+  };
+  for (const account of accounts) account.nodeIds.forEach(down);
+  for (const event of events) {
+    if (event.origin === "google") {
+      if (event.fromNodeId) down(event.fromNodeId);
+      continue;
+    }
+    if (event.nodeId === null && event.linkedNodeIds.length === 0) shows.add(GENERAL);
+    if (event.nodeId) up(event.nodeId);
+    event.linkedNodeIds.forEach(up);
+  }
+  return shows;
+}
+
+
 export function placeFromUrl(value: string | null, tree: TreeNode[] | null): string {
   if (!value || value === ALL) return ALL;
   if (value === GENERAL) return GENERAL;
@@ -53,59 +82,73 @@ export const MESSAGES: FilterUnit = { one: "message", many: "messages" };
 export const ITEMS: FilterUnit = { one: "item", many: "items" };
 export const EVENTS: FilterUnit = { one: "event", many: "events" };
 
-export const withCount = (label: string, n: number, unit: FilterUnit) => `${label} (${count(n, unit.one, unit.many)})`;
+export const whatItBrings = (n: number, unit: FilterUnit) => count(n, unit.one, unit.many);
 
-export function PlaceFilter({
-  value,
-  tree,
-  counts,
-  unit,
-  onChange,
-  noGeneral = false,
-  shows,
-}: {
+type PlaceOptions = {
   value: string;
   tree: TreeNode[] | null;
   
   counts: Map<string, number>;
   
   unit: FilterUnit;
-  onChange: (value: string) => void;
   
   noGeneral?: boolean;
   
   
   shows?: Set<string>;
-}) {
-  const options = [
-    { value: ALL, label: withCount("All places", counts.get(ALL) ?? 0, unit) },
-    ...(!noGeneral && ((counts.get(GENERAL) ?? 0) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [{ value: GENERAL, label: withCount("General", counts.get(GENERAL) ?? 0, unit) }] : []),
-    ...(tree ?? [])
-      .filter((node) => (counts.get(node.id) ?? 0) > 0 || shows?.has(node.id) || node.id === value)
-      .map((node) => ({ value: node.id, label: withCount(node.path, counts.get(node.id) ?? 0, unit) })),
+};
+
+
+export function placeOptions({ value, tree, counts, unit, noGeneral = false, shows }: PlaceOptions): SelectOption[] {
+  const option = (id: string, label: string) => ({ value: id, label, detail: whatItBrings(counts.get(id) ?? 0, unit) });
+  return [
+    option(ALL, "All places"),
+    ...(!noGeneral && ((counts.get(GENERAL) ?? 0) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [option(GENERAL, "General")] : []),
+    ...(tree ?? []).filter((node) => (counts.get(node.id) ?? 0) > 0 || shows?.has(node.id) || node.id === value).map((node) => option(node.id, node.path)),
   ];
-  return <Select label="Place" value={value} options={options} onChange={onChange} />;
 }
 
-export function AccountFilter({
-  value,
-  accounts,
-  counts,
-  unit,
-  onChange,
-}: {
+
+function NamedFilter({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <div className="named filter">
+      <span className="t-label named-label" aria-hidden="true">
+        {name}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+export function PlaceFilter({ onChange, ...read }: PlaceOptions & { onChange: (value: string) => void }) {
+  return (
+    <NamedFilter name="Place">
+      <Select label="Place" value={read.value} options={placeOptions(read)} onChange={onChange} />
+    </NamedFilter>
+  );
+}
+
+type AccountOptions = {
   value: string;
   accounts: Array<{ id: string; email: string }>;
   counts: Map<string, number>;
   unit: FilterUnit;
-  onChange: (value: string) => void;
-}) {
+};
+
+export function accountOptions({ value, accounts, counts, unit }: AccountOptions): SelectOption[] {
   const offered = accounts.filter((account) => (counts.get(account.id) ?? 0) > 0 || account.id === value);
+  if (offered.length === 0) return [];
+  const detail = (id: string) => whatItBrings(counts.get(id) ?? 0, unit);
+  return [{ value: ALL, label: "All accounts", detail: detail(ALL) }, ...offered.map((account) => ({ value: account.id, label: account.email, detail: detail(account.id) }))];
+}
+
+export function AccountFilter({ onChange, ...read }: AccountOptions & { onChange: (value: string) => void }) {
+  const options = accountOptions(read);
   
-  if (offered.length === 0) return null;
-  const options = [
-    { value: ALL, label: withCount("All accounts", counts.get(ALL) ?? 0, unit) },
-    ...offered.map((account) => ({ value: account.id, label: withCount(account.email, counts.get(account.id) ?? 0, unit) })),
-  ];
-  return <Select label="Account" value={value} options={options} onChange={onChange} />;
+  if (options.length === 0) return null;
+  return (
+    <NamedFilter name="Account">
+      <Select label="Account" value={read.value} options={options} onChange={onChange} />
+    </NamedFilter>
+  );
 }

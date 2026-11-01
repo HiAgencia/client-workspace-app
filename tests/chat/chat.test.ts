@@ -1,7 +1,8 @@
-import { readUIMessageStream, type UIMessage, type UIMessageChunk } from "ai";
+import { readUIMessageStream, simulateReadableStream, type UIMessage, type UIMessageChunk } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runChat, systemPrompt } from "@/lib/chat/run";
+import { chatTools } from "@/lib/chat/tools";
 import { simulatedModel } from "@/lib/chat/simulated";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { dailyCap, takeUsage, takeUsageFor } from "@/lib/chat/usage";
@@ -9,6 +10,7 @@ import { encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
 import { demoMailSource, holdsEveryWord, type MailMessage, type MailSource } from "@/lib/mail/source";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
+import { chatTurn } from "../support/chat-turn";
 import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
 
@@ -162,10 +164,10 @@ describe("the workspace's own chat, with no node open", () => {
     expect(task.ok).toBe(true);
     expect((await callTool("set_task_mail", withMail, { task: task.item.id, words: "Bayside Bank" })).ok).toBe(true);
 
-    const { message } = await drain(await runChat({ ctx: withMail, model: simulatedModel(), messages: ask("Did anything arrive for my tasks?"), timeZone: "UTC" }));
-    const read = message?.parts.find((part) => part.type === "tool-list_task_replies") as { output: { ok: boolean; replies: Array<{ id: string }> } } | undefined;
+    const message = await chatTurn({ ctx: withMail, model: simulatedModel(), messages: ask("Did anything arrive for my tasks?") });
+    const read = message.parts.find((part) => part.type === "tool-list_task_replies") as { output: { ok: boolean; replies: Array<{ id: string }> } } | undefined;
     expect(read?.output).toMatchObject({ ok: true, replies: [{ id: "transfer" }] });
-    const answer = message?.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
+    const answer = message.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
     expect(answer).toContain('"Wait for the transfer": 1 possible reply, the latest "Transfer received" from Bayside Bank.');
     
     const after = await user!.client.from("items").select("status").eq("id", task.item.id).single();
@@ -199,6 +201,30 @@ describe("the workspace's own chat, with no node open", () => {
   });
 });
 
+describe("a turn that reads the mail", () => {
+  it("publishes the mail reads with nothing to run on the server, and every other tool with its run", () => {
+    const published = chatTools(ctx());
+    for (const name of ["list_mail", "count_unread_mail", "search_mail", "list_task_replies"]) expect(published[name].execute).toBeUndefined();
+    for (const name of ["create_task", "search_items", "get_tasks", "list_tree"]) expect(published[name].execute).toBeTypeOf("function");
+  });
+
+  it("stops at a mail read with its call left open, and the turn's first request reads no mail", async () => {
+    const asking = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "tool-call", toolCallId: "read-1", toolName: "list_mail", input: "{}" },
+            { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage: { inputTokens: { total: 0, noCache: 0, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 0, text: 0, reasoning: undefined } } },
+          ],
+        }),
+      }),
+    });
+    let stored: UIMessage | undefined;
+    await drain(await runChat({ ctx: ctx(), model: asking, messages: ask("Read my mail"), timeZone: "UTC", onEnd: ({ responseMessage }) => void (stored = responseMessage) }));
+    expect(stored?.parts.find((part) => part.type === "tool-list_mail")).toMatchObject({ state: "input-available", toolCallId: "read-1" });
+  });
+});
+
 describe("the conversation the model reads", () => {
   it("is the node's latest messages in the order they were written, built on the server", async () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({
@@ -220,6 +246,12 @@ describe("the conversation the model reads", () => {
     ]);
     expect(messages[0].parts[0]).toEqual({ type: "text", text: "[an attachment was sent here: shot.png]" });
     expect(messages[1].parts[0]).toEqual(image);
+    
+    const goingOn = withoutEarlierFiles([
+      { id: "1", role: "user", parts: [image, { type: "text", text: "now" }] },
+      { id: "2", role: "assistant", parts: [{ type: "text", text: "reading" }] },
+    ]);
+    expect(goingOn[0].parts[0]).toEqual(image);
   });
 });
 

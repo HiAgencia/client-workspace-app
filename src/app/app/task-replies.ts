@@ -1,61 +1,55 @@
 import type { Day } from "@/lib/dates";
 import type { MailRow } from "@/lib/tools/mail-schema";
-import type { TaskRow, TasksView } from "@/lib/tools/tasks";
 import { useBoxRead, type BoxRead } from "./boxes";
-import { get, tool, type TreeNode } from "./client-api";
+import { tool, type TreeNode } from "./client-api";
+import { accountsSeenFrom, type MailFailureRow } from "./mail-store";
+import { branchOf } from "./place-filters";
+import { useWorkspace, type WaitingRead } from "./workspace";
+
+export { accountsSeenFrom };
 
 
 
 
 
-type Account = { id: string; email: string; nodeIds: string[] };
-type Failure = { accountId: string; accountEmail: string; reason: string };
 
-export type WaitingTask = Pick<TaskRow, "id" | "title" | "nodeId" | "path" | "color"> & { waitsFor: string };
+export type WaitingTask = Omit<WaitingRead, "accountId">;
 
-export type TaskReplies = { task: WaitingTask; replies: MailRow[]; more: string[]; failures: Failure[] };
-
-
-export function accountsSeenFrom(tree: TreeNode[] | null, accounts: Account[], nodeId: string | null): string[] {
-  if (nodeId === null) return accounts.map((account) => account.id);
-  const line = new Set<string>();
-  const byId = new Map((tree ?? []).map((node) => [node.id, node]));
-  for (let node = byId.get(nodeId); node && !line.has(node.id); node = node.parentId ? byId.get(node.parentId) : undefined) line.add(node.id);
-  return accounts.filter((account) => account.nodeIds.some((id) => line.has(id))).map((account) => account.id);
-}
+export type TaskReplies = { task: WaitingTask; replies: MailRow[]; more: string[]; failures: MailFailureRow[] };
 
 const newestFirst = (a: MailRow, b: MailRow) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0);
 
 
 
+function waitingIn(waiting: WaitingRead[], tree: TreeNode[], place: Record<string, unknown>): WaitingRead[] {
+  if (!("node" in place)) return waiting;
+  if (place.node === null) return waiting.filter((row) => row.nodeId === null);
+  const branch = branchOf(tree, place.node as string);
+  return waiting.filter((row) => row.nodeId !== null && branch.has(row.nodeId));
+}
+
+
+
 export function useTaskReplies(place: Record<string, unknown>, today: Day | null, tree: TreeNode[] | null, perAccount: number): BoxRead<{ tasks: TaskReplies[] }> {
-  const key = `task-replies:${JSON.stringify(place)}:${today}:${perAccount}:${tree ? "tree" : "no-tree"}`;
+  const { mailAccounts, mailWaiting } = useWorkspace();
+  const known = tree && today && mailAccounts && mailWaiting ? { tree, accounts: mailAccounts, waiting: waitingIn(mailWaiting, tree, place) } : null;
+  
+  
+  
+  const reads = (known?.waiting ?? []).flatMap((row) => {
+    const seen = accountsSeenFrom(known!.tree, known!.accounts, row.nodeId);
+    return (row.accountId ? seen.filter((account) => account === row.accountId) : seen).map((account) => ({ row, account }));
+  });
+  const key = `task-replies:${perAccount}:${known ? JSON.stringify([known.waiting.map((row) => [row.id, row.waitsFor]), reads.map((read) => read.account)]) : "off"}`;
   return useBoxRead<{ tasks: TaskReplies[] }>(
-    tree && today
+    known
       ? async () => {
-          const [view, listed] = await Promise.all([tool<TasksView>("get_tasks", { ...place, today }), get<{ accounts: Account[] }>("/api/accounts")]);
-          if (!view.ok) return view;
-          if (!listed.ok) return listed;
-          const { groups } = view;
-          const rows = [...groups.overdue.tasks, ...groups.today.tasks, ...groups.upcoming.days.flatMap((day) => day.tasks), ...groups.noDate.tasks];
-          const waiting = rows.filter((row) => row.mail !== null);
-          const emails = new Map(listed.accounts.map((account) => [account.id, account.email]));
-          
-          
-          
-          const reads = waiting.flatMap((row) => {
-            const seen = accountsSeenFrom(tree, listed.accounts, row.nodeId);
-            const fixed = row.mail!.accountId;
-            return (fixed ? seen.filter((account) => account === fixed) : seen).map((account) => ({ row, account }));
-          });
+          const emails = new Map(known.accounts.map((account) => [account.id, account.email]));
           const answers = await Promise.all(
-            reads.map(({ row, account }) => tool<{ replies: MailRow[]; more: string[]; failures: Failure[] }>("list_task_replies", { task: row.id, account, limit: perAccount })),
+            reads.map(({ row, account }) => tool<{ replies: MailRow[]; more: string[]; failures: MailFailureRow[] }>("list_task_replies", { task: row.id, account, limit: perAccount })),
           );
           const byTask = new Map<string, TaskReplies>(
-            waiting.map((row) => [
-              row.id,
-              { task: { id: row.id, title: row.title, nodeId: row.nodeId, path: row.path, color: row.color, waitsFor: row.mail!.waitsFor }, replies: [], more: [], failures: [] },
-            ]),
+            known.waiting.map((row) => [row.id, { task: { id: row.id, title: row.title, nodeId: row.nodeId, path: row.path, color: row.color, waitsFor: row.waitsFor }, replies: [], more: [], failures: [] }]),
           );
           answers.forEach((answer, index) => {
             const { row, account } = reads[index];

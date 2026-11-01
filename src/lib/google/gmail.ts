@@ -281,6 +281,11 @@ function failureOf(account: MailAccount, reason: string): MailFailure {
 }
 
 
+function partOf(account: MailAccount, reason: string): MailFailure {
+  return { ...failureOf(account, reason), partial: true };
+}
+
+
 function because(account: MailAccount, error: unknown): MailFailure {
   if (error instanceof GoogleError && error.revoked) return failureOf(account, REVOKED);
   const reason = error instanceof Error ? error.message : "the mail could not be read";
@@ -392,7 +397,7 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     const statuses = new Map<string, number>();
     for (const status of lost) statuses.set(status, (statuses.get(status) ?? 0) + 1);
     console.error(`gmail: account ${account.id}: ${lost.length} of ${listed} messages could not be read (${[...statuses].map(([status, times]) => `${status} × ${times}`).join(", ")})`);
-    return { messages, failure: failureOf(account, `${lost.length} of ${count(listed, "message", "messages")} could not be read`) };
+    return { messages, failure: partOf(account, `${lost.length} of ${count(listed, "message", "messages")} could not be read`) };
   }
 
   const isDemo = (account: MailAccount) => account.isDemo;
@@ -483,7 +488,7 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
               return next;
             });
             
-            return { ids, failure: pageToken ? failureOf(account, `only the latest ${count(ids.length, "unread message", "unread messages")} were counted`) : null };
+            return { ids, failure: pageToken ? partOf(account, `only the latest ${count(ids.length, "unread message", "unread messages")} were counted`) : null };
           } catch (error) {
             
             return { ids, failure: because(account, error) };

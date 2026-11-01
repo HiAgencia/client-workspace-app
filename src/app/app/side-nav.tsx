@@ -11,6 +11,7 @@ import { count } from "@/lib/count";
 import { PRODUCT_NAME } from "@/lib/product";
 import { post, type TreeNode } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
+import { figureText } from "./mail-store";
 import { openQuickAdd } from "./quick-add-bus";
 import { useWorkspace } from "./workspace";
 
@@ -21,7 +22,8 @@ import { useWorkspace } from "./workspace";
 
 export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: boolean; onLeave?: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
-  const { taskCounts, mailUnread, openPalette, who } = useWorkspace();
+  const { taskCounts, mailFigure, openPalette, who } = useWorkspace();
+  const mailNumber = mailFigure ? figureText(mailFigure) : null;
   const current = useCurrentNode();
   const mac = useMac();
   const main = useRef<HTMLDivElement>(null);
@@ -98,8 +100,13 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
               {}
               <Link href="/app/mail" className="side-link" aria-current={here("/app/mail")}>
                 <span className="side-link-name">Mail</span>
-                {mailUnread !== null && mailUnread > 0 && <Count value={mailUnread} spoken={`${mailUnread} unread`} />}
+                {mailNumber && <Count value={mailNumber.shown} spoken={mailNumber.spoken} />}
               </Link>
+              {mailFigure?.why && (
+                <p className="t-meta" data-mail-partial title={mailFigure.why}>
+                  {mailFigure.why}
+                </p>
+              )}
             </li>
           </ul>
           <NodeGroup kind="client" current={current} ids={ids} />
@@ -145,7 +152,7 @@ export function useMac(): boolean {
 
 
 
-function Count({ value, unit, spoken }: { value: number; unit?: string; spoken: string }) {
+function Count({ value, unit, spoken }: { value: number | string; unit?: string; spoken: string }) {
   return (
     <span className="side-count">
       <span aria-hidden="true">

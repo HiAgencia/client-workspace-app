@@ -4,19 +4,24 @@ import { Link } from "@/components/ui/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, ViewTransition, type ReactNode } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { count } from "@/lib/count";
 import { LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { mailFailureText } from "@/lib/mail/failure-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
-import { get, post, tool, type Item, type TreeNode } from "../client-api";
+import { useMailRead } from "../box-kinds";
+import { post, tool, type Item, type TreeNode } from "../client-api";
+import { accountsSeenFrom } from "../mail-store";
 import { PageHeader } from "../page-header";
-import { AccountFilter, ALL, branchOf, lineOf, MESSAGES, PlaceFilter, placeFromUrl } from "../place-filters";
+import { AccountFilter, ALL, branchOf, MESSAGES, PlaceFilter, placeFromUrl } from "../place-filters";
 import { TaskOutcome, useCompleteTask } from "../task-outcome";
 import { useTaskReplies, type TaskReplies } from "../task-replies";
 import { openTaskDetail, PlaceName, type TaskData } from "../task-row";
 import { useChatScope, useWorkspace } from "../workspace";
+import { tasksMatching } from "./link-task";
 import { MailViewer } from "./mail-viewer";
 import { subjectOf } from "./subject";
 import "../../styles/mail.css";
@@ -26,14 +31,6 @@ import "../../styles/mail.css";
 
 
 
-type Group = { count: number; messages: MailRow[] };
-type MailAnswer = {
-  accounts: Array<{ id: string; email: string; isDemo: boolean; status: string; nodeId: string | null }>;
-  groups: { forTasks: Group; unread: Group; earlier: Group };
-  unread: number;
-  failures: Array<{ accountId: string; accountEmail: string; reason: string }>;
-};
-type Account = { id: string; email: string; isDemo: boolean; nodeIds: string[] };
 type TasksAnswer = { groups: { overdue: { tasks: TaskData[] }; today: { tasks: TaskData[] }; upcoming: { days: Array<{ tasks: TaskData[] }> }; noDate: { tasks: TaskData[] } } };
 
 const GROUPS = [
@@ -87,15 +84,16 @@ function shortWhen(iso: string): string {
 function Mail() {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
-  const { version, tree, refreshTree } = useWorkspace();
+  const { version, tree, mailAccounts, mailStore } = useWorkspace();
   useChatScope(null);
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const place = placeFromUrl(params.get("place"), tree);
-  const [mail, setMail] = useState<MailAnswer | null>(null);
-  const [accounts, setAccounts] = useState<Account[] | null>(null);
-  const [readError, setReadError] = useState<string | null>(null);
+  
+  const read = useMailRead({ kind: "all" }, null);
+  const mail = read.data;
+  const readError = read.error;
   const [tasks, setTasks] = useState<TaskData[]>([]);
   
   
@@ -127,23 +125,19 @@ function Mail() {
     [params, pathname, router],
   );
 
+  
+  const [versionSeen, setVersionSeen] = useState(version);
+  if (versionSeen !== version) {
+    setVersionSeen(version);
+    setOpened(new Set());
+  }
+
   useEffect(() => {
     let live = true;
-    void Promise.all([
-      tool<MailAnswer>("list_mail", { limit: 50 }),
-      get<{ accounts: Account[] }>("/api/accounts"),
-      tool<TasksAnswer>("get_tasks", { today: today() }),
-    ]).then(([answer, accountsAnswer, tasksAnswer]) => {
-      if (!live) return;
-      if (!answer.ok) return setReadError(answer.message);
-      setReadError(null);
-      setMail(answer);
-      setOpened(new Set());
-      if (accountsAnswer.ok) setAccounts(accountsAnswer.accounts);
-      if (tasksAnswer.ok) {
-        const groups = tasksAnswer.groups;
-        setTasks([...groups.overdue.tasks, ...groups.today.tasks, ...groups.upcoming.days.flatMap((day) => day.tasks), ...groups.noDate.tasks]);
-      }
+    void tool<TasksAnswer>("get_tasks", { today: today() }).then((tasksAnswer) => {
+      if (!live || !tasksAnswer.ok) return;
+      const groups = tasksAnswer.groups;
+      setTasks([...groups.overdue.tasks, ...groups.today.tasks, ...groups.upcoming.days.flatMap((day) => day.tasks), ...groups.noDate.tasks]);
     });
     return () => {
       live = false;
@@ -153,25 +147,19 @@ function Mail() {
   
   
   const { inPlace, seenFrom } = useMemo(() => {
-    const byId = new Map((accounts ?? []).map((account) => [account.id, account]));
     const branches = new Map((tree ?? []).map((node) => [node.id, branchOf(tree, node.id)]));
-    const lines = new Map((tree ?? []).map((node) => [node.id, lineOf(tree, node.id)]));
-    
-    const seen = (accountId: string, where: string, fallback: string[] = []) => {
-      if (where === ALL) return true;
-      const line = lines.get(where);
-      return Boolean(line) && (byId.get(accountId)?.nodeIds ?? fallback).some((id) => line!.has(id));
-    };
+    const sees = new Map((tree ?? []).map((node) => [node.id, new Set(accountsSeenFrom(tree, mailAccounts ?? [], node.id))]));
+    const seen = (accountId: string, where: string) => where === ALL || Boolean(sees.get(where)?.has(accountId));
     return {
       inPlace: (row: MailRow, where: string) => {
         if (where === ALL) return true;
         const branch = branches.get(where);
         if (branch && row.nodes.some((node) => branch.has(node.id))) return true;
-        return seen(row.accountId, where, row.place ? [row.place.nodeId] : []);
+        return seen(row.accountId, where);
       },
       seenFrom: seen,
     };
-  }, [accounts, tree]);
+  }, [mailAccounts, tree]);
 
   const all = useMemo(
     () =>
@@ -213,12 +201,20 @@ function Mail() {
   const current = selected ? (shown.find((row) => keyOf(row) === selected) ?? all.find((row) => keyOf(row) === selected) ?? null) : null;
   const index = current ? shown.findIndex((row) => keyOf(row) === keyOf(current)) : -1;
 
+  
+  const countAgain = useCallback(
+    (accountId: string) => {
+      const account = mailAccounts?.find((entry) => entry.id === accountId);
+      if (account) mailStore.recount(account);
+    },
+    [mailAccounts, mailStore],
+  );
+
   function open(row: MailRow) {
     set({ message: keyOf(row) });
     if (row.unread && !opened.has(keyOf(row))) {
       setOpened((now) => new Set(now).add(keyOf(row)));
-      
-      void post("/api/mail/opened", { account: row.accountId, id: row.id }).then(() => void refreshTree());
+      void post("/api/mail/opened", { account: row.accountId, id: row.id }).then(() => countAgain(row.accountId));
     }
   }
 
@@ -229,9 +225,9 @@ function Mail() {
     const key = keyOf(landed);
     void post("/api/mail/opened", { account: landed.accountId, id: landed.id }).then(() => {
       setOpened((now) => new Set(now).add(key));
-      void refreshTree();
+      countAgain(landed.accountId);
     });
-  }, [landed, refreshTree]);
+  }, [landed, countAgain]);
 
   if (!mounted) return null;
   const noAccounts = mail !== null && mail.accounts.length === 0;
@@ -263,7 +259,13 @@ function Mail() {
       <div className="page mail-page">
         <PageHeader
           title="Mail"
-          count={!mail ? "Reading the mail…" : noAccounts ? "No account connected" : `${unread} unread, ${mail.groups.earlier.count + mail.groups.unread.count + mail.groups.forTasks.count} in all`}
+          count={
+            !mail
+              ? "Reading the mail…"
+              : noAccounts
+                ? "No account connected"
+                : `${unread} unread, ${mail.groups.earlier.count + mail.groups.unread.count + mail.groups.forTasks.count} in all${mail.waiting > 0 ? `, ${count(mail.waiting, "account", "accounts")} still reading` : ""}`
+          }
           filters={
             mail && !noAccounts ? (
               <>
@@ -286,8 +288,8 @@ function Mail() {
           </p>
         )}
         {failures.map((failure) => (
-          <p key={failure.accountId} role="alert" className="inline-note" data-tone="alert" data-mail-failure>
-            The mail of {failure.accountEmail} could not be read: {failure.reason}
+          <p key={failure.accountId} role={failure.partial ? "status" : "alert"} className="inline-note" data-tone={failure.partial ? undefined : "alert"} data-mail-failure>
+            {mailFailureText(failure)}
           </p>
         ))}
 
@@ -303,8 +305,8 @@ function Mail() {
           </section>
         ) : (
           <div className="mail-layout" data-reading={current ? "" : undefined}>
-            <section className="card mail-list" aria-label="Messages" aria-busy={!mail}>
-              {!mail ? (
+            <section className="card mail-list" aria-label="Messages" aria-busy={!mail || mail.waiting > 0}>
+              {!mail || (mail.waiting > 0 && shown.length === 0) ? (
                 <div className="mail-list-wait" role="status" aria-label="Reading the mail">
                   {Array.from({ length: 5 }, (_, i) => (
                     <span key={i} className="mail-row-wait">
@@ -406,10 +408,14 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
   const closeTask = useCompleteTask();
   
   const [answering, setAnswering] = useState<{ message: string; task: { id: string; title: string } } | null>(null);
+  
+  const [linking, setLinking] = useState<string | null>(null);
   const actions = useRef<HTMLDivElement>(null);
   const outcome = useRef<HTMLDivElement>(null);
+  const finder = useRef<HTMLDivElement>(null);
   
   const picked = useRef(false);
+  const findingTask = useRef(false);
   const chosen = answering?.message === keyOf(row) ? answering.task : null;
   const candidates = tasks.filter((task) => task.status === "open" && !row.tasks.some((linked) => linked.id === task.id));
   const nodes = (tree ?? []).filter((node) => !row.nodes.some((linked) => linked.id === node.id));
@@ -445,13 +451,14 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
 
   const entries: MenuEntry[] = [
     {
-      kind: "submenu",
-      label: "A task",
-      entries: candidates.length
-        ? candidates
-            .slice(0, 40)
-            .map((task): MenuEntry => ({ kind: "action", id: task.id, label: inlinePlain(task.title), detail: task.path ?? "General", onSelect: () => void link({ task: task.id }, `“${inlinePlain(task.title)}”`) }))
-        : [{ kind: "action", label: "No open task to link", disabled: true, onSelect: () => undefined }],
+      kind: "action",
+      label: "A task…",
+      disabled: candidates.length === 0,
+      detail: candidates.length === 0 ? "No open task to link" : undefined,
+      onSelect: () => {
+        findingTask.current = true;
+        setLinking(keyOf(row));
+      },
     },
     {
       kind: "submenu",
@@ -491,7 +498,17 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
         <Button size="sm" variant="primary" onClick={() => void createTask()}>
           Create task
         </Button>
-        <Menu label="Link to…" name={`Link to… “${row.subject}”`} entries={entries} className="mail-link-menu" />
+        <Menu
+          label="Link to…"
+          name={`Link to… “${row.subject}”`}
+          entries={entries}
+          className="mail-link-menu"
+          finalFocus={() => {
+            const target = findingTask.current ? finder.current?.querySelector<HTMLElement>("input") : null;
+            findingTask.current = false;
+            return target;
+          }}
+        />
         <Menu
           label="Answers a task…"
           name={`Answers a task… “${row.subject}”`}
@@ -517,6 +534,23 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
         <p id="mail-gmail-why" className="t-help mail-why">
           A sample account has no Gmail to open: its messages live only in this demo.
         </p>
+      )}
+      {linking === keyOf(row) && (
+        <div ref={finder}>
+          <TaskFinder
+            key={keyOf(row)}
+            tasks={candidates}
+            onPick={(task) => {
+              setLinking(null);
+              void link({ task: task.id }, `“${inlinePlain(task.title)}”`);
+              actions.current?.querySelector<HTMLElement>(".mail-link-menu")?.focus();
+            }}
+            onCancel={() => {
+              setLinking(null);
+              requestAnimationFrame(() => actions.current?.querySelector<HTMLElement>(".mail-link-menu")?.focus());
+            }}
+          />
+        </div>
       )}
       {chosen && (
         <div ref={outcome}>
@@ -556,6 +590,55 @@ function MailActions({ row, tree, tasks, replies, isDemo }: { row: MailRow; tree
         </ul>
       )}
     </>
+  );
+}
+
+
+const FOUND_SHOWN = 12;
+
+
+function TaskFinder({ tasks, onPick, onCancel }: { tasks: TaskData[]; onPick: (task: TaskData) => void; onCancel: () => void }) {
+  const [query, setQuery] = useState("");
+  const found = useMemo(() => tasksMatching(tasks, query), [tasks, query]);
+  const shown = found.slice(0, FOUND_SHOWN);
+  const rest = found.length - shown.length;
+  return (
+    <div className="stack" role="group" aria-label="Link the message to a task" data-task-finder>
+      <Field
+        autoFocus
+        aria-label="Find the task by its title or its place"
+        placeholder="Find the task by its title or its place"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            onCancel();
+          }
+        }}
+      />
+      {shown.length > 0 ? (
+        <ul className="mail-linked" aria-label="Open tasks that match">
+          {shown.map((task) => (
+            <li key={task.id} className="mail-linked-row">
+              <button type="button" className="mail-linked-open" onClick={() => onPick(task)}>
+                <span className="t-meta">{task.path ?? "General"}</span>
+                <span className="t-value">{inlinePlain(task.title)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="t-help">No open task matches “{query.trim()}”.</p>
+      )}
+      <p className="t-meta" role="status">
+        {rest > 0 ? `${count(found.length, "open task matches", "open tasks match")}: type more of its title to reach the other ${rest}.` : count(found.length, "open task matches", "open tasks match")}
+      </p>
+      <Button size="sm" onClick={onCancel}>
+        Cancel
+      </Button>
+    </div>
   );
 }
 

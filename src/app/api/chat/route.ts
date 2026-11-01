@@ -1,6 +1,7 @@
 import { createUIMessageStreamResponse, validateUIMessages, type UIMessage } from "ai";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
+import { continuedTurn } from "@/lib/chat/browser-reads";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { AI_OFF_MESSAGE, chatModel, chatProvider } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
@@ -51,6 +52,8 @@ export async function GET(request: NextRequest) {
 
 
 
+
+
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
   const provider = chatProvider();
@@ -80,15 +83,18 @@ export async function POST(request: Request) {
   } catch {
     return problem(422, "the message is not in the expected shape");
   }
-  if (message.role !== "user") return problem(422, "only the person's message is sent");
+  const continuing = message.role === "assistant";
+  if (!continuing && message.role !== "user") return problem(422, "only the person's message is sent");
   if (message.parts.filter((part) => part.type === "file").length > 1) return problem(422, "attach one image per message");
 
-  const taken = await takeUsageFor(serviceClient(), user, "chat_message");
-  if (!taken.allowed) {
-    if (taken.reason === "error") return problem(503, "the chat is unavailable right now: try again");
-    return json({ ok: false, code: "cap", message: capMessage(taken.reason, "chat_message") }, 429, {
-      "Retry-After": String(secondsToNextDay()),
-    });
+  if (!continuing) {
+    const taken = await takeUsageFor(serviceClient(), user, "chat_message");
+    if (!taken.allowed) {
+      if (taken.reason === "error") return problem(503, "the chat is unavailable right now: try again");
+      return json({ ok: false, code: "cap", message: capMessage(taken.reason, "chat_message") }, 429, {
+        "Retry-After": String(secondsToNextDay()),
+      });
+    }
   }
 
   let history: UIMessage[];
@@ -98,7 +104,10 @@ export async function POST(request: Request) {
     console.error("chat:", error instanceof Error ? error.message : error);
     return problem(500, "the conversation could not be read");
   }
-  const messages = withoutEarlierFiles([...history, message]);
+  const stored = continuing ? history.at(-1) : undefined;
+  const continued = continuing ? continuedTurn(stored, message) : null;
+  if (continuing && !continued) return problem(409, "this turn has no read waiting for that answer: send the message again");
+  const messages = withoutEarlierFiles(continued ? [...history.slice(0, -1), continued] : [...history, message]);
 
   const { model, providerOptions } = chatModel(provider);
   const stream = await runChat({
@@ -111,13 +120,18 @@ export async function POST(request: Request) {
     onEnd: async ({ responseMessage, isAborted }) => {
       
       if (isAborted) return;
-      const rows = [message, responseMessage].map((entry) => ({
+      const rows = (continued ? [responseMessage] : [message, responseMessage]).map((entry) => ({
         node_id: nodeId,
         role: entry.role,
         parts: JSON.parse(JSON.stringify(entry.parts)),
       }));
       const saved = await ctx.db.from("chat_messages").insert(rows);
-      if (saved.error) console.error("chat: storing the turn failed", saved.error.message);
+      if (saved.error) return console.error("chat: storing the turn failed", saved.error.message);
+      
+      if (stored) {
+        const gone = await ctx.db.from("chat_messages").delete().eq("id", stored.id);
+        if (gone.error) console.error("chat: replacing the turn failed", gone.error.message);
+      }
     },
   });
   return createUIMessageStreamResponse({ stream, headers: SESSION_HEADERS });

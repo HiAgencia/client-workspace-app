@@ -34,7 +34,9 @@ export type MailContent = MailMessage & { html: string | null; text: string | nu
 
 export type MailAccount = { id: string; email: string; isDemo: boolean; status: string; scopes: string[] };
 
-export const mailFailureSchema = z.object({ accountId: z.string(), accountEmail: z.string(), reason: z.string() });
+
+
+export const mailFailureSchema = z.object({ accountId: z.string(), accountEmail: z.string(), reason: z.string(), partial: z.boolean().optional() });
 export type MailFailure = z.infer<typeof mailFailureSchema>;
 
 export type MailSource = {

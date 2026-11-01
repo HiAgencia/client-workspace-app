@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Database } from "@/lib/db/types";
 import { withInitialCapital } from "@/lib/initial-capital";
-import { mailFailureSchema, waitWords, type MailFailure, type MailMessage } from "@/lib/mail/source";
+import { mailFailureSchema, waitWords, type MailMessage } from "@/lib/mail/source";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
 import { origin, reachableItem } from "./items";
@@ -179,8 +179,9 @@ export const listTaskReplies = defineTool({
   description:
     "The possible replies to what a task waits for: the messages that arrived since it started waiting, in the accounts " +
     "it waits in, whose sender or subject holds every word of what it waits for, newest first, without the ones the " +
-    "person ruled out. None of them is the answer until the person says so; read them to tell the person which one " +
-    "seems to answer, and close the task with complete_task only when the person asks.",
+    "person ruled out. One account per call: without account, over a task that waits in several, it reads none and toRead " +
+    "lists them, each read with its own call. None of them is the answer until the person says so; read them to tell the " +
+    "person which one seems to answer, and close the task with complete_task only when the person asks.",
   readOnly: true,
   input: z.strictObject({
     task: z.uuid(),
@@ -192,6 +193,8 @@ export const listTaskReplies = defineTool({
     task: waitingTaskSchema,
     
     accounts: z.array(z.object({ id: z.string(), email: z.string() })),
+    
+    toRead: z.array(z.string()),
     replies: z.array(mailRowSchema),
     
     more: z.array(z.string()),
@@ -212,26 +215,19 @@ export const listTaskReplies = defineTool({
     if (isError(reached)) return reached;
     const accounts = reached.accounts.map(({ id, email }) => ({ id, email }));
     const words = waitWords(wait.waitsFor);
-    if (words.length === 0 || reached.accounts.length === 0) return ok({ task, accounts, replies: [], more: [], next: {}, failures: [] });
-    const answers = await Promise.all(
-      reached.accounts.map((account) =>
-        mailOf(ctx).candidates({ db: ctx.db, ownerId: ctx.ownerId, account, since: wait.since, words, limit: input.limit, pageToken: input.pageToken }),
-      ),
-    );
+    const nothing = { replies: [], more: [], next: {}, failures: [] };
+    if (words.length === 0 || reached.accounts.length === 0) return ok({ task, accounts, toRead: [], ...nothing });
+    if (reached.accounts.length > 1) return ok({ task, accounts, toRead: accounts.map((account) => account.id), ...nothing });
+    const [account] = reached.accounts;
+    const answer = await mailOf(ctx).candidates({ db: ctx.db, ownerId: ctx.ownerId, account, since: wait.since, words, limit: input.limit, pageToken: input.pageToken });
     const ruledOut = new Set(wait.dismissed);
-    const messages: MailMessage[] = answers
-      .flatMap((answer) => answer.messages)
+    const messages = answer.messages
       .filter((message) => !ruledOut.has(replyKey(message.accountId, message.id)))
       .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
-    const failures: MailFailure[] = failuresByAccount(...answers.map((answer) => answer.failures));
-    const rows = await rowsOf(ctx, found.scope, messages, new Map(reached.accounts.map((account) => [account.id, account])));
+    const rows = await rowsOf(ctx, found.scope, messages, new Map([[account.id, account]]));
     if (isError(rows)) return rows;
-    const next: Record<string, string> = {};
-    reached.accounts.forEach((account, index) => {
-      const token = answers[index].nextPageToken;
-      if (token) next[account.id] = token;
-    });
-    return ok({ task, accounts, replies: rows.rows, more: Object.keys(next), next, failures });
+    const next: Record<string, string> = answer.nextPageToken ? { [account.id]: answer.nextPageToken } : {};
+    return ok({ task, accounts, toRead: [], replies: rows.rows, more: Object.keys(next), next, failures: failuresByAccount(answer.failures) });
   },
 });
 

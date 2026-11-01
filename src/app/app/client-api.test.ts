@@ -20,6 +20,41 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("a call narrowed to a node", () => {
+  it("goes on that node's address, and is not the same read as one over everything", async () => {
+    const fetched = answers(fine);
+    await Promise.all([tool("list_mail", { account: "a" }, "n1"), tool("list_mail", { account: "a" }), tool("list_mail", { account: "a" }, null)]);
+    const urls = (fetched.mock.calls as unknown as Array<[string]>).map(([url]) => url);
+    expect(urls).toEqual(["/api/tools/list_mail?scope=n1", "/api/tools/list_mail"]);
+  });
+});
+
+describe("two places of a page that read the same", () => {
+  it("cost one request while it is on its way, and the next read asks again", async () => {
+    const fetched = answers(fine);
+    const [one, two] = await Promise.all([tool("browse_events", { from: "a" }), tool("browse_events", { from: "a" })]);
+    expect([one, two]).toEqual([{ ok: true, value: 1 }, { ok: true, value: 1 }]);
+    expect(fetched).toHaveBeenCalledTimes(1);
+    await tool("browse_events", { from: "a" });
+    expect(fetched).toHaveBeenCalledTimes(2);
+  });
+
+  it("its twin: another input, or a read asked after a write, is another request", async () => {
+    const fetched = answers(fine);
+    await Promise.all([tool("browse_events", { from: "a" }), tool("browse_events", { from: "b" })]);
+    expect(fetched).toHaveBeenCalledTimes(2);
+    const again = answers(fine);
+    await Promise.all([tool("get_tasks", {}), tool("create_task", { title: "New" }), tool("get_tasks", {})]);
+    expect(again).toHaveBeenCalledTimes(3);
+  });
+
+  it("never joins two writes", async () => {
+    const fetched = answers(fine);
+    await Promise.all([tool("create_task", { title: "Same" }), tool("create_task", { title: "Same" })]);
+    expect(fetched).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("what the screens do with a cut request", () => {
   it("asks a read once more, and the person never hears of the cut", async () => {
     const fetched = answers(cut, fine);

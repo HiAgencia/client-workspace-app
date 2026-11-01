@@ -8,7 +8,7 @@ import { addDecision, addNote, createTask, deleteItem, listItems, searchItems, u
 import { createEvent, deleteEvent, linkNodeEvent, linkTaskEvent, unlinkNodeEvent, unlinkTaskEvent, updateEvent } from "./local-events";
 import { createGoogleEvent, deleteGoogleEvent, updateGoogleEvent } from "./google-events";
 import { getOverview, listTree } from "./nodes";
-import { createTaskFromMail, getMail, linkMail, listMail, unlinkMail } from "./mail";
+import { countUnreadMail, createTaskFromMail, getMail, linkMail, listMail, searchMail, unlinkMail } from "./mail";
 import { getItem } from "./item-detail";
 import { listNotes } from "./notes";
 import { fail, type ToolError, type ToolResult } from "./result";
@@ -31,6 +31,8 @@ export const tools: Tool[] = [
   listEvents,
   browseEvents,
   listMail,
+  countUnreadMail,
+  searchMail,
   getMail,
   createTask,
   addNote,
