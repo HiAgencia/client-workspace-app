@@ -6,8 +6,8 @@ drop policy chat_messages_insert on public.chat_messages;
 drop policy chat_messages_update on public.chat_messages;
 drop policy chat_messages_delete on public.chat_messages;
 
--- The demo's sample conversations are planted by its seed for the signed-in person. It takes no text from the caller, and it writes
--- only for `auth.uid()`, so it may do what the person may not. Its live definition stays the one in
+-- The demo's sample conversations are planted by its seed for the signed-in person. The only text it takes is the zone, which goes as a
+-- value and never into a statement, and it writes only for `auth.uid()`, so it may do what the person may not. Its live definition stays the one in
 -- 20261101060000_demo_calendars_and_priorities.sql; a later migration that redefines it says `security definer` again, and the
 -- check below fails on one that does not.
 alter function public.seed_demo(date, text) security definer;

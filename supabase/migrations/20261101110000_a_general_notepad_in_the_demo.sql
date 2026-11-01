@@ -1,6 +1,6 @@
 -- The general notepad of a demo holds what a person's does: a few loose notes and a decision, enough for its box to read as lived in beside
--- the tasks without a date and the activity. The rest of the seed stays as it was; it stays `security definer`, because it takes no text from
--- the caller and writes only for `auth.uid()`.
+-- the tasks without a date and the activity. The rest of the seed stays as it was; it stays `security definer`, because the only text it takes
+-- is the zone, which goes as a value, and it writes only for `auth.uid()`.
 
 create or replace function public.seed_demo(p_today date, p_zone text default 'UTC')
 returns boolean

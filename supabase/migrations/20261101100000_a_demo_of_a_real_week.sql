@@ -1,7 +1,8 @@
--- A demo reads as a week of real work. Today holds four tasks, one of each origin, so the first screen shows the day whole; a meeting
+-- A demo reads as a week of real work. Today holds four tasks, two of the person's, one by the chat and one by an agent, so the first screen shows the day whole; a meeting
 -- lands on each working day of this week and the next, so the calendar's week is lived in whichever day the visitor arrives on; each
 -- sample account lists the calendar its meetings come from; and the trash holds what the person deleted, with what left with it.
--- The seed stays `security definer`: it takes no text from the caller, and it writes only for `auth.uid()`.
+-- The seed stays `security definer`: the only text it takes is the zone, which goes as a value and never into a statement, and it writes
+-- only for `auth.uid()`.
 
 create or replace function public.seed_demo(p_today date, p_zone text default 'UTC')
 returns boolean
