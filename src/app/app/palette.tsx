@@ -142,8 +142,6 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     const dark = currentTheme() === "dark";
     list.push({ kind: "action", id: "theme", label: dark ? "Switch to the light theme" : "Switch to the dark theme", run: () => setTheme(dark ? "light" : "dark") });
     return list;
-    
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [here, router]);
 
   
@@ -188,7 +186,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       
       if (entry.item.nodeId) go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type, done: entry.item.status === "done" });
     } else if (entry.kind === "mail") router.push(`/app/mail?account=${encodeURIComponent(entry.row.accountId)}&message=${encodeURIComponent(entry.row.id)}`);
-    else entry.run();
+
+    else requestAnimationFrame(entry.run);
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
