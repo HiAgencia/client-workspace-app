@@ -60,7 +60,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 function PaletteBody({ onClose }: { onClose: () => void }) {
-  const { tree, mailAccounts } = useWorkspace();
+  const { tree, treeError, refreshTree, mailAccounts } = useWorkspace();
   const router = useRouter();
   const pathname = usePathname();
   const [query, setQuery] = useState("");
@@ -73,11 +73,19 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   
   
+  
+  const treeRead = tree !== null;
   const rootIds = (tree ?? [])
     .filter((node) => node.parentId === null)
     .map((node) => node.id)
     .join(",");
   useEffect(() => {
+    if (!treeRead && treeError) void refreshTree();
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!treeRead) return;
     let live = true;
     const roots = rootIds ? rootIds.split(",") : [];
     void Promise.all(roots.map((id) => tool<{ items: Item[] }>("list_items", { node: id, status: "all", includeSubprojects: true }))).then((answers) => {
@@ -88,7 +96,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     return () => {
       live = false;
     };
-  }, [rootIds]);
+  }, [rootIds, treeRead]);
 
   
   
@@ -199,17 +207,26 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const searching = query.trim().length > 0;
   
   const accountsSearching = !words ? 0 : mail.words === words ? mailNow.waiting : (mailAccounts?.length ?? 0);
+  const treeFailed = !treeRead && treeError !== null;
+  const nothing = flat.length === 0 && accountsSearching === 0;
   
-  const note =
-    flat.length === 0 && accountsSearching === 0
-      ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
-      : searching && items === null
-        ? "Reading tasks and notes…"
-        : itemsFailed
-          ? "Some tasks and notes could not be read; projects and actions still work."
-          : accountsSearching > 0
-            ? `Searching the mail of ${count(accountsSearching, "account", "accounts")}…`
-            : "";
+  
+  const note = treeFailed
+    ? `Clients, projects, tasks and mail could not be read: ${treeError.replace(/\.+$/, "")}. Actions still work; open this again to retry.`
+    : searching && (items === null || mailAccounts === null)
+      ? "Reading tasks and notes…"
+      : nothing && itemsFailed
+        ? `Some tasks and notes could not be read, and nothing else matches “${query.trim()}”.`
+        : nothing && mailNow.failures.length > 0
+          ? `Nothing matches “${query.trim()}” in what could be searched.`
+          : nothing
+            ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
+            : itemsFailed
+              ? "Some tasks and notes could not be read; projects and actions still work."
+              : accountsSearching > 0
+                ? `Searching the mail of ${count(accountsSearching, "account", "accounts")}…`
+                : "";
+  const noteFailed = treeFailed || itemsFailed;
   return (
     <div className="palette-inner">
       <div className="palette-search">
@@ -258,7 +275,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           ))}
         </div>
       )}
-      <p className="palette-note t-help" role="status">
+      <p className={noteFailed ? "palette-note inline-note" : "palette-note t-help"} data-tone={noteFailed ? "alert" : undefined} role="status">
         {note}
       </p>
       {mailNow.failures.map((failure) => (
