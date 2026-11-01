@@ -54,6 +54,8 @@ export type SeedMail = {
   ago: number;
   unread: boolean;
   important: boolean;
+  
+  linkedTo?: string;
 };
 
 
@@ -165,6 +167,7 @@ export function demoSeedTree(today: string): Seed[] {
               ago: 97,
               unread: true,
               important: true,
+              linkedTo: "Collect product photos from the client",
             },
             {
               from: { name: "Maya Chen", email: "maya@larkspur.example" },
@@ -174,6 +177,7 @@ export function demoSeedTree(today: string): Seed[] {
               ago: 1652,
               unread: false,
               important: false,
+              linkedTo: "Set up the staging site",
             },
           ],
           calendar: {

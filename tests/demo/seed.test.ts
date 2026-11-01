@@ -504,7 +504,7 @@ describe("the demo seed", () => {
     expect((attached.data ?? []).map((row) => ({ path: placeOf(row.node_id, byId), email: emailOf.get(row.account_id) })).sort((x, y) => x.email!.localeCompare(y.email!))).toEqual(
       expectedAccounts().map(({ path, account }) => ({ path, email: account.email })).sort((x, y) => x.email.localeCompare(y.email)),
     );
-    const mail = await user.client.from("demo_mail").select("account_id, from_name, from_email, subject, snippet, text_body, html, unread, important, received_at");
+    const mail = await user.client.from("demo_mail").select("account_id, gmail_id, from_name, from_email, subject, snippet, text_body, html, unread, important, received_at");
     expect(mail.error).toBeNull();
     const now = Date.now();
     const actualMail = (mail.data ?? []).map((row) => ({
@@ -549,6 +549,22 @@ describe("the demo seed", () => {
         .map((item) => ({ title: titleOf(item), account: item.waitsFor!.account, words: item.waitsFor!.words, dismissed: [] }))
         .sort((x, y) => x.title.localeCompare(y.title)),
     );
+
+    
+    const mailLinks = await user.client.from("mail_links").select("account_id, message_id, item_id, node_id");
+    expect(mailLinks.error).toBeNull();
+    const linkedMail = (mailLinks.data ?? []).map((row) => {
+      const message = (mail.data ?? []).find((entry) => entry.gmail_id === row.message_id && entry.account_id === row.account_id)!;
+      const task = (items.data ?? []).find((item) => item.id === row.item_id)!;
+      return { subject: message.subject, title: task.title, status: task.status, node: row.node_id };
+    });
+    const declaredLinks = expectedAccounts()
+      .flatMap(({ account }) => account.mail)
+      .filter((message) => message.linkedTo)
+      .map((message) => ({ subject: message.subject, title: message.linkedTo }));
+    expect(linkedMail.map(({ subject, title }) => ({ subject, title })).sort((x, y) => x.subject.localeCompare(y.subject))).toEqual(declaredLinks.sort((x, y) => x.subject.localeCompare(y.subject)));
+    expect(linkedMail.map((link) => link.status).sort()).toEqual(["done", "open"]);
+    expect(linkedMail.every((link) => link.node === null)).toBe(true);
 
     const second = await user.client.rpc("seed_demo", { p_today: TODAY });
     expect(second.error).toBeNull();
