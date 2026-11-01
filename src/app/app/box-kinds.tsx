@@ -14,7 +14,8 @@ import type { TasksView } from "@/lib/tools/tasks";
 import { buttonClass } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { BoxEmpty, BoxFailed, BoxWait, useBoxSettled, useToolRead, type BoxRead } from "./boxes";
-import { get, post, tool, type CalendarEvent, type EventsFailure, type Item, type TreeNode } from "./client-api";
+import { useEventsRead } from "./use-events-read";
+import { get, post, tool, type CalendarEvent, type Item, type TreeNode } from "./client-api";
 import { PathText } from "./item-parts";
 import { accountsSeenFrom, type MailList } from "./mail-store";
 import { subjectOf } from "./mail/subject";
@@ -288,7 +289,6 @@ export function NoDateBoxContent({ read, placeId, showPlace, pageNode }: { read:
 
 
 type Event = CalendarEvent & { origin: "google" | "local"; localId: string | null; nodeId: string | null; nodePath: string | null; linkedNodeIds: string[] };
-type Events = { events: Event[]; failures: EventsFailure[] };
 
 function onDay(event: Event, day: Day): boolean {
   if (event.allDay) {
@@ -319,13 +319,17 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   const actions = useTaskActions();
   const week = weekOf(now, weekStart);
   const instants = instantsOf(week.from, week.to);
-  const read = useToolRead<Events>("browse_events", {
-    ...(place.kind === "node" ? { node: place.id } : {}),
-    from: instants.from,
-    to: instants.to,
-    fromDay: week.from,
-    toDay: week.to,
-  });
+  
+  const read = useEventsRead<Event>(
+    {
+      ...(place.kind === "node" ? { node: place.id } : {}),
+      from: instants.from,
+      to: instants.to,
+      fromDay: week.from,
+      toDay: week.to,
+    },
+    place.kind !== "general",
+  );
   const [chosen, setChosen] = useState<Day>(now);
   const [over, setOver] = useState<Day | null>(null);
   const days = Array.from({ length: 7 }, (_, index) => addDays(week.from, index));

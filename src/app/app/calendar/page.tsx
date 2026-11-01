@@ -29,6 +29,7 @@ import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, mon
 import { inlinePlain } from "@/lib/inline-links";
 import { PRODUCT_NAME } from "@/lib/product";
 import { get, post, tool, type EventsFailure, type Item, type TreeNode } from "../client-api";
+import { readEvents } from "../events-read";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
 import { openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
@@ -178,7 +179,7 @@ function Calendar() {
     let live = true;
     const instants = instantsOf(range.from, range.to);
     void Promise.all([
-      tool<{ events: CalEvent[]; failures: EventsFailure[] }>("browse_events", { from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to }),
+      readEvents<CalEvent>({ from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to }),
       tool<TasksAnswer>("get_tasks", { today: today(), withCompleted: true }),
       get<{ accounts: Account[] }>("/api/accounts"),
     ]).then(([events, tasks, accounts]) => {
@@ -484,6 +485,7 @@ function Calendar() {
         />
         <EventDetail
           event={selectedEvent}
+          sample={Boolean(selectedEvent && loaded?.accounts.some((entry) => entry.isDemo && entry.id === selectedEvent.accountId))}
           tree={tree}
           tasks={tasksAll}
           onClose={() => setOpenEvent(null)}
@@ -1156,7 +1158,7 @@ function EventComposer({
 
 
 
-function EventDetail({ event, tree, tasks, onClose }: { event: CalEvent | null; tree: TreeNode[] | null; tasks: TaskData[]; onClose: () => void }) {
+function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent | null; sample: boolean; tree: TreeNode[] | null; tasks: TaskData[]; onClose: () => void }) {
   const { notify, touch, saving } = useWorkspace();
   const { ref, kept, props } = useDialog(event, onClose);
   const shown = event ?? kept;
@@ -1252,7 +1254,11 @@ function EventDetail({ event, tree, tasks, onClose }: { event: CalEvent | null; 
           <div className="cal-dialog-head">
             <p className="t-meta cal-dialog-origin">{shown.origin === "local" ? OWN_CALENDAR : `Google calendar, ${shown.accountEmail}`}</p>
             <div className="cal-dialog-tools">
-              <Menu label="More" about={`for “${shown.title}”`} entries={[{ kind: "action", label: "Delete", tone: "danger", onSelect: () => void remove() }]} />
+              <Menu
+                label="More"
+                about={`for “${shown.title}”`}
+                entries={[{ kind: "action", label: "Delete", tone: "danger", disabled: sample, detail: sample ? "The sample accounts are read only" : undefined, onSelect: () => void remove() }]}
+              />
               <Button size="sm" onClick={onClose}>
                 Close
               </Button>

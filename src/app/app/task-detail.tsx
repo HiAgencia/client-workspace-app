@@ -13,6 +13,7 @@ import { inlinePlain } from "@/lib/inline-links";
 import { richTextToPlain } from "@/lib/rich-text";
 import { get, post, tool, type Answer, type Item } from "./client-api";
 import { dueTimeOptions, NO_TIME } from "./due-times";
+import { readEvents } from "./events-read";
 import { PRIORITIES, sourceName } from "./item-parts";
 import { subjectOf } from "./mail/subject";
 import { TaskOutcome, useCompleteTask } from "./task-outcome";
@@ -426,6 +427,7 @@ type TaskWait = { accountId: string | null; waitsFor: string; since: string; dis
 type MailMessageRow = { id: string; accountId: string; accountEmail: string; from: { name: string | null; email: string }; subject: string; receivedAt: string };
 type MailFailure = { accountEmail: string; reason: string };
 type MailDetail = { mail: TaskWait | null; messages: MailMessageRow[]; mailFailures: MailFailure[] };
+type ItemMail = { messages: MailMessageRow[]; failures: MailFailure[] };
 type MailAccount = { id: string; email: string; nodeIds: string[] };
 
 type RepliesRead = { replies: MailMessageRow[]; next: Record<string, string>; failures: MailFailure[] };
@@ -459,6 +461,12 @@ function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: st
   return { replies: rows.sort(newestFirst), next, failures };
 }
 
+
+function withItemMail(read: MailDetail, mail: Answer<ItemMail>, email: string | undefined): MailDetail {
+  if (!mail.ok) return { ...read, mailFailures: [...read.mailFailures, { accountEmail: email ?? "one account", reason: mail.message }] };
+  return { ...read, messages: [...read.messages, ...mail.messages].sort(newestFirst), mailFailures: [...read.mailFailures, ...mail.failures] };
+}
+
 function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   const { tree, notify, touch, saving, version } = useWorkspace();
   const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null } | null>(null);
@@ -477,10 +485,17 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
 
   useEffect(() => {
     let live = true;
-    void Promise.all([tool<MailDetail>("get_item", { id: task.id }), get<{ accounts: MailAccount[] }>("/api/accounts")]).then(([answer, listed]) => {
+    void Promise.all([tool<MailDetail & { mailToRead: string[] }>("get_item", { id: task.id }), get<{ accounts: MailAccount[] }>("/api/accounts")]).then(([answer, listed]) => {
       if (!live) return;
       setDetail({ id: task.id, read: answer.ok ? { mail: answer.mail, messages: answer.messages, mailFailures: answer.mailFailures } : null, error: answer.ok ? null : answer.message });
       if (listed.ok) setAccounts(listed.accounts);
+      if (!answer.ok) return;
+      
+      for (const account of answer.mailToRead) {
+        void tool<ItemMail>("list_item_mail", { id: task.id, account }).then((mail) => {
+          if (live) setDetail((now) => (now?.id === task.id && now.read ? { ...now, read: withItemMail(now.read, mail, listed.ok ? listed.accounts.find((entry) => entry.id === account)?.email : undefined) } : now));
+        });
+      }
     });
     return () => {
       live = false;
@@ -1191,7 +1206,7 @@ function EventField({ task }: { task: Item }) {
     const from = today();
     const to = addDays(from, 30);
     const range = instantsOf(from, to);
-    void tool<{ events: BrowsedEvent[] }>("browse_events", { from: range.from, to: range.to, fromDay: from, toDay: to }).then((answer) => {
+    void readEvents<BrowsedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }).then((answer) => {
       if (answer.ok) setEvents(answer.events);
       else setEventsFailed(true);
     });

@@ -39,6 +39,21 @@ function agentCtx(scopeNodeId: string, extra: Partial<ToolContext> = {}): ToolCo
   return { db: serviceClient(), ownerId: a.id, scopeNodeId, source: "agent", agentLabel: "laptop", ...extra };
 }
 
+
+async function accountOf(user: DisposableUser, nodeId: string) {
+  const service = serviceClient();
+  const { data, error } = await service.from("google_accounts").insert({ owner_id: user.id, email: `events-${nodeId}@example.com` }).select("id").single();
+  if (error) throw new Error(error.message);
+  const attached = await service.from("node_accounts").insert({ node_id: nodeId, account_id: data.id });
+  if (attached.error) throw new Error(attached.error.message);
+  return {
+    id: data.id,
+    remove: async () => {
+      await service.from("google_accounts").delete().eq("id", data.id);
+    },
+  };
+}
+
 type Success = { ok: true } & Record<string, unknown>;
 
 async function run<T = Success>(name: string, ctx: ToolContext, input: unknown): Promise<T> {
@@ -106,6 +121,7 @@ describe("the registry", () => {
         "link_node_event",
         "link_task_event",
         "list_events",
+        "list_item_mail",
         "list_items",
         "list_mail",
         "list_notes",
@@ -139,6 +155,7 @@ describe("the registry", () => {
         "get_tasks",
         "get_updates_since",
         "list_events",
+        "list_item_mail",
         "list_items",
         "list_mail",
         "list_notes",
@@ -331,11 +348,12 @@ describe("reads", () => {
       ],
       failures: [],
     });
+    const account = await accountOf(a!, treeA.web);
     const overview = await run<{ openTasks: ItemOut[]; decisions: ItemOut[]; children: Array<{ id: string }>; events: Array<{ title: string }> } & Record<string, unknown>>(
       "get_overview",
       userCtx(a, { events }),
       { node: "Acme / Web" },
-    );
+    ).finally(account.remove);
     expect(overview.openTasks.length).toBeGreaterThan(0);
     expect(overview.openTasks.every((i) => i.type === "task" && i.status === "open")).toBe(true);
     expect(overview.decisions.length).toBeGreaterThan(0);
@@ -351,11 +369,12 @@ describe("reads", () => {
       events: [],
       failures: [{ accountId: "acc", accountEmail: "broken@example.com", reason: "access revoked" }],
     });
+    const account = await accountOf(a!, treeA.web);
     const listed = await run<{ failures: Array<{ reason: string }>; from: string; to: string }>(
       "list_events",
       userCtx(a, { events }),
       { node: treeA.web, from: "2026-11-01", to: "2026-11-08" },
-    );
+    ).finally(account.remove);
     expect(listed.failures[0].reason).toBe("access revoked");
     expect(listed.from).toBe("2026-11-01T00:00:00.000Z");
     expect(

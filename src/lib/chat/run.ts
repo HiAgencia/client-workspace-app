@@ -42,7 +42,7 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
     "overdue, due today, upcoming, and what changed, read the calendars, and advise on what to do next from what you",
     "read. A link goes over its words: [words](https://address). Act when asked to act; do not ask for confirmation of a",
     "write, since every write can be undone from the screen.",
-    "Mail is read one account per call: a read without account over several accounts reads none and its toRead lists them, each read with its own call.",
+    "Mail and calendars are read one account per call: a read without account over several accounts reads none of them and its toRead lists them (eventsToRead in get_overview, mailToRead in get_item), each read with its own call.",
     ctx.scopeNodeId
       ? "Prefer the open node when the person does not name another."
       : "No node is open: this conversation covers every client and project, and General. Write where the request says; a task that names no client or project and fits none goes to General.",

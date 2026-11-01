@@ -2,36 +2,99 @@ import { z } from "zod";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
 import { calendarEventSchema, eventsFailureSchema, type CalendarEvent, type EventsFailure } from "./events-source";
+import { localEventsIn, type LocalEvent } from "./local-events";
+import { accountsOf } from "./mail";
 import { fail, isError, ok, type ToolResult } from "./result";
-import { loadScope, resolveNode, type TreeNode } from "./tree";
+import { loadScope, reachOf, resolveNode, type ReadPlace, type Scope } from "./tree";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const eventsOutput = z.object({
-  node: z.object({ id: z.string(), path: z.string() }),
-  from: z.string(),
-  to: z.string(),
-  events: z.array(calendarEventSchema),
-  failures: z.array(eventsFailureSchema),
+
+export const browsedEventSchema = calendarEventSchema.extend({
+  origin: z.enum(["google", "local"]),
+  
+  localId: z.string().nullable(),
+  nodeId: z.string().nullable(),
+  nodePath: z.string().nullable(),
+  
+  linkedNodeIds: z.array(z.string()),
+  linkedTaskIds: z.array(z.string()),
 });
 
+export type BrowsedEvent = z.infer<typeof browsedEventSchema>;
+
+export function fromGoogle(event: CalendarEvent): BrowsedEvent {
+  return { ...event, origin: "google", localId: null, nodeId: null, nodePath: null, linkedNodeIds: [], linkedTaskIds: [] };
+}
+
+export function fromLocal(event: LocalEvent): BrowsedEvent {
+  return {
+    id: event.id,
+    title: event.title,
+    start: event.allDay ? event.startsOn! : event.startsAt!,
+    end: event.allDay ? event.endsOn! : event.endsAt!,
+    allDay: event.allDay,
+    location: null,
+    link: null,
+    calendarId: "workspace",
+    calendarName: event.nodePath ?? "Workspace",
+    color: null,
+    accountId: "",
+    accountEmail: "",
+    fromNodeId: event.nodeId ?? "",
+    origin: "local",
+    localId: event.id,
+    nodeId: event.nodeId,
+    nodePath: event.nodePath,
+    linkedNodeIds: [],
+    linkedTaskIds: [],
+  };
+}
+
+const startOf = (event: BrowsedEvent) => (event.allDay ? Date.parse(`${event.start}T00:00:00`) : Date.parse(event.start));
+
+export const inTimeOrder = (events: BrowsedEvent[]) => events.sort((a, b) => startOf(a) - startOf(b));
 
 
-export async function eventsForNode(
-  ctx: ToolContext,
-  node: TreeNode,
-  from: string,
-  to: string,
-): Promise<{ events: CalendarEvent[]; failures: EventsFailure[] }> {
-  if (!ctx.events) return { events: [], failures: [] };
-  try {
-    return await ctx.events({ db: ctx.db, ownerId: ctx.ownerId, nodeId: node.id, from, to });
-  } catch (error) {
-    
-    const reason = error instanceof Error ? error.message : "the calendars could not be read";
-    console.error("events:", reason);
-    return { events: [], failures: [{ accountId: "", accountEmail: "", reason: "the calendars could not be read" }] };
+
+export const daysOfRange = (from: Date, to: Date) => ({ fromDay: new Date(from.getTime() - 14 * 3_600_000).toISOString().slice(0, 10), toDay: to.toISOString().slice(0, 10) });
+
+export const accountRowSchema = z.object({ id: z.string(), email: z.string(), isDemo: z.boolean(), status: z.string(), nodeId: z.string() });
+
+type AccountRow = z.infer<typeof accountRowSchema>;
+
+export type CalendarsRead = { accounts: AccountRow[]; toRead: string[]; events: CalendarEvent[]; failures: EventsFailure[] };
+
+
+
+
+
+export async function readCalendars(ctx: ToolContext, scope: Scope, place: ReadPlace, range: { from: string; to: string }, account?: string): Promise<ToolResult<CalendarsRead>> {
+  const reached = await accountsOf(ctx, scope, place);
+  if (isError(reached)) {
+    if (account) return reached;
+    return ok({ accounts: [], toRead: [], events: [], failures: [{ accountId: "", accountEmail: "", reason: "the calendars could not be read" }] });
   }
+  const accounts = reached.accounts.flatMap(({ id, email, isDemo, status, nodeId }) => (nodeId ? [{ id, email, isDemo, status, nodeId }] : []));
+  if (account && !accounts.some((entry) => entry.id === account)) return fail("not_found", `no account with id ${account} is reachable here`);
+  const said = { accounts: account ? accounts.filter((entry) => entry.id === account) : accounts };
+  const source = ctx.events;
+  if (!source) return ok({ ...said, toRead: [], events: [], failures: [] });
+  const connected = accounts.filter((entry) => !entry.isDemo);
+  const toRead = !account && connected.length > 1 ? connected.map((entry) => entry.id) : [];
+  const read = account ? said.accounts : accounts.filter((entry) => entry.isDemo || toRead.length === 0);
+  const answers = await Promise.all(
+    read.map(async (entry) => {
+      try {
+        return await source({ db: ctx.db, ownerId: ctx.ownerId, account: entry, nodeId: entry.nodeId, from: range.from, to: range.to });
+      } catch (error) {
+        
+        console.error(`events of account ${entry.id}:`, error instanceof Error ? error.message : error);
+        return { events: [], failures: [{ accountId: entry.id, accountEmail: entry.email, reason: "the calendars could not be read" }] };
+      }
+    }),
+  );
+  return ok({ ...said, toRead, events: answers.flatMap((answer) => answer.events), failures: answers.flatMap((answer) => answer.failures) });
 }
 
 const instant = z.iso
@@ -39,15 +102,30 @@ const instant = z.iso
   .or(z.iso.date())
   .describe("An ISO date (YYYY-MM-DD) or date-time with its offset.");
 
+export const eventsOutput = z.object({
+  node: z.object({ id: z.string(), path: z.string() }),
+  from: z.string(),
+  to: z.string(),
+  accounts: z.array(accountRowSchema),
+  
+  toRead: z.array(z.string()),
+  events: z.array(browsedEventSchema),
+  failures: z.array(eventsFailureSchema),
+});
+
 export const listEvents = defineTool({
   name: "list_events",
   description:
-    "List calendar events of the Google accounts visible from a node (its own and those inherited from the nodes " +
-    "above it), between two moments. Defaults: from now to seven days ahead. Each event says which account and " +
-    "calendar it comes from; an account that could not be read is listed under failures.",
+    "List a node's calendar events between two moments, one account per call. With account: only that account's events; " +
+    "not_found when the node does not see it (it sees its own accounts and those inherited from the nodes above). Without " +
+    "it: the workspace's own events of the node and below it, the sample accounts', and a lone connected account's; over " +
+    "several connected accounts it reads none of them: toRead lists them, and each is read with its own call. Defaults: " +
+    "from now to seven days ahead. Each event says its origin (google or local), account and calendar; an account that " +
+    "could not be read is listed under failures.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
+    account: z.uuid().optional().describe("The account to read. Omit it to learn the node's accounts: one alone is read at once."),
     from: instant.optional(),
     to: instant.optional(),
   }),
@@ -55,7 +133,8 @@ export const listEvents = defineTool({
   async run(ctx, input): Promise<ToolResult<z.infer<typeof eventsOutput>>> {
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
-    const resolved = resolveNode(loaded.scope, input.node);
+    const { scope } = loaded;
+    const resolved = resolveNode(scope, input.node);
     if (isError(resolved)) return resolved;
     const from = new Date(input.from ?? Date.now());
     
@@ -64,13 +143,22 @@ export const listEvents = defineTool({
       : new Date(from.getTime() + 7 * DAY_MS);
     if (!(to > from)) return fail("invalid_input", "the end must come after the start");
     if (to.getTime() - from.getTime() > 92 * DAY_MS) return fail("invalid_input", "ask for at most three months");
-    const { events, failures } = await eventsForNode(ctx, resolved.node, from.toISOString(), to.toISOString());
+    const range = { from: from.toISOString(), to: to.toISOString() };
+    const place: ReadPlace = { kind: "node", node: resolved.node };
+    const { fromDay, toDay } = daysOfRange(from, to);
+    const [google, local] = await Promise.all([
+      readCalendars(ctx, scope, place, range, input.account),
+      input.account ? ok({ events: [] as LocalEvent[] }) : localEventsIn(ctx, scope, reachOf(scope, place), fromDay, toDay, range),
+    ]);
+    if (isError(google)) return google;
+    if (isError(local)) return local;
     return ok({
       node: { id: resolved.node.id, path: resolved.node.path },
-      from: from.toISOString(),
-      to: to.toISOString(),
-      events,
-      failures,
+      ...range,
+      accounts: google.accounts,
+      toRead: google.toRead,
+      events: inTimeOrder([...google.events.map(fromGoogle), ...local.events.map(fromLocal)]),
+      failures: google.failures,
     });
   },
 });

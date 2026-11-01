@@ -1,6 +1,6 @@
 import type { Db } from "@/lib/db/client";
 import type { CalendarWriter, EventsSource } from "@/lib/tools/context";
-import type { CalendarEvent, EventsFailure } from "@/lib/tools/events-source";
+import type { CalendarEvent } from "@/lib/tools/events-source";
 import { deleteEvent, GoogleError, insertEvent, listEvents, patchEvent, refreshAccessToken, type Fetch, type GoogleEvent, type OAuthClient } from "./api";
 import { decrypt, encrypt } from "./crypto";
 
@@ -94,68 +94,49 @@ function toEvent(
   };
 }
 
+const REVOKED = "access was revoked: connect the account again";
+
 
 
 
 export function googleEventsSource(deps: GoogleDeps): EventsSource {
-  return async ({ ownerId, nodeId, from, to }) => {
-    const visible = await deps.service.rpc("visible_accounts", { node: nodeId });
-    if (visible.error) throw new Error(`reading the node's accounts: ${visible.error.message}`);
-    const fromNode = new Map(visible.data.map((row) => [row.account_id, row.from_node_id]));
-    if (fromNode.size === 0) return { events: [], failures: [] };
+  return async ({ ownerId, account, nodeId, from, to }) => {
+    if (account.isDemo) return { events: [], failures: [] };
+    const failed = (reason: string) => ({ events: [], failures: [{ accountId: account.id, accountEmail: account.email, reason }] });
+    
+    if (account.status === "revoked") return failed(REVOKED);
 
-    const accounts = await deps.service
+    const tokens = await deps.service
       .from("google_accounts")
-      .select("id, email, status, is_demo, refresh_token, access_token, access_token_expires_at")
+      .select("id, email, refresh_token, access_token, access_token_expires_at")
+      .eq("id", account.id)
       .eq("owner_id", ownerId)
       .eq("is_demo", false)
-      .in("id", [...fromNode.keys()]);
-    if (accounts.error) throw new Error(`reading the accounts: ${accounts.error.message}`);
-    const calendars = await deps.service
-      .from("account_calendars")
-      .select("account_id, calendar_id, summary, color")
-      .eq("selected", true)
-      .in("account_id", accounts.data.map((account) => account.id));
+      .maybeSingle();
+    if (tokens.error) throw new Error(`reading the account: ${tokens.error.message}`);
+    const row = tokens.data;
+    if (!row) return { events: [], failures: [] };
+    const calendars = await deps.service.from("account_calendars").select("calendar_id, summary, color").eq("selected", true).eq("account_id", account.id);
     if (calendars.error) throw new Error(`reading the calendars: ${calendars.error.message}`);
+    const chosen = calendars.data;
+    if (chosen.length === 0) return { events: [], failures: [] };
 
-    const events: CalendarEvent[] = [];
-    const failures: EventsFailure[] = [];
-    await Promise.all(
-      accounts.data.map(async (account) => {
-        
-        if (account.status === "revoked") {
-          failures.push({ accountId: account.id, accountEmail: account.email, reason: "access was revoked: connect the account again" });
-          return;
+    try {
+      
+      const events = await withAccessToken(deps, row, async (token) => {
+        const found: CalendarEvent[] = [];
+        for (const calendar of chosen) {
+          for (const item of await listEvents(deps.fetch, token, calendar.calendar_id, from, to)) {
+            const event = toEvent(item, calendar, row, nodeId);
+            if (event) found.push(event);
+          }
         }
-        try {
-          const own = calendars.data.filter((calendar) => calendar.account_id === account.id);
-          
-          const read = await withAccessToken(deps, account, async (token) => {
-            const found: CalendarEvent[] = [];
-            for (const calendar of own) {
-              for (const item of await listEvents(deps.fetch, token, calendar.calendar_id, from, to)) {
-                const event = toEvent(item, calendar, account, fromNode.get(account.id)!);
-                if (event) found.push(event);
-              }
-            }
-            return found;
-          });
-          events.push(...read);
-        } catch (error) {
-          failures.push({
-            accountId: account.id,
-            accountEmail: account.email,
-            reason: error instanceof GoogleError && error.revoked
-              ? "access was revoked: connect the account again"
-              : error instanceof Error
-                ? error.message
-                : "the account could not be read",
-          });
-        }
-      }),
-    );
-    events.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
-    return { events, failures };
+        return found;
+      });
+      return { events: events.sort((a, b) => Date.parse(a.start) - Date.parse(b.start)), failures: [] };
+    } catch (error) {
+      return failed(error instanceof GoogleError && error.revoked ? REVOKED : error instanceof Error ? error.message : "the account could not be read");
+    }
   };
 }
 
@@ -165,21 +146,15 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
 
 export function demoEventsSource(): EventsSource {
   const reads = new Map<string, ReturnType<typeof readDemoCalendars>>();
-  return async ({ db, ownerId, nodeId, from, to }) => {
+  return async ({ db, ownerId, account, nodeId, from, to }) => {
     const key = `${from}|${to}`;
     const read = reads.get(key) ?? readDemoCalendars(db, ownerId, from, to);
     reads.set(key, read);
-    const { rows, parents, hung, emails } = await read;
-    
-    const fromNode = new Map<string, string>();
-    for (let at: string | null | undefined = nodeId; at; at = parents.get(at)) {
-      for (const account of hung.get(at) ?? []) if (!fromNode.has(account)) fromNode.set(account, at);
-    }
-    const events = rows.flatMap((row): CalendarEvent[] => {
-      const seenFrom = fromNode.get(row.account_id);
-      if (!seenFrom) return [];
-      return [
-        {
+    const rows = await read;
+    const events = rows
+      .filter((row) => row.account_id === account.id)
+      .map(
+        (row): CalendarEvent => ({
           id: row.google_id,
           title: row.title,
           start: row.starts_at,
@@ -191,39 +166,24 @@ export function demoEventsSource(): EventsSource {
           calendarName: row.calendar_name,
           color: null,
           accountId: row.account_id,
-          accountEmail: emails.get(row.account_id) ?? "",
-          fromNodeId: seenFrom,
-        },
-      ];
-    });
+          accountEmail: account.email,
+          fromNodeId: nodeId,
+        }),
+      );
     return { events, failures: [] };
   };
 }
 
 async function readDemoCalendars(db: Db, ownerId: string, from: string, to: string) {
-  const [rows, nodes, attached, accounts] = await Promise.all([
-    db
-      .from("demo_events")
-      .select("google_id, account_id, calendar_name, title, location, starts_at, ends_at")
-      .eq("owner_id", ownerId)
-      .lt("starts_at", to)
-      .gt("ends_at", from)
-      .order("starts_at"),
-    db.from("nodes").select("id, parent_id").eq("owner_id", ownerId),
-    db.from("node_accounts").select("node_id, account_id"),
-    db.from("google_accounts").select("id, email").eq("owner_id", ownerId).eq("is_demo", true),
-  ]);
-  if (rows.error || nodes.error || attached.error || accounts.error) {
-    throw new Error(`reading the sample calendars: ${(rows.error ?? nodes.error ?? attached.error ?? accounts.error)!.message}`);
-  }
-  const hung = new Map<string, string[]>();
-  for (const link of attached.data) hung.set(link.node_id, [...(hung.get(link.node_id) ?? []), link.account_id]);
-  return {
-    rows: rows.data,
-    parents: new Map(nodes.data.map((node) => [node.id, node.parent_id])),
-    hung,
-    emails: new Map(accounts.data.map((account) => [account.id, account.email])),
-  };
+  const { data, error } = await db
+    .from("demo_events")
+    .select("google_id, account_id, calendar_name, title, location, starts_at, ends_at")
+    .eq("owner_id", ownerId)
+    .lt("starts_at", to)
+    .gt("ends_at", from)
+    .order("starts_at");
+  if (error) throw new Error(`reading the sample calendars: ${error.message}`);
+  return data;
 }
 
 

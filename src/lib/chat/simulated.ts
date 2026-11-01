@@ -93,6 +93,19 @@ type WaitingRow = { id: string; title: string; mail: { waitsFor: string } | null
 type Replies = { task?: { id: string; title: string }; accounts?: Array<{ id: string }>; toRead?: string[]; replies?: Array<{ subject: string; from: { name: string | null; email: string } }> };
 
 
+const CALENDAR = /\b(?:on (?:my|the) calendars?|en (?:mi|el) calendario|en mis calendarios)\b/i;
+
+type EventsRead = { ok?: boolean; message?: string; accounts?: Array<{ id: string }>; toRead?: string[]; events?: Array<{ title: string }>; failures?: Array<{ accountEmail: string; reason: string }> };
+
+
+function weekAhead(prompt: LanguageModelV4Prompt) {
+  const { today } = personDay(prompt);
+  const from = Date.parse(`${today}T00:00:00Z`);
+  const toDay = new Date(from + 7 * 86_400_000).toISOString().slice(0, 10);
+  return { from: `${today}T00:00:00Z`, to: `${toDay}T00:00:00Z`, fromDay: today, toDay };
+}
+
+
 const CLOSE = /\b(?:close|complete|cerr[aá]|complet[aá])\s+(?:the task\s+|la tarea\s+)?["“«]?(.+?)["”»]?\s+(?:as|como)\s+(.+?)[.!]*$/i;
 
 
@@ -137,6 +150,17 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
     const waiting = waitingTasks((answer.output as { value?: TaskRows }).value);
     if (waiting.length === 0) return text("No task waits for mail.");
     return calls(...waiting.map((task) => ({ toolName: "list_task_replies", input: { task: task.id } })));
+  }
+  
+  if (CALENDAR.test(request) && results.some((result) => result.toolName === "browse_events")) {
+    const answers = results.filter((result) => result.toolName === "browse_events").map(({ output }) => (output as { value?: EventsRead }).value);
+    
+    const read = new Set(answers.flatMap((value) => (value?.toRead?.length ? [] : (value?.accounts ?? []).map((account) => account.id))));
+    const toRead = answers.flatMap((value) => value?.toRead ?? []).filter((account) => !read.has(account));
+    if (toRead.length > 0) return calls(...toRead.map((account) => ({ toolName: "browse_events", input: { ...weekAhead(prompt), account } })));
+    const titles = answers.flatMap((value) => (value?.events ?? []).map((event) => event.title));
+    const failed = answers.flatMap((value) => (value?.ok === false ? [`I could not read the calendars: ${value.message}`] : (value?.failures ?? []).map((failure) => `The calendar of ${failure.accountEmail} could not be read: ${failure.reason}.`)));
+    return text([...failed, titles.length === 0 ? "Nothing is on the calendars this week." : `This week: ${titles.join("; ")}.`].join(" "));
   }
   
   
@@ -186,6 +210,7 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
   if (hasImage(prompt)) return call("create_task", { title: "Follow up on the attached screenshot" });
   
   if (ARRIVED.test(request)) return call("get_tasks", { today: personDay(prompt).today });
+  if (CALENDAR.test(request)) return call("browse_events", weekAhead(prompt));
   
   if (/pending|what('s| is) (left|next)|advise|what should/i.test(request)) {
     return workspaceWide(prompt) ? call("browse_items", { type: ["task"], status: "open", sort: "priority", limit: 5 }) : call("get_overview", {});

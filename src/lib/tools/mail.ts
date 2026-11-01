@@ -43,7 +43,9 @@ export async function accountsOf(ctx: ToolContext, scope: Scope, place: ReadPlac
     
     const links = await ctx.db.from("node_accounts").select("node_id, account_id").in("account_id", data.map((row) => row.id));
     if (links.error) return dbFail("reading where the accounts hang", links.error);
-    for (const link of links.data) if (!fromNode.has(link.account_id) && scope.all.has(link.node_id)) fromNode.set(link.account_id, link.node_id);
+    const inTree = new Map([...scope.all.keys()].map((id, at) => [id, at]));
+    const hanging = links.data.filter((link) => inTree.has(link.node_id)).sort((a, b) => inTree.get(a.node_id)! - inTree.get(b.node_id)!);
+    for (const link of hanging) if (!fromNode.has(link.account_id)) fromNode.set(link.account_id, link.node_id);
   }
   return ok({
     accounts: (data as AccountRow[]).map((row) => ({
@@ -522,28 +524,29 @@ export const searchMail = defineTool({
 
 
 
-export async function itemMailOf(ctx: ToolContext, scope: Scope, itemId: string): Promise<ToolResult<{ rows: MailRow[]; failures: MailFailure[] }>> {
+
+export async function itemMailOf(ctx: ToolContext, scope: Scope, itemId: string, account?: string): Promise<ToolResult<{ rows: MailRow[]; failures: MailFailure[]; toRead: string[] }>> {
   const { data: links, error } = await ctx.db.from("mail_links").select("account_id, message_id").eq("owner_id", ctx.ownerId).eq("item_id", itemId);
   if (error) return dbFail("reading the item's mail", error);
-  const wanted = new Map(links.map((link) => [`${link.account_id}:${link.message_id}`, { accountId: link.account_id, messageId: link.message_id }]));
-  if (wanted.size === 0) return ok({ rows: [], failures: [] });
   const place: ReadPlace = scope.root ? { kind: "node", node: scope.root } : { kind: "all" };
+  const wanted = new Map(links.map((link) => [`${link.account_id}:${link.message_id}`, { accountId: link.account_id, messageId: link.message_id }]));
+  if (wanted.size === 0 && !account) return ok({ rows: [], failures: [], toRead: [] });
   const reached = await accountsOf(ctx, scope, place);
   if (isError(reached)) return reached;
-  const accounts = new Map(reached.accounts.map((account) => [account.id, account]));
+  const accounts = new Map(reached.accounts.map((entry) => [entry.id, entry]));
+  if (account && !accounts.has(account)) return fail("not_found", `no account with id ${account} is reachable here`);
   const byAccount = new Map<string, string[]>();
   for (const { accountId, messageId } of wanted.values()) {
     if (accounts.has(accountId)) byAccount.set(accountId, [...(byAccount.get(accountId) ?? []), messageId]);
   }
-  const answers = await Promise.all(
-    [...byAccount].map(([accountId, ids]) => mailOf(ctx).many({ db: ctx.db, ownerId: ctx.ownerId, account: accounts.get(accountId)!, ids })),
-  );
-  const messages: MailMessage[] = answers.flatMap((answer) => answer.messages);
-  const failures = failuresByAccount(...answers.map((answer) => answer.failures));
-  const context = await mailContext(ctx, scope, [...new Set(messages.map((message) => message.accountId))]);
+  if (!account && byAccount.size > 1) return ok({ rows: [], failures: [], toRead: [...byAccount.keys()] });
+  const [read] = account ? [[account, byAccount.get(account) ?? []] as const] : [...byAccount];
+  if (!read || read[1].length === 0) return ok({ rows: [], failures: [], toRead: [] });
+  const { messages, failures } = await mailOf(ctx).many({ db: ctx.db, ownerId: ctx.ownerId, account: accounts.get(read[0])!, ids: read[1] });
+  const context = await mailContext(ctx, scope, messages.length > 0 ? [read[0]] : []);
   if (isError(context)) return context;
-  messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
-  return ok({ rows: toRows(messages, context, accounts, scope), failures });
+  const ordered: MailMessage[] = [...messages].sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
+  return ok({ rows: toRows(ordered, context, accounts, scope), failures: failuresByAccount(failures), toRead: [] });
 }
 
 export { mailRowSchema, taskMailSchema, type MailRow, type TaskMail };

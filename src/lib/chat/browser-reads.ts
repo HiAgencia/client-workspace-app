@@ -5,7 +5,7 @@ import { isToolUIPart, type UIMessage } from "ai";
 
 
 
-export const BROWSER_READS: ReadonlySet<string> = new Set(["list_mail", "count_unread_mail", "search_mail", "list_task_replies"]);
+export const BROWSER_READS: ReadonlySet<string> = new Set(["list_mail", "count_unread_mail", "search_mail", "list_task_replies", "list_item_mail", "list_events", "browse_events"]);
 
 
 export const MAX_READ_ANSWER = 256 * 1024;

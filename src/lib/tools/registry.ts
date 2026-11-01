@@ -9,7 +9,7 @@ import { createEvent, deleteEvent, linkNodeEvent, linkTaskEvent, unlinkNodeEvent
 import { createGoogleEvent, deleteGoogleEvent, updateGoogleEvent } from "./google-events";
 import { getOverview, listTree } from "./nodes";
 import { countUnreadMail, createTaskFromMail, getMail, linkMail, listMail, searchMail, unlinkMail } from "./mail";
-import { getItem } from "./item-detail";
+import { getItem, listItemMail } from "./item-detail";
 import { listNotes } from "./notes";
 import { fail, type ToolError, type ToolResult } from "./result";
 import { getTasks, moveItem, reorderItems, requestReview, rescheduleOverdue } from "./tasks";
@@ -22,6 +22,7 @@ export const tools: Tool[] = [
   getTasks,
   listNotes,
   getItem,
+  listItemMail,
   getBoard,
   getOverview,
   browseItems,

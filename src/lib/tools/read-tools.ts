@@ -17,5 +17,6 @@ export const READ_TOOLS: ReadonlySet<string> = new Set([
   "count_unread_mail",
   "search_mail",
   "get_mail",
+  "list_item_mail",
   "list_task_replies",
 ]);

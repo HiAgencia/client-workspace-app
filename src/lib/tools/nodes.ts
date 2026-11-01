@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { defineTool } from "./define";
-import { browsedEventSchema, fromLocal } from "./browse";
-import { eventsForNode } from "./events";
-import { localEventsIn } from "./local-events";
-import { eventsFailureSchema } from "./events-source";
+import { browsedEventSchema, daysOfRange, fromGoogle, fromLocal, inTimeOrder, readCalendars } from "./events";
+import { localEventsIn, type LocalEvent } from "./local-events";
+import { eventsFailureSchema, type CalendarEvent, type EventsFailure } from "./events-source";
 import { dbFail, isError, ok } from "./result";
 import { byPriorityThenDue, countInSubtrees, itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
 import { accountMap } from "./mail";
@@ -184,8 +183,10 @@ export const getOverview = defineTool({
   description:
     "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), the latest notes " +
     "and decisions of the node and of everything below it (each with its nodePath; totals says how many there are in " +
-    "all), what the nodes below hold (below), its subprojects, and the events of the next seven days from its accounts. " +
-    "Start here to answer what is pending in a node or to advise on what to do next.",
+    "all), what the nodes below hold (below), its subprojects, and the events of the next seven days: the workspace's own, " +
+    "the sample accounts', and a lone connected account's; over several connected accounts it reads none of them: " +
+    "eventsToRead lists them, and list_events reads each with its own call. Start here to answer what is pending in a node " +
+    "or to advise on what to do next.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),
@@ -200,6 +201,8 @@ export const getOverview = defineTool({
     
     totals: z.object({ notes: z.number(), decisions: z.number() }),
     events: z.array(browsedEventSchema),
+    
+    eventsToRead: z.array(z.string()),
     eventFailures: z.array(eventsFailureSchema),
     
     
@@ -235,22 +238,17 @@ export const getOverview = defineTool({
     const until = new Date(now.getTime() + 7 * DAY_MS);
     
     
+    const range = { from: now.toISOString(), to: until.toISOString() };
+    const { fromDay, toDay } = daysOfRange(now, until);
     const [google, local] = input.withEvents
       ? await Promise.all([
-          eventsForNode(ctx, node, now.toISOString(), until.toISOString()),
-          
-          localEventsIn(ctx, scope, { nodeIds: below, general: false }, new Date(now.getTime() - 14 * 3_600_000).toISOString().slice(0, 10), until.toISOString().slice(0, 10), {
-            from: now.toISOString(),
-            to: until.toISOString(),
-          }),
+          readCalendars(ctx, scope, { kind: "node", node }, range),
+          localEventsIn(ctx, scope, { nodeIds: below, general: false }, fromDay, toDay, range),
         ])
-      : [{ events: [], failures: [] }, ok({ events: [] })];
+      : [ok({ toRead: [] as string[], events: [] as CalendarEvent[], failures: [] as EventsFailure[] }), ok({ events: [] as LocalEvent[] })];
+    if (isError(google)) return google;
     if (isError(local)) return local;
-    const failures = google.failures;
-    const events = [
-      ...google.events.map((event) => ({ ...event, origin: "google" as const, localId: null, nodeId: null, nodePath: null, linkedNodeIds: [], linkedTaskIds: [] })),
-      ...local.events.map(fromLocal),
-    ].sort((a, b) => Date.parse(a.allDay ? `${a.start}T00:00:00` : a.start) - Date.parse(b.allDay ? `${b.start}T00:00:00` : b.start));
+    const events = inTimeOrder([...google.events.map(fromGoogle), ...local.events.map(fromLocal)]);
     const [notes, decisions] = [latest("note"), latest("decision")];
     return ok({
       node: { id: node.id, path: node.path, kind: node.kind },
@@ -267,7 +265,8 @@ export const getOverview = defineTool({
         decisions: summary("decision", false),
       },
       events,
-      eventFailures: failures,
+      eventsToRead: google.toRead,
+      eventFailures: google.failures,
     });
   },
 });

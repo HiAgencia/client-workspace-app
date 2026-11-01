@@ -18,11 +18,12 @@ const MEETINGS = {
 const EVERY_MEETING = Object.values(MEETINGS).flat().sort();
 
 type Browsed = { ok: boolean; events: Array<{ origin: string; title: string; calendarName?: string; accountEmail?: string; fromNodeId?: string; allDay: boolean }>; failures: unknown[] };
-type Tree = { nodes: Array<{ id: string; path: string; parentId: string | null }> };
+type Tree = { nodes: Array<{ id: string; path: string; parentId: string | null }>; mail: { accounts: Array<{ id: string; email: string; isDemo: boolean; status: string; nodeId: string }> } };
 
 let user: DisposableUser | undefined;
 let stranger: DisposableUser | undefined;
 let nodeOf: (path: string) => string;
+let samples: Tree["mail"]["accounts"];
 
 const contextOf = (who: DisposableUser, withSource = true): ToolContext => ({ db: who.client, ownerId: who.id, source: "manual", events: withSource ? demoEventsSource() : undefined });
 const meetingsIn = (answer: Browsed) => answer.events.filter((event) => event.origin === "google");
@@ -32,7 +33,8 @@ beforeAll(async () => {
   [user, stranger] = await Promise.all([createAnonymousUser("demo-calendars"), createAnonymousUser("demo-calendars-stranger")]);
   const planted = await user.client.rpc("seed_demo", { p_today: TODAY });
   expect(planted.error).toBeNull();
-  const tree = (await callTool("list_tree", contextOf(user), {})) as unknown as Tree;
+  const tree = (await callTool("list_tree", contextOf(user), { withMail: true })) as unknown as Tree;
+  samples = tree.mail.accounts;
   nodeOf = (path) => {
     const found = tree.nodes.find((node) => node.path === path);
     if (!found) throw new Error(`no node at ${path}`);
@@ -46,9 +48,11 @@ afterAll(async () => {
 
 describe("the demo's calendars", () => {
   it("bring each meeting once over everything, at its hours, from more than one account", async () => {
-    const answer = (await callTool("browse_events", contextOf(user!), WEEK)) as unknown as Browsed;
+    const answer = (await callTool("browse_events", contextOf(user!), WEEK)) as unknown as Browsed & { toRead: string[] };
     expect(answer.ok).toBe(true);
     expect(answer.failures).toEqual([]);
+    
+    expect(answer.toRead).toEqual([]);
     expect(titlesIn(answer)).toEqual(EVERY_MEETING);
     const meetings = meetingsIn(answer);
     expect(meetings.every((event) => event.allDay === false)).toBe(true);
@@ -72,8 +76,9 @@ describe("the demo's calendars", () => {
     const own = (await callTool("browse_events", contextOf(stranger!), WEEK)) as unknown as Browsed;
     expect(own.ok).toBe(true);
     expect(meetingsIn(own)).toEqual([]);
-    const claimed = await demoEventsSource()({ db: stranger!.client, ownerId: user!.id, nodeId: nodeOf("Larkspur Bakery"), from: WEEK.from, to: WEEK.to });
-    expect(claimed.events).toEqual([]);
+    const answers = await Promise.all(samples.map((account) => demoEventsSource()({ db: stranger!.client, ownerId: user!.id, account, nodeId: account.nodeId, from: WEEK.from, to: WEEK.to })));
+    expect(samples.length).toBeGreaterThan(1);
+    expect(answers.flatMap((answer) => answer.events)).toEqual([]);
   });
 
   it("are not there without the source: the screens read them from it", async () => {
@@ -81,7 +86,7 @@ describe("the demo's calendars", () => {
     expect(meetingsIn(answer)).toEqual([]);
   });
 
-  it("cost the same whatever the places: a read over every root asks once per range", async () => {
+  it("cost the same whatever the accounts: a read of every sample account asks once per range", async () => {
     let asked = 0;
     const counting = new Proxy(user!.client, {
       get(target, key, receiver) {
@@ -93,8 +98,14 @@ describe("the demo's calendars", () => {
       },
     });
     const source = demoEventsSource();
-    const roots = ["Larkspur Bakery", "Studio Atlas", "Lumen Dental", "Operations"].map(nodeOf);
-    await Promise.all(roots.map((nodeId) => source({ db: counting, ownerId: user!.id, nodeId, from: WEEK.from, to: WEEK.to })));
-    expect(asked).toBe(4);
+    const read = (to: string) => Promise.all(samples.map((account) => source({ db: counting, ownerId: user!.id, account, nodeId: account.nodeId, from: WEEK.from, to })));
+    const answers = await read(WEEK.to);
+    expect(samples.length).toBeGreaterThan(1);
+    expect(asked).toBe(1);
+    
+    expect(answers.flatMap((answer) => answer.events).map((event) => event.title).sort()).toEqual(EVERY_MEETING);
+    
+    await read("2026-11-04T00:00:00.000Z");
+    expect(asked).toBe(2);
   });
 });

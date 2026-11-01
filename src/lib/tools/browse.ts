@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { richTextToPlain } from "@/lib/rich-text";
 import { defineTool } from "./define";
-import { eventsForNode } from "./events";
-import { calendarEventSchema, eventsFailureSchema, type CalendarEvent, type EventsFailure } from "./events-source";
+import { accountRowSchema, browsedEventSchema, fromGoogle, fromLocal, inTimeOrder, readCalendars, type BrowsedEvent } from "./events";
+import { eventsFailureSchema } from "./events-source";
 import { localEventsIn, nodeEventLinks, type LocalEvent } from "./local-events";
 import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok } from "./result";
@@ -158,48 +158,6 @@ export const browseItems = defineTool({
 });
 
 
-export const browsedEventSchema = calendarEventSchema.extend({
-  origin: z.enum(["google", "local"]),
-  
-  localId: z.string().nullable(),
-  nodeId: z.string().nullable(),
-  nodePath: z.string().nullable(),
-  
-  linkedNodeIds: z.array(z.string()),
-  linkedTaskIds: z.array(z.string()),
-});
-
-export type BrowsedEvent = z.infer<typeof browsedEventSchema>;
-
-function fromGoogle(event: CalendarEvent): BrowsedEvent {
-  return { ...event, origin: "google", localId: null, nodeId: null, nodePath: null, linkedNodeIds: [], linkedTaskIds: [] };
-}
-
-export function fromLocal(event: LocalEvent): BrowsedEvent {
-  return {
-    id: event.id,
-    title: event.title,
-    start: event.allDay ? event.startsOn! : event.startsAt!,
-    end: event.allDay ? event.endsOn! : event.endsAt!,
-    allDay: event.allDay,
-    location: null,
-    link: null,
-    calendarId: "workspace",
-    calendarName: event.nodePath ?? "Workspace",
-    color: null,
-    accountId: "",
-    accountEmail: "",
-    fromNodeId: event.nodeId ?? "",
-    origin: "local",
-    localId: event.id,
-    nodeId: event.nodeId,
-    nodePath: event.nodePath,
-    linkedNodeIds: [],
-    linkedTaskIds: [],
-  };
-}
-
-
 
 async function tasksInEvents(ctx: ToolContext, scope: Scope, events: BrowsedEvent[]) {
   const byEvent = new Map<string, string[]>();
@@ -233,24 +191,31 @@ async function tasksInEvents(ctx: ToolContext, scope: Scope, events: BrowsedEven
   return ok({ byEvent });
 }
 
-const startOf = (event: BrowsedEvent) => (event.allDay ? Date.parse(`${event.start}T00:00:00`) : Date.parse(event.start));
-
 export const browseEvents = defineTool({
   name: "browse_events",
   description:
-    "The events between two moments: those of the Google accounts visible from a node (its own and inherited), the " +
-    "workspace's own events of that node and everything below it, and those linked to them; without a node, every " +
-    "account and every own event, those of no node included, each event once. Each says its origin (google or local) " +
-    "and the clients and projects linked to it and the tasks that live in it.",
+    "The events between two moments, one account per call. With account: only that account's events; not_found when the " +
+    "place does not see it (a node sees its own accounts and those inherited; without a node, every account). Without it: " +
+    "the workspace's own events of the node and everything below it, and those linked to them (without a node, every own " +
+    "event, those of no node included), the sample accounts', and a lone connected account's; over several connected " +
+    "accounts it reads none of them: toRead lists them, and each is read with its own call. Each event comes once and says " +
+    "its origin (google or local), the clients and projects linked to it, and the tasks that live in it.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it for the current node, or for everything."),
+    account: z.uuid().optional().describe("The account to read. Omit it to learn the place's accounts: one alone is read at once."),
     from: z.iso.datetime({ offset: true }).describe("The range's start, an ISO date-time with its offset."),
     to: z.iso.datetime({ offset: true }).describe("The range's end."),
     fromDay: day.describe("The person's calendar day where the range starts, for whole-day events."),
     toDay: day.describe("The person's last calendar day in the range (included)."),
   }),
-  output: z.object({ events: z.array(browsedEventSchema), failures: z.array(eventsFailureSchema) }),
+  output: z.object({
+    accounts: z.array(accountRowSchema),
+    
+    toRead: z.array(z.string()),
+    events: z.array(browsedEventSchema),
+    failures: z.array(eventsFailureSchema),
+  }),
   async run(ctx, input) {
     if (!(Date.parse(input.to) > Date.parse(input.from))) return fail("invalid_input", "the end must come after the start");
     if (Date.parse(input.to) - Date.parse(input.from) > 93 * 24 * 60 * 60 * 1000) return fail("invalid_input", "ask for at most three months");
@@ -268,37 +233,26 @@ export const browseEvents = defineTool({
     
     const linked = await nodeEventLinks(ctx, reach.nodeIds);
     if (isError(linked)) return linked;
-    
-    
-    let anchors: TreeNode[] = node ? [node] : [...scope.all.values()].filter((n) => n.parentId === null && scope.reachable.has(n.id));
-    const failures = new Map<string, EventsFailure>();
-    if (!node && ctx.events) {
-      const { data: links, error } = await ctx.db.from("node_accounts").select("node_id");
-      if (error) {
-        console.error("events: reading where accounts hang", error.message);
-        failures.set("", { accountId: "", accountEmail: "", reason: "the accounts that hang below a client could not be read" });
-      }
-      const below = new Set((links ?? []).map((link) => link.node_id));
-      anchors = [...anchors, ...[...below].map((id) => scope.all.get(id)).filter((n): n is TreeNode => Boolean(n && n.parentId !== null))];
-    }
+    const range = { from: input.from, to: input.to };
     const [google, local] = await Promise.all([
-      Promise.all(anchors.map((anchor) => eventsForNode(ctx, anchor, input.from, input.to))),
-      localEventsIn(
-        ctx,
-        scope,
-        reach,
-        input.fromDay,
-        input.toDay,
-        { from: input.from, to: input.to },
-        linked.links.flatMap((link) => (link.eventId ? [link.eventId] : [])),
-      ),
+      readCalendars(ctx, scope, place, range, input.account),
+      
+      input.account
+        ? ok({ events: [] as LocalEvent[] })
+        : localEventsIn(
+            ctx,
+            scope,
+            reach,
+            input.fromDay,
+            input.toDay,
+            range,
+            linked.links.flatMap((link) => (link.eventId ? [link.eventId] : [])),
+          ),
     ]);
+    if (isError(google)) return google;
     if (isError(local)) return local;
     const events = new Map<string, BrowsedEvent>();
-    for (const answer of google) {
-      for (const event of answer.events) events.set(`g:${event.accountId}:${event.calendarId}:${event.id}`, fromGoogle(event));
-      for (const failure of answer.failures) failures.set(failure.accountId, failure);
-    }
+    for (const event of google.events) events.set(`g:${event.accountId}:${event.calendarId}:${event.id}`, fromGoogle(event));
     for (const event of local.events) events.set(`l:${event.id}`, fromLocal(event));
     for (const link of linked.links) {
       const key = link.eventId ? `l:${link.eventId}` : `g:${link.accountId}:${link.calendarId}:${link.googleEventId}`;
@@ -308,6 +262,6 @@ export const browseEvents = defineTool({
     const tasks = await tasksInEvents(ctx, scope, [...events.values()]);
     if (isError(tasks)) return tasks;
     for (const [key, ids] of tasks.byEvent) events.get(key)?.linkedTaskIds.push(...ids);
-    return ok({ events: [...events.values()].sort((a, b) => startOf(a) - startOf(b)), failures: [...failures.values()] });
+    return ok({ accounts: google.accounts, toRead: google.toRead, events: inTimeOrder([...events.values()]), failures: google.failures });
   },
 });

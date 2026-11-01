@@ -1,9 +1,15 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { loadHistory } from "@/lib/chat/history";
+import { simulatedModel } from "@/lib/chat/simulated";
+import { takeUsageFor } from "@/lib/chat/usage";
 import type { Fetch } from "@/lib/google/api";
 import { connectAccount } from "@/lib/google/connect";
 import { decrypt, encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
 import { googleCalendarWriter, googleEventsSource, type GoogleDeps } from "@/lib/google/events";
+import { readSession } from "@/lib/supabase/server";
+import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
+import { chatTurn } from "../support/chat-turn";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
 
@@ -25,6 +31,7 @@ const googleEvents: Record<string, unknown[]> = {
   ],
   "token-landing": [{ id: "l1", summary: "Landing review", start: { date: "2026-11-02" }, end: { date: "2026-11-03" } }],
   "token-late": [{ id: "t1", summary: "Late review", start: { date: "2026-11-04" }, end: { date: "2026-11-05" } }],
+  "token-reader": [{ id: "r1", summary: "Reader sync", start: { dateTime: "2026-11-04T12:00:00Z" }, end: { dateTime: "2026-11-04T12:30:00Z" } }],
 };
 
 const fakeGoogle: Fetch = async (input, init) => {
@@ -90,12 +97,12 @@ async function insertNode(kind: "client" | "project" | "subproject", name: strin
   return data.id;
 }
 
-async function insertAccount(email: string, refresh: string, node: string) {
+async function insertAccount(email: string, refresh: string, node: string, owner = user!) {
   const service = serviceClient();
   const { data, error } = await service
     .from("google_accounts")
     .insert({
-      owner_id: user!.id,
+      owner_id: owner.id,
       email,
       refresh_token: await encrypt(deps.key, refresh),
       
@@ -130,11 +137,30 @@ afterAll(async () => {
 }, 60_000);
 
 const window = { from: "2026-11-01T00:00:00Z", to: "2026-11-08T00:00:00Z" };
+const days = { fromDay: "2026-11-01", toDay: "2026-11-07" };
+
+type EventRead = { id: string; title: string; start: string; allDay: boolean; origin: string; accountId: string; accountEmail: string; fromNodeId: string; linkedTaskIds: string[] };
+type Read = { ok: boolean; toRead: string[]; events: EventRead[]; failures: Array<{ accountId: string; accountEmail: string; reason: string }> };
+
+const readerContext = (owner = user!): ToolContext => ({ db: owner.client, ownerId: owner.id, source: "manual", events: googleEventsSource(deps) });
+
+
+async function readWhole(ctx: ToolContext, name: "list_events" | "browse_events", input: Record<string, unknown>) {
+  const first = (await callTool(name, ctx, input)) as unknown as Read;
+  expect(first.ok).toBe(true);
+  const rest = (await Promise.all(first.toRead.map((account) => callTool(name, ctx, { ...input, account })))) as unknown as Read[];
+  const answers = [first, ...rest];
+  return {
+    events: answers.flatMap((answer) => answer.events).sort((a, b) => a.start.localeCompare(b.start)),
+    failures: answers.flatMap((answer) => answer.failures),
+  };
+}
+
+const eventsOf = (node: string) => readWhole(readerContext(), "list_events", { node, ...window });
 
 describe("events from inherited accounts", () => {
   it("the subproject sees its own account and the inherited ones; a revoked one is reported, not fatal", async () => {
-    const source = googleEventsSource(deps);
-    const { events, failures } = await source({ db: user!.client, ownerId: user!.id, nodeId: ids.leaf, ...window });
+    const { events, failures } = await eventsOf(ids.leaf);
     expect(events.map((e) => e.title)).toEqual(["Landing review", "Agency standup"]);
     expect(events.find((e) => e.id === "l1")).toMatchObject({ allDay: true, fromNodeId: ids.leaf, accountEmail: "landing@example.com" });
     expect(events.find((e) => e.id === "a1")).toMatchObject({ allDay: false, fromNodeId: ids.root });
@@ -144,9 +170,11 @@ describe("events from inherited accounts", () => {
   });
 
   it("the root sees only its own account", async () => {
-    const { events, failures } = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: ids.root, ...window });
-    expect(events.map((e) => e.accountEmail)).toEqual(["agency@example.com"]);
-    expect(failures).toEqual([]);
+    
+    const first = (await callTool("list_events", readerContext(), { node: ids.root, ...window })) as unknown as Read;
+    expect(first.toRead).toEqual([]);
+    expect(first.events.map((e) => e.accountEmail)).toEqual(["agency@example.com"]);
+    expect(first.failures).toEqual([]);
   });
 
   it("a renewed token is stored encrypted, and a revoked account is marked", async () => {
@@ -165,7 +193,7 @@ describe("events from inherited accounts", () => {
       await service.from("node_accounts").insert({ node_id: ids.leaf, account_id: sample.id });
       await service.from("account_calendars").insert({ account_id: sample.id, calendar_id: "primary", summary: "Sample", selected: true });
       calls.length = 0;
-      const { events, failures } = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: ids.leaf, ...window });
+      const { events, failures } = await eventsOf(ids.leaf);
       expect(failures.map((failure) => failure.accountEmail)).toEqual(["revoked@example.com"]);
       expect(events.every((event) => event.accountId !== sample.id)).toBe(true);
       
@@ -182,27 +210,19 @@ describe("events from inherited accounts", () => {
     const task = (await callTool("create_task", ctx, { node: ids.leaf, title: "Prepare the standup" })) as { ok: boolean; item: { id: string } };
     const other = (await callTool("create_task", ctx, { node: ids.leaf, title: "Not in an event" })) as { ok: boolean; item: { id: string } };
     expect((await callTool("link_task_event", ctx, { task: task.item.id, account: ids.agency, calendar: "primary", googleEvent: "a1" })).ok).toBe(true);
-    const browsed = (await callTool("browse_events", ctx, { node: ids.leaf, ...window, fromDay: "2026-11-01", toDay: "2026-11-07" })) as {
-      ok: boolean;
-      events: Array<{ id: string; linkedTaskIds: string[] }>;
-    };
-    expect(browsed.ok).toBe(true);
+    const browsed = await readWhole(ctx, "browse_events", { node: ids.leaf, ...window, ...days });
     expect(browsed.events.find((event) => event.id === "a1")?.linkedTaskIds).toEqual([task.item.id]);
     expect(browsed.events.find((event) => event.id === "l1")?.linkedTaskIds).toEqual([]);
     expect(browsed.events.flatMap((event) => event.linkedTaskIds)).not.toContain(other.item.id);
     
     await callTool("delete_item", ctx, { id: task.item.id });
-    const after = (await callTool("browse_events", ctx, { node: ids.leaf, ...window, fromDay: "2026-11-01", toDay: "2026-11-07" })) as { ok: boolean; events: Array<{ id: string; linkedTaskIds: string[] }> };
+    const after = await readWhole(ctx, "browse_events", { node: ids.leaf, ...window, ...days });
     expect(after.events.find((event) => event.id === "a1")?.linkedTaskIds).toEqual([]);
   });
 
   it("list_events serves them through the tool layer, and another owner's id is not found", async () => {
     const ctx = { db: user!.client, ownerId: user!.id, source: "manual" as const, events: googleEventsSource(deps) };
-    const result = (await callTool("list_events", ctx, { node: "Acme / Web / Landing", ...window })) as {
-      ok: boolean;
-      events: Array<{ title: string }>;
-    };
-    expect(result.ok).toBe(true);
+    const result = await readWhole(ctx, "list_events", { node: "Acme / Web / Landing", ...window });
     expect(result.events.map((e) => e.title)).toEqual(["Landing review", "Agency standup"]);
     const other = await createDisposableUser("google-other");
     try {
@@ -235,7 +255,7 @@ describe("events from inherited accounts", () => {
       await service.from("node_accounts").insert({ node_id: node, account_id: data.id });
       await service.from("account_calendars").insert({ account_id: data.id, calendar_id: "primary", summary: email, selected: true });
     }
-    const { events, failures } = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: node, ...window });
+    const { events, failures } = await eventsOf(node);
     expect(events.map((event) => event.title)).toEqual(["Late review"]);
     expect(failures).toEqual([{ accountId: accountIds[1], accountEmail: "revoked-late@example.com", reason: "access was revoked: connect the account again" }]);
     const { data } = await service.from("google_accounts").select("id, access_token, status").in("id", accountIds);
@@ -243,6 +263,290 @@ describe("events from inherited accounts", () => {
     expect(await decrypt(deps.key, late.access_token!)).toBe("token-late");
     expect(data!.find((row) => row.id === accountIds[1])!.status).toBe("revoked");
   });
+});
+
+describe("what reading the calendars costs in requests of the Worker's own", () => {
+  
+  
+  
+  const SIZES = [1, 3, 10];
+  let owner: DisposableUser | undefined;
+  let place = "";
+  let inside = "";
+  const readers: string[] = [];
+  const ownerContext = () => readerContext(owner!);
+  const range = { ...window, ...days };
+
+  type Cost = { google: number; token: number; supabase: number; total: number };
+
+  async function costOf<T>(run: () => Promise<T>): Promise<{ cost: Cost; result: T }> {
+    calls.length = 0;
+    const spy = vi.spyOn(globalThis, "fetch");
+    const settled = await run().then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    const urls = spy.mock.calls.map(([input]) => (input instanceof Request ? input.url : String(input)));
+    spy.mockRestore();
+    if (!settled.ok) throw settled.error;
+    
+    expect(urls.filter((url) => !/\/(rest|auth)\/v1\//.test(url))).toEqual([]);
+    const token = calls.filter((call) => call.endsWith("/token")).length;
+    const google = calls.length - token;
+    return { cost: { google, token, supabase: urls.length, total: google + token + urls.length }, result: settled.value };
+  }
+
+  async function expireTokens() {
+    const { error } = await serviceClient().from("google_accounts").update({ access_token_expires_at: "2020-01-01T00:00:00Z" }).eq("owner_id", owner!.id);
+    if (error) throw new Error(error.message);
+  }
+
+  
+  async function withReaders(count: number) {
+    while (readers.length < count) readers.push(await insertAccount(`reader-${readers.length + 1}@example.com`, "refresh-reader", place, owner!));
+    const extra = readers.splice(count);
+    if (extra.length > 0) {
+      const { error } = await serviceClient().from("google_accounts").delete().in("id", extra);
+      if (error) throw new Error(error.message);
+    }
+  }
+
+  async function acrossSizes(read: () => Promise<unknown>, sizes = SIZES): Promise<Cost[]> {
+    const measured: Cost[] = [];
+    for (const size of sizes) {
+      await withReaders(size);
+      await expireTokens();
+      const { cost, result } = await costOf(read);
+      
+      expect(result).toMatchObject({ ok: true });
+      measured.push(cost);
+    }
+    return measured;
+  }
+
+  const grew = (measured: Cost[]) => measured.some((cost) => cost.total !== measured[0].total);
+
+  beforeAll(async () => {
+    owner = await createDisposableUser("google-cost");
+    const node = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "client", name: "Northwind" }).select("id").single();
+    if (node.error) throw new Error(node.error.message);
+    place = node.data.id;
+    const project = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "project", name: "Launch", parent_id: place }).select("id").single();
+    if (project.error) throw new Error(project.error.message);
+    inside = project.data.id;
+  }, 60_000);
+
+  afterAll(async () => {
+    if (owner) await deleteDisposableUsers([owner]);
+  }, 60_000);
+
+  it("reads one account in a request that costs the same with 1, 3 and 10 accounts", async () => {
+    const reads: Array<[string, () => Promise<unknown>]> = [
+      ["browse_events over everything", () => callTool("browse_events", ownerContext(), { ...range, account: readers[0] })],
+      ["browse_events from a node below", () => callTool("browse_events", ownerContext(), { ...range, node: inside, account: readers[0] })],
+      ["list_events", () => callTool("list_events", ownerContext(), { ...window, node: place, account: readers[0] })],
+    ];
+    for (const [name, read] of reads) {
+      const measured = await acrossSizes(read);
+      expect({ name, measured }).toEqual({ name, measured: [measured[0], measured[0], measured[0]] });
+      
+      expect(measured[0].google).toBe(1);
+      expect(measured[0].token).toBe(1);
+    }
+  }, 180_000);
+
+  it("its twin: a request that reads every account grows with them and fails the rule", async () => {
+    const measured = await acrossSizes(async () => {
+      await Promise.all(readers.map((id) => callTool("browse_events", ownerContext(), { ...range, account: id })));
+      return { ok: true };
+    });
+    expect(grew(measured)).toBe(true);
+  }, 180_000);
+
+  it("what grows inside one account is its chosen calendars, one read of Google each", async () => {
+    await withReaders(1);
+    const calendar = await serviceClient().from("account_calendars").insert({ account_id: readers[0], calendar_id: "second", summary: "Second", selected: true });
+    expect(calendar.error).toBeNull();
+    try {
+      await expireTokens();
+      const { cost } = await costOf(() => callTool("browse_events", ownerContext(), { ...range, account: readers[0] }));
+      expect(cost.google).toBe(2);
+      expect(cost.token).toBe(1);
+    } finally {
+      await serviceClient().from("account_calendars").delete().eq("account_id", readers[0]).eq("calendar_id", "second");
+    }
+  });
+
+  it("a read that names no account, over several, asks Google nothing and lists them all, at any size", async () => {
+    for (const [name, read, listed] of [
+      ["browse_events", () => callTool("browse_events", ownerContext(), range), "toRead"],
+      ["list_events", () => callTool("list_events", ownerContext(), { ...window, node: place }), "toRead"],
+      ["get_overview", () => callTool("get_overview", ownerContext(), { node: place }), "eventsToRead"],
+    ] as Array<[string, () => Promise<unknown>, string]>) {
+      const measured: Cost[] = [];
+      for (const size of [3, 10]) {
+        await withReaders(size);
+        await expireTokens();
+        const { cost, result } = await costOf(read);
+        expect({ name, listed: [...(result as Record<string, string[]>)[listed]].sort() }).toEqual({ name, listed: [...readers].sort() });
+        expect(cost.google + cost.token).toBe(0);
+        measured.push(cost);
+      }
+      expect({ name, grew: grew(measured) }).toEqual({ name, grew: false });
+    }
+  }, 180_000);
+
+  it("a lone connected account comes in the first request, with the place's own events beside it", async () => {
+    await withReaders(1);
+    await expireTokens();
+    const own = (await callTool("create_event", ownerContext(), { node: place, title: "Own review", startsOn: "2026-11-03" })) as { ok: boolean };
+    expect(own.ok).toBe(true);
+    for (const [name, read, listed] of [
+      ["browse_events", () => callTool("browse_events", ownerContext(), range), "toRead"],
+      ["list_events", () => callTool("list_events", ownerContext(), { ...window, node: place }), "toRead"],
+    ] as Array<[string, () => Promise<unknown>, string]>) {
+      const answer = (await read()) as unknown as Read;
+      expect({ name, listed: (answer as unknown as Record<string, string[]>)[listed] }).toEqual({ name, listed: [] });
+      expect(answer.events.map((event) => [event.title, event.origin])).toEqual([
+        ["Own review", "local"],
+        ["Reader sync", "google"],
+      ]);
+    }
+    
+    const named = (await callTool("browse_events", ownerContext(), { ...range, account: readers[0] })) as unknown as Read;
+    expect(named.events.map((event) => event.title)).toEqual(["Reader sync"]);
+    
+    calls.length = 0;
+    const agenda = (await callTool("get_overview", ownerContext(), { node: place })) as unknown as { eventsToRead: string[] };
+    expect(agenda.eventsToRead).toEqual([]);
+    expect(calls.filter((call) => call.includes("/events"))).toHaveLength(1);
+  });
+
+  it("an account says the node it is seen from, nearest to the node asked, and the first it hangs from over everything", async () => {
+    await withReaders(1);
+    const service = serviceClient();
+    const attached = await service.from("node_accounts").insert({ node_id: inside, account_id: readers[0] });
+    expect(attached.error).toBeNull();
+    try {
+      const fromInside = (await callTool("browse_events", ownerContext(), { ...range, node: inside, account: readers[0] })) as unknown as Read;
+      expect(fromInside.events.map((event) => event.fromNodeId)).toEqual([inside]);
+      const fromAbove = (await callTool("browse_events", ownerContext(), { ...range, node: place, account: readers[0] })) as unknown as Read;
+      expect(fromAbove.events.map((event) => event.fromNodeId)).toEqual([place]);
+      
+      const everything = (await callTool("browse_events", ownerContext(), { ...range, account: readers[0] })) as unknown as Read;
+      const tree = (await callTool("list_tree", ownerContext(), { withMail: true })) as unknown as { mail: { accounts: Array<{ id: string; nodeId: string; nodeIds: string[] }> } };
+      const hanging = tree.mail.accounts.find((account) => account.id === readers[0])!;
+      expect([...hanging.nodeIds].sort()).toEqual([place, inside].sort());
+      expect(everything.events.map((event) => event.fromNodeId)).toEqual([hanging.nodeId]);
+    } finally {
+      await service.from("node_accounts").delete().eq("node_id", inside).eq("account_id", readers[0]);
+    }
+  });
+
+  it("a scoped access reads no node out of its reach in where an inherited account hangs", async () => {
+    await withReaders(1);
+    const scoped = { ...ownerContext(), db: serviceClient(), scopeNodeId: inside, source: "agent" as const, agentLabel: "laptop" };
+    const tree = (await callTool("list_tree", scoped, { withMail: true })) as unknown as { mail: { accounts: Array<{ id: string; nodeId: string | null; nodeIds: string[] }> } };
+    expect(tree.mail.accounts.find((account) => account.id === readers[0])).toMatchObject({ nodeId: null, nodeIds: [] });
+  });
+
+  it("an account out of reach is not found: from another place, a scoped access, and another person", async () => {
+    await withReaders(1);
+    const other = await owner!.client.from("nodes").insert({ owner_id: owner!.id, kind: "client", name: "Contoso" }).select("id").single();
+    expect(other.error).toBeNull();
+    calls.length = 0;
+    const fromElsewhere = await callTool("browse_events", ownerContext(), { ...range, node: other.data!.id, account: readers[0] });
+    expect(fromElsewhere).toMatchObject({ ok: false, code: "not_found" });
+    const listed = await callTool("list_events", ownerContext(), { ...window, node: other.data!.id, account: readers[0] });
+    expect(listed).toMatchObject({ ok: false, code: "not_found" });
+    const scoped = await callTool("browse_events", { ...ownerContext(), db: serviceClient(), scopeNodeId: other.data!.id, source: "agent", agentLabel: "laptop" }, { ...range, account: readers[0] });
+    expect(scoped).toMatchObject({ ok: false, code: "not_found" });
+    const stranger = await createDisposableUser("google-cost-stranger");
+    try {
+      const foreign = await callTool("browse_events", readerContext(stranger), { ...range, account: readers[0] });
+      expect(foreign).toMatchObject({ ok: false, code: "not_found" });
+      const own = (await callTool("browse_events", readerContext(stranger), range)) as unknown as Read;
+      expect(own.events).toEqual([]);
+      expect(own.toRead).toEqual([]);
+    } finally {
+      await deleteDisposableUsers([stranger]);
+    }
+    expect(calls).toEqual([]);
+    
+    const reached = await callTool("browse_events", ownerContext(), { ...range, node: place, account: readers[0] });
+    expect(reached).toMatchObject({ ok: true });
+    expect(calls.length).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("a revoked account says so and asks Google nothing; its twin, an active one, asks", async () => {
+    await withReaders(1);
+    const service = serviceClient();
+    await service.from("google_accounts").update({ status: "revoked" }).eq("id", readers[0]);
+    try {
+      await expireTokens();
+      const { cost, result } = await costOf(() => callTool("browse_events", ownerContext(), { ...range, account: readers[0] }));
+      expect(cost.google + cost.token).toBe(0);
+      expect((result as unknown as Read).failures.map((failure) => failure.reason)).toEqual(["access was revoked: connect the account again"]);
+    } finally {
+      await service.from("google_accounts").update({ status: "active" }).eq("id", readers[0]);
+    }
+    const { cost } = await costOf(() => callTool("browse_events", ownerContext(), { ...range, account: readers[0] }));
+    expect(cost.google).toBeGreaterThan(0);
+  });
+
+  it("without a source no account is read and none is listed, and a named one out of reach is still not found", async () => {
+    await withReaders(3);
+    const ctx: ToolContext = { db: owner!.client, ownerId: owner!.id, source: "manual" };
+    const answer = (await callTool("browse_events", ctx, range)) as unknown as Read;
+    expect(answer).toMatchObject({ ok: true, toRead: [], failures: [] });
+    expect(answer.events.filter((event) => event.origin === "google")).toEqual([]);
+    expect(await callTool("browse_events", ctx, { ...range, account: "00000000-0000-4000-8000-000000000000" })).toMatchObject({ ok: false, code: "not_found" });
+  });
+
+  it("a chat turn reads each account in a request of its own, and its own requests cost the same with 3 and with 10", async () => {
+    async function turnIn(size: number) {
+      const requests: Cost[] = [];
+      const reads: Cost[] = [];
+      await withReaders(size);
+      await expireTokens();
+      const message = await chatTurn({
+        ctx: { ...ownerContext(), source: "chat" },
+        model: simulatedModel(),
+        messages: [{ id: "asked", role: "user", parts: [{ type: "text", text: "What's on my calendar this week?" }] }],
+        
+        request: async (run) => {
+          const { cost, result } = await costOf(async () => {
+            await readSession(owner!.client);
+            await takeUsageFor(serviceClient(), { id: owner!.id, isAnonymous: false }, "chat_message");
+            await loadHistory(owner!.client, null);
+            return run();
+          });
+          requests.push(cost);
+          return result;
+        },
+        read: async (run) => {
+          const { cost, result } = await costOf(run);
+          reads.push(cost);
+          return result;
+        },
+      });
+      return { requests, reads, said: message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ") };
+    }
+    const medium = await turnIn(3);
+    const large = await turnIn(10);
+    
+    expect(medium.said).toMatch(/This week|Nothing is on the calendars/);
+    expect(large.said).toMatch(/This week|Nothing is on the calendars/);
+    for (const turn of [medium, large]) expect(turn.requests.map((cost) => cost.google + cost.token)).toEqual(turn.requests.map(() => 0));
+    expect(large.requests.map((cost) => cost.total)).toEqual(medium.requests.map((cost) => cost.total));
+    
+    expect(medium.reads).toHaveLength(1 + 3);
+    expect(large.reads).toHaveLength(1 + 10);
+    expect(large.reads[0].google + large.reads[0].token).toBe(0);
+    expect(large.reads.slice(1).every((cost) => cost.token === 1 && cost.google === 1)).toBe(true);
+    
+    expect(new Set([...medium.reads.slice(1), ...large.reads.slice(1)].map((cost) => cost.total)).size).toBe(1);
+  }, 180_000);
 });
 
 describe("connecting an account", () => {
@@ -285,7 +589,7 @@ describe("writing to Google", () => {
     };
     expect(created.ok).toBe(true);
     expect(created.event).toMatchObject({ start: "2026-11-04T15:00:00.000Z", end: "2026-11-04T16:00:00.000Z", allDay: false });
-    const read = await googleEventsSource(deps)({ db: user!.client, ownerId: user!.id, nodeId: ids.root, ...window });
+    const read = await eventsOf(ids.root);
     expect(read.events.map((e) => e.title)).toContain("Client call");
 
     const moved = (await callTool("update_google_event", ctx(), { account: ids.agency, calendar: "primary", event: created.event.id, title: "Client call (moved)", startsOn: "2026-11-05", endsOn: "2026-11-06" })) as {

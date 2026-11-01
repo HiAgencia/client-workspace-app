@@ -3,10 +3,10 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
 import { firstWeekday, instantsOf, weekOf, type Day } from "@/lib/dates";
-import { useToolRead } from "./boxes";
+import { useEventsRead } from "./use-events-read";
 import { mailBoxRows, placeValue, readPlace, type MailList, type Place } from "./box-kinds";
 import type { TreeNode } from "./client-api";
-import { AccountFilter, ALL, MESSAGES, PlaceFilter, placesThatShow, TASKS, type ShownEvent } from "./place-filters";
+import { AccountFilter, ALL, GENERAL, MESSAGES, PlaceFilter, placesThatShow, TASKS, type ShownEvent } from "./place-filters";
 import type { TaskReplies } from "./task-replies";
 import { useWorkspace } from "./workspace";
 
@@ -37,11 +37,14 @@ export function usePlaceParam(tree: TreeNode[] | null): Place {
 
 
 
+
 function useShows(now: Day | null): Set<string> {
   const { tree, mailAccounts, notePlaces } = useWorkspace();
   const week = now ? weekOf(now, firstWeekday()) : null;
   const instants = week ? instantsOf(week.from, week.to) : null;
-  const read = useToolRead<{ events: ShownEvent[] }>("browse_events", week && instants ? { from: instants.from, to: instants.to, fromDay: week.from, toDay: week.to } : null);
+  const read = useEventsRead<ShownEvent>(week && instants ? { from: instants.from, to: instants.to, fromDay: week.from, toDay: week.to } : null, false);
+  
+  if (read.error && !read.data) return new Set([GENERAL, ...(tree ?? []).map((node) => node.id)]);
   return placesThatShow(tree, mailAccounts ?? [], notePlaces, read.data?.events ?? []);
 }
 

@@ -12,6 +12,7 @@ type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWri
 const OPEN_WORLD = new Set([
   "list_events",
   "browse_events",
+  "get_overview",
   "create_google_event",
   "update_google_event",
   "delete_google_event",
@@ -22,6 +23,7 @@ const OPEN_WORLD = new Set([
   "link_mail",
   "create_task_from_mail",
   "get_item",
+  "list_item_mail",
   "list_task_replies",
   "complete_task",
 ]);

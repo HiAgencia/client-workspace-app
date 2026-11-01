@@ -570,6 +570,30 @@ describe("the tools over Gmail", () => {
     expect(calls.filter((call) => /\/gmail\/v1\/users\/me\/messages\/./.test(call))).toHaveLength(0);
     expect(batchFormats).toEqual(["metadata"]);
   });
+
+  it("a task's mail from several accounts is read account by account, and the detail asks Gmail nothing", async () => {
+    const { data: task, error } = await user!.client.from("items").insert({ owner_id: user!.id, node_id: ids.client, type: "task", title: "Answer the bank" }).select("id").single();
+    if (error) throw new Error(error.message);
+    const linked = await user!.client.from("mail_links").insert([
+      { owner_id: user!.id, account_id: ids.mail, message_id: "m1", item_id: task.id },
+      { owner_id: user!.id, account_id: ids.late, message_id: "m2", item_id: task.id },
+    ]);
+    if (linked.error) throw new Error(linked.error.message);
+    forget();
+    type Detail = { ok: boolean; messages: Array<{ id: string; accountId: string }>; mailFailures: unknown[]; mailToRead: string[] };
+    const detail = (await callTool("get_item", context(), { id: task.id })) as unknown as Detail;
+    expect(detail.ok).toBe(true);
+    expect(detail.messages).toEqual([]);
+    expect([...detail.mailToRead].sort()).toEqual([ids.mail, ids.late].sort());
+    expect(calls).toEqual([]);
+    type ItemMail = { ok: boolean; messages: Array<{ id: string; accountId: string }>; failures: unknown[]; toRead: string[] };
+    const one = (await callTool("list_item_mail", context(), { id: task.id, account: ids.mail })) as unknown as ItemMail;
+    expect(one.messages.map((row) => [row.id, row.accountId])).toEqual([["m1", ids.mail]]);
+    expect(one.toRead).toEqual([]);
+    expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(1);
+    
+    expect(await callTool("list_item_mail", context(), { id: task.id, account: "00000000-0000-4000-8000-000000000000" })).toMatchObject({ ok: false, code: "not_found" });
+  });
 });
 
 describe("what a task waits for, over a busy inbox", () => {
@@ -1043,6 +1067,7 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
   const grew = (measured: Cost[]) => measured.some((cost) => cost.total !== measured[0].total);
 
   const oneAccount = (): Array<[string, () => Promise<unknown>]> => [
+    ["the linked mail of one account", () => callTool("list_item_mail", ownerContext(), { id: waiting, account: readers[0] })],
     ["the list of one account", () => callTool("list_mail", ownerContext(), { account: readers[0], limit: 50 })],
     ["the unread count of one account", () => callTool("count_unread_mail", ownerContext(), { account: readers[0] })],
     ["the search of one account", () => callTool("search_mail", ownerContext(), { account: readers[0], query: "approved" })],
@@ -1066,7 +1091,17 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     if (owner) await deleteDisposableUsers([owner]);
   }, 60_000);
 
+  
+  async function linkReaders() {
+    for (const id of readers) {
+      const { error } = await owner!.client.from("mail_links").insert({ owner_id: owner!.id, account_id: id, message_id: "m1", item_id: waiting });
+      if (error && error.code !== "23505") throw new Error(error.message);
+    }
+  }
+
   it("reads one account in a request that costs the same with 1, 3 and 10 accounts", async () => {
+    await withReaders(1);
+    await linkReaders();
     for (const [name, read] of oneAccount()) {
       const measured = await acrossSizes(read);
       expect({ name, measured }).toEqual({ name, measured: [measured[0], measured[0], measured[0]] });
@@ -1094,6 +1129,26 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     expect(replies.cost.gmail + replies.cost.token).toBe(0);
     expect((replies.result as unknown as { toRead: string[] }).toRead).toHaveLength(10);
   }, 120_000);
+
+  it("a task with mail linked from several accounts: its detail asks Google nothing and lists them, at any size", async () => {
+    const seen: Cost[] = [];
+    for (const size of [3, 10]) {
+      await withReaders(size);
+      await expireTokens();
+      await linkReaders();
+      const { cost, result } = await costOf(() => callTool("get_item", ownerContext(), { id: waiting }));
+      expect((result as unknown as { mailToRead: string[] }).mailToRead).toHaveLength(size);
+      expect(cost.gmail + cost.token).toBe(0);
+      seen.push(cost);
+    }
+    expect(grew(seen)).toBe(false);
+    
+    const measured = await acrossSizes(async () => {
+      await Promise.all(readers.map((id) => callTool("list_item_mail", ownerContext(), { id: waiting, account: id })));
+      return { ok: true, failures: [] };
+    });
+    expect(grew(measured)).toBe(true);
+  }, 180_000);
 
   it("an account whose unread count runs to its last page costs the same at any size", async () => {
     trouble.endlessUnread = true;
