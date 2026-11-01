@@ -307,12 +307,10 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   
   
   
-  const firstScreen = useRef(true);
+  const lastScreen = useRef(pathname);
   useEffect(() => {
-    if (firstScreen.current) {
-      firstScreen.current = false;
-      return;
-    }
+    if (lastScreen.current === pathname) return;
+    lastScreen.current = pathname;
     if (hasFocusRequest(pathname)) return;
     const focusTitle = () => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true });
     focusTitle();
