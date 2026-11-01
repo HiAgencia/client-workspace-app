@@ -17,6 +17,7 @@ import { ItemPanel } from "./item-panel";
 import { createMailStore, type MailAccountRef, type MailFigure, type MailStore } from "./mail-store";
 import { Palette } from "./palette";
 import { QuickAddDialog } from "./quick-add";
+import { watchRounds } from "./read-again";
 import { TaskDetail } from "./task-detail";
 import { SCREEN_TITLES } from "./screen-titles";
 import { openTaskDetail } from "./task-row";
@@ -106,9 +107,6 @@ function subscribeStorage(onChange: () => void) {
   };
 }
 
-
-const AWAY_MS = 5 * 60_000;
-
 export function WorkspaceShell({ config, children }: { config: PublicConfig; children: ReactNode }) {
   const [tree, setTree] = useState<TreeNode[] | null>(null);
   const [treeError, setTreeError] = useState<string | null>(null);
@@ -180,36 +178,25 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsKey, mailStore, version]);
 
+  const lastRound = useRef(0);
   const touch = useCallback(() => {
+    lastRound.current = Date.now();
     mailStore.forget();
     setVersion((v) => v + 1);
     void refreshTree();
   }, [refreshTree, mailStore]);
 
   
-  
-  
   useEffect(() => {
-    let hiddenAt = document.hidden ? Date.now() : null;
-    const again = () => {
-      mailStore.aged();
-      touch();
-    };
-    const onChange = () => {
-      if (document.hidden) hiddenAt = Date.now();
-      else {
-        if (hiddenAt !== null && Date.now() - hiddenAt >= AWAY_MS) again();
-        hiddenAt = null;
-      }
-    };
-    const inView = window.setInterval(() => {
-      if (!document.hidden && !document.activeElement?.matches("input, textarea, [contenteditable='true']")) again();
-    }, AWAY_MS);
-    document.addEventListener("visibilitychange", onChange);
-    return () => {
-      window.clearInterval(inView);
-      document.removeEventListener("visibilitychange", onChange);
-    };
+    lastRound.current = Date.now();
+    return watchRounds(
+      document,
+      () => Date.now() - lastRound.current,
+      () => {
+        mailStore.aged();
+        touch();
+      },
+    );
   }, [mailStore, touch]);
 
   
