@@ -9,8 +9,7 @@ import type { Item } from "./client-api";
 export type FocusTarget =
   | { kind: "node"; nodeId: string }
 
-  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"]; done?: boolean }
-  | { kind: "quick-add"; nodeId: string; type: Item["type"] };
+  | { kind: "item"; nodeId: string; itemId: string; title: string; type: Item["type"]; done?: boolean };
 
 export type FocusRequest = { target: FocusTarget; acted: boolean };
 
@@ -86,7 +85,6 @@ export async function land(target: FocusTarget, { acted = false }: { acted?: boo
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let element: HTMLElement | null = null;
   if (target.kind === "node") element = document.querySelector<HTMLElement>("[data-node-title]");
-  if (target.kind === "quick-add") element = document.querySelector<HTMLElement>(`[data-quick-add="${target.type}"] input`);
   if (target.kind === "item") element = document.querySelector<HTMLElement>(`[data-item="${target.itemId}"] [data-item-title]`);
   if (!element) return "missing";
   const closed = closedAround(element);

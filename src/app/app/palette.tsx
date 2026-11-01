@@ -12,6 +12,7 @@ import { tool, type Item, type TreeNode } from "./client-api";
 import { requestFocus, type FocusTarget } from "./focus-request";
 import { TYPE_NAMES } from "./item-parts";
 import { subjectOf } from "./mail/subject";
+import { openQuickAdd } from "./quick-add-bus";
 import type { MailFailureRow } from "./mail-store";
 import { useWorkspace } from "./workspace";
 
@@ -135,8 +136,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
       { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
     ];
     if (here) {
-      list.push({ kind: "action", id: "new-task", label: `New task in ${here.name}`, run: () => go({ kind: "quick-add", nodeId: here.id, type: "task" }) });
-      list.push({ kind: "action", id: "new-decision", label: `Record a decision in ${here.name}`, run: () => go({ kind: "quick-add", nodeId: here.id, type: "decision" }) });
+      list.push({ kind: "action", id: "new-task", label: `New task in ${here.name}`, run: () => openQuickAdd({ placeId: here.id }) });
       list.push({ kind: "action", id: "agent", label: `Issue an agent token for ${here.name}`, run: () => router.push(`/app/settings?node=${here.id}#agent-tokens`) });
     }
     const dark = currentTheme() === "dark";

@@ -139,6 +139,14 @@ export function ItemPanel({
     setNotes(answer.item.body ?? "");
   }
 
+  
+  async function markDecision(decision: boolean) {
+    const itemId = id.current;
+    if (!itemId) return;
+    const ok = await saving(tool("update_item", { id: itemId, decision }));
+    if (ok && id.current === itemId) setShown((known) => known && { ...known, type: decision ? "decision" : "note" });
+  }
+
   const fieldName = current?.type === "note" ? "Note" : current?.type === "decision" ? "Why" : "Notes";
 
   return (
@@ -167,7 +175,9 @@ export function ItemPanel({
         <div className="panel-in">
           <header className="panel-head">
             <div className="panel-title">
-              <p className="t-label">{TYPE_NAMES[current.type]}</p>
+              <p key={current.type} className="t-label fade-enter">
+                {TYPE_NAMES[current.type]}
+              </p>
               <h2 id={titleId} className="t-title">
                 {inlinePlain(current.title)}
               </h2>
@@ -200,6 +210,11 @@ export function ItemPanel({
           </div>
           <Versions revisions={revisions} onRestore={restore} />
           <div className="panel-foot">
+            {current.type !== "task" && (
+              <Button size="sm" data-panel-mark onClick={() => void markDecision(current.type === "note")}>
+                {current.type === "note" ? "Mark as a decision" : "Make it a note again"}
+              </Button>
+            )}
             <Button
               variant="quiet"
               size="sm"
