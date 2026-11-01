@@ -162,7 +162,7 @@ function expectedChats(): Array<{ path: string; title: string; chat: SeedChat }>
 }
 
 
-function expectedAccounts(): Array<{ path: string; account: SeedAccount }> {
+function expectedAccounts(today = TODAY): Array<{ path: string; account: SeedAccount }> {
   const rows: Array<{ path: string; account: SeedAccount }> = [];
   const walk = (nodes: Tree, parent: string) => {
     for (const node of nodes) {
@@ -171,7 +171,7 @@ function expectedAccounts(): Array<{ path: string; account: SeedAccount }> {
       walk(node.children ?? [], path);
     }
   };
-  walk(demoSeedTree(TODAY), "");
+  walk(demoSeedTree(today), "");
   return rows;
 }
 
@@ -596,6 +596,25 @@ describe("the demo seed", () => {
       expect(theirs.data).toHaveLength(expectedNodes().length);
       const mineIds = new Set((mine.data ?? []).map((node) => node.id));
       expect((theirs.data ?? []).every((node) => !mineIds.has(node.id))).toBe(true);
+    } finally {
+      await deleteDisposableUsers([other]);
+    }
+  });
+
+  it("plants the mirror's week on a Sunday too, the day furthest from the Monday both count from", async () => {
+    const sunday = "2026-11-01";
+    const other = await createAnonymousUser("demo-seed-sunday");
+    try {
+      const seeded = await other.client.rpc("seed_demo", { p_today: sunday, p_zone: ZONE });
+      expect(seeded.error).toBeNull();
+      expect(seeded.data).toBe(true);
+      const meetings = await other.client.from("demo_events").select("title, starts_at, ends_at");
+      expect(meetings.error).toBeNull();
+      const byTitle = (a: { title: string; day: string }, b: { title: string; day: string }) => a.title.localeCompare(b.title) || a.day.localeCompare(b.day);
+      const actual = (meetings.data ?? []).map((row) => ({ title: row.title, day: inZone(row.starts_at).day, at: inZone(row.starts_at).time, until: inZone(row.ends_at).time }));
+      const declared = expectedAccounts(sunday).flatMap(({ account }) => (account.calendar?.meetings ?? []).map(({ title, day, at, until }) => ({ title, day, at, until })));
+      expect(declared.length).toBeGreaterThan(0);
+      expect(actual.sort(byTitle)).toEqual(declared.sort(byTitle));
     } finally {
       await deleteDisposableUsers([other]);
     }
