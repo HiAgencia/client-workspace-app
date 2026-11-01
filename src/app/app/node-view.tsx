@@ -223,11 +223,11 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       title: "Calendar",
       purpose: "This week in the calendars it sees",
       action: (
-        <HeadLink href={`/app/calendar?scope=${nodeId}`} name="Open the calendar">
+        <HeadLink href={`/app/calendar?place=${nodeId}`} name="Open the calendar">
           Open
         </HeadLink>
       ),
-      content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?scope=${nodeId}`} />,
+      content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?place=${nodeId}`} />,
     },
     mail: {
       id: "mail",
