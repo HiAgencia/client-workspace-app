@@ -21,7 +21,8 @@ import { openTaskDetail } from "./task-row";
 import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
 
-type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void };
+
+type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void; focusAfter?: () => HTMLElement | null };
 
 
 const noticeLife = (notice: Notice) => (notice.undo ? 6000 : 3000);
@@ -147,9 +148,23 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     shown.current = next;
     setNotice(next);
   }, []);
+  const noticeBox = useRef<HTMLDivElement>(null);
+  const heldBefore = useRef<HTMLElement | null>(null);
+  const pointerOnNotice = useRef(false);
   const dismiss = useCallback(() => {
     clearTimeout(timer.current);
     if (!shown.current) return show(queued.current);
+    
+    if (noticeBox.current?.contains(document.activeElement)) {
+      const { focusAfter } = shown.current;
+      const before = heldBefore.current;
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const target = focusAfter?.() ?? (before?.isConnected ? before : null) ?? document.querySelector<HTMLElement>("[data-page-title]");
+          target?.focus({ preventScroll: true });
+        }),
+      );
+    }
     setLeaving(true);
     timer.current = setTimeout(() => {
       setLeaving(false);
@@ -167,6 +182,17 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       timer.current = setTimeout(dismiss, noticeLife(notice));
     }
   }, [notice, leaving, dismiss]);
+
+  
+  
+  useEffect(() => {
+    pointerOnNotice.current = false;
+    if (!notice) return;
+    const holder = document.activeElement;
+    const free = !holder || holder === document.body || holder.closest("[data-leaving]") !== null;
+    heldBefore.current = free ? null : (holder as HTMLElement);
+    if (free && notice.undo) noticeBox.current?.querySelector("button")?.focus({ preventScroll: true });
+  }, [notice]);
 
   const notify = useCallback(
     (next: Omit<Notice, "id">) => {
@@ -386,6 +412,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
           {notice && (
             <div
               key={notice.id}
+              ref={noticeBox}
               role={notice.tone === "error" ? "alert" : "status"}
               className="notice"
               data-tone={notice.tone}
@@ -393,10 +420,15 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
               inert={leaving}
               data-notice
               
-              onPointerEnter={() => {
-                if (!leaving && notice.tone === "status") clearTimeout(timer.current);
+              
+              onPointerMove={(event) => {
+                if (leaving || notice.tone !== "status" || pointerOnNotice.current || (!event.movementX && !event.movementY)) return;
+                pointerOnNotice.current = true;
+                clearTimeout(timer.current);
               }}
               onPointerLeave={() => {
+                if (!pointerOnNotice.current) return;
+                pointerOnNotice.current = false;
                 if (!leaving && notice.tone === "status") timer.current = setTimeout(dismiss, noticeLife(notice));
               }}
             >
@@ -405,8 +437,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                 <Button
                   size="sm"
                   variant="primary"
-                  
-                  autoFocus
                   onClick={() => {
                     notice.undo?.();
                     dismiss();

@@ -225,6 +225,43 @@ function hideRow(id: string) {
 
 
 
+
+function focusAfterRow(id: string): (() => HTMLElement | null) | undefined {
+  const row = document.querySelector<HTMLElement>(`[data-item="${id}"]`);
+  if (!row?.contains(document.activeElement)) return undefined;
+  const rows = [...document.querySelectorAll<HTMLElement>(".task[data-item]")].map((each) => each.dataset.item!);
+  const at = rows.indexOf(id);
+  const nearest = [id, ...rows.slice(at + 1), ...rows.slice(0, Math.max(at, 0)).reverse()];
+  return () => {
+    for (const each of nearest) {
+      const open = document.querySelector<HTMLElement>(`[data-item="${each}"] .task-open`);
+      if (!open) continue;
+      if (each === id) returning = null;
+      return open;
+    }
+    return null;
+  };
+}
+
+
+function refocusSoon(target: () => HTMLElement | null) {
+  requestAnimationFrame(() => requestAnimationFrame(() => target()?.focus({ preventScroll: true })));
+}
+
+
+
+let returning: string | null = null;
+function focusWhenBack(id: string) {
+  returning = id;
+  const movedOn = () => {
+    if (returning === id) returning = null;
+  };
+  window.addEventListener("keydown", movedOn, { capture: true, once: true });
+  window.addEventListener("pointerdown", movedOn, { capture: true, once: true });
+}
+
+
+
 type GroupEntry = { group: string; label: string; dropDay: Day | null | undefined; element: HTMLElement };
 const groups = new Map<string, GroupEntry>();
 
@@ -285,11 +322,13 @@ export function useTaskActions() {
     const reopening = task.status === "done";
     const was = task.status;
     const title = inlinePlain(task.title);
+    const focusAfter = focusAfterRow(task.id);
     hideRow(task.id);
     const answer = await tool("update_item", { id: task.id, status: reopening ? "open" : "done" });
     if (!answer.ok) {
       dropOp("hide", task.id);
       notify({ text: `“${title}” could not be ${reopening ? "reopened" : "completed"}: ${answer.message}`, tone: "error" });
+      if (focusAfter) refocusSoon(focusAfter);
       return false;
     }
     settleOp("hide", task.id);
@@ -297,8 +336,10 @@ export function useTaskActions() {
     notify({
       text: reopening ? `Reopened “${title}”` : `Completed “${title}”`,
       tone: "status",
+      focusAfter,
       undo: () => {
         dropOp("hide", task.id);
+        if (focusAfter) focusWhenBack(task.id);
         void saving(tool("update_item", { id: task.id, status: was }));
       },
     });
@@ -306,19 +347,24 @@ export function useTaskActions() {
   }
 
   async function remove(task: TaskData) {
+    const focusAfter = focusAfterRow(task.id);
     hideRow(task.id);
     const answer = await tool("delete_item", { id: task.id });
     if (!answer.ok) {
       dropOp("hide", task.id);
-      return notify({ text: `“${inlinePlain(task.title)}” could not be deleted: ${answer.message}`, tone: "error" });
+      notify({ text: `“${inlinePlain(task.title)}” could not be deleted: ${answer.message}`, tone: "error" });
+      if (focusAfter) refocusSoon(focusAfter);
+      return;
     }
     settleOp("hide", task.id);
     touch();
     notify({
       text: `Deleted “${inlinePlain(task.title)}”`,
       tone: "status",
+      focusAfter,
       undo: () => {
         dropOp("hide", task.id);
+        if (focusAfter) focusWhenBack(task.id);
         void saving(post(`/api/items/${task.id}/restore`, {}));
       },
     });
@@ -539,6 +585,12 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
   const hasMeta = Boolean(when || task.subtasks.total || task.priority === 1 || task.priority === 2 || task.notes || mail || task.source !== "manual");
   const groupFor = (day: Day | null) => groupOfDay(day, now);
   const place = placeOnPage(task, showPlace, pageNode, tree);
+
+  useEffect(() => {
+    if (returning !== task.id) return;
+    returning = null;
+    document.querySelector<HTMLElement>(`[data-item="${task.id}"] .task-open`)?.focus({ preventScroll: true });
+  }, [task.id]);
 
   return (
     <div
