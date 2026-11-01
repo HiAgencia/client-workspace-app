@@ -17,10 +17,12 @@ import {
   type MouseEvent,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
+import { Fold } from "@/components/ui/fold";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select } from "@/components/ui/select";
@@ -32,6 +34,7 @@ import { BoxFailed } from "../boxes";
 import { get, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "../client-api";
 import { readEvents, type EventsRead } from "../events-read";
 import { PageHeader } from "../page-header";
+import { openQuickAdd } from "../quick-add-bus";
 import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
 import { openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
 import { useSwap } from "../use-swap";
@@ -82,7 +85,7 @@ const VIEWS = [
 ];
 const OWN_CALENDAR = `${PRODUCT_NAME} calendar`;
 
-const ALL_DAY_CHIPS = 3;
+const BAND_PIECES = 3;
 
 export default function CalendarPage() {
   return (
@@ -111,6 +114,10 @@ const minutesOf = (iso: string) => {
   const date = new Date(iso);
   return date.getHours() * 60 + date.getMinutes();
 };
+const minutesOfDay = (time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 const fullDay = (day: Day) => {
   const [y, m, d] = day.split("-").map(Number);
@@ -132,17 +139,30 @@ function whenText(event: CalEvent): string {
 
 
 
-const NARROW = "(width < 48rem)";
-function subscribeNarrow(onChange: () => void) {
-  const query = window.matchMedia(NARROW);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
+
+const NARROW_REM = 52;
+function useNarrow(card: RefObject<HTMLElement | null>, mounted: boolean): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const element = card.current;
+    if (!mounted || !element) return;
+    const observer = new ResizeObserver(() => {
+      setNarrow(element.clientWidth / parseFloat(getComputedStyle(document.documentElement).fontSize) < NARROW_REM);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [card, mounted]);
+  return narrow;
 }
 const noSubscription = () => () => {};
 
+
+const onFreeSpace = (event: MouseEvent<HTMLElement>) => !(event.target as Element).closest("button, a, [draggable='true'], [role='menu']");
+
 function Calendar() {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
-  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
+  const card = useRef<HTMLElement>(null);
+  const narrow = useNarrow(card, mounted);
   const { version, tree, notify, touch, saving } = useWorkspace();
   useChatScope(null);
   const params = useSearchParams();
@@ -392,11 +412,11 @@ function Calendar() {
   };
 
   
-  
   function onGap(event: MouseEvent<HTMLElement>, day: Day, time: string | null) {
-    if ((event.target as Element).closest("button, a, [draggable='true'], [role='menu']")) return;
-    setDraft({ day, time });
+    if (onFreeSpace(event)) setDraft({ day, time });
   }
+  
+  const addTask = (day: Day) => openQuickAdd(place === ALL ? { day } : { day, placeId: place === GENERAL ? null : place });
 
   if (!mounted) return null;
   const counted = `${count(events.length, "event", "events")} and ${count(tasks.length, "task", "tasks")}`;
@@ -419,11 +439,11 @@ function Calendar() {
             </>
           }
           filtersSet={(place === ALL ? 0 : 1) + (account === ALL ? 0 : 1)}
-          views={{ label: "Calendar view", value: view, options: VIEWS, onChange: (value) => set({ view: value === "week" ? null : value }) }}
+          views={{ label: "View", value: view, options: VIEWS, onChange: (value) => set({ view: value === "week" ? null : value }) }}
           chat
         />
 
-        <section className="card cal-card" aria-labelledby="cal-range" aria-busy={reading || (readError === null && (!loaded || loaded.key !== rangeKey))}>
+        <section ref={card} className="card cal-card" aria-labelledby="cal-range" aria-busy={reading || (readError === null && (!loaded || loaded.key !== rangeKey))}>
           <div className="cal-bar">
             <h2 id="cal-range" className="t-title cal-range" aria-live="polite">
               {title}
@@ -466,7 +486,7 @@ function Calendar() {
                 narrow ? (
                   <WeekList days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onAdd={(day) => setDraft({ day, time: null })} emptyDay={emptyDay} />
                 ) : (
-                  <WeekGrid days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onGap={onGap} onCreate={(day, time) => setDraft({ day, time })} />
+                  <WeekGrid days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onCreate={(day, time) => setDraft({ day, time })} onAddTask={addTask} />
                 )
               ) : (
                 <MonthGrid
@@ -548,30 +568,32 @@ function nodeColor(tree: TreeNode[] | null, id: string | null | undefined): stri
   return tree?.find((node) => node.id === id)?.color ?? undefined;
 }
 
-function EventChip({ event, chips, style, timed }: { event: CalEvent; chips: ChipHandlers; style?: CSSProperties; timed?: boolean }) {
+function EventChip({ event, chips, style, timed, minutes, lead }: { event: CalEvent; chips: ChipHandlers; style?: CSSProperties; timed?: boolean; minutes?: number; lead?: boolean }) {
   const { tree } = useWorkspace();
   const color = nodeColor(tree, event.nodeId ?? event.linkedNodeIds[0] ?? event.fromNodeId);
-  const when = event.allDay ? "All day" : clock(event.start);
+  const moment = <span className="cal-event-when">{event.allDay ? "All day" : clock(event.start)}</span>;
   return (
     <button
       type="button"
       className="cal-event"
       data-color={color}
       data-timed={timed ? "" : undefined}
+      data-short={timed && (minutes ?? 0) < 60 ? "" : undefined}
       data-origin={event.origin}
       style={style}
       onClick={() => chips.onOpenEvent(event)}
       data-cal-event={event.id}
     >
       {}
-      <span className="cal-event-when">{when}</span>
+      {lead && moment}
       <span className="cal-event-title">{event.title}</span>
+      {!lead && !event.allDay && moment}
       <span className="sr-only">, event, {whenText(event)}</span>
     </button>
   );
 }
 
-function TaskChip({ task, chips, style, timed }: { task: TaskData; chips: ChipHandlers; style?: CSSProperties; timed?: boolean }) {
+function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: ChipHandlers; style?: CSSProperties; timed?: boolean; lead?: boolean }) {
   const [done, setDone] = useState(task.status === "done");
   const { notify, touch, saving } = useWorkspace();
   const fine = useSyncExternalStore(subscribeFine, () => window.matchMedia("(pointer: fine)").matches, () => false);
@@ -590,6 +612,7 @@ function TaskChip({ task, chips, style, timed }: { task: TaskData; chips: ChipHa
       undo: () => void saving(tool("update_item", { id: task.id, status: next ? "open" : "done" })),
     });
   }
+  const hour = task.dueTime ? timeLabel(task.dueTime) : null;
   return (
     <div
       className="cal-task"
@@ -606,6 +629,7 @@ function TaskChip({ task, chips, style, timed }: { task: TaskData; chips: ChipHa
       }}
       onDragEnd={chips.onDragEnd}
     >
+      {lead && <span className="cal-task-when">{hour}</span>}
       <TaskCircle title={task.title} priority={task.priority} done={done} onToggle={() => void toggle()} className="cal-task-circle" />
       <button
         type="button"
@@ -614,9 +638,11 @@ function TaskChip({ task, chips, style, timed }: { task: TaskData; chips: ChipHa
         onKeyDown={(event) => chips.onTaskKey(event, task)}
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
       >
-        {task.dueTime && <span className="cal-task-when">{timeLabel(task.dueTime)}</span>}
         <span className="cal-task-title">{inlinePlain(task.title)}</span>
-        <span className="sr-only">, task. Alt with the arrows moves it to another day</span>
+        {!lead && hour && <span className="cal-task-when">{hour}</span>}
+        <span className="sr-only">
+          , task{lead && hour ? ` at ${hour}` : ""}. Alt with the arrows moves it to another day
+        </span>
       </button>
     </div>
   );
@@ -633,21 +659,29 @@ function subscribeFine(onChange: () => void) {
 
 const HOUR_REM = 3;
 
+
+
+function titleLines(minutes: number): number {
+  const lines = Math.max(1, Math.floor(((minutes / 60) * HOUR_REM - 0.4) / 1.06));
+  return lines <= 2 ? lines : lines - 1;
+}
+
 function WeekGrid({
   days,
   byDay,
   chips,
   dropOn,
-  onGap,
   onCreate,
+  onAddTask,
 }: {
   days: Day[];
   byDay: Map<Day, { events: CalEvent[]; tasks: TaskData[] }>;
   chips: ChipHandlers;
   dropOn: DropOn;
-  onGap: (event: MouseEvent<HTMLElement>, day: Day, time: string | null) => void;
   
   onCreate: (day: Day, time: string | null) => void;
+  
+  onAddTask: (day: Day) => void;
 }) {
   const now = today();
   
@@ -670,7 +704,10 @@ function WeekGrid({
   const hours = Array.from({ length: last - first + 1 }, (_, i) => first + i);
   const top = (minutes: number) => `${((minutes - first * 60) / 60) * HOUR_REM}rem`;
   
-  const grid = useGridKeys({ rows: hours.length + 1, cols: days.length }, { row: 0, col: Math.max(0, days.indexOf(now)) });
+  const withTasks = days.some((day) => byDay.get(day)?.tasks.some((task) => !task.dueTime));
+  const firstHourRow = withTasks ? 2 : 1;
+  
+  const grid = useGridKeys({ rows: hours.length + firstHourRow, cols: days.length }, { row: 0, col: Math.max(0, days.indexOf(now)) });
   const hint = useId();
 
   return (
@@ -684,7 +721,7 @@ function WeekGrid({
       onFocus={grid.onFocus}
     >
       <span id={hint} className="sr-only">
-        The arrows move between days and hours; Enter adds an event there.
+        The arrows move between days and hours; Enter adds there.
       </span>
       <div className="cal-week-row cal-week-head" role="row">
         <span className="cal-gutter" aria-hidden="true" />
@@ -695,42 +732,30 @@ function WeekGrid({
           </div>
         ))}
       </div>
-      <div className="cal-week-row cal-allday" role="row">
-        <span className="cal-gutter t-meta">All day</span>
-        {days.map((day, column) => {
-          const entry = byDay.get(day);
-          
-          
-          const items = [
-            ...(entry?.events ?? []).filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />),
-            ...(entry?.tasks ?? []).filter((task) => !task.dueTime).map((task) => <TaskChip key={task.id} task={task} chips={chips} />),
-          ];
-          const more = items.length - ALL_DAY_CHIPS;
-          return (
-            <div
-              key={day}
-              role="gridcell"
-              className="cal-slot"
-              data-day={day}
-              onClick={(event) => onGap(event, day, null)}
-              onKeyDown={(event) => {
-                if (event.target !== event.currentTarget || !activates(event.key)) return;
-                event.preventDefault();
-                onCreate(day, null);
-              }}
-              {...grid.cell(0, column)}
-              {...dropOn(day)}
-            >
-              {items.slice(0, ALL_DAY_CHIPS)}
-              {more > 0 && <span className="cal-more cal-more-band">+{more} more</span>}
-              <span className="sr-only">{fullDay(day)}, all day</span>
-              <span className="cal-add-hint" aria-hidden="true">
-                Add event
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <WeekBand
+        label="All day"
+        about="all day"
+        hint="Add event"
+        days={days}
+        row={0}
+        grid={grid}
+        dropOn={dropOn}
+        onAdd={(day) => onCreate(day, null)}
+        pieces={(day) => (byDay.get(day)?.events ?? []).filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />)}
+      />
+      {withTasks && (
+        <WeekBand
+          label="Tasks"
+          about="tasks without an hour"
+          hint="Add task"
+          days={days}
+          row={1}
+          grid={grid}
+          dropOn={dropOn}
+          onAdd={onAddTask}
+          pieces={(day) => (byDay.get(day)?.tasks ?? []).filter((task) => !task.dueTime).map((task) => <TaskChip key={task.id} task={task} chips={chips} />)}
+        />
+      )}
       <div className="cal-week-row cal-hours" role="row" style={{ "--hours": hours.length, "--hour": `${HOUR_REM}rem` } as CSSProperties}>
         <div className="cal-gutter cal-hour-names" aria-hidden="true">
           {hours.map((hour) => (
@@ -744,26 +769,13 @@ function WeekGrid({
           const timed = [
             ...(entry?.events ?? []).filter(onHours).map((event) => ({ kind: "event" as const, key: eventKey(event), start: minutesOf(event.start), end: Math.max(minutesOf(event.end), minutesOf(event.start) + 30), event })),
             ...(entry?.tasks ?? []).filter((task) => task.dueTime).map((task) => {
-              const [h, m] = task.dueTime!.split(":").map(Number);
-              return { kind: "task" as const, key: task.id, start: h * 60 + m, end: h * 60 + m + 30, task };
+              const start = minutesOfDay(task.dueTime!);
+              return { kind: "task" as const, key: task.id, start, end: start + 30, task };
             }),
           ];
           const laned = lanes(timed);
           return (
-            <div
-              key={day}
-              role="gridcell"
-              className="cal-day-hours"
-              data-day={day}
-              data-today={day === now ? "" : undefined}
-              onClick={(event) => {
-                const box = event.currentTarget.getBoundingClientRect();
-                const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-                const minutes = first * 60 + Math.floor(((event.clientY - box.top) / (HOUR_REM * rem)) * 2) * 30;
-                onGap(event, day, hhmm(Math.max(0, Math.min(23 * 60 + 30, minutes))));
-              }}
-              {...dropOn(day)}
-            >
+            <div key={day} role="gridcell" className="cal-day-hours" data-day={day} data-today={day === now ? "" : undefined} {...dropOn(day)}>
               {}
               {hours.map((hour, index) => (
                 <button
@@ -772,19 +784,28 @@ function WeekGrid({
                   className="cal-hour-slot"
                   style={{ top: top(hour * 60) }}
                   aria-label={`${fullDay(day)}, ${hourName(hour)}: add event`}
-                  onClick={() => onCreate(day, hhmm(hour * 60))}
-                  {...grid.cell(index + 1, column)}
-                />
+                  onClick={(event) => {
+                    const box = event.currentTarget.getBoundingClientRect();
+                    onCreate(day, hhmm(hour * 60 + (event.detail > 0 && event.clientY - box.top >= box.height / 2 ? 30 : 0)));
+                  }}
+                  {...grid.cell(index + firstHourRow, column)}
+                >
+                  <span className="cal-add-hint" aria-hidden="true">
+                    Add event
+                  </span>
+                </button>
               ))}
               {laned.map(({ item, lane, of }) => {
+                const minutes = item.end - item.start;
                 const style = {
                   top: top(item.start),
-                  height: `${((item.end - item.start) / 60) * HOUR_REM}rem`,
+                  height: `${(minutes / 60) * HOUR_REM}rem`,
                   left: `calc(${(lane / of) * 100}% + 2px)`,
                   width: `calc(${100 / of}% - 4px)`,
+                  "--title-lines": titleLines(minutes),
                 } as CSSProperties;
                 return item.kind === "event" ? (
-                  <EventChip key={item.key} event={item.event} chips={chips} style={style} timed />
+                  <EventChip key={item.key} event={item.event} chips={chips} style={style} timed minutes={minutes} />
                 ) : (
                   <TaskChip key={item.key} task={item.task} chips={chips} style={style} timed />
                 );
@@ -795,6 +816,94 @@ function WeekGrid({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+
+
+function WeekBand({
+  label,
+  about,
+  hint,
+  days,
+  row,
+  grid,
+  dropOn,
+  onAdd,
+  pieces,
+}: {
+  label: string;
+  about: string;
+  hint: string;
+  days: Day[];
+  row: number;
+  grid: ReturnType<typeof useGridKeys>;
+  dropOn: DropOn;
+  onAdd: (day: Day) => void;
+  pieces: (day: Day) => ReactNode[];
+}) {
+  const now = today();
+  const id = useId();
+  const [open, setOpen] = useState<ReadonlySet<Day>>(new Set());
+  const toggle = (day: Day) =>
+    setOpen((current) => {
+      const next = new Set(current);
+      if (!next.delete(day)) next.add(day);
+      return next;
+    });
+  return (
+    <div className="cal-week-row cal-band" role="row">
+      <span className="cal-gutter t-meta">{label}</span>
+      {days.map((day, column) => {
+        const all = pieces(day);
+        const rest = all.length - BAND_PIECES;
+        const unfolded = open.has(day);
+        return (
+          <div
+            key={day}
+            role="gridcell"
+            className="cal-slot"
+            data-day={day}
+            data-today={day === now ? "" : undefined}
+            onClick={(event) => {
+              if (onFreeSpace(event)) onAdd(day);
+            }}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget || !activates(event.key)) return;
+              event.preventDefault();
+              onAdd(day);
+            }}
+            {...grid.cell(row, column)}
+            {...dropOn(day)}
+          >
+            {all.slice(0, BAND_PIECES)}
+            {rest > 0 && (
+              <>
+                <Fold open={unfolded} id={`${id}${day}`}>
+                  <div className="cal-band-rest">{all.slice(BAND_PIECES)}</div>
+                </Fold>
+                <button
+                  type="button"
+                  className="cal-more"
+                  aria-expanded={unfolded}
+                  aria-controls={`${id}${day}`}
+                  aria-label={unfolded ? `Show less on ${fullDay(day)}` : `${rest} more on ${fullDay(day)}`}
+                  onClick={() => toggle(day)}
+                >
+                  {unfolded ? "Show less" : `${rest} more`}
+                </button>
+              </>
+            )}
+            <span className="sr-only">
+              {fullDay(day)}, {about}
+            </span>
+            <span className="cal-add-hint" aria-hidden="true">
+              {hint}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -860,22 +969,30 @@ function WeekList({
   return (
     <ol className="cal-list" aria-label="Day by day">
       {days.map((day) => {
-        const entry = byDay.get(day);
-        const items = (entry?.events.length ?? 0) + (entry?.tasks.length ?? 0);
+        const events = byDay.get(day)?.events ?? [];
+        const tasks = byDay.get(day)?.tasks ?? [];
+        const empty = events.length === 0 && tasks.length === 0;
+        
+        
+        const onClock = [
+          ...events.filter(onHours).map((event) => ({ at: minutesOf(event.start), piece: <EventChip key={eventKey(event)} event={event} chips={chips} lead /> })),
+          ...tasks.filter((task) => task.dueTime).map((task) => ({ at: minutesOfDay(task.dueTime!), piece: <TaskChip key={task.id} task={task} chips={chips} lead /> })),
+        ].sort((a, b) => a.at - b.at);
         return (
-          <li key={day} className="cal-list-day" data-day={day} aria-current={day === now ? "date" : undefined} {...dropOn(day)}>
+          <li key={day} className="cal-list-day" data-day={day} data-empty={empty ? "" : undefined} aria-current={day === now ? "date" : undefined} {...dropOn(day)}>
             <div className="cal-list-head">
-              <h3 className="t-label">{day === now ? `Today, ${shortDay(day)}` : fullDay(day)}</h3>
+              <h3 className="t-label">{day === now ? `Today, ${fullDay(day)}` : fullDay(day)}</h3>
               <Button size="sm" variant="quiet" onClick={() => onAdd(day)} aria-label={`Add event on ${fullDay(day)}`}>
                 Add event
               </Button>
             </div>
-            {items === 0 ? (
+            {empty ? (
               <p className="t-help">{EMPTY_DAY[emptyDay]}</p>
             ) : (
               <div className="cal-list-items">
-                {entry?.events.map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />)}
-                {entry?.tasks.map((task) => <TaskChip key={task.id} task={task} chips={chips} />)}
+                {events.filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} lead />)}
+                {onClock.map((entry) => entry.piece)}
+                {tasks.filter((task) => !task.dueTime).map((task) => <TaskChip key={task.id} task={task} chips={chips} lead />)}
               </div>
             )}
           </li>
