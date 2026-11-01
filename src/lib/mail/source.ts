@@ -36,7 +36,8 @@ export type MailAccount = { id: string; email: string; isDemo: boolean; status: 
 
 
 
-export const mailFailureSchema = z.object({ accountId: z.string(), accountEmail: z.string(), reason: z.string(), partial: z.boolean().optional() });
+
+export const mailFailureSchema = z.object({ accountId: z.string(), accountEmail: z.string(), reason: z.string(), partial: z.boolean().optional(), atLimit: z.boolean().optional() });
 export type MailFailure = z.infer<typeof mailFailureSchema>;
 
 export type MailSource = {

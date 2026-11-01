@@ -1,13 +1,17 @@
+import { isToolUIPart, simulateReadableStream } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadHistory } from "@/lib/chat/history";
 import { simulatedModel } from "@/lib/chat/simulated";
 import { takeUsageFor } from "@/lib/chat/usage";
-import type { Fetch } from "@/lib/google/api";
+import { GMAIL_READ_SCOPE, type Fetch } from "@/lib/google/api";
 import { connectAccount } from "@/lib/google/connect";
 import { decrypt, encrypt, importKey, newKeyBase64 } from "@/lib/google/crypto";
 import { googleCalendarWriter, googleEventsSource, type GoogleDeps } from "@/lib/google/events";
+import { gmailMailSource } from "@/lib/google/gmail";
+import type { MailSource } from "@/lib/mail/source";
 import { readSession } from "@/lib/supabase/server";
-import type { ToolContext } from "@/lib/tools/context";
+import type { EventsSource, ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { chatTurn } from "../support/chat-turn";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
@@ -448,7 +452,172 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
     const scoped = { ...ownerContext(), db: serviceClient(), scopeNodeId: inside, source: "agent" as const, agentLabel: "laptop" };
     const tree = (await callTool("list_tree", scoped, { withMail: true })) as unknown as { mail: { accounts: Array<{ id: string; nodeId: string | null; nodeIds: string[] }> } };
     expect(tree.mail.accounts.find((account) => account.id === readers[0])).toMatchObject({ nodeId: null, nodeIds: [] });
+    
+    type Said = { accounts: Array<{ nodeId: string | null }>; events: EventRead[] };
+    const message = { id: "m1", threadId: "t1", accountId: readers[0], accountEmail: "reader-1@example.com", from: { name: null, email: "a@example.com" }, to: [], subject: "Hello", snippet: "", receivedAt: "2026-11-03T12:00:00Z", unread: false, important: false };
+    const mail = { list: async () => ({ messages: [message], failures: [] }), unread: async () => ({ messages: [], failures: [] }) } as unknown as MailSource;
+    for (const [name, read] of [
+      ["browse_events", (ctx: ToolContext) => callTool("browse_events", ctx, { ...range, account: readers[0] })],
+      ["browse_events, the first read", (ctx: ToolContext) => callTool("browse_events", ctx, range)],
+      ["list_events", (ctx: ToolContext) => callTool("list_events", ctx, { ...window, account: readers[0] })],
+      ["list_events, the first read", (ctx: ToolContext) => callTool("list_events", ctx, window)],
+    ] as Array<[string, (ctx: ToolContext) => Promise<unknown>]>) {
+      const said = (await read(scoped)) as unknown as Said;
+      expect({ name, accounts: said.accounts.map((account) => account.nodeId) }).toEqual({ name, accounts: [null] });
+      expect({ name, from: said.events.filter((event) => event.origin === "google").map((event) => event.fromNodeId) }).toEqual({ name, from: [""] });
+      
+      const whole = (await read({ ...ownerContext(), ...(name.startsWith("list_events") ? { scopeNodeId: place } : {}) })) as unknown as Said;
+      expect({ name, accounts: whole.accounts.map((account) => account.nodeId) }).toEqual({ name, accounts: [place] });
+      expect({ name, from: whole.events.filter((event) => event.origin === "google").map((event) => event.fromNodeId) }).toEqual({ name, from: [place] });
+    }
+    const inboxOf = async (ctx: ToolContext) =>
+      (await callTool("list_mail", { ...ctx, mail }, { account: readers[0] })) as unknown as { accounts: Array<{ nodeId: string | null }>; groups: { earlier: { messages: Array<{ place: { nodeId: string } | null }> } } };
+    const scopedInbox = await inboxOf(scoped);
+    expect(scopedInbox.accounts.map((account) => account.nodeId)).toEqual([null]);
+    expect(scopedInbox.groups.earlier.messages.map((row) => row.place)).toEqual([null]);
+    const wholeInbox = await inboxOf(ownerContext());
+    expect(wholeInbox.accounts.map((account) => account.nodeId)).toEqual([place]);
+    expect(wholeInbox.groups.earlier.messages.map((row) => row.place?.nodeId)).toEqual([place]);
   });
+
+  it("list_events brings the whole-day events of exactly the days it is asked for", async () => {
+    await withReaders(0);
+    const node = await owner!.client.from("nodes").insert({ owner_id: owner!.id, kind: "client", name: "Days" }).select("id").single();
+    if (node.error) throw new Error(node.error.message);
+    try {
+      for (const day of ["2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"]) {
+        const made = (await callTool("create_event", ownerContext(), { node: node.data.id, title: day, startsOn: day })) as { ok: boolean };
+        expect(made.ok).toBe(true);
+      }
+      const daysOf = async (from: string, to?: string) => {
+        const read = (await callTool("list_events", ownerContext(), { node: node.data.id, from, ...(to ? { to } : {}) })) as unknown as Read;
+        expect(read.ok).toBe(true);
+        return read.events.map((event) => event.title);
+      };
+      expect(await daysOf("2026-11-05", "2026-11-05")).toEqual(["2026-11-05"]);
+      expect(await daysOf("2026-11-05", "2026-11-06")).toEqual(["2026-11-05", "2026-11-06"]);
+      
+      expect(await daysOf("2026-11-06T02:00:00+09:00", "2026-11-06T10:00:00+09:00")).toEqual(["2026-11-06"]);
+      expect(await daysOf("2026-11-05T22:00:00-03:00", "2026-11-05T23:30:00-03:00")).toEqual(["2026-11-05"]);
+      
+      expect(await daysOf("2026-11-05T00:00:00-03:00", "2026-11-07T00:00:00-03:00")).toEqual(["2026-11-05", "2026-11-06"]);
+      
+      expect(await daysOf("2026-10-31")).toEqual(["2026-11-04", "2026-11-05", "2026-11-06"]);
+    } finally {
+      await serviceClient().from("nodes").delete().eq("id", node.data.id);
+    }
+  }, 60_000);
+
+  it("a chat turn over several nodes asks Google nothing in its own request, and the same reads anywhere else do", async () => {
+    const service = serviceClient();
+    const spots: Array<{ node: string; account: string; task: string }> = [];
+    for (const name of ["Alpine", "Borealis", "Cascade"]) {
+      const node = await owner!.client.from("nodes").insert({ owner_id: owner!.id, kind: "client", name }).select("id").single();
+      if (node.error) throw new Error(node.error.message);
+      const account = await insertAccount(`${name.toLowerCase()}@example.com`, "refresh-reader", node.data.id, owner!);
+      const granted = await service.from("google_accounts").update({ scopes: [GMAIL_READ_SCOPE] }).eq("id", account);
+      if (granted.error) throw new Error(granted.error.message);
+      const task = await owner!.client.from("items").insert({ owner_id: owner!.id, node_id: node.data.id, type: "task", title: `Answer ${name}` }).select("id").single();
+      if (task.error) throw new Error(task.error.message);
+      const link = await owner!.client.from("mail_links").insert({ owner_id: owner!.id, account_id: account, message_id: "m1", item_id: task.data.id });
+      if (link.error) throw new Error(link.error.message);
+      spots.push({ node: node.data.id, account, task: task.data.id });
+    }
+    const withMail = (): ToolContext => ({ ...ownerContext(), mail: gmailMailSource(deps) });
+    const usage = { inputTokens: { total: 0, noCache: 0, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 0, text: 0, reasoning: undefined } };
+    let step = 0;
+    const model = new MockLanguageModelV4({
+      doStream: async () =>
+        step++ === 0
+          ? {
+              stream: simulateReadableStream({
+                chunks: [
+                  ...spots.flatMap((spot) => [
+                    { type: "tool-call" as const, toolCallId: `overview-${spot.node}`, toolName: "get_overview", input: JSON.stringify({ node: spot.node }) },
+                    { type: "tool-call" as const, toolCallId: `item-${spot.task}`, toolName: "get_item", input: JSON.stringify({ id: spot.task }) },
+                  ]),
+                  { type: "finish" as const, finishReason: { unified: "tool-calls" as const, raw: undefined }, usage },
+                ],
+              }),
+            }
+          : {
+              stream: simulateReadableStream({
+                chunks: [
+                  { type: "text-start" as const, id: "said" },
+                  { type: "text-delta" as const, id: "said", delta: "Read." },
+                  { type: "text-end" as const, id: "said" },
+                  { type: "finish" as const, finishReason: { unified: "stop" as const, raw: undefined }, usage },
+                ],
+              }),
+            },
+    });
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expireTokens();
+      const requests: Cost[] = [];
+      const message = await chatTurn({
+        ctx: { ...withMail(), source: "chat" },
+        model,
+        messages: [{ id: "asked", role: "user", parts: [{ type: "text", text: "What is pending in each client?" }] }],
+        request: async (run) => {
+          const { cost, result } = await costOf(run);
+          requests.push(cost);
+          return result;
+        },
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0].google + requests[0].token).toBe(0);
+      
+      const outputs = message.parts.flatMap((part) => (isToolUIPart(part) && part.state === "output-available" ? [part.output as { eventsToRead?: string[]; mailToRead?: string[] }] : []));
+      expect(outputs).toHaveLength(spots.length * 2);
+      expect(outputs.flatMap((output) => output.eventsToRead ?? []).sort()).toEqual(spots.map((spot) => spot.account).sort());
+      expect(outputs.flatMap((output) => output.mailToRead ?? []).sort()).toEqual(spots.map((spot) => spot.account).sort());
+      
+      await expireTokens();
+      const { cost } = await costOf(() => Promise.all(spots.flatMap((spot) => [callTool("get_overview", withMail(), { node: spot.node }), callTool("get_item", withMail(), { id: spot.task })])));
+      expect(cost.google).toBeGreaterThanOrEqual(spots.length * 2);
+      expect(cost.token).toBeGreaterThanOrEqual(spots.length);
+    } finally {
+      quiet.mockRestore();
+      await service.from("google_accounts").delete().in("id", spots.map((spot) => spot.account));
+      await service.from("nodes").delete().in("id", spots.map((spot) => spot.node));
+    }
+  }, 120_000);
+
+  it("in the chat's own request the sample accounts are still read, and a connected one beside them is listed", async () => {
+    const service = serviceClient();
+    const node = await owner!.client.from("nodes").insert({ owner_id: owner!.id, kind: "client", name: "Samples" }).select("id").single();
+    if (node.error) throw new Error(node.error.message);
+    const connected = await insertAccount("connected@example.com", "refresh-reader", node.data.id, owner!);
+    const sample = await service.from("google_accounts").insert({ owner_id: owner!.id, email: "sample@demo.example", is_demo: true }).select("id").single();
+    if (sample.error) throw new Error(sample.error.message);
+    try {
+      expect((await service.from("node_accounts").insert({ node_id: node.data.id, account_id: sample.data.id })).error).toBeNull();
+      const task = await owner!.client.from("items").insert({ owner_id: owner!.id, node_id: node.data.id, type: "task", title: "Answer the samples" }).select("id").single();
+      if (task.error) throw new Error(task.error.message);
+      const links = await owner!.client.from("mail_links").insert([connected, sample.data.id].map((account) => ({ owner_id: owner!.id, account_id: account, message_id: "m1", item_id: task.data.id })));
+      if (links.error) throw new Error(links.error.message);
+      const asked: string[] = [];
+      const events: EventsSource = async ({ account }) => (asked.push(account.id), { events: [], failures: [] });
+      const many: MailSource["many"] = async ({ account }) => (asked.push(account.id), { messages: [], failures: [] });
+      const ctx = (source: ToolContext["source"]): ToolContext => ({ ...ownerContext(), source, events, mail: { many } as unknown as MailSource });
+      const overview = (await callTool("get_overview", ctx("chat"), { node: node.data.id })) as unknown as { eventsToRead: string[] };
+      expect(overview.eventsToRead).toEqual([connected]);
+      expect(asked).toEqual([sample.data.id]);
+      asked.length = 0;
+      const item = (await callTool("get_item", ctx("chat"), { id: task.data.id })) as unknown as { mailToRead: string[] };
+      expect(item.mailToRead).toEqual([connected]);
+      expect(asked).toEqual([sample.data.id]);
+      
+      asked.length = 0;
+      const detail = (await callTool("get_item", ctx("manual"), { id: task.data.id })) as unknown as { mailToRead: string[] };
+      expect([...detail.mailToRead].sort()).toEqual([connected, sample.data.id].sort());
+      expect(asked).toEqual([]);
+    } finally {
+      await service.from("google_accounts").delete().in("id", [connected, sample.data.id]);
+      await service.from("nodes").delete().eq("id", node.data.id);
+    }
+  }, 60_000);
 
   it("an account out of reach is not found: from another place, a scoped access, and another person", async () => {
     await withReaders(1);

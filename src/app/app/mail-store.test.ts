@@ -26,11 +26,11 @@ describe("the mail the screens hold", () => {
     expect(store.mailOf([a, b]).waiting).toBe(2);
     pending[1].answer(listOf("b", 2, [row("old", "b", "2026-01-01T00:00:00Z")]));
     await flush();
-    expect(store.mailOf([a, b])).toMatchObject({ waiting: 1, unread: 2 });
+    expect(store.mailOf([a, b])).toMatchObject({ waiting: 1, unreadByAccount: { b: 2 } });
     pending[0].answer(listOf("a", 1, [row("new", "a", "2026-02-01T00:00:00Z")]));
     await flush();
     const whole = store.mailOf([a, b]);
-    expect(whole).toMatchObject({ waiting: 0, unread: 3 });
+    expect(whole).toMatchObject({ waiting: 0, unreadByAccount: { a: 1, b: 2 } });
     
     expect(whole.groups.unread.messages.map((message) => message.id)).toEqual(["new", "old"]);
   });
@@ -138,7 +138,7 @@ describe("the mail the screens hold", () => {
     const [a, b] = [ref("a"), ref("b")];
     store.count(a);
     store.count(b);
-    pending[0].answer({ ok: true, unread: 500, failures: [{ accountId: "a", accountEmail: "a@example.com", reason: "only the latest 500 unread messages were counted", partial: true }] });
+    pending[0].answer({ ok: true, unread: 500, failures: [{ accountId: "a", accountEmail: "a@example.com", reason: "only the latest 500 unread messages were counted", partial: true, atLimit: true }] });
     pending[1].answer({ ok: true, unread: 4, failures: [] });
     await flush();
     store.forget();
@@ -151,6 +151,22 @@ describe("the mail the screens hold", () => {
     expect(ask).toHaveBeenCalledTimes(4);
     
     expect(store.figure([a, b])).toMatchObject({ unread: 504, partial: true });
+  });
+
+  it("a count cut by a failure is read again with the next round, and says its part until the whole one arrives", async () => {
+    const { ask, pending } = asked();
+    const store = createMailStore(ask);
+    const a = ref("a");
+    store.count(a);
+    pending[0].answer({ ok: true, unread: 100, failures: [{ accountId: "a", accountEmail: "a@example.com", reason: "only 100 unread messages could be counted before the read failed", partial: true }] });
+    await flush();
+    store.forget();
+    store.count(a);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(figureText(store.figure([a])!)).toMatchObject({ shown: "100+" });
+    pending[1].answer({ ok: true, unread: 300, failures: [] });
+    await flush();
+    expect(figureText(store.figure([a])!)).toMatchObject({ shown: "300" });
   });
 
   it("gives no figure until every account answered, and an account that failed makes it a part", async () => {
@@ -179,7 +195,7 @@ describe("the mail the screens hold", () => {
     pending[0].answer({ ok: false, status: 503, message: "the platform cut the read" });
     pending[1].answer(listOf("b", 1));
     await flush();
-    expect(store.mailOf([a, b])).toMatchObject({ waiting: 0, unread: 1, failures: [{ accountId: "a", reason: "the platform cut the read" }] });
+    expect(store.mailOf([a, b])).toMatchObject({ waiting: 0, unreadByAccount: { b: 1 }, failures: [{ accountId: "a", reason: "the platform cut the read" }] });
   });
 
   it("says nothing when nothing is unread and nothing failed", () => {

@@ -1,6 +1,8 @@
+import type { UIMessage } from "ai";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Answer } from "@/app/app/client-api";
 import { accountsSeenFrom, createMailStore, figureOf, figureText, type MailAccountRef, type MailFigure } from "@/app/app/mail-store";
+import { continuedTurn, MAX_READ_ANSWER } from "@/lib/chat/browser-reads";
 import { loadHistory } from "@/lib/chat/history";
 import { simulatedModel } from "@/lib/chat/simulated";
 import { takeUsageFor } from "@/lib/chat/usage";
@@ -494,11 +496,60 @@ describe("the tools over Gmail", () => {
     expect(opened.message.text).toBe("Your app review was approved.");
   });
 
+  it("get_mail stays within what a read of the chat carries and says so, and gives the viewer the whole message", async () => {
+    type Opened = { ok: boolean; message: { html: string; text: string | null; partial: boolean } };
+    const longText = `"quoted" line\n`.repeat(40_000);
+    const big: Stored = {
+      id: "big",
+      threadId: "big",
+      labelIds: ["INBOX"],
+      internalDate: at("2020-01-01T00:00:00Z"),
+      snippet: "Big",
+      payload: {
+        mimeType: "multipart/alternative",
+        headers: headers("Big <big@example.com>", "Big"),
+        parts: [
+          { mimeType: "text/plain", body: { data: encode(longText) } },
+          { mimeType: "text/html", body: { data: encode(`<p>"line"</p>\n`.repeat(40_000)) } },
+        ],
+      },
+    };
+    const htmlOnly: Stored = { ...big, id: "big-html", payload: { mimeType: "text/html", headers: headers("Big <big@example.com>", "Big"), body: { data: encode(`<p>"line"</p>\n`.repeat(40_000)) } } };
+    mailbox.push(big, htmlOnly);
+    try {
+      const read = (await callTool("get_mail", context(), { account: ids.mail, id: "big" })) as unknown as Opened;
+      expect(read.ok).toBe(true);
+      expect(read.message.partial).toBe(true);
+      expect(JSON.stringify(read).length).toBeLessThanOrEqual(MAX_READ_ANSWER);
+      expect(longText.startsWith(read.message.text!)).toBe(true);
+      expect(read.message.text!.length).toBeGreaterThan(0);
+      const onlyHtml = (await callTool("get_mail", context(), { account: ids.mail, id: "big-html" })) as unknown as Opened;
+      expect(onlyHtml.message.partial).toBe(true);
+      expect(JSON.stringify(onlyHtml).length).toBeLessThanOrEqual(MAX_READ_ANSWER);
+      expect(onlyHtml.message.html.length).toBeGreaterThan(0);
+      
+      expect(onlyHtml.message.html.endsWith(">")).toBe(true);
+      
+      const whole = (await callTool("get_mail", context(), { account: ids.mail, id: "big", whole: true })) as unknown as Opened;
+      expect(whole.message).toMatchObject({ partial: false, text: longText });
+      expect(JSON.stringify(whole).length).toBeGreaterThan(MAX_READ_ANSWER);
+      const turn = (output: unknown): UIMessage => ({ id: "turn", role: "assistant", parts: [{ type: "tool-get_mail", toolCallId: "read", state: "output-available", input: {}, output }] });
+      const left: UIMessage = { id: "turn", role: "assistant", parts: [{ type: "tool-get_mail", toolCallId: "read", state: "input-available", input: {} }] };
+      expect(continuedTurn(left, turn(read))!.parts[0]).toMatchObject({ state: "output-available" });
+      expect(continuedTurn(left, turn(whole))!.parts[0]).toMatchObject({ state: "output-error" });
+      
+      const small = (await callTool("get_mail", context(), { account: ids.mail, id: "m1" })) as unknown as Opened;
+      expect(small.message).toMatchObject({ partial: false, text: "Your app review was approved." });
+    } finally {
+      mailbox.splice(mailbox.indexOf(big), 2);
+    }
+  }, 60_000);
+
   it("says an unread count that stopped short, and keeps an account whose count failed out of the figures", async () => {
     trouble.endlessUnread = true;
     try {
       const listed = (await callTool("list_mail", context(), { account: ids.mail })) as unknown as Listed;
-      expect(listed.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/), partial: true }]);
+      expect(listed.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/), partial: true, atLimit: true }]);
       
       expect(listed.unreadByAccount[ids.mail]).toBeGreaterThan(0);
     } finally {
@@ -1304,6 +1355,37 @@ describe("what the screens read and say of the mail", () => {
   }, 60_000);
 
   const unreadSearches = () => searches.filter((q) => q.includes("is:unread")).length;
+
+  it("a count stopped at its limit stands with the next round; one cut by a failure is read again until it is whole", async () => {
+    const reads = refs.find((ref) => ref.email === "reads@example.com")!;
+    trouble.endlessUnread = true;
+    const atLimit = storeOf();
+    try {
+      atLimit.count(reads);
+      await settled(atLimit, () => atLimit.figure([reads]) !== null);
+      forget();
+      atLimit.forget();
+      atLimit.count(reads);
+      expect(unreadSearches()).toBe(0);
+    } finally {
+      clearTrouble();
+    }
+    trouble.unreadCut = true;
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cut = storeOf();
+    try {
+      cut.count(reads);
+      await settled(cut, () => cut.figure([reads]) !== null);
+      expect(cut.figure([reads])).toMatchObject({ partial: true });
+    } finally {
+      quiet.mockRestore();
+      clearTrouble();
+    }
+    cut.forget();
+    cut.count(reads);
+    await settled(cut, () => cut.figure([reads])?.partial === false);
+    expect(cut.figure([reads])).toMatchObject({ unread: 1, partial: false });
+  }, 60_000);
 
   it("an Overview load reads each account's count once: what the sidebar and two boxes show is one read", async () => {
     forget();

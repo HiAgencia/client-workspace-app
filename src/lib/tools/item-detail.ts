@@ -59,8 +59,9 @@ export const getItem = defineTool({
   name: "get_item",
   description:
     "One item by id with what its detail shows: where it lives, its parent task, its subtasks with their counts, its " +
-    "notes and decisions, the event it is in, what mail it waits for, and the messages linked to it. With messages linked " +
-    "from several accounts it reads none of them: mailToRead lists the accounts, and list_item_mail reads each with its own call.",
+    "notes and decisions, the event it is in, what mail it waits for, and the messages linked to it. It reads those of a lone " +
+    "account, except in the chat, which reads no connected account here; linked from several accounts it reads none of them. " +
+    "An account it did not read is listed in mailToRead, and list_item_mail reads each with its own call.",
   readOnly: true,
   input: z.strictObject({ id: z.uuid() }),
   output: itemDetailOutput,

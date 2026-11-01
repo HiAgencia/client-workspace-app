@@ -82,7 +82,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, onClose, onLoaded
 
   useEffect(() => {
     let live = true;
-    void tool<{ message: MailContent }>("get_mail", { account: row.accountId, id: row.id }).then((answer) => {
+    void tool<{ message: MailContent }>("get_mail", { account: row.accountId, id: row.id, whole: true }).then((answer) => {
       if (!live) return;
       setRead({ key, message: answer.ok ? answer.message : null, error: answer.ok ? null : answer.message });
     });

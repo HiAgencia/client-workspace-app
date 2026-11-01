@@ -184,9 +184,9 @@ export const getOverview = defineTool({
     "Everything that matters in one node: its open tasks by priority (subtasks say their parentId), the latest notes " +
     "and decisions of the node and of everything below it (each with its nodePath; totals says how many there are in " +
     "all), what the nodes below hold (below), its subprojects, and the events of the next seven days: the workspace's own, " +
-    "the sample accounts', and a lone connected account's; over several connected accounts it reads none of them: " +
-    "eventsToRead lists them, and list_events reads each with its own call. Start here to answer what is pending in a node " +
-    "or to advise on what to do next.",
+    "the sample accounts', and a lone connected account's, except in the chat, which reads no connected account here; over " +
+    "several connected accounts it reads none of them. A connected account it did not read is listed in eventsToRead, and " +
+    "list_events reads each with its own call. Start here to answer what is pending in a node or to advise on what to do next.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it to use the current node."),

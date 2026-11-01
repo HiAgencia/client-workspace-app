@@ -8,7 +8,7 @@ import type { Answer, TreeNode } from "./client-api";
 
 
 export type MailAccountRef = { id: string; email: string; isDemo: boolean; status: string; nodeId: string | null; nodeIds: string[] };
-export type MailFailureRow = { accountId: string; accountEmail: string; reason: string; partial?: boolean };
+export type MailFailureRow = { accountId: string; accountEmail: string; reason: string; partial?: boolean; atLimit?: boolean };
 
 type Group = { count: number; messages: MailRow[] };
 export type MailGroups = Record<"forTasks" | "unread" | "earlier", Group>;
@@ -20,7 +20,6 @@ export type AccountMail = { groups: MailGroups; unread: number | null; unreadByA
 export type MailList = {
   accounts: MailAccountRef[];
   groups: MailGroups;
-  unread: number;
   unreadByAccount: Record<string, number>;
   failures: MailFailureRow[];
   waiting: number;
@@ -121,7 +120,7 @@ export function createMailStore(ask: Ask) {
     count(account: MailAccountRef) {
       const entry = entryOf(account.id);
       if (entry.listedIn === round || entry.counting) return;
-      const stands = entry.counted !== null && !entry.countOld && entry.counted.failures.every((failure) => failure.partial);
+      const stands = entry.counted !== null && !entry.countOld && entry.counted.failures.every((failure) => failure.atLimit);
       if (!stands) store.recount(account);
     },
     
@@ -142,7 +141,6 @@ export function createMailStore(ask: Ask) {
       const merged: MailList = {
         accounts,
         groups: { forTasks: { count: 0, messages: [] }, unread: { count: 0, messages: [] }, earlier: { count: 0, messages: [] } },
-        unread: 0,
         unreadByAccount: {},
         failures: [],
         waiting: 0,
@@ -158,7 +156,6 @@ export function createMailStore(ask: Ask) {
         }
         if (!entry.listError) merged.failures.push(...entry.list.failures);
         Object.assign(merged.unreadByAccount, entry.list.unreadByAccount);
-        merged.unread += entry.list.unread ?? 0;
       }
       for (const group of Object.values(merged.groups)) group.messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
       return merged;

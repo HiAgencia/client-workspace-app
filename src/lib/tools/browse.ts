@@ -198,8 +198,9 @@ export const browseEvents = defineTool({
     "place does not see it (a node sees its own accounts and those inherited; without a node, every account). Without it: " +
     "the workspace's own events of the node and everything below it, and those linked to them (without a node, every own " +
     "event, those of no node included), the sample accounts', and a lone connected account's; over several connected " +
-    "accounts it reads none of them: toRead lists them, and each is read with its own call. Each event comes once and says " +
-    "its origin (google or local), the clients and projects linked to it, and the tasks that live in it.",
+    "accounts it reads none of them. A connected account it did not read is listed in toRead, and each is read with its own " +
+    "call. Each event comes once and says its origin (google or local), the clients and projects linked to it, and the tasks " +
+    "that live in it.",
   readOnly: true,
   input: z.strictObject({
     node: z.string().min(1).optional().describe("The node's id or path. Omit it for the current node, or for everything."),

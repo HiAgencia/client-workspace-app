@@ -204,7 +204,7 @@ describe("the workspace's own chat, with no node open", () => {
 describe("a turn that reads the mail", () => {
   it("publishes the mail reads with nothing to run on the server, and every other tool with its run", () => {
     const published = chatTools(ctx());
-    for (const name of ["list_mail", "count_unread_mail", "search_mail", "list_task_replies", "list_item_mail", "list_events", "browse_events"]) expect(published[name].execute).toBeUndefined();
+    for (const name of ["list_mail", "count_unread_mail", "search_mail", "get_mail", "list_task_replies", "list_item_mail", "list_events", "browse_events"]) expect(published[name].execute).toBeUndefined();
     for (const name of ["create_task", "search_items", "get_tasks", "list_tree"]) expect(published[name].execute).toBeTypeOf("function");
   });
 

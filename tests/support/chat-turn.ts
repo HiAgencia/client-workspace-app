@@ -32,7 +32,8 @@ export async function chatTurn(options: { ctx: ToolContext; model: LanguageModel
       if (!isToolUIPart(part)) continue;
       const name = part.type.replace(/^tool-/, "");
       if (!BROWSER_READS.has(name)) throw new Error(`${name} stopped the turn and no browser runs it`);
-      answers.set(part.toolCallId, await read(() => callTool(name, ctx, part.input)));
+      
+      answers.set(part.toolCallId, await read(() => callTool(name, { ...ctx, source: "manual" }, part.input)));
     }
     const sent = {
       id: stored.id,
