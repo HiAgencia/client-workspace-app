@@ -7,8 +7,9 @@ import { land } from "./focus-request";
 const TITLE = '[data-item="task-1"] [data-item-title]';
 const CONTROL = '[aria-controls="fold-1"]';
 const CLOSED_FOLD = '.fold[data-open="false"]';
+const CLOSED_ROWS = '.first-rows[data-open="false"]';
 
-function page({ opensAfter = 1, folded = true, controlled = true } = {}) {
+function page({ opensAfter = 1, folded = true, controlled = true, behindShowAll = false, seen = false } = {}) {
   const log: string[] = [];
   const fold = { id: "fold-1", dataset: { open: folded ? "false" : "true" }, getAnimations: () => [{ finished: Promise.resolve().then(() => log.push("fold opened")) }] };
   const row = { removeAttribute: () => {}, setAttribute: () => {}, offsetWidth: 0 };
@@ -24,13 +25,16 @@ function page({ opensAfter = 1, folded = true, controlled = true } = {}) {
   };
   const title = {
     closest: (selector: string) => {
-      if (selector === CLOSED_FOLD) return fold.dataset.open === "false" ? fold : null;
+      if (selector === CLOSED_FOLD) return !behindShowAll && fold.dataset.open === "false" ? fold : null;
+      if (selector === CLOSED_ROWS) return behindShowAll && fold.dataset.open === "false" ? fold : null;
       if (selector === "[data-item]") return row;
       return null;
     },
+    
+    checkVisibility: () => seen || fold.dataset.open === "true",
     focus: () => {
       log.push("focus");
-      if (fold.dataset.open === "true") doc.activeElement = title;
+      if (seen || fold.dataset.open === "true") doc.activeElement = title;
     },
     scrollIntoView: () => log.push("scroll"),
   };
@@ -91,6 +95,21 @@ describe("landing on a place", () => {
     const { log } = page({ opensAfter: 1_000 });
     await expect(land(target)).resolves.toBe("hidden");
     expect(log).toContain("click");
+  });
+
+  it("opens the rows a box keeps behind «Show all» for a place among them", async () => {
+    const { log, doc, title } = page({ behindShowAll: true });
+    await expect(land(target)).resolves.toBe("landed");
+    expect(doc.activeElement).toBe(title);
+    expect(log.indexOf("click")).toBeLessThan(log.indexOf("focus"));
+    expect(log.indexOf("fold opened")).toBeLessThan(log.indexOf("scroll"));
+  });
+
+  it("leaves a long list closed for a place among its first rows, which is in view already", async () => {
+    const { log, doc, title } = page({ behindShowAll: true, seen: true });
+    await expect(land(target)).resolves.toBe("landed");
+    expect(doc.activeElement).toBe(title);
+    expect(log).not.toContain("click");
   });
 
   it("says a place that is not on the page is missing", async () => {

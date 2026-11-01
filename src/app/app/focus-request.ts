@@ -65,6 +65,14 @@ export type Landing = "landed" | "busy" | "missing" | "hidden";
 const nextFrame = () => new Promise((done) => requestAnimationFrame(done));
 
 
+function closedAround(element: HTMLElement): HTMLElement | null {
+  const fold = element.closest<HTMLElement>('.fold[data-open="false"]');
+  if (fold) return fold;
+  const rows = element.closest<HTMLElement>('.first-rows[data-open="false"]');
+  return rows && !element.checkVisibility({ visibilityProperty: true }) ? rows : null;
+}
+
+
 
 
 
@@ -81,15 +89,15 @@ export async function land(target: FocusTarget, { acted = false }: { acted?: boo
   if (target.kind === "quick-add") element = document.querySelector<HTMLElement>(`[data-quick-add="${target.type}"] input`);
   if (target.kind === "item") element = document.querySelector<HTMLElement>(`[data-item="${target.itemId}"] [data-item-title]`);
   if (!element) return "missing";
-  const fold = element.closest<HTMLElement>('.fold[data-open="false"]');
-  if (fold) {
-    document.querySelector<HTMLElement>(`[aria-controls="${fold.id}"]`)?.click();
-    for (let frames = 0; fold.dataset.open !== "true" && frames < 10; frames++) await nextFrame();
+  const closed = closedAround(element);
+  if (closed) {
+    document.querySelector<HTMLElement>(`[aria-controls="${closed.id}"]`)?.click();
+    for (let frames = 0; closed.dataset.open !== "true" && frames < 10; frames++) await nextFrame();
   }
   element.focus({ preventScroll: true });
   if (document.activeElement !== element) return "hidden";
   
-  if (fold) await Promise.allSettled(fold.getAnimations().map((animation) => animation.finished));
+  if (closed) await Promise.allSettled([closed, element.closest<HTMLElement>(".task-item")].flatMap((box) => box?.getAnimations() ?? []).map((animation) => animation.finished));
   element.scrollIntoView({ block: target.kind === "node" ? "start" : "center", behavior: reduced ? "instant" : "smooth" });
   if (target.kind === "item") {
     const row = element.closest<HTMLElement>("[data-item]");
