@@ -848,7 +848,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
 
 
 async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], label: string | null): Promise<{ ok: boolean; message?: string }> {
-  if (kind === "completed") return tool("update_item", { id: item.id, status: "open" });
+  if (kind === "completed") return item.type === "task" ? tool("reopen_task", { task: item.id }) : tool("update_item", { id: item.id, status: "open" });
   if (kind === "deleted") return post(`/api/items/${item.id}/restore`, {});
   const versions = await get<{ revisions: Revision[] }>(`/api/items/${item.id}/revisions`);
   if (!versions.ok) return versions;

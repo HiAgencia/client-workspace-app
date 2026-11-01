@@ -1,10 +1,11 @@
 import { z } from "zod";
 import type { Database } from "@/lib/db/types";
 import { withInitialCapital } from "@/lib/initial-capital";
+import { writtenBody } from "@/lib/inline-links";
 import { mailFailureSchema, waitWords, type MailMessage } from "@/lib/mail/source";
 import type { ToolContext } from "./context";
 import { defineTool } from "./define";
-import { origin, reachableItem } from "./items";
+import { origin, reachableItem, richText } from "./items";
 import { accountsOf, failuresByAccount, mailOf, rowsOf, type ReachedAccount } from "./mail";
 import { mailRowSchema, taskMailSchema, type TaskMail } from "./mail-schema";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
@@ -317,6 +318,7 @@ export const completeTask = defineTool({
       })
       .optional()
       .describe("The message that answered the task."),
+    notes: richText("What the decision says under the result; without it, who sent the reply and what about").optional(),
   }),
   output: z.object({
     item: itemSchema,
@@ -333,12 +335,12 @@ export const completeTask = defineTool({
     const mark = origin(ctx);
     if (!mark) return fail("internal", "an agent write needs its token's label");
     
-    let said: string | null = null;
+    let said = writtenBody(input.notes);
     if (input.reply) {
       const answer = await answeringMessage(ctx, scope, input.reply.account, input.reply.id);
       if (isError(answer)) return answer;
       const { message } = answer;
-      said = `<p>${escaped(`From ${message.from.name ?? message.from.email}: ${message.subject || "(no subject)"} · ${message.receivedAt.slice(0, 10)}`)}</p>`;
+      said ??= `<p>${escaped(`From ${message.from.name ?? message.from.email}: ${message.subject || "(no subject)"} · ${message.receivedAt.slice(0, 10)}`)}</p>`;
     }
     
     
@@ -360,38 +362,66 @@ export const completeTask = defineTool({
   },
 });
 
+
+
+
+async function leftByClosing(ctx: ToolContext, task: ItemRow): Promise<ToolResult<{ decision: { id: string; title: string; body: string | null } | null; link: { account_id: string; message_id: string } | null }>> {
+  if (!task.completed_at) return ok({ decision: null, link: null });
+  const decisions = await ctx.db
+    .from("items")
+    .select("id, title, body")
+    .eq("owner_id", ctx.ownerId)
+    .eq("parent_item_id", task.id)
+    .eq("type", "decision")
+    .eq("created_at", task.completed_at)
+    .is("deleted_at", null)
+    .limit(1);
+  if (decisions.error) return dbFail("reading what the closing left", decisions.error);
+  const [decision] = decisions.data;
+  if (!decision) return ok({ decision: null, link: null });
+  const links = await ctx.db.from("mail_links").select("account_id, message_id").eq("owner_id", ctx.ownerId).eq("item_id", task.id).eq("created_at", task.completed_at).limit(1);
+  if (links.error) return dbFail("reading what the closing left", links.error);
+  return ok({ decision, link: links.data[0] ?? null });
+}
+
 export const reopenTask = defineTool({
   name: "reopen_task",
   description:
-    "Take back a closing made with complete_task, whole: the task opens again, the decision with its result goes, and the " +
-    "message comes off the task when that closing linked it. Use it when the person says a task was closed by mistake.",
+    "Open a done task again and take its closing back, whole: when complete_task closed it, the decision with its result goes " +
+    "and the message comes off the task if that closing linked it. Its answer says what it took back, to make it again with " +
+    "complete_task. Use it when the person says a task was closed by mistake.",
   readOnly: false,
-  input: z.strictObject({
-    task: z.uuid(),
-    decision: z.uuid().describe("The decision with the result, as complete_task gave it."),
-    reply: z
-      .strictObject({ account: z.uuid(), id: z.string().min(1).max(200) })
-      .optional()
-      .describe("The message to take off the task, only when that closing linked it (its link says created)."),
+  input: z.strictObject({ task: z.uuid() }),
+  output: z.object({
+    item: itemSchema,
+    
+    closing: z.object({ outcome: z.string(), notes: z.string().nullable(), reply: z.object({ account: z.string(), id: z.string() }).nullable() }).nullable(),
   }),
-  output: z.object({ item: itemSchema }),
   async run(ctx, input) {
     const found = await reachableItem(ctx, input.task);
     if (isError(found)) return found;
-    if (found.row.type !== "task") return fail("invalid_input", `a ${found.row.type} is not closed with a result: a task is`);
+    const { row, scope } = found;
+    if (row.type !== "task") return fail("invalid_input", `a ${row.type} is not closed with a result: a task is`);
+    if (row.status !== "done") return fail("invalid_input", "the task is already open");
     const mark = origin(ctx);
     if (!mark) return fail("internal", "an agent write needs its token's label");
+    const left = await leftByClosing(ctx, row);
+    if (isError(left)) return left;
+    const { decision, link } = left;
     const { data, error } = await ctx.db.rpc("reopen_task", {
       p_owner: ctx.ownerId,
-      p_item: found.row.id,
-      p_decision: input.decision,
-      p_account: (input.reply?.account ?? null) as string,
-      p_message: (input.reply?.id ?? null) as string,
+      p_item: row.id,
+      p_decision: (decision?.id ?? null) as string,
+      p_account: (link?.account_id ?? null) as string,
+      p_message: (link?.message_id ?? null) as string,
       p_source: mark.source,
       p_agent_label: mark.agent_label as string,
     });
     if (error) return dbFail("opening the task again", error);
-    if (!data) return fail("not_found", `task ${found.row.id} was deleted meanwhile`);
-    return ok({ item: toItem(data as unknown as ItemRow, found.scope) });
+    if (!data) return fail("not_found", `task ${row.id} was deleted meanwhile`);
+    return ok({
+      item: toItem(data as unknown as ItemRow, scope),
+      closing: decision ? { outcome: decision.title, notes: decision.body, reply: link ? { account: link.account_id, id: link.message_id } : null } : null,
+    });
   },
 });

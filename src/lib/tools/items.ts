@@ -32,7 +32,7 @@ const parentRef = z
 
 export { dueOn, dueTime, priority, titleText };
 
-const richText = (what: string) =>
+export const richText = (what: string) =>
   z
     .string()
     .trim()

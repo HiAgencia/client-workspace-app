@@ -10,8 +10,6 @@ type Previous = { title: string; body: string | null; type: "task" | "note" | "d
 type Moved = { nodeId: string | null; parentId: string | null };
 type TaskMail = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
 type MailLink = { accountId: string; messageId: string; taskId: string | null; nodeId: string | null };
-
-type ReplyLink = { accountId: string; messageId: string; created: boolean };
 type EventLink = { itemId: string; eventId: string | null; accountId: string | null; calendarId: string | null; googleEventId: string | null };
 
 
@@ -29,14 +27,15 @@ export type WriteOutput = {
   
   title?: string;
   
-  
-  link?: MailLink | EventLink | ReplyLink | null;
+  link?: MailLink | EventLink | null;
   removed?: boolean;
   created?: boolean;
   task?: string;
   mail?: TaskMail | null;
   
   decision?: { id: string; title: string };
+  
+  closing?: { outcome: string; notes: string | null; reply: { account: string; id: string } | null } | null;
   
   reply?: { account: string; id: string; dismissed: boolean };
 };
@@ -126,16 +125,23 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
   
   
   complete_task: (o) => {
-    const reply = o.link as ReplyLink | null | undefined;
     if (!o.item || !o.decision) return null;
     const task = o.item;
-    const decision = o.decision;
+    return { what: `Closed ${quoted(task.title)}: ${o.decision.title}`, undo: () => tool("reopen_task", { task: task.id }) };
+  },
+  
+  reopen_task: (o) => {
+    if (!o.item) return null;
+    const { id } = o.item;
+    const was = o.closing;
     return {
-      what: `Closed ${quoted(task.title)}: ${decision.title}`,
-      undo: () => tool("reopen_task", { task: task.id, decision: decision.id, ...(reply?.created ? { reply: { account: reply.accountId, id: reply.messageId } } : {}) }),
+      what: `Opened ${quoted(o.item.title)} again`,
+      undo: () =>
+        was
+          ? tool("complete_task", { task: id, outcome: was.outcome, ...(was.notes ? { notes: was.notes } : {}), ...(was.reply ? { reply: was.reply } : {}) })
+          : tool("update_item", { id, status: "done" }),
     };
   },
-  reopen_task: (o) => (o.item ? { what: `Opened ${quoted(o.item.title)} again` } : null),
 };
 
 function created(verb: string, output: WriteOutput): Card {

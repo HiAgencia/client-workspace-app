@@ -264,32 +264,86 @@ describe("what a closing reads of the message", () => {
 });
 
 describe("taking a closing back", () => {
-  it("opens the task, takes its result off, and unlinks the reply this closing linked, in one call", async () => {
+  type Reopened = { ok: boolean; message?: string; closing: { outcome: string; notes: string | null; reply: { account: string; id: string } | null } | null };
+  const reopen = (task: string) => callTool("reopen_task", context(), { task }) as unknown as Promise<Reopened>;
+
+  it("opens the task, takes its result off, and unlinks the reply this closing linked, in one call, and says what it took back", async () => {
     const task = await newTask();
     const closed = await close(task);
-    const back = await callTool("reopen_task", context(), { task, decision: closed.decision.id, reply: { account, id: stored.id } });
+    const back = await reopen(task);
     expect(back.ok).toBe(true);
+    expect(back.closing).toEqual({ outcome: "Approved", notes: "<p>From Bayside Bank: Transfer received · 2026-10-29</p>", reply: { account, id: stored.id } });
     leftAsItWas(await stateOf(task));
     const decision = await user!.client.from("items").select("deleted_at").eq("id", closed.decision.id).single();
     expect(decision.data?.deleted_at, "the result goes to the trash, as a deletion does").not.toBeNull();
   });
 
-  it("keeps a link that was there before the closing", async () => {
+  it("keeps a link that was there before the closing, and so has none to give back", async () => {
+    const task = await newTask();
+    const linked = await user!.client.from("mail_links").insert({ owner_id: user!.id, account_id: account, message_id: stored.id, item_id: task });
+    expect(linked.error).toBeNull();
+    await close(task);
+    const back = await reopen(task);
+    expect(back.ok).toBe(true);
+    expect(back.closing).toMatchObject({ outcome: "Approved", reply: null });
+    expect(await stateOf(task)).toMatchObject({ status: "open", results: 0, links: 1 });
+  });
+
+  const decidedByHand = async (task: string) => {
+    const written = await user!.client.from("items").insert({ owner_id: user!.id, node_id: client, parent_item_id: task, type: "decision", title: "Written by hand" });
+    expect(written.error).toBeNull();
+  };
+
+  it("only opens a task that was marked done without a result, and leaves what hangs from it", async () => {
+    const task = await newTask();
+    await decidedByHand(task);
+    const done = await callTool("update_item", context(), { id: task, status: "done" });
+    expect(done.ok).toBe(true);
+    const back = await reopen(task);
+    expect(back.ok).toBe(true);
+    expect(back.closing).toBeNull();
+    expect(await stateOf(task)).toMatchObject({ status: "open", completedAt: null, results: 1 });
+  });
+
+  it("takes back the last closing alone, and a decision written by hand before it stays", async () => {
+    const task = await newTask();
+    await decidedByHand(task);
+    await close(task, undefined, "approved");
+    await reopen(task);
+    const again = (await callTool("complete_task", context(), { task, outcome: "Rejected" })) as unknown as Closed;
+    expect(again.ok).toBe(true);
+    const back = await reopen(task);
+    expect(back.closing).toEqual({ outcome: "Rejected", notes: null, reply: null });
+    expect(await stateOf(task)).toMatchObject({ status: "open", results: 1, links: 0 });
+  });
+
+  it("makes the closing again as it was from what it gave back", async () => {
+    const task = await newTask();
+    const closed = await close(task);
+    const back = await reopen(task);
+    const redone = (await callTool("complete_task", context(), { task, outcome: back.closing!.outcome, notes: back.closing!.notes, reply: back.closing!.reply })) as unknown as Closed;
+    expect(redone.ok).toBe(true);
+    expect(redone.decision).toMatchObject({ title: closed.decision.title, body: closed.decision.body });
+    expect(await stateOf(task)).toMatchObject({ status: "done", results: 1, links: 1 });
+  });
+
+  it("keeps the words of the closing that had a message already linked when it is made again", async () => {
     const task = await newTask();
     const linked = await user!.client.from("mail_links").insert({ owner_id: user!.id, account_id: account, message_id: stored.id, item_id: task });
     expect(linked.error).toBeNull();
     const closed = await close(task);
-    const back = await callTool("reopen_task", context(), { task, decision: closed.decision.id });
-    expect(back.ok).toBe(true);
-    expect(await stateOf(task)).toMatchObject({ status: "open", results: 0, links: 1 });
+    const back = await reopen(task);
+    const redone = (await callTool("complete_task", context(), { task, outcome: back.closing!.outcome, notes: back.closing!.notes })) as unknown as Closed;
+    expect(redone.ok).toBe(true);
+    expect(redone.decision).toMatchObject({ title: closed.decision.title, body: closed.decision.body });
+    expect(await stateOf(task)).toMatchObject({ status: "done", results: 1, links: 1 });
   });
 
-  it("leaves a decision that hangs from another task", async () => {
+  it("refuses a task that is open, and writes nothing", async () => {
     const task = await newTask();
-    const closed = await close(await newTask("Another task"));
-    const back = await callTool("reopen_task", context(), { task, decision: closed.decision.id });
-    expect(back.ok).toBe(true);
-    const decision = await user!.client.from("items").select("deleted_at").eq("id", closed.decision.id).single();
-    expect(decision.data?.deleted_at).toBeNull();
+    const back = await reopen(task);
+    expect(back.ok).toBe(false);
+    expect(back.message).toContain("already open");
+    leftAsItWas(await stateOf(task));
   });
 });

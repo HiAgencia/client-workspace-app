@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WRITES } from "./chat-cards";
+import { WRITES, type WriteOutput } from "./chat-cards";
 
 
 
@@ -89,21 +89,26 @@ describe("the chat's cards", () => {
     expect(sent).toEqual([{ url: "/api/tools/dismiss_reply", body: { task: "t5", account: "a1", id: "m1", dismissed: false } }]);
   });
 
-  it("a task closed with its result opens again, its result goes, and the reply comes off it only when the closing linked it", async () => {
-    const closed = (created: boolean) =>
-      WRITES.complete_task({
-        ok: true,
-        item: { id: "t6", title: "Wait for the app review", type: "task" },
-        decision: { id: "d6", title: "Approved" },
-        link: { accountId: "a1", messageId: "m6", created },
-      });
-    expect(closed(true)?.what).toBe("Closed “Wait for the app review”: Approved");
+  it("a task closed with its result opens again in one call, which finds what the closing left", async () => {
+    const closed = WRITES.complete_task({ ok: true, item: { id: "t6", title: "Wait for the app review", type: "task" }, decision: { id: "d6", title: "Approved" } });
+    expect(closed?.what).toBe("Closed “Wait for the app review”: Approved");
     const sent = capture();
-    await closed(true)?.undo?.();
-    await closed(false)?.undo?.();
+    await closed?.undo?.();
+    expect(sent).toEqual([{ url: "/api/tools/reopen_task", body: { task: "t6" } }]);
+  });
+
+  it("makes a closing taken back again, with its words and its message, and marks done a task that had neither", async () => {
+    const task = { id: "t7", title: "Wait for the app review", type: "task" as const };
+    const opened = (closing: WriteOutput["closing"]) => WRITES.reopen_task({ ok: true, item: task, closing });
+    expect(opened(null)?.what).toBe("Opened “Wait for the app review” again");
+    const sent = capture();
+    await opened({ outcome: "Approved", notes: "<p>From Meta</p>", reply: { account: "a1", id: "m7" } })?.undo?.();
+    await opened({ outcome: "Rejected", notes: null, reply: null })?.undo?.();
+    await opened(null)?.undo?.();
     expect(sent).toEqual([
-      { url: "/api/tools/reopen_task", body: { task: "t6", decision: "d6", reply: { account: "a1", id: "m6" } } },
-      { url: "/api/tools/reopen_task", body: { task: "t6", decision: "d6" } },
+      { url: "/api/tools/complete_task", body: { task: "t7", outcome: "Approved", notes: "<p>From Meta</p>", reply: { account: "a1", id: "m7" } } },
+      { url: "/api/tools/complete_task", body: { task: "t7", outcome: "Rejected" } },
+      { url: "/api/tools/update_item", body: { id: "t7", status: "done" } },
     ]);
   });
 });
