@@ -424,7 +424,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   if (!read.data) return <BoxWait what="Reading this week's events…" rows={2} />;
   const chosenEvents = ofDay(chosen);
   return (
-    <div className="box-read" data-stale={read.stale || undefined} aria-busy={read.stale || undefined}>
+    <div className="box-read" data-stale={read.stale || undefined} aria-busy={read.stale || read.data.waiting > 0 || undefined}>
       {read.error && <BoxFailed what="The calendar" message={read.error} kept onRetry={read.retry} />}
       {}
       {[...new Set(read.data.failures.map((failure) => failure.reason))].map((reason) => {
@@ -473,7 +473,10 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         <h3 className="group-title" data-when={chosen === now ? "today" : undefined}>
           {chosen === now ? "Today" : dayHeading(chosen, now)}
         </h3>
-        {chosenEvents.length === 0 ? (
+        {}
+        {chosenEvents.length === 0 && read.data.waiting > 0 ? (
+          <BoxWait what="Reading this week's events…" rows={2} />
+        ) : chosenEvents.length === 0 ? (
           <BoxEmpty text={`No events ${chosen === now ? "today" : `on ${longDay(chosen)}`} in the calendars in view.`} reason="no-events">
             <Link className={buttonClass({ size: "sm" })} href={calendarHref}>
               <span className="btn-label">Open the calendar</span>

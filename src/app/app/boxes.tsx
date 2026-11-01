@@ -558,9 +558,9 @@ export function BoxFailed({ what, message, kept, onRetry }: { what: string; mess
 
 export type BoxRead<T> = { data: T | null; error: string | null; stale: boolean; settled: boolean; retry: () => void };
 
-export function useBoxRead<T>(read: (() => Promise<{ ok: true } & T | { ok: false; message: string }>) | null, key: string): BoxRead<T> {
+export function useBoxRead<T>(read: ((publish: (partial: T) => void) => Promise<{ ok: true } & T | { ok: false; message: string }>) | null, key: string): BoxRead<T> {
   const { version } = useWorkspace();
-  const [state, setState] = useState<{ key: string; value: T } | null>(null);
+  const [state, setState] = useState<{ key: string; value: T; partial?: boolean } | null>(null);
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
   const [round, setRound] = useState(0);
   const reader = useRef(read);
@@ -571,7 +571,11 @@ export function useBoxRead<T>(read: (() => Promise<{ ok: true } & T | { ok: fals
     const run = reader.current;
     if (!run) return;
     let live = true;
-    void run().then((answer) => {
+    
+    const publish = (partial: T) => {
+      if (live) setState((now) => (now?.key === key && !now.partial ? now : { key, value: partial, partial: true }));
+    };
+    void run(publish).then((answer) => {
       if (!live) return;
       if (answer.ok) {
         setState({ key, value: answer as unknown as T });

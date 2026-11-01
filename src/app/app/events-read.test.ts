@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Answer } from "./client-api";
 import { readEvents } from "./events-read";
 
@@ -45,6 +45,36 @@ describe("reading the events account by account", () => {
     const { ask, asked } = server({ events: [own("mine", "2026-11-03")] }, {});
     await readEvents<Event>(INPUT, { ask });
     expect(asked).toHaveLength(1);
+  });
+
+  it("says what has arrived as each account answers, so a slow one holds back only its own", async () => {
+    let slowAnswers!: (answer: Answer<Record<string, unknown>>) => void;
+    const ask = async (_name: string, input: Record<string, unknown>): Promise<Answer<Record<string, unknown>>> => {
+      if (input.account === "a") return new Promise((done) => (slowAnswers = done));
+      if (input.account === "b") return { ok: true, events: [google("b", "quick", "2026-11-02T10:00:00Z")], failures: [] };
+      return { ok: true, events: [own("mine", "2026-11-03")], failures: [], accounts: ACCOUNTS, toRead: ["a", "b"] };
+    };
+    const heard: Array<{ ids: string[]; waiting: number }> = [];
+    const reading = readEvents<Event>(INPUT, { ask, onArrived: (read) => heard.push({ ids: read.events.map((event) => event.id), waiting: read.waiting }) });
+    await vi.waitFor(() => expect(heard).toHaveLength(2));
+    expect(heard).toEqual([
+      { ids: ["mine"], waiting: 2 },
+      { ids: ["quick", "mine"], waiting: 1 },
+    ]);
+    slowAnswers({ ok: true, events: [google("a", "slow", "2026-11-05T10:00:00Z")], failures: [] });
+    const read = await reading;
+    if (!read.ok) throw new Error(read.message);
+    expect(read.waiting).toBe(0);
+    expect(read.events.map((event) => event.id)).toEqual(["quick", "mine", "slow"]);
+    
+    expect(heard).toHaveLength(2);
+  });
+
+  it("with nothing to read apart, nothing is heard before the answer", async () => {
+    const { ask } = server({ events: [own("mine", "2026-11-03")] }, {});
+    const heard: unknown[] = [];
+    await readEvents<Event>(INPUT, { ask, onArrived: (read) => heard.push(read) });
+    expect(heard).toEqual([]);
   });
 
   it("says which account failed and why, and keeps what the others brought", async () => {

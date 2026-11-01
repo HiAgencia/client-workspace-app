@@ -28,8 +28,8 @@ import { count, plural } from "@/lib/count";
 import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, monthGrid, monthTitle, rangeLabel, today, weekdayNames, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { PRODUCT_NAME } from "@/lib/product";
-import { get, post, tool, type EventsFailure, type Item, type TreeNode } from "../client-api";
-import { readEvents } from "../events-read";
+import { get, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "../client-api";
+import { readEvents, type EventsRead } from "../events-read";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
 import { openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
@@ -65,7 +65,7 @@ type TasksAnswer = {
   completed: { tasks: TaskData[] } | null;
 };
 
-type Loaded = { key: string; view: View; anchor: Day; from: Day; to: Day; events: CalEvent[]; tasks: TaskData[]; failures: EventsFailure[]; accounts: Account[] };
+type Loaded = { key: string; view: View; anchor: Day; from: Day; to: Day; events: CalEvent[]; tasks: TaskData[]; failures: EventsFailure[]; waiting: number; accounts: Account[] };
 type View = "week" | "month";
 
 type Draft = { day: Day; time: string | null };
@@ -178,36 +178,46 @@ function Calendar() {
   useEffect(() => {
     let live = true;
     const instants = instantsOf(range.from, range.to);
+    const beside = Promise.all([tool<TasksAnswer>("get_tasks", { today: today(), withCompleted: true }), get<{ accounts: Account[] }>("/api/accounts")]);
+    const made = (events: EventsRead<CalEvent>, tasks: TasksAnswer, accounts: Answer<{ accounts: Account[] }>): Loaded => ({
+      key: rangeKey,
+      view,
+      anchor,
+      from: range.from,
+      to: range.to,
+      events: events.events,
+      tasks: [
+        ...tasks.groups.overdue.tasks,
+        ...tasks.groups.today.tasks,
+        ...tasks.groups.upcoming.days.flatMap((day) => day.tasks),
+        ...(tasks.completed?.tasks ?? []),
+      ],
+      failures: events.failures,
+      waiting: events.waiting,
+      accounts: accounts.ok ? accounts.accounts : [],
+    });
     void Promise.all([
-      readEvents<CalEvent>({ from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to }),
-      tool<TasksAnswer>("get_tasks", { today: today(), withCompleted: true }),
-      get<{ accounts: Account[] }>("/api/accounts"),
-    ]).then(([events, tasks, accounts]) => {
+      readEvents<CalEvent>(
+        { from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to },
+        {
+          
+          onArrived: (events) =>
+            void beside.then(([tasks, accounts]) => {
+              if (live && tasks.ok) setLoaded((now) => (now?.key === rangeKey && now.waiting === 0 ? now : made(events, tasks, accounts)));
+            }),
+        },
+      ),
+      beside,
+    ]).then(([events, [tasks, accounts]]) => {
       if (!live) return;
       if (!events.ok || !tasks.ok) {
         
         setReadError(!events.ok ? events.message : !tasks.ok ? tasks.message : "");
         return;
       }
-      const all = [
-        ...tasks.groups.overdue.tasks,
-        ...tasks.groups.today.tasks,
-        ...tasks.groups.upcoming.days.flatMap((day) => day.tasks),
-        ...(tasks.completed?.tasks ?? []),
-      ];
       setReadError(null);
       setMoved(new Map());
-      setLoaded({
-        key: rangeKey,
-        view,
-        anchor,
-        from: range.from,
-        to: range.to,
-        events: events.events,
-        tasks: all,
-        failures: events.failures,
-        accounts: accounts.ok ? accounts.accounts : [],
-      });
+      setLoaded(made(events, tasks, accounts));
     });
     return () => {
       live = false;
@@ -379,7 +389,7 @@ function Calendar() {
       <div className="page cal-page" data-calendar={view}>
         <PageHeader
           title="Calendar"
-          count={loaded ? `Your connected calendars and the tasks with a date. ${counted}.` : "Reading the calendar…"}
+          count={loaded ? `Your connected calendars and the tasks with a date. ${[counted, loaded.waiting > 0 ? `${count(loaded.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : "Reading the calendar…"}
           filters={
             <>
               <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
@@ -397,7 +407,7 @@ function Calendar() {
           chat
         />
 
-        <section className="card cal-card" aria-labelledby="cal-range" aria-busy={!loaded || loaded.key !== rangeKey}>
+        <section className="card cal-card" aria-labelledby="cal-range" aria-busy={!loaded || loaded.key !== rangeKey || loaded.waiting > 0}>
           <div className="cal-bar">
             <h2 id="cal-range" className="t-title cal-range" aria-live="polite">
               {title}
