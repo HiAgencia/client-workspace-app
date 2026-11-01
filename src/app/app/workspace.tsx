@@ -187,20 +187,29 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   }, [refreshTree, mailStore]);
 
   
+  
+  
   useEffect(() => {
     let hiddenAt = document.hidden ? Date.now() : null;
+    const again = () => {
+      mailStore.aged();
+      touch();
+    };
     const onChange = () => {
       if (document.hidden) hiddenAt = Date.now();
       else {
-        if (hiddenAt !== null && Date.now() - hiddenAt >= AWAY_MS) {
-          mailStore.aged();
-          touch();
-        }
+        if (hiddenAt !== null && Date.now() - hiddenAt >= AWAY_MS) again();
         hiddenAt = null;
       }
     };
+    const inView = window.setInterval(() => {
+      if (!document.hidden && !document.activeElement?.matches("input, textarea, [contenteditable='true']")) again();
+    }, AWAY_MS);
     document.addEventListener("visibilitychange", onChange);
-    return () => document.removeEventListener("visibilitychange", onChange);
+    return () => {
+      window.clearInterval(inView);
+      document.removeEventListener("visibilitychange", onChange);
+    };
   }, [mailStore, touch]);
 
   
