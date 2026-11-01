@@ -35,7 +35,7 @@ import { FOOT, SPLIT, type BoardLayout } from "./board-layout";
 import { BoxBoard, customizeEntries, savePreference, useBoardLayout, useBoxRead, type BoxSpec } from "./boxes";
 import type { ConnectBlocked } from "./connect-blocked";
 import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
-import { accountsSeenFrom, figureWords } from "./mail-store";
+import { accountsSeenFrom, figureWords, lostWords } from "./mail-store";
 import { BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
@@ -398,7 +398,7 @@ function NodeStrip({
                   <span className="node-chip-name t-name">{account.email}</span>
                   {lost ? (
                     <span className="node-chip-detail" data-tone="alert">
-                      {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
+                      {lostWords(account.status)}
                     </span>
                   ) : (
                     <span className="node-chip-detail">{accountFacts(figureWords(mailStore.figure([account])), known ? known.calendars.filter((calendar) => calendar.selected).length : null)}</span>

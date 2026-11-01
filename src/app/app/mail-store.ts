@@ -188,6 +188,9 @@ export function figureText(figure: MailFigure): { shown: string; spoken: string 
 }
 
 
+export const lostWords = (status: string) => (status === "revoked" ? "Access revoked: connect it again" : "Connection failed: connect it again");
+
+
 export function figureWords(figure: MailFigure | null): string | null {
   if (!figure) return null;
   if (!figure.partial) return `${figure.unread} unread`;

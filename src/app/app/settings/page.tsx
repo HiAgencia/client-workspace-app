@@ -15,6 +15,7 @@ import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
 import { get, post } from "../client-api";
 import { ConfirmButton } from "../confirm-button";
 import { ConnectBlockedNote, type ConnectBlocked } from "../connect-blocked";
+import { lostWords } from "../mail-store";
 import { PageHeader } from "../page-header";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
@@ -209,7 +210,7 @@ function AccountsSection() {
                       <h3 className="t-name">{account.email}</h3>
                       {account.status !== "active" && !account.isDemo && (
                         <span className="pill" data-tone="alert">
-                          {account.status === "revoked" ? "Access revoked: connect it again" : account.status}
+                          {lostWords(account.status)}
                         </span>
                       )}
                       {account.isDemo && <span className="pill">Sample account, read-only</span>}
