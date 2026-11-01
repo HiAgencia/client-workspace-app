@@ -4,7 +4,7 @@ import { withInitialCapital } from "@/lib/initial-capital";
 import { hashAgentToken, mcpJson, newAgentToken, TOKEN_ENV } from "@/lib/agent-token";
 import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
-import { currentUser, userClient } from "@/lib/supabase/server";
+import { requireUser, userClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tools/tree";
 
 
@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
   const nodeId = request.nextUrl.searchParams.get("node");
   if (nodeId !== null && !isUuid(nodeId)) return problem(400, "no such node");
   const db = await userClient();
-  if (!(await currentUser(db))) return problem(401, "not signed in");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
   const query = db.from("agent_tokens").select("id, node_id, label, created_at, last_used_at, revoked_at");
   const { data, error } = await (nodeId ? query.eq("node_id", nodeId) : query).order("created_at", { ascending: false });
   if (error) {
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
   const input = await readInput(request, action);
   if (!input.ok) return input.response;
   const db = await userClient();
-  if (!(await currentUser(db))) return problem(401, "not signed in");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
   const value = input.value;
   if (value.action === "issue") {
     const token = newAgentToken();

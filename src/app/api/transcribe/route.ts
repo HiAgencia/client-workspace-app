@@ -4,15 +4,15 @@ import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
 import { isSupportedWav } from "@/lib/chat/wav";
 import { serverEnv } from "@/lib/env";
 import { json, problem, sameOrigin } from "@/lib/http";
-import { currentUser, serviceClient, userClient } from "@/lib/supabase/server";
+import { requireUser, serviceClient, userClient } from "@/lib/supabase/server";
 
 
 const MAX_AUDIO = 4 * 1024 * 1024;
 
 
 export async function GET() {
-  const user = await currentUser(await userClient());
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(await userClient());
+  if (!who.ok) return who.response;
   const available = chatProvider() === "simulated" || Boolean(serverEnv("MODEL_API_KEY"));
   return json({ ok: true, available });
 }
@@ -21,8 +21,9 @@ export async function GET() {
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
   if (Number(request.headers.get("content-length") ?? 0) > MAX_AUDIO + 4096) return problem(413, "the note is too long");
-  const user = await currentUser(await userClient());
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(await userClient());
+  if (!who.ok) return who.response;
+  const { user } = who;
   let audio: File | null;
   try {
     const form = await request.formData();

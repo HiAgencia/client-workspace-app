@@ -1,4 +1,3 @@
-import { problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
 import { toolResponse } from "@/lib/tool-response";
@@ -10,6 +9,6 @@ export async function POST(request: Request) {
   const input = await readInput(request, createNodeInput);
   if (!input.ok) return input.response;
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   return toolResponse("create node", await createNode(session.ctx, input.value));
 }

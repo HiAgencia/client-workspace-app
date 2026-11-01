@@ -150,7 +150,7 @@ describe("the MCP endpoint", () => {
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
       }),
     );
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(503);
   });
 
   it("a token on the parent reaches the node a sibling token cannot", async () => {

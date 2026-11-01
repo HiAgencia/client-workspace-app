@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import type { Db } from "@/lib/db/client";
 import type { Database } from "@/lib/db/types";
 import { publicConfig, requireServerEnv } from "@/lib/env";
+import { problem } from "@/lib/http";
 
 
 
@@ -31,10 +32,39 @@ export function serviceClient(): Db {
 export type SessionUser = { id: string; email: string | null; isAnonymous: boolean };
 
 
-export async function currentUser(db: Db): Promise<SessionUser | null> {
-  const { data, error } = await db.auth.getUser();
-  
-  if (error && error.name !== "AuthSessionMissingError") console.error("auth: reading the user failed", error.status, error.name);
-  if (error || !data.user) return null;
-  return { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false };
+
+export type SessionReading = { kind: "user"; user: SessionUser } | { kind: "none" } | { kind: "unavailable" };
+
+
+const RETRY_PAUSES_MS = [150, 400];
+
+
+function refused(status: number | undefined): boolean {
+  return status !== undefined && status >= 400 && status < 500 && status !== 429;
+}
+
+
+export async function readSession(db: Db): Promise<SessionReading> {
+  for (let attempt = 0; ; attempt++) {
+    const { data, error } = await db.auth.getUser();
+    if (!error) {
+      if (!data.user) return { kind: "none" };
+      return { kind: "user", user: { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false } };
+    }
+    
+    if (error.name === "AuthSessionMissingError") return { kind: "none" };
+    console.error("auth: reading the user failed", error.status, error.name);
+    if (refused(error.status)) return { kind: "none" };
+    if (attempt === RETRY_PAUSES_MS.length) return { kind: "unavailable" };
+    await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSES_MS[attempt]));
+  }
+}
+
+
+
+export async function requireUser(db: Db): Promise<{ ok: true; user: SessionUser } | { ok: false; response: Response }> {
+  const session = await readSession(db);
+  if (session.kind === "user") return { ok: true, user: session.user };
+  if (session.kind === "none") return { ok: false, response: problem(401, "not signed in") };
+  return { ok: false, response: problem(503, "The session could not be checked. Try again.") };
 }

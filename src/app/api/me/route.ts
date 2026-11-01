@@ -1,9 +1,10 @@
-import { json, problem } from "@/lib/http";
-import { currentUser, userClient } from "@/lib/supabase/server";
+import { json } from "@/lib/http";
+import { requireUser, userClient } from "@/lib/supabase/server";
 
 
 export async function GET() {
-  const user = await currentUser(await userClient());
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(await userClient());
+  if (!who.ok) return who.response;
+  const { user } = who;
   return json({ ok: true, user });
 }

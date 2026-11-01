@@ -1,15 +1,16 @@
 import { json, problem } from "@/lib/http";
 import { LAYOUT_COOKIE, layoutCookie, preferencesChange, readPreferences, savePreferences } from "@/lib/preferences";
 import { readInput } from "@/lib/route-input";
-import { currentUser, userClient } from "@/lib/supabase/server";
+import { requireUser, userClient } from "@/lib/supabase/server";
 
 
 
 
 export async function GET() {
   const db = await userClient();
-  const user = await currentUser(db);
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
+  const { user } = who;
   const read = await readPreferences(db, user.id);
   if (!read.ok) {
     console.error("preferences:", read.message);
@@ -22,8 +23,9 @@ export async function POST(request: Request) {
   const input = await readInput(request, preferencesChange);
   if (!input.ok) return input.response;
   const db = await userClient();
-  const user = await currentUser(db);
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
+  const { user } = who;
   const saved = await savePreferences(db, user.id, input.value);
   if (!saved.ok) {
     console.error("saving preferences:", saved.message);

@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/item
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such item");
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   const result = await listRevisions(session.ctx, id);
   return isError(result) ? toolResponse("item revisions", result) : json(result);
 }

@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (asked !== null && !isUuid(asked)) return problem(400, "no such node");
   const nodeId = asked;
   const session = await sessionContext("chat", nodeId ?? undefined);
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   try {
     return json({ ok: true, messages: await loadHistory(session.ctx.db, nodeId, SHOWN_MESSAGES) });
   } catch (error) {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
   const { nodeId } = parsed.data;
   const session = await sessionContext("chat", nodeId ?? undefined);
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   const { ctx, user } = session;
   if (nodeId) {
     const reachable = await ctx.db.from("nodes").select("id").eq("id", nodeId).maybeSingle();

@@ -10,7 +10,7 @@ export type AgentAccess = {
   lastReadAt: string | null;
 };
 
-export type AuthOutcome = { ok: true; access: AgentAccess } | { ok: false; status: 401 | 403; message: string };
+export type AuthOutcome = { ok: true; access: AgentAccess } | { ok: false; status: 401 | 403 | 503; message: string };
 
 
 
@@ -31,9 +31,10 @@ export async function authenticateAgent(request: Request, service: Db): Promise<
     .select("id, node_id, label, last_used_at, revoked_at, nodes!inner(owner_id, archived_at)")
     .eq("token_hash", await hashAgentToken(token))
     .maybeSingle();
+  
   if (error) {
     console.error("mcp auth:", error.message);
-    return { ok: false, status: 401, message: "a valid agent token is required" };
+    return { ok: false, status: 503, message: "the token could not be checked: try again" };
   }
   if (!data || data.revoked_at || data.nodes.archived_at) {
     return { ok: false, status: 401, message: "a valid agent token is required" };

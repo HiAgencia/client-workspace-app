@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/even
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such event");
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   const links = await taskEventLinks(session.ctx, { eventIds: [id] });
   if (isError(links)) return toolResponse("event tasks", links);
   const loaded = await loadScope(session.ctx);

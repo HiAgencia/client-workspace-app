@@ -4,7 +4,7 @@ import { googleDeps, missingGoogleConfig } from "@/lib/google/deps";
 import { NONCE_COOKIE, newNonce, signState } from "@/lib/google/state";
 import { serverEnv } from "@/lib/env";
 import { problem, SESSION_HEADERS } from "@/lib/http";
-import { currentUser, userClient } from "@/lib/supabase/server";
+import { requireUser, userClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tools/tree";
 
 
@@ -13,8 +13,9 @@ export async function GET(request: NextRequest) {
   const nodeId = request.nextUrl.searchParams.get("node") ?? "";
   if (!isUuid(nodeId)) return problem(400, "say which node the account hangs from");
   const db = await userClient();
-  const user = await currentUser(db);
-  if (!user) return problem(401, "sign in first");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
+  const { user } = who;
   if (user.isAnonymous) return problem(403, "the demo does not connect Google accounts: sign in with Google to connect yours");
   const deps = await googleDeps();
   if (!deps) return problem(503, `connecting accounts is not configured: ${missingGoogleConfig().join(", ")}`);

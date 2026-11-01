@@ -2,7 +2,7 @@ import { googleDeps } from "@/lib/google/deps";
 import { googleCalendarWriter, googleEventsSource } from "@/lib/google/events";
 import { gmailMailSource } from "@/lib/google/gmail";
 import { demoMailSource } from "@/lib/mail/source";
-import { currentUser, userClient, type SessionUser } from "@/lib/supabase/server";
+import { requireUser, userClient, type SessionUser } from "@/lib/supabase/server";
 import type { ToolContext, ToolSource } from "@/lib/tools/context";
 
 
@@ -10,16 +10,17 @@ import type { ToolContext, ToolSource } from "@/lib/tools/context";
 export async function sessionContext(
   source: ToolSource,
   scopeNodeId?: string,
-): Promise<{ ctx: ToolContext; user: SessionUser } | null> {
+): Promise<{ ok: true; ctx: ToolContext; user: SessionUser } | { ok: false; response: Response }> {
   const db = await userClient();
-  const user = await currentUser(db);
-  if (!user) return null;
+  const who = await requireUser(db);
+  if (!who.ok) return who;
   const deps = await googleDeps();
   return {
-    user,
+    ok: true,
+    user: who.user,
     ctx: {
       db,
-      ownerId: user.id,
+      ownerId: who.user.id,
       source,
       scopeNodeId,
       events: deps ? googleEventsSource(deps) : undefined,

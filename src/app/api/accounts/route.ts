@@ -2,15 +2,16 @@ import { z } from "zod";
 import { missingGoogleConfig } from "@/lib/google/deps";
 import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
-import { currentUser, userClient } from "@/lib/supabase/server";
+import { requireUser, userClient } from "@/lib/supabase/server";
 
 
 
 
 export async function GET() {
   const db = await userClient();
-  const user = await currentUser(db);
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
+  const { user } = who;
   const [accounts, links, calendars] = await Promise.all([
     db.from("google_accounts").select("id, email, status, is_demo, created_at").order("email"),
     db.from("node_accounts").select("account_id, node_id"),
@@ -49,8 +50,8 @@ export async function POST(request: Request) {
   const input = await readInput(request, action);
   if (!input.ok) return input.response;
   const db = await userClient();
-  const user = await currentUser(db);
-  if (!user) return problem(401, "not signed in");
+  const who = await requireUser(db);
+  if (!who.ok) return who.response;
   const value = input.value;
   let result: { error: { message: string } | null; count?: number | null };
   switch (value.action) {

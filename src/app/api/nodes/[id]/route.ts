@@ -12,6 +12,6 @@ export async function PATCH(request: Request, { params }: RouteContext<"/api/nod
   const input = await readInput(request, changeNodeInput);
   if (!input.ok) return input.response;
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   return toolResponse("change node", await changeNode(session.ctx, id, input.value));
 }

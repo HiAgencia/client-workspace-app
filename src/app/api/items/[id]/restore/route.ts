@@ -13,6 +13,6 @@ export async function POST(request: Request, { params }: RouteContext<"/api/item
   const input = await readInput(request, z.unknown());
   if (!input.ok) return input.response;
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   return toolResponse("restore item", await restoreItem(session.ctx, id));
 }

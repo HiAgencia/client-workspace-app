@@ -8,7 +8,7 @@ import type { GoogleDeps } from "@/lib/google/events";
 import { gmailMailSource } from "@/lib/google/gmail";
 import type { MailAccount, MailSource } from "@/lib/mail/source";
 import { authenticateAgent } from "@/lib/mcp/auth";
-import { currentUser } from "@/lib/supabase/server";
+import { readSession } from "@/lib/supabase/server";
 import type { ToolContext } from "@/lib/tools/context";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { callTool } from "@/lib/tools/registry";
@@ -1108,7 +1108,7 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     await withReaders(3);
     
     
-    expect((await costOf(() => currentUser(owner!.client))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
+    expect((await costOf(() => readSession(owner!.client))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
     const agent = new Request("http://localhost/api/mcp", { headers: { authorization: `Bearer cwa_${"a".repeat(43)}` } });
     expect((await costOf(() => authenticateAgent(agent, serviceClient()))).cost).toEqual({ gmail: 0, token: 0, supabase: 1, total: 1 });
     
@@ -1116,7 +1116,7 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     
     const turn = async () => {
       const ctx: ToolContext = { ...ownerContext(), source: "chat" };
-      await currentUser(owner!.client);
+      await readSession(owner!.client);
       await takeUsageFor(serviceClient(), { id: owner!.id, isAnonymous: false }, "chat_message");
       await loadHistory(owner!.client, null);
       await systemPrompt(ctx, "UTC");

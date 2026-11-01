@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const body = await readInput(request, input);
   if (!body.ok) return body.response;
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   if (!session.user.isAnonymous) return problem(403, "the demo workspace is planted only for demo sessions");
   let seeded: { planted: boolean };
   try {
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return problem(403, "the request must come from this site");
   const session = await sessionContext("manual");
-  if (!session) return problem(401, "not signed in");
+  if (!session.ok) return session.response;
   if (!session.user.isAnonymous) return problem(403, "only a demo session starts over");
   try {
     await resetDemo(session.ctx.db);

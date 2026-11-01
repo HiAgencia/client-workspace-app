@@ -4,7 +4,7 @@ import { googleDeps } from "@/lib/google/deps";
 import { NONCE_COOKIE, verifyState } from "@/lib/google/state";
 import { serverEnv } from "@/lib/env";
 import { SESSION_HEADERS } from "@/lib/http";
-import { currentUser, userClient } from "@/lib/supabase/server";
+import { readSession, userClient } from "@/lib/supabase/server";
 
 
 
@@ -23,8 +23,11 @@ export async function GET(request: NextRequest) {
   if (!deps || !secret) return back(null, "not-configured");
   const state = await verifyState(secret, url.searchParams.get("state") ?? "");
   if (!state || state.nonce !== request.cookies.get(NONCE_COOKIE)?.value) return back(null, "invalid-state");
-  const user = await currentUser(await userClient());
-  if (!user || user.id !== state.userId) return back(null, "invalid-state");
+  const session = await readSession(await userClient());
+  
+  if (session.kind === "unavailable") return back(state.nodeId, "failed");
+  if (session.kind === "none" || session.user.id !== state.userId) return back(null, "invalid-state");
+  const { user } = session;
   if (url.searchParams.get("error")) return back(state.nodeId, "cancelled");
   const code = url.searchParams.get("code");
   if (!code) return back(state.nodeId, "cancelled");
