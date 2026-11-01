@@ -11,7 +11,7 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { count } from "@/lib/count";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
-import { stepsTaken } from "./browser-reads";
+import { stepsTaken, whatWasDone } from "./browser-reads";
 import { chatTools } from "./tools";
 
 
@@ -80,8 +80,7 @@ export async function runChat(options: {
   const result = streamText({
     model: options.model,
     system: await systemPrompt(options.ctx, options.timeZone),
-    
-    messages: await convertToModelMessages(options.messages, { ignoreIncompleteToolCalls: true }),
+    messages: await convertToModelMessages(options.messages.map(whatWasDone)),
     tools: chatTools(options.ctx),
     stopWhen: isStepCount(Math.max(1, MAX_STEPS - taken)),
     

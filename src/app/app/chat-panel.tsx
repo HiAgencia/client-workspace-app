@@ -5,7 +5,7 @@ import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } f
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
-import { BROWSER_READS, leftAtARead, turnGoesOn } from "@/lib/chat/browser-reads";
+import { BROWSER_READS, leftUnfinished, turnGoesOn } from "@/lib/chat/browser-reads";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { get, tool } from "./client-api";
 import { onFocusRequest } from "./focus-request";
@@ -237,7 +237,7 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
               return null;
             })}
             {}
-            {!busy && leftAtARead(message) && (
+            {!busy && leftUnfinished(message) && (
               <p className="inline-note" data-chat-unfinished>
                 This answer was left unfinished. Ask again to finish it.
               </p>

@@ -1,7 +1,7 @@
-import { createUIMessageStreamResponse, validateUIMessages, type UIMessage } from "ai";
+import { createUIMessageStreamResponse, isToolUIPart, validateUIMessages, type UIMessage } from "ai";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
-import { continuedTurn, openCall } from "@/lib/chat/browser-reads";
+import { continuedTurn, openCall, whatWasDone } from "@/lib/chat/browser-reads";
 import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
 import { AI_OFF_MESSAGE, chatModel, chatProvider } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
@@ -90,8 +90,9 @@ export async function POST(request: Request) {
   if (!continuing && message.role !== "user") return problem(422, "only the person's message is sent");
   if (message.parts.filter((part) => part.type === "file").length > 1) return problem(422, "attach one image per message");
 
+  const service = serviceClient();
   if (!continuing) {
-    const taken = await takeUsageFor(serviceClient(), user, "chat_message");
+    const taken = await takeUsageFor(service, user, "chat_message");
     if (!taken.allowed) {
       if (taken.reason === "error") return problem(503, "the chat is unavailable right now: try again");
       return json({ ok: false, code: "cap", message: capMessage(taken.reason, "chat_message") }, 429, {
@@ -114,10 +115,11 @@ export async function POST(request: Request) {
   
   
   if (stored && continued) {
-    const taken = await ctx.db
+    const taken = await service
       .from("chat_messages")
       .update({ parts: storable(continued) })
       .eq("id", stored.id)
+      .eq("owner_id", ctx.ownerId)
       .contains("parts", JSON.stringify([openCall(stored)]))
       .select("id");
     if (taken.error) {
@@ -138,10 +140,12 @@ export async function POST(request: Request) {
     abortSignal: request.signal,
     onEnd: async ({ responseMessage, isAborted }) => {
       
-      if (isAborted) return;
+      
+      const kept = isAborted ? whatWasDone(responseMessage) : responseMessage;
+      if (isAborted && !stored && !kept.parts.some(isToolUIPart)) return;
       const saved = stored
-        ? await ctx.db.from("chat_messages").update({ parts: storable(responseMessage) }).eq("id", stored.id)
-        : await ctx.db.from("chat_messages").insert([message, responseMessage].map((entry) => ({ node_id: nodeId, role: entry.role, parts: storable(entry) })));
+        ? await service.from("chat_messages").update({ parts: storable(kept) }).eq("id", stored.id).eq("owner_id", ctx.ownerId)
+        : await service.from("chat_messages").insert([message, kept].map((entry) => ({ owner_id: ctx.ownerId, node_id: nodeId, role: entry.role, parts: storable(entry) })));
       if (saved.error) console.error("chat: storing the turn failed", saved.error.message);
     },
   });

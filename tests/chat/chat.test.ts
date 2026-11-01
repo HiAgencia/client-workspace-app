@@ -191,8 +191,8 @@ describe("the workspace's own chat, with no node open", () => {
   });
 
   it("keeps its conversation apart from each node's", async () => {
-    const rows = ["workspace one", "workspace two"].map((text, i) => ({ node_id: null, role: i === 0 ? "user" : "assistant", parts: [{ type: "text", text }] }));
-    const { error } = await user!.client.from("chat_messages").insert(rows);
+    const rows = ["workspace one", "workspace two"].map((text, i) => ({ owner_id: user!.id, node_id: null, role: i === 0 ? "user" : "assistant", parts: [{ type: "text", text }] }));
+    const { error } = await serviceClient().from("chat_messages").insert(rows);
     expect(error).toBeNull();
     const workspace = await loadHistory(user!.client, null);
     expect(workspace.map((m) => (m.parts[0] as { text: string }).text)).toEqual(["workspace one", "workspace two"]);
@@ -228,11 +228,12 @@ describe("a turn that reads the mail", () => {
 describe("the conversation the model reads", () => {
   it("is the node's latest messages in the order they were written, built on the server", async () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({
+      owner_id: user!.id,
       node_id: nodeId,
       role: i % 2 === 0 ? "user" : "assistant",
       parts: [{ type: "text", text: `turn ${i}` }],
     }));
-    const { error } = await user!.client.from("chat_messages").insert(rows);
+    const { error } = await serviceClient().from("chat_messages").insert(rows);
     expect(error).toBeNull();
     const history = await loadHistory(user!.client, nodeId, 4);
     expect(history.map((m) => (m.parts[0] as { text: string }).text)).toEqual(["turn 2", "turn 3", "turn 4", "turn 5"]);

@@ -34,8 +34,28 @@ export function turnGoesOn({ messages }: { messages: UIMessage[] }): boolean {
 
 
 
-export function leftAtARead(message: UIMessage): boolean {
-  return message.role === "assistant" && lastStep(message).some(isBrowserRead);
+
+export function leftUnfinished(message: UIMessage): boolean {
+  if (message.role !== "assistant") return false;
+  const step = lastStep(message);
+  const words = step.filter((part) => part.type === "text");
+  return step.some(isToolUIPart) || words.length === 0 || words.some((part) => part.state === "streaming");
+}
+
+
+
+export function whatWasDone(message: UIMessage): UIMessage {
+  if (message.role !== "assistant") return message;
+  const parts: AnyPart[] = [];
+  let followed = false;
+  for (const part of [...message.parts].reverse()) {
+    if (part.type === "step-start") followed = false;
+    else if (isToolUIPart(part) && !isAnswered(part)) continue;
+    else if (part.type === "reasoning" && !followed) continue;
+    else followed = true;
+    parts.unshift(part);
+  }
+  return { ...message, parts };
 }
 
 

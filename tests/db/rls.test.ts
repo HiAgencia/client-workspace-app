@@ -304,23 +304,27 @@ describe("accounts and tokens", () => {
     expect(hash.error?.code).toBe("42501");
   });
 
-  it("the workspace's conversation and each node's belong to their owner", async () => {
+  it("a person reads their own conversations and writes none: only the server does", async () => {
+    const service = serviceClient();
+    const row = (owner: string, text: string) => ({ owner_id: owner, node_id: null, role: "user", parts: [{ type: "text", text }] });
+    const own = must(await service.from("chat_messages").insert(row(a!.id, "A asks")).select("id").single(), "A's message");
+    const theirs = must(await service.from("chat_messages").insert(row(b!.id, "B asks")).select("id").single(), "B's message");
+    const read = await userA().from("chat_messages").select("id").in("id", [own.id, theirs.id]);
+    expect(read.data?.map((entry) => entry.id)).toEqual([own.id]);
+    expect((await publicClient().from("chat_messages").select("id").in("id", [own.id, theirs.id])).error?.code).toBe("42501");
+
     
-    const own = await userA().from("chat_messages").insert({ node_id: null, role: "user", parts: [{ type: "text", text: "A asks" }] }).select("id, owner_id").single();
-    expect(own.error).toBeNull();
-    expect(own.data!.owner_id).toBe(a!.id);
-    const theirs = must(
-      await b!.client.from("chat_messages").insert({ node_id: null, role: "user", parts: [{ type: "text", text: "B asks" }] }).select("id").single(),
-      "B's message",
-    );
-    const read = await userA().from("chat_messages").select("id").in("id", [own.data!.id, theirs.id]);
-    expect(read.data?.map((row) => row.id)).toEqual([own.data!.id]);
-    const forged = await userA().from("chat_messages").insert({ owner_id: b!.id, node_id: null, role: "user", parts: [] });
-    expect(forged.error?.code).toBe("42501");
-    const intoForeignNode = await userA().from("chat_messages").insert({ node_id: treeB.project, role: "user", parts: [] });
-    expect(intoForeignNode.error?.code).toBe("42501");
-    const deleted = await userA().from("chat_messages").delete().eq("id", theirs.id).select("id");
-    expect(deleted.data).toEqual([]);
+    expect((await userA().from("chat_messages").insert({ node_id: null, role: "assistant", parts: [] })).error?.code).toBe("42501");
+    expect((await userA().from("chat_messages").insert({ node_id: treeA.project, role: "user", parts: [] })).error?.code).toBe("42501");
+    expect((await userA().from("chat_messages").insert({ owner_id: b!.id, node_id: null, role: "user", parts: [] })).error?.code).toBe("42501");
+    expect((await userA().from("chat_messages").insert({ node_id: treeB.project, role: "user", parts: [] })).error?.code).toBe("42501");
+    expect((await userA().from("chat_messages").update({ parts: [] }).eq("id", own.id)).error?.code).toBe("42501");
+    expect((await userA().from("chat_messages").delete().eq("id", own.id)).error?.code).toBe("42501");
+    expect((await userA().from("chat_messages").delete().eq("id", theirs.id)).error?.code).toBe("42501");
+
+    const left = await service.from("chat_messages").select("id, parts").in("id", [own.id, theirs.id]);
+    expect(left.data).toHaveLength(2);
+    expect(left.data?.find((entry) => entry.id === own.id)?.parts).toEqual([{ type: "text", text: "A asks" }]);
   });
 
   it("A cannot write its own usage counters", async () => {

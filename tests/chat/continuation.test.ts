@@ -3,10 +3,10 @@ import { isToolUIPart, simulateReadableStream, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadHistory } from "@/lib/chat/history";
-import { leftAtARead, MAX_READ_ANSWER } from "@/lib/chat/browser-reads";
+import { leftUnfinished, MAX_READ_ANSWER } from "@/lib/chat/browser-reads";
 import type { Json } from "@/lib/db/types";
 import type { ToolContext } from "@/lib/tools/context";
-import { createDisposableUser, deleteDisposableUsers, type DisposableUser } from "../support/supabase";
+import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
 
 
@@ -27,6 +27,8 @@ const answering: LanguageModelV4StreamPart[] = [
   { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
 ];
 let script = answering;
+
+let steps: LanguageModelV4StreamPart[][] | null = null;
 let pace: number | null = null;
 
 vi.mock("@/lib/session-context", () => ({
@@ -43,7 +45,7 @@ vi.mock("@/lib/chat/model", () => ({
     model: new MockLanguageModelV4({
       doStream: async (options) => {
         calls.push(options);
-        return { stream: simulateReadableStream({ chunks: script, chunkDelayInMs: pace }) };
+        return { stream: simulateReadableStream({ chunks: steps?.[calls.length - 1] ?? script, chunkDelayInMs: pace }) };
       },
     }),
   }),
@@ -55,18 +57,52 @@ const WRITTEN = { type: "tool-create_task", toolCallId: "write-1", state: "outpu
 const openTurn = (steps = 1) => [...Array.from({ length: steps - 1 }, () => ({ type: "step-start" })), { type: "step-start" }, { ...READ, state: "input-available" }];
 
 
-async function leaveOpen(steps = 1, before: Json[] = []) {
-  const gone = await user!.client.from("chat_messages").delete().is("node_id", null);
+async function leaveOpen(taken = 1, before: Json[] = []) {
+  const service = serviceClient();
+  const gone = await service.from("chat_messages").delete().eq("owner_id", user!.id);
   if (gone.error) throw new Error(gone.error.message);
   const rows = [
-    { node_id: null, role: "user", parts: [{ type: "text", text: "Read my mail" }] },
-    { node_id: null, role: "assistant", parts: [...before, ...openTurn(steps)] },
+    { owner_id: user!.id, node_id: null, role: "user", parts: [{ type: "text", text: "Read my mail" }] },
+    { owner_id: user!.id, node_id: null, role: "assistant", parts: [...before, ...openTurn(taken)] },
   ];
   
   for (const row of rows) {
-    const saved = await user!.client.from("chat_messages").insert(row);
+    const saved = await service.from("chat_messages").insert(row);
     if (saved.error) throw new Error(saved.error.message);
   }
+}
+
+
+const writesThenTalks = (): LanguageModelV4StreamPart[][] => [
+  [
+    { type: "tool-call", toolCallId: "write-2", toolName: "create_task", input: JSON.stringify({ title: "Call the bank" }) },
+    { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage },
+  ],
+  answering,
+];
+
+
+async function cutOnceWritten(answer: Response, cut: AbortController): Promise<boolean> {
+  const reader = answer.body!.getReader();
+  let aborted = false;
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    const text = new TextDecoder().decode(chunk.value);
+    if (text.includes("tool-output-available")) cut.abort();
+    if (text.includes('"abort"')) aborted = true;
+  }
+  return aborted;
+}
+
+async function newMessage(signal?: AbortSignal) {
+  const { POST } = await import("@/app/api/chat/route");
+  return POST(
+    new Request(`${SITE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: SITE, Host: "localhost:8796" },
+      body: JSON.stringify({ nodeId: null, timeZone: "UTC", message: { id: "new", role: "user", parts: [{ type: "text", text: "Add a task to call the bank" }] } }),
+      signal,
+    }),
+  );
 }
 
 function goesOn(output: unknown, signal?: AbortSignal) {
@@ -138,7 +174,109 @@ describe("going on with a turn", () => {
     expect(tools.find((part) => part.toolCallId === WRITTEN.toolCallId)).toMatchObject({ state: "output-available", output: WRITTEN.output });
     expect(tools.find((part) => part.toolCallId === READ.toolCallId)).toMatchObject({ state: "output-available" });
     
-    expect(leftAtARead(rows[1])).toBe(true);
+    expect(leftUnfinished(rows[1])).toBe(true);
+  }, 60_000);
+
+  it("a person leaves no read open: going on from a row of their own is refused, and the model is not called", async () => {
+    const service = serviceClient();
+    await service.from("chat_messages").delete().eq("owner_id", user!.id);
+    const parts = openTurn() as Json[];
+    expect((await user!.client.from("chat_messages").insert({ node_id: null, role: "assistant", parts })).error?.code).toBe("42501");
+    const { POST } = await import("@/app/api/chat/route");
+    expect((await POST(goesOn({ ok: true }))).status).toBe(409);
+
+    
+    await leaveOpen();
+    const stored = (await history())[1];
+    expect((await POST(goesOn({ ok: true }))).status).toBe(200);
+    expect((await user!.client.from("chat_messages").update({ parts }).eq("id", stored.id)).error?.code).toBe("42501");
+    expect((await POST(goesOn({ ok: true }))).status).toBe(409);
+    expect(calls).toHaveLength(1);
+
+    
+    const demo = await createAnonymousUser("continuation-demo");
+    try {
+      expect((await demo.client.from("chat_messages").insert({ node_id: null, role: "assistant", parts })).error?.code).toBe("42501");
+    } finally {
+      await deleteDisposableUsers([demo]);
+    }
+  }, 60_000);
+
+  it("a turn that goes on and is cut keeps what it did after going on, and says it stopped", async () => {
+    await leaveOpen();
+    const { POST } = await import("@/app/api/chat/route");
+    const cut = new AbortController();
+    steps = writesThenTalks();
+    pace = 300;
+    try {
+      const answer = await POST(goesOn({ ok: true }, cut.signal));
+      expect(answer.status).toBe(200);
+      expect(await cutOnceWritten(answer, cut)).toBe(true);
+    } finally {
+      steps = null;
+      pace = null;
+    }
+    const rows = await history();
+    expect(rows.map((row) => row.role)).toEqual(["user", "assistant"]);
+    const tools = rows[1].parts.filter(isToolUIPart);
+    expect(tools.find((part) => part.toolCallId === READ.toolCallId)).toMatchObject({ state: "output-available" });
+    expect(tools.find((part) => part.toolCallId === "write-2")).toMatchObject({ state: "output-available", output: { ok: true } });
+    expect(leftUnfinished(rows[1])).toBe(true);
+    const written = await user!.client.from("items").select("title").eq("title", "Call the bank");
+    expect(written.data).toHaveLength(1);
+    await serviceClient().from("items").delete().eq("owner_id", user!.id).eq("title", "Call the bank");
+  }, 60_000);
+
+  it("a first request cut after it wrote keeps the message and what it did; one cut before leaves nothing", async () => {
+    await serviceClient().from("chat_messages").delete().eq("owner_id", user!.id);
+    const before = new AbortController();
+    pace = 300;
+    try {
+      const answer = await newMessage(before.signal);
+      expect(answer.status).toBe(200);
+      const reader = answer.body!.getReader();
+      await reader.read();
+      before.abort();
+      for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read());
+    } finally {
+      pace = null;
+    }
+    expect(await history()).toEqual([]);
+
+    const cut = new AbortController();
+    steps = writesThenTalks();
+    calls.length = 0;
+    pace = 300;
+    try {
+      const answer = await newMessage(cut.signal);
+      expect(answer.status).toBe(200);
+      expect(await cutOnceWritten(answer, cut)).toBe(true);
+    } finally {
+      steps = null;
+      pace = null;
+    }
+    const rows = await history();
+    expect(rows.map((row) => row.role)).toEqual(["user", "assistant"]);
+    expect(rows[1].parts.filter(isToolUIPart)).toHaveLength(1);
+    expect(rows[1].parts.find(isToolUIPart)).toMatchObject({ toolCallId: "write-2", state: "output-available" });
+    expect(leftUnfinished(rows[1])).toBe(true);
+    await serviceClient().from("items").delete().eq("owner_id", user!.id).eq("title", "Call the bank");
+  }, 60_000);
+
+  it("a call left open and the reasoning that led only to it do not reach the model again", async () => {
+    await leaveOpen(1, [{ type: "step-start" }, WRITTEN]);
+    const service = serviceClient();
+    const thought = { type: "reasoning", text: "I should read the mail", state: "done" };
+    const row = await service.from("chat_messages").select("id, parts").eq("owner_id", user!.id).eq("role", "assistant").single();
+    const parts = row.data!.parts as Json[];
+    await service.from("chat_messages").update({ parts: [...parts.slice(0, -1), thought, parts.at(-1)!] }).eq("id", row.data!.id);
+    const answer = await newMessage();
+    expect(answer.status).toBe(200);
+    await answer.text();
+    const prompt = JSON.stringify(calls[0].prompt);
+    expect(prompt).toContain(WRITTEN.toolCallId);
+    expect(prompt).not.toContain(READ.toolCallId);
+    expect(prompt).not.toContain("I should read the mail");
   }, 60_000);
 
   it("a turn that goes on keeps its place in the conversation", async () => {
@@ -146,24 +284,21 @@ describe("going on with a turn", () => {
     const { POST } = await import("@/app/api/chat/route");
     const first = await POST(goesOn({ ok: true }));
     expect(first.status).toBe(200);
-    const elsewhere = await user!.client.from("chat_messages").insert({ node_id: null, role: "user", parts: [{ type: "text", text: "From another tab" }] });
+    const elsewhere = await serviceClient().from("chat_messages").insert({ owner_id: user!.id, node_id: null, role: "user", parts: [{ type: "text", text: "From another tab" }] });
     if (elsewhere.error) throw new Error(elsewhere.error.message);
     await first.text();
     const rows = await history();
     expect(rows.map((row) => row.role)).toEqual(["user", "assistant", "user"]);
     expect(rows[1].parts.some((part) => part.type === "text" && part.text === "Here is what arrived.")).toBe(true);
-    expect(leftAtARead(rows[1])).toBe(false);
+    expect(leftUnfinished(rows[1])).toBe(false);
   }, 60_000);
 
-  it("another person's turn cannot be written, and only a message's parts can", async () => {
+  it("another person's turn is neither read nor written", async () => {
     await leaveOpen();
     const stored = (await history())[1];
-    const before = await stranger!.client.from("chat_messages").update({ parts: [] }).eq("id", stored.id).select("id");
-    expect(before.error).toBeNull();
-    expect(before.data).toEqual([]);
+    expect((await stranger!.client.from("chat_messages").select("id").eq("id", stored.id)).data).toEqual([]);
+    expect((await stranger!.client.from("chat_messages").update({ parts: [] }).eq("id", stored.id)).error?.code).toBe("42501");
     expect(toolPart((await history())[1])).toMatchObject({ toolCallId: READ.toolCallId, state: "input-available" });
-    const moved = await user!.client.from("chat_messages").update({ role: "user" }).eq("id", stored.id);
-    expect(moved.error?.code).toBe("42501");
   }, 60_000);
 
   it("an answer far larger than a read brings reaches the model as a read that failed, and is not kept", async () => {
