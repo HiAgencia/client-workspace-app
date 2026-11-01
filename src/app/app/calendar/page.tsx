@@ -114,6 +114,12 @@ const minutesOf = (iso: string) => {
   const date = new Date(iso);
   return date.getHours() * 60 + date.getMinutes();
 };
+const DAY_MINUTES = 24 * 60;
+
+const endOf = (event: CalEvent) => {
+  const minutes = minutesOf(event.end);
+  return minutes === 0 && Date.parse(event.end) > Date.parse(event.start) ? DAY_MINUTES : minutes;
+};
 const minutesOfDay = (time: string) => {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
@@ -692,7 +698,7 @@ function WeekGrid({
     for (const event of entry?.events ?? []) {
       if (!onHours(event)) continue;
       first = Math.min(first, Math.floor(minutesOf(event.start) / 60));
-      last = Math.max(last, Math.ceil(minutesOf(event.end) / 60) - 1);
+      last = Math.max(last, Math.ceil(endOf(event) / 60) - 1);
     }
     for (const task of entry?.tasks ?? []) {
       if (!task.dueTime) continue;
@@ -767,10 +773,10 @@ function WeekGrid({
         {days.map((day, column) => {
           const entry = byDay.get(day);
           const timed = [
-            ...(entry?.events ?? []).filter(onHours).map((event) => ({ kind: "event" as const, key: eventKey(event), start: minutesOf(event.start), end: Math.max(minutesOf(event.end), minutesOf(event.start) + 30), event })),
+            ...(entry?.events ?? []).filter(onHours).map((event) => ({ kind: "event" as const, key: eventKey(event), start: minutesOf(event.start), end: Math.min(DAY_MINUTES, Math.max(endOf(event), minutesOf(event.start) + 30)), event })),
             ...(entry?.tasks ?? []).filter((task) => task.dueTime).map((task) => {
               const start = minutesOfDay(task.dueTime!);
-              return { kind: "task" as const, key: task.id, start, end: start + 30, task };
+              return { kind: "task" as const, key: task.id, start, end: Math.min(DAY_MINUTES, start + 30), task };
             }),
           ];
           const laned = lanes(timed);
@@ -810,7 +816,7 @@ function WeekGrid({
                   <TaskChip key={item.key} task={item.task} chips={chips} style={style} timed />
                 );
               })}
-              {day === now && <NowLine first={first} />}
+              {day === now && <NowLine first={first} last={last} />}
               <span className="sr-only">{fullDay(day)}, by the hour</span>
             </div>
           );
@@ -909,13 +915,14 @@ function WeekBand({
 }
 
 
-function NowLine({ first }: { first: number }) {
+function NowLine({ first, last }: { first: number; last: number }) {
   const [minutes, setMinutes] = useState(() => minutesOf(new Date().toISOString()));
   useEffect(() => {
     const timer = setInterval(() => setMinutes(minutesOf(new Date().toISOString())), 60_000);
     return () => clearInterval(timer);
   }, []);
-  if (minutes < first * 60) return null;
+  
+  if (minutes < first * 60 || minutes >= (last + 1) * 60) return null;
   return <span className="cal-now" aria-hidden="true" style={{ top: `${((minutes - first * 60) / 60) * HOUR_REM}rem` }} />;
 }
 
