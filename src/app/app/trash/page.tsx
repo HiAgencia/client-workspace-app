@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/components/ui/link";
 import { useEffect, useState, ViewTransition } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { count } from "@/lib/count";
