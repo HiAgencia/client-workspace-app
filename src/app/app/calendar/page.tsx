@@ -28,6 +28,7 @@ import { count, plural } from "@/lib/count";
 import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, monthGrid, monthTitle, rangeLabel, today, weekdayNames, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { PRODUCT_NAME } from "@/lib/product";
+import { BoxFailed } from "../boxes";
 import { get, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "../client-api";
 import { readEvents, type EventsRead } from "../events-read";
 import { PageHeader } from "../page-header";
@@ -66,6 +67,11 @@ type TasksAnswer = {
 };
 
 type Loaded = { key: string; view: View; anchor: Day; from: Day; to: Day; events: CalEvent[]; tasks: TaskData[]; failures: EventsFailure[]; waiting: number; accounts: Account[] };
+
+
+type EmptyDay = "nothing" | "reading" | "unread";
+const EMPTY_DAY: Record<EmptyDay, string> = { nothing: "Nothing this day.", reading: "Reading this day…", unread: "This day could not be read." };
+const EMPTY_MONTH_DAY: Record<EmptyDay, string> = { nothing: "nothing", reading: "still reading", unread: "not read" };
 type View = "week" | "month";
 
 type Draft = { day: Day; time: string | null };
@@ -155,6 +161,7 @@ function Calendar() {
   const rangeKey = `${view}:${range.from}:${range.to}`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [openEvent, setOpenEvent] = useState<string | null>(null);
   const [chosenDay, setChosenDay] = useState<Day | null>(null);
@@ -203,7 +210,10 @@ function Calendar() {
           
           onArrived: (events) =>
             void beside.then(([tasks, accounts]) => {
-              if (live && tasks.ok) setLoaded((now) => (now?.key === rangeKey && now.waiting === 0 ? now : made(events, tasks, accounts)));
+              if (!live || !tasks.ok) return;
+              setLoaded((now) => (now?.key === rangeKey && now.waiting === 0 ? now : made(events, tasks, accounts)));
+              
+              setReadError(null);
             }),
         },
       ),
@@ -224,7 +234,7 @@ function Calendar() {
     };
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, rangeKey, version]);
+  }, [range, rangeKey, version, round]);
 
   
   
@@ -293,6 +303,12 @@ function Calendar() {
   const swap = useSwap(model, loaded?.key ?? "none");
   const shown = swap.shown;
   const stale = Boolean(loaded && loaded.key !== rangeKey);
+  
+  
+  const unanswered = loaded?.waiting ?? 0;
+  const reading = readError === null && unanswered > 0;
+  
+  const emptyDay: EmptyDay = unanswered === 0 ? "nothing" : reading ? "reading" : "unread";
 
   const step = (direction: 1 | -1) => set({ date: view === "month" ? addMonths(anchor, direction) : addDays(anchor, 7 * direction) });
   const writable = (loaded?.accounts ?? []).filter((entry) => !entry.isDemo && entry.status === "active");
@@ -389,7 +405,7 @@ function Calendar() {
       <div className="page cal-page" data-calendar={view}>
         <PageHeader
           title="Calendar"
-          count={loaded ? `Your connected calendars and the tasks with a date. ${[counted, loaded.waiting > 0 ? `${count(loaded.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : "Reading the calendar…"}
+          count={loaded ? `Your connected calendars and the tasks with a date. ${[counted, reading ? `${count(unanswered, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : readError === null ? "Reading the calendar…" : "Your connected calendars and the tasks with a date."}
           filters={
             <>
               <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
@@ -407,7 +423,7 @@ function Calendar() {
           chat
         />
 
-        <section className="card cal-card" aria-labelledby="cal-range" aria-busy={!loaded || loaded.key !== rangeKey || loaded.waiting > 0}>
+        <section className="card cal-card" aria-labelledby="cal-range" aria-busy={reading || (readError === null && (!loaded || loaded.key !== rangeKey))}>
           <div className="cal-bar">
             <h2 id="cal-range" className="t-title cal-range" aria-live="polite">
               {title}
@@ -428,7 +444,7 @@ function Calendar() {
             </div>
           </div>
 
-          {readError && (
+          {readError && shown && (
             <p role="alert" className="inline-note" data-tone="alert">
               The calendar could not be read again: {readError}. What shows is from the last read.
             </p>
@@ -440,13 +456,15 @@ function Calendar() {
             </p>
           ))}
 
-          {!shown ? (
+          {!shown && readError ? (
+            <BoxFailed what="The calendar" message={readError} kept={false} onRetry={() => setRound((value) => value + 1)} />
+          ) : !shown ? (
             <CalendarSkeleton view={view} />
           ) : (
             <div className="cal-body" data-leaving={swap.leaving ? "" : undefined} data-stale={stale ? "" : undefined} data-cal-body={swap.shownKey}>
               {shown.view === "week" ? (
                 narrow ? (
-                  <WeekList days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onAdd={(day) => setDraft({ day, time: null })} />
+                  <WeekList days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onAdd={(day) => setDraft({ day, time: null })} emptyDay={emptyDay} />
                 ) : (
                   <WeekGrid days={daysBetween(shown.from, shown.to)} byDay={shown.byDay} chips={chipProps} dropOn={dropOn} onGap={onGap} onCreate={(day, time) => setDraft({ day, time })} />
                 )
@@ -464,6 +482,7 @@ function Calendar() {
                   chosen={chosenDay}
                   onChoose={setChosenDay}
                   onMore={(day) => set({ view: null, date: day })}
+                  emptyDay={emptyDay}
                 />
               )}
               {shown.view === "month" && narrow && (
@@ -473,9 +492,10 @@ function Calendar() {
                   chips={chipProps}
                   dropOn={dropOn}
                   onAdd={(day) => setDraft({ day, time: null })}
+                  emptyDay={emptyDay}
                 />
               )}
-              {!stale && events.length === 0 && tasks.length === 0 && (
+              {!stale && unanswered === 0 && events.length === 0 && tasks.length === 0 && (
                 <p className="t-help cal-empty">
                   {place === ALL && account === ALL
                     ? `Nothing in this ${view === "week" ? "week" : "month"}: no events and no tasks due. "New event" adds one.`
@@ -827,12 +847,14 @@ function WeekList({
   chips,
   dropOn,
   onAdd,
+  emptyDay,
 }: {
   days: Day[];
   byDay: Map<Day, { events: CalEvent[]; tasks: TaskData[] }>;
   chips: ChipHandlers;
   dropOn: DropOn;
   onAdd: (day: Day) => void;
+  emptyDay: EmptyDay;
 }) {
   const now = today();
   return (
@@ -849,7 +871,7 @@ function WeekList({
               </Button>
             </div>
             {items === 0 ? (
-              <p className="t-help">Nothing this day.</p>
+              <p className="t-help">{EMPTY_DAY[emptyDay]}</p>
             ) : (
               <div className="cal-list-items">
                 {entry?.events.map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />)}
@@ -880,6 +902,7 @@ function MonthGrid({
   chosen,
   onChoose,
   onMore,
+  emptyDay,
 }: {
   weeks: Day[][];
   month: string;
@@ -894,6 +917,7 @@ function MonthGrid({
   chosen: Day | null;
   onChoose: (day: Day) => void;
   onMore: (day: Day) => void;
+  emptyDay: EmptyDay;
 }) {
   const now = today();
   
@@ -945,7 +969,7 @@ function MonthGrid({
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
                     <span className="sr-only">, {fullDay(day)}: </span>
                     <span className="cal-month-count">{total > 0 ? total : ""}</span>
-                    <span className="sr-only">{total === 0 ? "nothing" : ` ${plural(total, "item", "items")}`}</span>
+                    <span className="sr-only">{total > 0 ? ` ${plural(total, "item", "items")}` : EMPTY_MONTH_DAY[emptyDay]}</span>
                   </button>
                 </div>
               );
