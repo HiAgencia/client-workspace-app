@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { AccountIcon, PlaceIcon, type Icon } from "@/components/ui/icons";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { count } from "@/lib/count";
 import type { TreeNode } from "./client-api";
@@ -110,11 +111,14 @@ export function placeOptions({ value, tree, counts, unit, noGeneral = false, sho
 }
 
 
-function NamedFilter({ name, children }: { name: string; children: ReactNode }) {
+
+
+function NamedFilter({ name, icon: Glyph, children }: { name: string; icon: Icon; children: ReactNode }) {
   return (
     <div className="named filter">
       <span className="t-label named-label" aria-hidden="true">
-        {name}
+        <Glyph className="filter-icon" />
+        <span className="filter-name">{name}</span>
       </span>
       {children}
     </div>
@@ -123,7 +127,7 @@ function NamedFilter({ name, children }: { name: string; children: ReactNode }) 
 
 export function PlaceFilter({ onChange, ...read }: PlaceOptions & { onChange: (value: string) => void }) {
   return (
-    <NamedFilter name="Place">
+    <NamedFilter name="Place" icon={PlaceIcon}>
       <Select label="Place" value={read.value} options={placeOptions(read)} onChange={onChange} />
     </NamedFilter>
   );
@@ -148,7 +152,7 @@ export function AccountFilter({ onChange, ...read }: AccountOptions & { onChange
   
   if (options.length === 0) return null;
   return (
-    <NamedFilter name="Account">
+    <NamedFilter name="Account" icon={AccountIcon}>
       <Select label="Account" value={read.value} options={options} onChange={onChange} />
     </NamedFilter>
   );

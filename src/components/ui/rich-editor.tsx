@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { safeHref, sanitizeRichText, TONES, type Tone } from "@/lib/rich-text";
 import { cx } from "@/lib/utils";
+import { BoldIcon, BulletsIcon, ItalicIcon, LinkIcon, NumbersIcon, type Icon } from "./icons";
 
 
 
@@ -156,42 +157,59 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     }
   }
 
-  const tool = (name: string, pressed: boolean | undefined, run: () => void) => (
+  
+  const tool = (name: string, pressed: boolean | undefined, run: () => void, Glyph?: Icon) => (
     <button
       type="button"
-      className="btn btn-quiet btn-sm rich-tool"
+      className={cx("btn btn-quiet btn-sm rich-tool", Glyph && "btn-icon")}
       aria-pressed={pressed ?? false}
+      title={Glyph ? name : undefined}
       onMouseDown={(event) => event.preventDefault()}
       onClick={run}
     >
-      <span className="btn-label">{name}</span>
+      {Glyph ? (
+        <>
+          <Glyph />
+          <span className="sr-only">{name}</span>
+        </>
+      ) : (
+        <span className="btn-label">{name}</span>
+      )}
     </button>
   );
 
   return (
     <div className="rich" data-rich-editor data-empty={state?.empty || undefined}>
       <div className="rich-bar" role="toolbar" aria-label={`Formatting of ${label}`} aria-controls={editorId}>
-        {tool("Bold", state?.bold, () => editor?.chain().focus().toggleBold().run())}
-        {tool("Italic", state?.italic, () => editor?.chain().focus().toggleItalic().run())}
-        {tool("List", state?.bullet, () => editor?.chain().focus().toggleBulletList().run())}
-        {tool("Numbered", state?.ordered, () => editor?.chain().focus().toggleOrderedList().run())}
-        {tool("Link", state?.link || linking, () => {
-          setAddress((editor?.getAttributes("link").href as string | undefined) ?? "");
-          setLinkError(false);
-          setLinking((open) => !open);
-        })}
+        {tool("Bold", state?.bold, () => editor?.chain().focus().toggleBold().run(), BoldIcon)}
+        {tool("Italic", state?.italic, () => editor?.chain().focus().toggleItalic().run(), ItalicIcon)}
+        {tool("List", state?.bullet, () => editor?.chain().focus().toggleBulletList().run(), BulletsIcon)}
+        {tool("Numbered", state?.ordered, () => editor?.chain().focus().toggleOrderedList().run(), NumbersIcon)}
+        {tool(
+          "Link",
+          state?.link || linking,
+          () => {
+            setAddress((editor?.getAttributes("link").href as string | undefined) ?? "");
+            setLinkError(false);
+            setLinking((open) => !open);
+          },
+          LinkIcon,
+        )}
+        <span className="rich-sep" aria-hidden="true" />
         {}
         <span className="rich-tones" role="group" aria-label={`Color of the selected text in ${label}`}>
           {TONES.map((tone) => (
             <button
               key={tone}
               type="button"
-              className={cx("btn btn-quiet btn-sm rich-tool", `tc-${tone}`)}
+              className={cx("btn btn-quiet btn-sm btn-icon rich-tool", `tc-${tone}`)}
               aria-pressed={state?.tone === tone}
+              title={TONE_NAMES[tone]}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => editor?.chain().focus().setMark("tone", { tone }).run()}
             >
-              <span className="btn-label">{TONE_NAMES[tone]}</span>
+              <span className="rich-swatch" aria-hidden="true" />
+              <span className="sr-only">{TONE_NAMES[tone]}</span>
             </button>
           ))}
           {state && state.tone !== "none" && tool("No color", false, () => editor?.chain().focus().unsetMark("tone").run())}

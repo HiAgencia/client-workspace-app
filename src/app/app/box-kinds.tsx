@@ -5,6 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
+import { AddIcon, ByAgentIcon, ByChatIcon, OpenIcon, RescheduleIcon, UndoIcon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
@@ -19,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { BoxEmpty, BoxFailed, BoxWait, useBoxSettled, useToolRead, type BoxRead } from "./boxes";
 import { useEventsRead } from "./use-events-read";
 import { get, post, tool, type CalendarEvent, type Item, type TreeNode } from "./client-api";
-import { PathText } from "./item-parts";
+import { PathText, SenderMark } from "./item-parts";
 import { accountsSeenFrom, figureWords, type MailList } from "./mail-store";
 import { subjectOf, taskLine } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
@@ -55,8 +56,9 @@ export function placeValue(place: Place): string | null {
 
 export function HeadLink({ href, name, children }: { href: string; name: string; children: string }) {
   return (
-    <Link className={buttonClass({ variant: "quiet", size: "sm", className: "head-action" })} href={href} aria-label={name}>
+    <Link className={buttonClass({ variant: "quiet", size: "sm", className: "head-action head-link" })} href={href} aria-label={name}>
       <span className="btn-label">{children}</span>
+      <OpenIcon />
     </Link>
   );
 }
@@ -360,7 +362,7 @@ function Reschedule({ count: overdue, place, now }: { count: number; place: Plac
       undo: () => void saving(Promise.all(back.map((task) => tool("update_item", { id: task.id, dueOn: task.previousDueOn }))).then((all) => all.find((one) => !one.ok) ?? { ok: true })),
     });
   }
-  return <DatePicker look="chip" className="reschedule head-action" label={`Reschedule the ${count(overdue, "overdue task", "overdue tasks")}`} value={null} display="Reschedule" onChange={(day) => void move(day)} />;
+  return <DatePicker look="chip" className="reschedule head-action" icon={RescheduleIcon} label={`Reschedule the ${count(overdue, "overdue task", "overdue tasks")}`} value={null} display="Reschedule" onChange={(day) => void move(day)} />;
 }
 
 
@@ -419,7 +421,7 @@ export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<
       <div id={rowsId} className="first-rows" data-open={all || !folds}>
         <TaskList group="noDate" label="No date" tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
       </div>
-      {group.tasks.length === 0 && <p className="t-help group-empty">Nothing waits without a date. One added here stays without one, in the order you give it.</p>}
+      {group.tasks.length === 0 && <BoxEmpty text="Nothing waits without a date. One added here stays without one, in the order you give it." reason="no-date-empty" />}
       {folds && (
         <button type="button" className="task-add" aria-controls={rowsId} aria-expanded={all} onClick={() => setAll((value) => !value)}>
           {all ? `Show the first ${FIRST_SHOWN}` : `Show all ${group.tasks.length}`}
@@ -479,6 +481,11 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   const events = (read.data?.events ?? []).filter((event) => place.kind !== "general" || (event.origin === "local" && event.nodeId === null));
   const ofDay = (day: Day) => events.filter((event) => onDay(event, day));
   const names = new Map((tree ?? []).map((node) => [node.id, node.path]));
+  
+  
+  const colors = new Map((tree ?? []).map((node) => [node.id, node.color]));
+  const colorOf = (event: { nodeId?: string | null; linkedNodeIds: string[]; fromNodeId: string }) =>
+    [event.nodeId, ...event.linkedNodeIds, event.fromNodeId].map((id) => (id ? colors.get(id) : null)).find(Boolean) ?? undefined;
   useBoxSettled(read.settled);
 
   function onDrop(event: DragEvent<HTMLElement>, day: Day) {
@@ -528,13 +535,17 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         ) : (
           <ul className="event-list">
             {chosenEvents.map((event) => {
-              const where = event.nodePath ?? event.linkedNodeIds.map((id) => names.get(id)).filter(Boolean).join(", ") ?? "";
+              
+              
+              const where = event.nodePath ?? (event.linkedNodeIds.map((id) => names.get(id)).filter(Boolean).join(", ") || names.get(event.fromNodeId) || "");
+              
+              const own = place.kind === "node" && where === names.get(place.id);
               return (
-                <li key={`${event.origin}:${event.accountId}:${event.id}`} className="event-row">
+                <li key={`${event.origin}:${event.accountId}:${event.id}`} className="event-row" data-color={colorOf(event)}>
                   <span className="event-when">{event.allDay ? "All day" : timeLabel(new Date(event.start).toTimeString().slice(0, 5))}</span>
                   <span className="event-what">
                     <span className="event-title">{event.title}</span>
-                    <span className="event-where">{where ? <PathText path={where} /> : event.origin === "google" ? event.accountEmail : "No client or project"}</span>
+                    {!own && <span className="event-where">{where ? <PathText path={where} /> : event.origin === "google" ? event.accountEmail : "No client or project"}</span>}
                   </span>
                 </li>
               );
@@ -659,11 +670,14 @@ export function useMailCount(read: BoxRead<MailList>): string | undefined {
   return figureWords(mailStore.figure(read.data.accounts)) ?? undefined;
 }
 
+
+
 export function mailWhen(iso: string, now: Day): string {
   const date = new Date(iso);
   const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const time = new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(date);
-  return day === now ? time : dayName(day, now);
+  if (day === now) return new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(date);
+  const sameYear = date.getFullYear() === Number(now.slice(0, 4));
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
 }
 
 const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
@@ -755,9 +769,14 @@ export function MailBoxContent({
           return (
             <li key={mailKey(message)}>
               <Link className="mail-row" href={`/app/mail?account=${message.accountId}&message=${encodeURIComponent(message.id)}`} data-unread={message.unread || undefined}>
+                <SenderMark name={message.from.name || message.from.email} />
                 <span className="mail-from">{message.from.name || message.from.email}</span>
                 <span className="mail-side">
-                  {message.important && <span className="pill mail-important">Important</span>}
+                  {message.important && (
+                    <span className="pill mail-important" data-tone="warn">
+                      Important
+                    </span>
+                  )}
                   <span className="mail-when">{mailWhen(message.receivedAt, now)}</span>
                 </span>
                 <span className="mail-subject">{subjectOf(message)}</span>
@@ -831,7 +850,7 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
       {error && <BoxFailed what="The notes" message={error} kept onRetry={retry} />}
       {data.notes.length === 0 ? (
-        <p className="t-help group-empty">{node ? "No notes here yet: a note keeps in view what is not something to do." : "No loose notes yet: write one here, and give it a place later."}</p>
+        <BoxEmpty text={node ? "No notes here yet: a note keeps in view what is not something to do." : "No loose notes yet: write one here, and give it a place later."} reason="no-notes" />
       ) : (
         <ul className="note-list">
           {data.notes.map((note) => {
@@ -913,7 +932,8 @@ export function useAddNote(node: string | null) {
         setOpen(true);
       }}
     >
-      Add note
+      <AddIcon />
+      <span className="btn-label">Add note</span>
     </Button>
   );
   const editor = (
@@ -957,6 +977,8 @@ type Revision = { id: string; createdAt: string; source: Item["source"]; agentLa
 type Entry = {
   key: string;
   at: string;
+  
+  by: "chat" | "agent";
   what: string;
   title: string;
   undo: () => Promise<{ ok: boolean; message?: string }>;
@@ -965,6 +987,17 @@ type Entry = {
 };
 
 const ACTIVITY_DAYS = 7;
+
+
+function ago(at: string, now: number): string {
+  const minutes = Math.max(0, Math.round((now - Date.parse(at)) / 60_000));
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "Yesterday" : `${days} days ago`;
+}
 
 function actor(source: Item["source"], label: string | null): string {
   if (source === "chat") return "The chat";
@@ -977,6 +1010,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
   const { openItem, saving, chat } = useWorkspace();
   const [all, setAll] = useState(false);
   const [since] = useState(() => new Date(Date.now() - ACTIVITY_DAYS * 86_400_000));
+  const [readAt] = useState(() => Date.now());
   const sinceIso = since.toISOString();
   const updates = useToolRead<Updates>("get_updates_since", { since: sinceIso, ...(place.kind === "node" ? { node: place.id } : {}) });
 
@@ -1002,6 +1036,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
           list.push({
             key: `${as}:${item.id}`,
             at: as === "created" ? item.createdAt : as === "completed" ? (item.completedAt ?? item.updatedAt ?? item.createdAt) : (item.updatedAt ?? item.createdAt),
+            by: who,
             what: `${actor(who, label)} ${changedByOther ? "changed" : verb} ${TYPE_WORD[item.type]}`,
             title: item.title,
             undo: () => undoUpdate(as, item, who, label),
@@ -1032,10 +1067,17 @@ export function ActivityBoxContent({ place }: { place: Place }) {
         <>
           <ol className="activity-list" id="activity-entries">
             {entries.slice(0, all ? entries.length : FIRST_SHOWN).map((entry) => (
-              <li key={entry.key} className="activity-entry" data-activity={entry.key.split(":")[0]}>
-                <span className="activity-what">{entry.what}</span>
+              <li key={entry.key} className="activity-entry" data-activity={entry.key.split(":")[0]} data-by={entry.by}>
+                <span className="activity-icon" aria-hidden="true">
+                  {entry.by === "chat" ? <ByChatIcon /> : <ByAgentIcon />}
+                </span>
+                <span className="activity-what">
+                  {entry.what}
+                  <span className="activity-when">{ago(entry.at, readAt)}</span>
+                </span>
                 <Button size="sm" variant="quiet" className="activity-undo head-action" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
-                  Undo
+                  <UndoIcon />
+                  <span className="btn-label">Undo</span>
                 </Button>
                 {entry.open ? (
                   <button type="button" className="activity-title" onClick={entry.open}>

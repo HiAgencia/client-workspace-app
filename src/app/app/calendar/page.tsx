@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
+import { AddIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select } from "@/components/ui/select";
@@ -457,17 +458,22 @@ function Calendar() {
               {title}
             </h2>
             <div className="cal-steps" role="group" aria-label="Move through the calendar">
-              <Button size="sm" onClick={() => step(-1)}>
-                Previous
-              </Button>
-              <Button size="sm" onClick={() => set({ date: null })} disabled={isCurrent} aria-label={view === "week" ? "Today: back to this week" : "Today: back to this month"}>
-                Today
-              </Button>
-              <Button size="sm" onClick={() => step(1)}>
-                Next
-              </Button>
+              <div className="btn-group">
+                <Button size="sm" className="btn-icon" onClick={() => step(-1)} title="Previous">
+                  <PreviousIcon />
+                  <span className="sr-only">Previous</span>
+                </Button>
+                <Button size="sm" onClick={() => set({ date: null })} disabled={isCurrent} aria-label={view === "week" ? "Today: back to this week" : "Today: back to this month"}>
+                  Today
+                </Button>
+                <Button size="sm" className="btn-icon" onClick={() => step(1)} title="Next">
+                  <NextIcon />
+                  <span className="sr-only">Next</span>
+                </Button>
+              </div>
               <Button size="sm" variant="primary" onClick={() => setDraft({ day: chosenDay ?? (isCurrent ? todayDay : range.from), time: null })}>
-                New event
+                <AddIcon />
+                <span className="btn-label">New event</span>
               </Button>
             </div>
           </div>

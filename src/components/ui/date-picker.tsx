@@ -16,6 +16,7 @@ import {
   type Day,
 } from "@/lib/dates";
 import { cx } from "@/lib/utils";
+import { NextIcon, PreviousIcon, type Icon } from "./icons";
 import { usePopupContainer } from "./popup-layer";
 
 type DatePickerProps = {
@@ -26,12 +27,14 @@ type DatePickerProps = {
   className?: string;
   
   display?: string;
+  
+  icon?: Icon;
 };
 
 
 
 
-export function DatePicker({ value, onChange, label, look = "field", className, display }: DatePickerProps) {
+export function DatePicker({ value, onChange, label, look = "field", className, display, icon: Glyph }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const now = today();
   const container = usePopupContainer();
@@ -45,6 +48,7 @@ export function DatePicker({ value, onChange, label, look = "field", className, 
         className={cx("picker", look === "field" ? "field" : "chip-picker", className)}
         data-tone={look === "chip" ? dueTone(value, now) : undefined}
       >
+        {Glyph && <Glyph className="picker-icon" />}
         <span className={cx("picker-value", !value && "picker-placeholder")}>{shown}</span>
       </Popover.Trigger>
       <Popover.Portal container={container}>
@@ -107,14 +111,16 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
   return (
     <div className="cal">
       <div className="cal-head">
-        <button type="button" className="btn btn-quiet btn-sm" onClick={() => move(addMonths(active, -1))}>
-          Previous
+        <button type="button" className="btn btn-quiet btn-sm btn-icon" title="Previous month" onClick={() => move(addMonths(active, -1))}>
+          <PreviousIcon />
+          <span className="sr-only">Previous</span>
         </button>
-        <p className="t-label" aria-live="polite">
+        <p className="t-label cal-month-title" aria-live="polite">
           {monthTitle(active)}
         </p>
-        <button type="button" className="btn btn-quiet btn-sm" onClick={() => move(addMonths(active, 1))}>
-          Next
+        <button type="button" className="btn btn-quiet btn-sm btn-icon" title="Next month" onClick={() => move(addMonths(active, 1))}>
+          <NextIcon />
+          <span className="sr-only">Next</span>
         </button>
       </div>
       <table className="cal-grid" role="grid" ref={grid} onKeyDown={onKey} aria-label={monthTitle(active)}>

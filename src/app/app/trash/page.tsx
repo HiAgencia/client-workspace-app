@@ -3,6 +3,7 @@
 import { Link } from "@/components/ui/link";
 import { useEffect, useState, ViewTransition } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
+import { DecisionIcon, NoteIcon, RestoreIcon, TasksIcon } from "@/components/ui/icons";
 import { count } from "@/lib/count";
 import { LOCALE } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
@@ -80,6 +81,9 @@ export default function TrashPage() {
                       return (
                         <li key={item.id} className="trash-item" data-trash={item.id} data-leaving={leaving === item.id || undefined}>
                           <div className="trash-row">
+                            <span className="trash-icon" aria-hidden="true">
+                              {item.type === "task" ? <TasksIcon /> : item.type === "decision" ? <DecisionIcon /> : <NoteIcon />}
+                            </span>
                             <div className="trash-main">
                               <span className="t-value trash-title">{title}</span>
                               <span className="t-meta">
@@ -88,7 +92,8 @@ export default function TrashPage() {
                               </span>
                             </div>
                             <Button size="sm" disabled={leaving !== null} onClick={() => void restore(item)} aria-label={`Restore “${title}”`}>
-                              Restore
+                              <RestoreIcon />
+                              <span className="btn-label">Restore</span>
                             </Button>
                           </div>
                         </li>

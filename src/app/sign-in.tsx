@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import type { PublicConfig } from "@/lib/env";
@@ -28,6 +29,7 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
   const [state, setState] = useState<State>({ kind: "loading" });
   const [error, setError] = useState<string | null>(failed ? "Signing in did not finish. Try again." : null);
   const [busy, setBusy] = useState<"google" | "demo" | "out" | null>(null);
+  const router = useRouter();
 
   async function refresh() {
     const response = await askOnceMoreIfCut("/api/me", {});
@@ -77,9 +79,13 @@ export function SignIn({ config, failed }: { config: PublicConfig; failed: boole
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ today: dayOf(new Date()), zone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     });
-    setBusy(null);
-    if (!(seeded instanceof Response) || !seeded.ok) return setError("The demo workspace could not be prepared. Reload to try again.");
-    await refresh();
+    if (!(seeded instanceof Response) || !seeded.ok) {
+      setBusy(null);
+      return setError("The demo workspace could not be prepared. Reload to try again.");
+    }
+    
+    
+    router.push("/app/resume");
   }
 
   async function signOut() {

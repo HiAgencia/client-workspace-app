@@ -3,9 +3,13 @@ import {
   Activity,
   ArrowRight,
   ArrowUp,
+  AtSign,
+  Bold,
   Bot,
   Calendar,
   CalendarClock,
+  CalendarDays,
+  CalendarOff,
   CalendarPlus,
   Check,
   ChevronDown,
@@ -25,12 +29,17 @@ import {
   Image as ImageGlyph,
   ImagePlus,
   Inbox,
+  Italic,
   Info,
   KeyRound,
+  Layers,
   Link as LinkGlyph,
+  List as ListGlyph,
   ListChecks,
+  ListOrdered,
   LogOut,
   Mail,
+  MailCheck,
   Menu as MenuGlyph,
   MessageSquare,
   Mic,
@@ -75,6 +84,9 @@ export const MailIcon = named(Mail);
 export const TrashIcon = named(Trash2);
 export const SettingsIcon = named(Settings);
 export const GeneralIcon = named(Inbox);
+export const PlaceIcon = named(Layers);
+export const AccountIcon = named(AtSign);
+export const NoDateIcon = named(CalendarOff);
 
 
 export const AddIcon = named(Plus);
@@ -89,6 +101,9 @@ export const DeleteIcon = named(Trash2);
 export const CopyIcon = named(Copy);
 export const CopiedIcon = named(Check);
 export const MoveIcon = named(ArrowRight);
+
+export const OpenIcon = named(ArrowRight);
+export const RepliesIcon = named(MailCheck);
 export const LinkIcon = named(LinkGlyph);
 export const ExternalIcon = named(ExternalLink);
 export const ReplyIcon = named(Reply);
@@ -102,6 +117,7 @@ export const MicIcon = named(Mic);
 export const AttachImageIcon = named(ImagePlus);
 export const ImageIcon = named(ImageGlyph);
 export const NewEventIcon = named(CalendarPlus);
+export const EventIcon = named(CalendarDays);
 export const RescheduleIcon = named(CalendarClock);
 export const PreviousIcon = named(ChevronLeft);
 export const NextIcon = named(ChevronRight);
@@ -121,6 +137,12 @@ export const ActivityIcon = named(Activity);
 export const VersionsIcon = named(History);
 export const ColorIcon = named(Palette);
 export const TokenIcon = named(KeyRound);
+
+
+export const BoldIcon = named(Bold);
+export const ItalicIcon = named(Italic);
+export const BulletsIcon = named(ListGlyph);
+export const NumbersIcon = named(ListOrdered);
 
 
 export const LightIcon = named(Sun);

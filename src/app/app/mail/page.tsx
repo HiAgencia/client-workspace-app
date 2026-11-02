@@ -4,19 +4,20 @@ import { Link } from "@/components/ui/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, ViewTransition, type ReactNode } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
-import { AddIcon, ExternalIcon } from "@/components/ui/icons";
+import { AddIcon, ExternalIcon, MailIcon, NextIcon } from "@/components/ui/icons";
 import { Field } from "@/components/ui/field";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { useMedia } from "@/components/ui/use-media";
 import { count } from "@/lib/count";
-import { LOCALE, today } from "@/lib/dates";
+import { today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
 import { repliesText } from "@/lib/mail/replies-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
-import { useMailRead } from "../box-kinds";
+import { mailWhen, useMailRead } from "../box-kinds";
 import { post, tool, type Item, type TreeNode } from "../client-api";
+import { SenderMark } from "../item-parts";
 import { accountsSeenFrom, figureWords } from "../mail-store";
 import { PageHeader } from "../page-header";
 import { AccountFilter, ALL, branchOf, MESSAGES, PlaceFilter, placeFromUrl } from "../place-filters";
@@ -74,13 +75,7 @@ export default function MailPage() {
 const noSubscription = () => () => {};
 
 
-function shortWhen(iso: string): string {
-  const date = new Date(iso);
-  const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  if (day === today()) return date.toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" });
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
-}
+const shortWhen = (iso: string): string => mailWhen(iso, today());
 
 function Mail() {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
@@ -399,6 +394,9 @@ function Mail() {
                   <div className="mail-view-in">
                     {viewer ?? (
                       <div className="mail-view-none">
+                        <span className="box-empty-icon" aria-hidden="true">
+                          <MailIcon />
+                        </span>
                         <h2 className="t-title">{shown.length > 0 || !revealed ? "Choose a message to read it here" : "A message opens here"}</h2>
                         <p className="t-help">It opens with its real design, beside what you can do with it: make it a task, link it, or say which task it answers. Gmail stays where you reply.</p>
                         <div className="mail-view-go">
@@ -439,8 +437,9 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
           <span className="t-meta">{`${repliesText(entry.replies.length, entry.more.length > 0)} for`}</span>
           <span className="t-value">{title}</span>
         </h3>
-        <Button size="sm" variant="quiet" className="head-action" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
-          Open the task
+        <Button size="sm" variant="quiet" className="head-action head-link" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
+          <span className="btn-label">Open the task</span>
+          <NextIcon />
         </Button>
       </div>
       <ul className="mail-rows">{entry.replies.map(listed)}</ul>
@@ -453,6 +452,7 @@ function MailRowView({ row, unread, current, onOpen }: { row: MailRow; unread: b
   const line = taskLine(row);
   return (
     <button type="button" className="mail-row" data-unread={unread ? "" : undefined} aria-current={current ? "true" : undefined} onClick={onOpen} data-mail-row={keyOf(row)}>
+      <SenderMark name={row.from.name ?? row.from.email} />
       <span className="mail-row-top">
         <span className="t-name mail-row-from">{row.from.name ?? row.from.email}</span>
         {row.important && (

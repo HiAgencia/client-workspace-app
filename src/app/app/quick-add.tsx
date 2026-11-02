@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Fold } from "@/components/ui/fold";
+import { AddIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { count } from "@/lib/count";
@@ -311,6 +312,10 @@ function QuickAddEditor({
         </p>
       )}
       <div className="qa-foot">
+        {}
+        <p className="t-meta qa-hint">
+          Type <kbd className="kbd">#</kbd> for a place, <kbd className="kbd">p1</kbd> to <kbd className="kbd">p4</kbd> for a priority, and a day like <span className="nowrap">“tomorrow 4pm”</span>.
+        </p>
         <div className="qa-actions">
           <Button size="sm" onClick={() => onDone("cancel")}>
             Cancel
@@ -400,7 +405,8 @@ export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }
         setOpen((value) => !value);
       }}
     >
-      {label}
+      <AddIcon />
+      <span className="btn-label">{label}</span>
     </Button>
   );
   const editor = (

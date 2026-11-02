@@ -4,7 +4,7 @@ import { Link } from "@/components/ui/link";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CloseIcon, DeleteIcon, DownIcon, DuplicateIcon, UpIcon, VersionsIcon } from "@/components/ui/icons";
+import { AddIcon, CloseIcon, DateIcon, EventIcon, DeleteIcon, DownIcon, DuplicateIcon, MailIcon, PlaceIcon, PriorityIcon, UpIcon, VersionsIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { RichEditor } from "@/components/ui/rich-editor";
@@ -282,7 +282,7 @@ export function TaskDetail() {
               <p className="task-detail-path t-meta">
                 {item.nodeId ? (
                   <Link className="link link-meta" href={`/app/node/${item.nodeId}`} onClick={leave}>
-                    <PlaceName path={item.nodePath} color={null} />
+                    <PlaceName path={item.nodePath} color={tree?.find((node) => node.id === item.nodeId)?.color ?? null} />
                   </Link>
                 ) : (
                   <PlaceName path={null} color={null} />
@@ -374,13 +374,19 @@ export function TaskDetail() {
               <aside className="task-detail-side" aria-label="Attributes">
                 <dl className="task-attrs">
                   <div className="task-attr">
-                    <dt className="t-label">Place</dt>
+                    <dt className="t-label">
+                      <PlaceIcon />
+                      Place
+                    </dt>
                     <dd>
                       <Select label="Place" value={item.nodeId ?? "general"} options={places} onChange={(value) => void movePlace(value)} />
                     </dd>
                   </div>
                   <div className="task-attr">
-                    <dt className="t-label">Date</dt>
+                    <dt className="t-label">
+                      <DateIcon />
+                      Date
+                    </dt>
                     <dd className="task-attr-date">
                       <DatePicker
                         label="Date"
@@ -396,13 +402,19 @@ export function TaskDetail() {
                     </dd>
                   </div>
                   <div className="task-attr">
-                    <dt className="t-label">Priority</dt>
-                    <dd>
+                    <dt className="t-label">
+                      <PriorityIcon />
+                      Priority
+                    </dt>
+                    <dd data-priority={item.priority ?? 4}>
                       <Select label="Priority" value={String(item.priority ?? 4)} options={PRIORITIES} onChange={(value) => void change({ priority: Number(value) })} />
                     </dd>
                   </div>
                   <div className="task-attr">
-                    <dt className="t-label">Event</dt>
+                    <dt className="t-label">
+                      <EventIcon />
+                      Event
+                    </dt>
                     <dd ref={eventTrigger}>
                       <EventField key={item.id} task={item} />
                     </dd>
@@ -652,7 +664,10 @@ function MailAttribute({ task, onLeave }: { task: Item; onLeave: (event: MouseEv
   const asking = Boolean(mail) || Boolean(waitingHere);
   return (
     <div className="task-attr task-mail-attr" data-task-mail={mail ? "waiting" : "none"}>
-      <dt className="t-label">Mail</dt>
+      <dt className="t-label">
+        <MailIcon />
+        Mail
+      </dt>
       <dd className="task-mail-body">
         {!read && !detail?.error ? (
           <span className="skeleton" aria-label="Reading the mail it waits for" />
@@ -990,6 +1005,7 @@ function SubtaskSection({ task, version }: { task: Item; version: number }) {
         />
       ) : (
         <button ref={addButton} type="button" className="task-add" onClick={() => setAdding(true)}>
+          <AddIcon />
           Add subtask
         </button>
       )}
@@ -1218,6 +1234,7 @@ function NoteSection({ task, version }: { task: Item; version: number }) {
         />
       ) : (
         <button ref={addButton} type="button" className="task-add" onClick={() => setAdding(true)}>
+          <AddIcon />
           Add note
         </button>
       )}
@@ -1301,7 +1318,7 @@ function EventField({ task }: { task: Item }) {
       ? [{ kind: "action", label: "Take it out of the event", onSelect: () => void saving(tool("unlink_task_event", { task: task.id })).then((ok) => ok && read()) } as MenuEntry]
       : []),
   ];
-  return <Menu label={linked} name={`Event: ${linked}`} className="task-attr-menu" entries={entries} onOpenChange={(open) => open && loadEvents()} />;
+  return <Menu label={linked} name={`Event: ${linked}`} className={state?.link ? "task-attr-menu" : "task-attr-menu task-attr-empty"} entries={entries} onOpenChange={(open) => open && loadEvents()} />;
 }
 
 function Versions({ id, task, onRestored }: { id: string; task: Item; onRestored: () => void }) {

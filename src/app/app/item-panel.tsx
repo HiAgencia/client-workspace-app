@@ -3,6 +3,7 @@
 import { Link } from "@/components/ui/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CloseIcon, DecisionIcon, DeleteIcon, NoteIcon, TasksIcon } from "@/components/ui/icons";
 import { RichEditor } from "@/components/ui/rich-editor";
 import { LOCALE } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
@@ -190,15 +191,17 @@ export function ItemPanel({
         <div className="panel-in">
           <header className="panel-head">
             <div className="panel-title">
-              <p key={current.type} className="t-label fade-enter">
+              <p key={current.type} className="pill panel-kind fade-enter" data-tone={current.type === "decision" ? "accent" : undefined}>
+                {current.type === "decision" ? <DecisionIcon /> : current.type === "note" ? <NoteIcon /> : <TasksIcon />}
                 {TYPE_NAMES[current.type]}
               </p>
               <h2 id={titleId} className="t-title">
                 {inlinePlain(current.title)}
               </h2>
             </div>
-            <Button size="sm" onClick={close}>
-              Close
+            <Button size="sm" variant="quiet" className="btn-icon" onClick={close} title="Close">
+              <CloseIcon />
+              <span className="sr-only">Close</span>
             </Button>
           </header>
           {current.nodeId ? (
@@ -242,7 +245,8 @@ export function ItemPanel({
                 });
               }}
             >
-              {`Delete this ${TYPE_NAMES[current.type].toLowerCase()}`}
+              <DeleteIcon />
+              <span className="btn-label">{`Delete this ${TYPE_NAMES[current.type].toLowerCase()}`}</span>
             </Button>
           </div>
         </div>

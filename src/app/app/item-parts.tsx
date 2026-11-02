@@ -47,3 +47,18 @@ export function Origin({ item }: { item: Item }) {
     </span>
   );
 }
+
+
+
+const SENDER_COLORS = ["blue", "violet", "teal", "amber", "pink", "indigo", "green", "orange"] as const;
+
+export function SenderMark({ name }: { name: string }) {
+  const letter = (name.trim().match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toLocaleUpperCase();
+  let hash = 0;
+  for (const char of name.toLowerCase()) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) | 0;
+  return (
+    <span className="sender-mark" data-color={SENDER_COLORS[Math.abs(hash) % SENDER_COLORS.length]} aria-hidden="true">
+      {letter}
+    </span>
+  );
+}

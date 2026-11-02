@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useMedia } from "@/components/ui/use-media";
-import { DownIcon, UpIcon } from "@/components/ui/icons";
+import { DarkIcon, DownIcon, LightIcon, UpIcon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { LOCALE } from "@/lib/dates";
 import { currentTheme, subscribeTheme, type Theme } from "@/lib/theme";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { tool } from "../client-api";
+import { SenderMark } from "../item-parts";
 import { documentFor } from "./mail-document";
 import { subjectOf } from "./subject";
 import { PlaceName } from "../task-row";
@@ -139,8 +140,8 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
           </>
         ) : (
           <>
-            {acting}
             {moving}
+            {acting}
           </>
         )}
       </div>
@@ -148,14 +149,15 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
         <h2 id="mail-subject" className="t-title mail-head-subject" tabIndex={-1}>
           {subjectOf(row)}
         </h2>
-        <p className="mail-from-line">
+        <div className="mail-from-line">
+          <SenderMark name={row.from.name ?? row.from.email} />
           <span className="mail-from-who">
             <span className="t-name">{row.from.name ?? row.from.email}</span>
             {row.from.name && <span className="t-meta mail-address">{row.from.email}</span>}
           </span>
           <span className="t-meta mail-head-when">{fullTime(row.receivedAt)}</span>
-        </p>
-        <p className="t-meta mail-where-line">
+        </div>
+        <div className="t-meta mail-where-line">
           <span>
             To <span className="mail-address">{row.accountEmail}</span>
           </span>
@@ -173,7 +175,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
               Important
             </span>
           )}
-        </p>
+        </div>
       </header>
 
       {message && message.remoteImages > 0 && (
@@ -209,8 +211,9 @@ function ModeSwitch({ value, onChange }: { value: Theme; onChange: (value: Theme
   return (
     <div ref={rail} role="group" aria-label="Mail colors" className="seg mail-mode" data-mail-mode={value}>
       {(["light", "dark"] as const).map((option) => (
-        <button key={option} type="button" className="seg-option" aria-pressed={option === value} onClick={() => onChange(option)}>
-          {option === "light" ? "Light" : "Dark"}
+        <button key={option} type="button" className="seg-option" aria-pressed={option === value} title={option === "light" ? "Light" : "Dark"} onClick={() => onChange(option)}>
+          {option === "light" ? <LightIcon /> : <DarkIcon />}
+          <span className="sr-only">{option === "light" ? "Light" : "Dark"}</span>
         </button>
       ))}
     </div>

@@ -59,3 +59,12 @@
 .preview-frame .week-day {
   cursor: default;
 }
+.preview-frame .week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+.preview-frame .week-day[aria-pressed="true"] {
+  background: var(--interior-hover);
+  box-shadow: inset 0 0 0 1px var(--card-rim);
+}

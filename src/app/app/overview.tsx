@@ -83,6 +83,11 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           title: NAMES.tasks,
           purpose: "Overdue, today and the days ahead",
           count: tasksCountLabel(tasks.data),
+          action: (
+            <HeadLink href={tasksHref} name="Open all tasks">
+              Open
+            </HeadLink>
+          ),
           menu: [{ kind: "action", label: "Open Tasks", onSelect: () => router.push(tasksHref) }],
           content: <TasksBoxContent read={tasks} now={now} place={place} placeId={placeId} showPlace layout="list" allHref={tasksHref} />,
         },

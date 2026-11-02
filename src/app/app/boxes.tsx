@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { ActivityIcon, CalendarIcon, MailIcon, NoDateIcon, NoteIcon, TasksIcon, type Icon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { cx } from "@/lib/utils";
 import { columnsOf, isMark, orderDropped, orderMovedTo, settleLayout, steppedOrder, type BoardLayout, type Zone } from "./board-layout";
@@ -176,6 +177,16 @@ function refocus(id: string) {
 }
 
 
+
+
+const BOX_ICONS: Record<string, Icon> = {
+  tasks: TasksIcon,
+  calendar: CalendarIcon,
+  mail: MailIcon,
+  no_date: NoDateIcon,
+  notes: NoteIcon,
+  activity: ActivityIcon,
+};
 
 export type BoxSpec = {
   id: string;
@@ -489,6 +500,12 @@ function Box({
           (event.currentTarget as HTMLElement).closest(".box")?.removeAttribute("data-dragging");
         }}
       >
+        <span className="box-icon" aria-hidden="true">
+          {(() => {
+            const Glyph = BOX_ICONS[spec.id] ?? TasksIcon;
+            return <Glyph />;
+          })()}
+        </span>
         <h2 id={titleId} className="t-title box-title" tabIndex={-1}>
           {spec.title}
         </h2>
@@ -522,9 +539,17 @@ export function BoxWait({ what, rows = 3 }: { what: string; rows?: number }) {
   );
 }
 
+
 export function BoxEmpty({ text, children, reason }: { text: ReactNode; children?: ReactNode; reason?: string }) {
+  const id = useContext(BoxIdContext);
+  const Glyph = id ? BOX_ICONS[id] : undefined;
   return (
     <div className="box-empty" data-empty={reason}>
+      {Glyph && (
+        <span className="box-empty-icon" aria-hidden="true">
+          <Glyph />
+        </span>
+      )}
       <p className="t-help">{text}</p>
       {children}
     </div>

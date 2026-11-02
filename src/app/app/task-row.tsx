@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
-import { ByAgentIcon, ByChatIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon } from "@/components/ui/icons";
+import { ByAgentIcon, ByChatIcon, DateIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon, TimeIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { addDays, LOCALE, today, type Day } from "@/lib/dates";
@@ -649,6 +649,7 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
               <DatePicker
                 look="chip"
                 className="task-when-trigger"
+                icon={task.dueTime ? TimeIcon : DateIcon}
                 label={`Date of “${plain}”`}
                 value={task.dueOn}
                 display={when}
@@ -680,7 +681,7 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
             </span>
           )}
           {mail && (
-            <span className="pill task-mail" data-tone="accent" data-mail={mail}>
+            <span className="task-mail" data-mail={mail}>
               <MailIcon />
               Waiting for mail
             </span>

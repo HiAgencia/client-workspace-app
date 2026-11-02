@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { DecisionIcon, MailIcon, NextIcon, NoteIcon, SearchIcon, TasksIcon } from "@/components/ui/icons";
 import { count } from "@/lib/count";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
@@ -229,6 +230,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   return (
     <div className="palette-inner">
       <div className="palette-search">
+        <SearchIcon className="palette-search-icon" />
         <input
           autoFocus
           id="palette-search"
@@ -282,7 +284,18 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           {`Not searched: ${mailFailureText(failure)}`}
         </p>
       ))}
-      <p className="palette-foot t-meta">Arrows move, Enter opens, Escape closes.</p>
+      <p className="palette-foot t-meta">
+        <span className="palette-keys">
+          <kbd className="kbd">↑</kbd>
+          <kbd className="kbd">↓</kbd> Move
+        </span>
+        <span className="palette-keys">
+          <kbd className="kbd">↵</kbd> Open
+        </span>
+        <span className="palette-keys">
+          <kbd className="kbd">Esc</kbd> Close
+        </span>
+      </p>
     </div>
   );
 }
@@ -291,6 +304,9 @@ function EntryView({ entry }: { entry: Entry }) {
   if (entry.kind === "node") {
     return (
       <>
+        <span className="palette-icon" data-color={entry.node.color ?? undefined} aria-hidden="true">
+          <span className="palette-dot" />
+        </span>
         <span className="pill">{KIND_NAMES[entry.node.kind]}</span>
         <span className="stack palette-text">
           <span className="t-name">{entry.node.name}</span>
@@ -303,6 +319,9 @@ function EntryView({ entry }: { entry: Entry }) {
     const { item } = entry;
     return (
       <>
+        <span className="palette-icon" aria-hidden="true">
+          {item.type === "task" ? <TasksIcon /> : item.type === "decision" ? <DecisionIcon /> : <NoteIcon />}
+        </span>
         <span className="pill" data-tone={item.status === "done" ? undefined : "accent"}>
           {item.status === "done" ? "Done" : TYPE_NAMES[item.type]}
         </span>
@@ -317,6 +336,9 @@ function EntryView({ entry }: { entry: Entry }) {
   if (entry.kind === "mail") {
     return (
       <>
+        <span className="palette-icon" aria-hidden="true">
+          <MailIcon />
+        </span>
         <span className="pill">Mail</span>
         <span className="stack palette-text">
           <span className="t-value">{subjectOf(entry.row)}</span>
@@ -327,6 +349,9 @@ function EntryView({ entry }: { entry: Entry }) {
   }
   return (
     <>
+      <span className="palette-icon" aria-hidden="true">
+        <NextIcon />
+      </span>
       <span className="pill" data-tone="info">
         Action
       </span>

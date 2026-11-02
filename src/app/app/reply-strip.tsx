@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Fold } from "@/components/ui/fold";
+import { NextIcon, RepliesIcon } from "@/components/ui/icons";
 import type { Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
@@ -35,6 +36,9 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
   return (
     <section className="reply-strip" data-replies-strip data-stale={read.stale || undefined} aria-labelledby={titleId}>
       <div className="reply-strip-head">
+        <span className="reply-strip-icon" aria-hidden="true">
+          <RepliesIcon />
+        </span>
         <h2 id={titleId} className="t-title reply-strip-title">
           For your tasks
         </h2>
@@ -96,24 +100,31 @@ function ReplyEntry({ entry, now }: { entry: TaskReplies; now: Day | null }) {
   const failure = entry.failures[0];
   const unread = entry.replies.length === 0 && failure;
   const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? "Its mail could not be read" : "Nothing arrived yet";
+  
+  
   return (
     <button type="button" className="reply-entry" data-reply-task={entry.task.id} onClick={() => openTaskDetail({ id: entry.task.id })}>
-      <span className="reply-entry-title">{inlinePlain(entry.task.title)}</span>
-      <span className="pill reply-entry-tally" data-tone={unread ? "alert" : entry.replies.length === 0 ? undefined : failure ? "warn" : "accent"}>
-        {tally}
+      <span className="reply-entry-task">
+        <span className="reply-entry-title">{inlinePlain(entry.task.title)}</span>
+        <span className="pill reply-entry-tally" data-tone={unread ? "alert" : entry.replies.length === 0 ? undefined : failure ? "warn" : "accent"}>
+          {tally}
+        </span>
       </span>
       {newest ? (
         <span className="reply-entry-mail">
           <span className="reply-entry-from">{newest.from.name || newest.from.email}</span>
           <span className="reply-entry-subject">{subjectOf(newest)}</span>
+          {now && <span className="reply-entry-when">{mailWhen(newest.receivedAt, now)}</span>}
         </span>
       ) : (
         <span className="reply-entry-mail">
           <span className="reply-entry-wait">{unread ? mailFailureText(failure) : `It waits for “${entry.task.waitsFor}”`}</span>
         </span>
       )}
-      <span className="reply-entry-when">{newest && now ? mailWhen(newest.receivedAt, now) : ""}</span>
-      <span className="reply-entry-go">Open the task</span>
+      <span className="reply-entry-go">
+        Open the task
+        <NextIcon />
+      </span>
     </button>
   );
 }

@@ -5,7 +5,7 @@ import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } f
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
-import { AttachImageIcon, CloseIcon, MicIcon, SendIcon } from "@/components/ui/icons";
+import { AttachImageIcon, ByChatIcon, CloseIcon, MicIcon, SendIcon } from "@/components/ui/icons";
 import { BROWSER_READS, leftUnfinished, turnGoesOn } from "@/lib/chat/browser-reads";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { get, tool } from "./client-api";
@@ -99,6 +99,9 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
   return (
     <section className="card chat" aria-labelledby="chat-title" data-chat={nodeId ?? "workspace"}>
       <div className="chat-head">
+        <span className="chat-icon" aria-hidden="true">
+          <ByChatIcon />
+        </span>
         <div className="stack chat-title">
           <h2 id="chat-title" className="t-title">
             Chat

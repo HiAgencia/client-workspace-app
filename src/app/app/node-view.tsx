@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransitio
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
+import { AddIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { firstWeekday, today } from "@/lib/dates";
@@ -204,6 +205,11 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     title: "Tasks",
     purpose: "Overdue, today and the days ahead",
     count: tasksCountLabel(view),
+    action: (
+      <HeadLink href={`/app/tasks?place=${nodeId}`} name="Open all its tasks">
+        Open
+      </HeadLink>
+    ),
     content: <TasksBoxContent read={tasksRead} now={now} place={place} placeId={nodeId} showPlace pageNode={nodeId} layout={layout} allHref={`/app/tasks?place=${nodeId}`} />,
   };
   const boxes: Record<string, BoxSpec> = {
@@ -358,8 +364,9 @@ function NodeStrip({
             </li>
           ))}
           <li>
-            <Button ref={addButton} data-add-child aria-expanded={adding} aria-controls={`${id}new`} onClick={onAdd}>
-              {`Add ${one}`}
+            <Button ref={addButton} className="node-add" data-add-child aria-expanded={adding} aria-controls={`${id}new`} onClick={onAdd}>
+              <AddIcon />
+              <span className="btn-label">{`Add ${one}`}</span>
             </Button>
           </li>
         </ul>

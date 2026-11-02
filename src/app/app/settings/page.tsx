@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
+import { AccountIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { LOCALE } from "@/lib/dates";
@@ -16,6 +17,7 @@ import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
 import { get, post } from "../client-api";
 import { ConfirmButton } from "../confirm-button";
 import { ConnectBlockedNote, type ConnectBlocked } from "../connect-blocked";
+import { SenderMark } from "../item-parts";
 import { lostWords } from "../mail-store";
 import { PageHeader } from "../page-header";
 import { useWorkspace } from "../workspace";
@@ -72,7 +74,7 @@ function useSettled(id: string, settled: boolean) {
 }
 
 
-function SettingsBox({ id, title, count: figure, order, children }: { id: string; title: string; count?: ReactNode; order: number; children: ReactNode }) {
+function SettingsBox({ id, title, icon: Glyph, count: figure, order, children }: { id: string; title: string; icon: Icon; count?: ReactNode; order: number; children: ReactNode }) {
   const { ready } = useContext(SettledContext);
   return (
     <section
@@ -84,6 +86,9 @@ function SettingsBox({ id, title, count: figure, order, children }: { id: string
       style={{ "--enter-delay": `${order * 55}ms` } as CSSProperties}
     >
       <header className="box-head">
+        <span className="box-icon" aria-hidden="true">
+          <Glyph />
+        </span>
         <h2 id={`${id}-title`} className="t-title box-title" tabIndex={-1}>
           {title}
         </h2>
@@ -96,7 +101,7 @@ function SettingsBox({ id, title, count: figure, order, children }: { id: string
 
 function ThemeSection() {
   return (
-    <SettingsBox id="theme-settings" title="Theme" order={0}>
+    <SettingsBox id="theme-settings" title="Theme" icon={ColorIcon} order={0}>
       <div className="settings-line">
         <p className="t-help">Light or dark. It follows your system until you choose, and your choice applies to every open tab.</p>
         <ThemeSwitch />
@@ -159,7 +164,7 @@ function AccountsSection() {
   }
 
   return (
-    <SettingsBox id="accounts-settings" title="Google accounts" order={1} count={accounts && accounts.length > 0 ? `${accounts.length} connected` : undefined}>
+    <SettingsBox id="accounts-settings" title="Google accounts" icon={AccountIcon} order={1} count={accounts && accounts.length > 0 ? `${accounts.length} connected` : undefined}>
       <p className="t-help">
         Connect an account to a client or a project to see its calendars and its mail there, and in its projects and subprojects.
       </p>
@@ -207,6 +212,7 @@ function AccountsSection() {
                 return (
                   <li key={account.id} className="settings-account" data-account={account.email}>
                     <div className="settings-account-head">
+                      <SenderMark name={account.email} />
                       <h3 className="t-name">{account.email}</h3>
                       {account.status !== "active" && !account.isDemo && (
                         <span className="pill" data-tone="alert">
@@ -266,8 +272,9 @@ function AccountsSection() {
                           <p className={line.tone ? "inline-note" : "t-value"} data-tone={line.tone} data-account-mail data-mail-failure={line.failed ? "" : undefined}>
                             {line.text}
                           </p>
-                          <a className="link" href={`/app/mail?account=${account.id}`}>
-                            Show its mail
+                          <a className={buttonClass({ variant: "quiet", size: "sm", className: "head-action head-link" })} href={`/app/mail?account=${account.id}`}>
+                            <span className="btn-label">Show its mail</span>
+                            <OpenIcon />
                           </a>
                         </div>
                       </div>
@@ -368,7 +375,7 @@ function AgentTokensSection() {
   const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A place no longer listed";
   const live = data?.tokens.filter((token) => !token.revokedAt).length;
   return (
-    <SettingsBox id="agent-tokens" title="Agent tokens" order={2} count={live ? `${live} in use` : undefined}>
+    <SettingsBox id="agent-tokens" title="Agent tokens" icon={TokenIcon} order={2} count={live ? `${live} in use` : undefined}>
       <p className="t-help">
         A token lets a coding agent read and update one client or project, its projects or subprojects included: its tasks, its notes,
         its decisions, and what changed. Each token is shown once; revoke it when the agent no longer needs it.
