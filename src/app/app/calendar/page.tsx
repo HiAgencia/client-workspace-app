@@ -433,7 +433,7 @@ function Calendar() {
       <div className="page cal-page" data-calendar={view}>
         <PageHeader
           title="Calendar"
-          count={loaded ? `Your connected calendars and the tasks with a date. ${[counted, reading ? `${count(unanswered, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : readError === null ? "Reading the calendar…" : "Your connected calendars and the tasks with a date."}
+          count={loaded ? `${[counted, reading ? `${count(unanswered, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : readError === null ? "Reading the calendar…" : "Events and the tasks with a date."}
           filters={
             <>
               <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
@@ -665,7 +665,7 @@ function subscribeFine(onChange: () => void) {
 
 
 
-const HOUR_REM = 3;
+const HOUR_REM = 3.5;
 
 
 

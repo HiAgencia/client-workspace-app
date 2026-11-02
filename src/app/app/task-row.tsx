@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ByAgentIcon, ByChatIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { addDays, LOCALE, today, type Day } from "@/lib/dates";
@@ -519,6 +520,7 @@ export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode
     {
       kind: "choice",
       label: "Priority",
+      icon: PriorityIcon,
       value: String(task.priority ?? 4),
       options: PRIORITIES.map((option) => ({ value: option.value, label: option.label })),
       onChoose: (value) => void actions.setPriority(task, Number(value)),
@@ -526,6 +528,7 @@ export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode
     {
       kind: "submenu",
       label: "Move to…",
+      icon: MoveIcon,
       entries: [
         {
           kind: "group",
@@ -543,10 +546,10 @@ export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode
         { kind: "group", label: "Place", entries: places },
       ],
     },
-    { kind: "action", label: "Link to an event…", onSelect: () => openTaskDetail({ id: task.id, task, list, focus: "event" }) },
-    { kind: "action", label: "Duplicate", onSelect: () => void actions.duplicate(task) },
+    { kind: "action", label: "Link to an event…", icon: LinkIcon, onSelect: () => openTaskDetail({ id: task.id, task, list, focus: "event" }) },
+    { kind: "action", label: "Duplicate", icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
     { kind: "separator" },
-    { kind: "action", label: "Delete", tone: "danger", onSelect: () => void actions.remove(task) },
+    { kind: "action", label: "Delete", tone: "danger", icon: DeleteIcon, onSelect: () => void actions.remove(task) },
   ];
 }
 
@@ -665,22 +668,35 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
                 setOpen((value) => !value);
               }}
             >
+              <SubtasksIcon />
               {task.subtasks.done}/{task.subtasks.total}
             </button>
           )}
           {}
           {task.priority === 1 && (
             <span className="task-priority" data-priority={task.priority}>
+              <PriorityIcon />
               {priorityName(task.priority)}
             </span>
           )}
           {mail && (
             <span className="pill task-mail" data-tone="accent" data-mail={mail}>
+              <MailIcon />
               Waiting for mail
             </span>
           )}
-          {task.notes > 0 && <span className="task-notes">{count(task.notes, "note", "notes")}</span>}
-          {task.source !== "manual" && <span className="task-source">{sourceName(task.source, task.agentLabel)}</span>}
+          {task.notes > 0 && (
+            <span className="task-notes">
+              <NoteIcon />
+              {count(task.notes, "note", "notes")}
+            </span>
+          )}
+          {task.source !== "manual" && (
+            <span className="task-source">
+              {task.source === "agent" ? <ByAgentIcon /> : <ByChatIcon />}
+              {sourceName(task.source, task.agentLabel)}
+            </span>
+          )}
           {place.shown && (
             <span className="task-place">
               <PlaceName path={place.path} color={task.color} />

@@ -100,22 +100,19 @@
 
   @media (hover: hover) {
     &:hover {
-      background: var(--interior-hover);
-      box-shadow: inset 0 0 0 1px var(--division);
+      background: var(--interior);
+      box-shadow: inset 0 0 0 1px transparent;
       transition-duration: var(--dur-hover);
-    }
-    &:hover .mail-row-from {
-      color: var(--accent-ink);
     }
   }
   &[aria-current="true"] {
     background: var(--accent-tint);
-    box-shadow: inset 0 0 0 1px var(--accent);
+    box-shadow: inset 2px 0 0 var(--accent);
   }
   @media (hover: hover) {
     &[aria-current="true"]:hover {
       background: var(--accent-tint-hover);
-      box-shadow: inset 0 0 0 2px var(--accent);
+      box-shadow: inset 3px 0 0 var(--accent);
     }
   }
 }
@@ -155,7 +152,7 @@
 }
 .mail-page .mail-row[data-unread] .mail-row-subject {
   color: var(--ink);
-  font-weight: 650;
+  font-weight: 500;
 }
 .mail-row-where {
   display: flex;
@@ -185,7 +182,7 @@
 .mail-row-where > .mail-row-for {
   display: -webkit-box;
   color: var(--mail-waiting);
-  font-weight: 650;
+  font-weight: 500;
   overflow-wrap: anywhere;
   white-space: normal;
   -webkit-box-orient: vertical;

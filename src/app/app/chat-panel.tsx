@@ -5,6 +5,7 @@ import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } f
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
+import { AttachImageIcon, CloseIcon, MicIcon, SendIcon } from "@/components/ui/icons";
 import { BROWSER_READS, leftUnfinished, turnGoesOn } from "@/lib/chat/browser-reads";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { get, tool } from "./client-api";
@@ -104,8 +105,9 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
           </h2>
           <p className="t-meta">{reach}</p>
         </div>
-        <Button size="sm" onClick={onClose} data-chat-close>
-          Close chat
+        <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title="Close chat">
+          <CloseIcon />
+          <span className="sr-only">Close chat</span>
         </Button>
       </div>
       {initial === null ? (
@@ -292,12 +294,14 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
               onKeyDown={onKey}
             />
             <Button type="submit" variant="primary" disabled={busy}>
-              Send
+              <SendIcon />
+              <span className="btn-label">Send</span>
             </Button>
           </div>
           <div className="compose-actions">
             {}
-            <label className={`${buttonClass({ size: "sm" })} file-button`}>
+            <label className={`${buttonClass({ size: "sm", variant: "quiet" })} file-button`}>
+              <AttachImageIcon />
               <span className="btn-label">Attach an image</span>
               <input id="chat-image" name="chat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
             </label>
@@ -414,8 +418,9 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   if (!available) return null;
   return (
     
-    <Button size="sm" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())}>
-      {working ? "Transcribing…" : recording ? "Stop and transcribe" : "Dictate"}
+    <Button size="sm" variant="quiet" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())}>
+      <MicIcon />
+      <span className="btn-label">{working ? "Transcribing…" : recording ? "Stop and transcribe" : "Dictate"}</span>
     </Button>
   );
 }

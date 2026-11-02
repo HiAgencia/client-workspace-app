@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useMedia } from "@/components/ui/use-media";
+import { DownIcon, UpIcon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { LOCALE } from "@/lib/dates";
@@ -116,11 +117,11 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
             Back
           </Button>
         )}
-        <Button size="sm" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}>
-          Previous
+        <Button size="sm" className="btn-icon" title="Previous message" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}>
+          <UpIcon />
         </Button>
-        <Button size="sm" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
-          Next
+        <Button size="sm" className="btn-icon" title="Next message" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
+          <DownIcon />
         </Button>
       </div>
       {phone ? more : <ModeSwitch value={mode} onChange={setMode} />}

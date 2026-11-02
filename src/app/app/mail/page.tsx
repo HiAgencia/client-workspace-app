@@ -4,6 +4,7 @@ import { Link } from "@/components/ui/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, ViewTransition, type ReactNode } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
+import { AddIcon, ExternalIcon } from "@/components/ui/icons";
 import { Field } from "@/components/ui/field";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
@@ -623,7 +624,8 @@ function OpenMessage({
   const bar = (
     <div ref={actions} className="mail-action-row">
       <Button size="sm" variant={answersFirst ? "control" : "primary"} onClick={() => void createTask()}>
-        Create task
+        <AddIcon />
+        <span className="btn-label">Create task</span>
       </Button>
       <Menu
         label="Answers a task…"
@@ -642,10 +644,12 @@ function OpenMessage({
           <Menu label="Link to…" name={`Link to… “${row.subject}”`} entries={entries} variant="control" className="mail-link-menu" finalFocus={linkFocus} />
           {isDemo ? (
             <Button size="sm" disabled aria-describedby="mail-gmail-why">
-              Open in Gmail
+              <ExternalIcon />
+              <span className="btn-label">Open in Gmail</span>
             </Button>
           ) : (
             <a className={buttonClass({ size: "sm" })} href={gmail} target="_blank" rel="noopener noreferrer">
+              <ExternalIcon />
               <span className="btn-label">Open in Gmail</span>
             </a>
           )}

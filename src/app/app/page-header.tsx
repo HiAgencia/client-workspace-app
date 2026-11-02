@@ -3,6 +3,7 @@
 import { Link } from "@/components/ui/link";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { ChatIcon, CloseIcon, FilterIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { usePiece } from "@/components/ui/use-piece";
 import { PRODUCT_NAME } from "@/lib/product";
@@ -146,6 +147,7 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
           setOpen(true);
         }}
       >
+        <FilterIcon />
         <span className="btn-label">Filter</span>
         {set > 0 && (
           <span className="pill page-filter-set" data-tone="accent">
@@ -175,8 +177,9 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
               <h2 id={titleId} className="t-title">
                 Filter
               </h2>
-              <Button size="sm" onClick={() => setOpen(false)}>
-                Close
+              <Button size="sm" variant="quiet" className="btn-icon" onClick={() => setOpen(false)} title="Close">
+                <CloseIcon />
+                <span className="sr-only">Close</span>
               </Button>
             </div>
             {everOpened && sheeted && <div className="filter-sheet-fields">{children}</div>}
@@ -191,6 +194,7 @@ const LAYOUTS: Array<{ value: PageLayout; label: string }> = [
   { value: "list", label: "List" },
   { value: "board", label: "Board" },
 ];
+
 
 
 
@@ -218,7 +222,8 @@ function ChatButton() {
   const { chat } = useWorkspace();
   return (
     <Button aria-expanded={chat.open} data-chat-toggle onClick={() => chat.setOpen(!chat.open)}>
-      Chat
+      <ChatIcon />
+      <span className="btn-label">Chat</span>
     </Button>
   );
 }

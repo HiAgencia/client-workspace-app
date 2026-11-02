@@ -4,6 +4,7 @@ import { Link } from "@/components/ui/link";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
+import { CloseIcon, DeleteIcon, DownIcon, DuplicateIcon, UpIcon, VersionsIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { RichEditor } from "@/components/ui/rich-editor";
@@ -219,10 +220,11 @@ export function TaskDetail() {
   const task = item ? taskFromItem(item) : null;
   const more: MenuEntry[] = task
     ? [
-        { kind: "action", label: "Duplicate", onSelect: () => void actions.duplicate(task) },
+        { kind: "action", label: "Duplicate", icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
         {
           kind: "action",
           label: "Versions",
+          icon: VersionsIcon,
           onSelect: () => {
             setShowVersions(true);
             requestAnimationFrame(() => document.getElementById(`${titleId}-versions`)?.focus({ preventScroll: false }));
@@ -233,6 +235,7 @@ export function TaskDetail() {
           kind: "action",
           label: "Delete",
           tone: "danger",
+          icon: DeleteIcon,
           onSelect: () => {
             void flush().then(() => {
               dialog.current?.close();
@@ -287,15 +290,34 @@ export function TaskDetail() {
                 {isSubtask && <span className="task-detail-kind"> · Subtask</span>}
               </p>
               <div className="task-detail-bar">
-                <Button size="sm" variant="quiet" disabled={index <= 0} onClick={() => step(-1)} aria-label={index <= 0 ? "Previous: this is the first task of the list" : undefined}>
-                  Previous
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  className="btn-icon"
+                  title="Previous"
+                  disabled={index <= 0}
+                  onClick={() => step(-1)}
+                  aria-label={index <= 0 ? "Previous: this is the first task of the list" : undefined}
+                >
+                  <UpIcon />
+                  <span className="sr-only">Previous</span>
                 </Button>
-                <Button size="sm" variant="quiet" disabled={index < 0 || index >= list.length - 1} onClick={() => step(1)} aria-label={index < 0 || index >= list.length - 1 ? "Next: this is the last task of the list" : undefined}>
-                  Next
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  className="btn-icon"
+                  title="Next"
+                  disabled={index < 0 || index >= list.length - 1}
+                  onClick={() => step(1)}
+                  aria-label={index < 0 || index >= list.length - 1 ? "Next: this is the last task of the list" : undefined}
+                >
+                  <DownIcon />
+                  <span className="sr-only">Next</span>
                 </Button>
                 <Menu label="More" about={`for “${inlinePlain(item.title)}”`} entries={more} />
-                <Button size="sm" onClick={close}>
-                  Close
+                <Button size="sm" variant="quiet" className="btn-icon" title="Close" onClick={close}>
+                  <CloseIcon />
+                  <span className="sr-only">Close</span>
                 </Button>
               </div>
             </header>

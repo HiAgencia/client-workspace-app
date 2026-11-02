@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
+import { AddIcon, CalendarIcon, MailIcon, OverviewIcon, SearchIcon, SettingsIcon, SignOutIcon, TasksIcon, TrashIcon, type Icon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { PRODUCT_NAME } from "@/lib/product";
@@ -57,6 +58,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
             startTask(current);
           }}
         >
+          <AddIcon />
           <span className="btn-label side-link-name">Add task</span>
           <kbd className="kbd side-key" aria-hidden="true">
             Q
@@ -72,6 +74,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
             openPalette();
           }}
         >
+          <SearchIcon />
           <span className="side-link-name">Search</span>
           <kbd className="kbd side-key" aria-hidden="true">
             {mac ? "⌘K" : "Ctrl K"}
@@ -83,24 +86,24 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           <ul className="side-list" aria-label="Views">
             <li>
               <Link href="/app" className="side-link side-view" aria-current={here("/app")}>
-                <ViewName name="Overview" detail="Your day on one page" />
+                <ViewName icon={OverviewIcon} name="Overview" detail="Your day on one page" />
               </Link>
             </li>
             <li>
               <Link href="/app/tasks" className="side-link side-view" aria-current={here("/app/tasks")}>
-                <ViewName name="Tasks" detail="All your tasks, by date" />
+                <ViewName icon={TasksIcon} name="Tasks" detail="All your tasks, by date" />
                 {due > 0 && <Count value={due} unit="due" spoken={`${due} overdue or due today`} />}
               </Link>
             </li>
             <li>
               <Link href="/app/calendar" className="side-link side-view" aria-current={here("/app/calendar")}>
-                <ViewName name="Calendar" detail="Events and dated tasks" />
+                <ViewName icon={CalendarIcon} name="Calendar" detail="Events and dated tasks" />
               </Link>
             </li>
             <li>
               {}
               <Link href="/app/mail" className="side-link side-view" aria-current={here("/app/mail")}>
-                <ViewName name="Mail" detail="For your tasks, then unread" />
+                <ViewName icon={MailIcon} name="Mail" detail="For your tasks, then unread" />
                 {mailNumber && <Count value={mailNumber.shown} spoken={mailNumber.spoken} />}
               </Link>
               {mailFigure?.why && (
@@ -116,20 +119,30 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
       </div>
       <div ref={foot} className="side-foot side-pieces">
         <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
+          <TrashIcon className="side-icon" />
           <span className="side-link-name">Trash</span>
         </Link>
         <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
+          <SettingsIcon className="side-icon" />
           <span className="side-link-name">Settings</span>
         </Link>
         {}
-        {who && (
-          <span className="t-meta side-who" title={who}>
-            {who}
-          </span>
-        )}
-        <Button size="sm" variant="quiet" className="side-sign-out" onClick={onSignOut}>
-          Sign out
-        </Button>
+        <div className="side-account">
+          {who && (
+            <>
+              <span className="side-avatar" aria-hidden="true">
+                {who.trim().charAt(0).toUpperCase()}
+              </span>
+              <span className="t-meta side-who" title={who}>
+                {who}
+              </span>
+            </>
+          )}
+          <Button size="sm" variant="quiet" className="btn-icon side-sign-out" onClick={onSignOut} title="Sign out">
+            <SignOutIcon />
+            <span className="sr-only">Sign out</span>
+          </Button>
+        </div>
       </div>
     </nav>
   );
@@ -152,12 +165,16 @@ export function useMac(): boolean {
 }
 
 
-function ViewName({ name, detail }: { name: string; detail: string }) {
+
+function ViewName({ icon: Glyph, name, detail }: { icon: Icon; name: string; detail: string }) {
   return (
-    <span className="side-view-text">
-      <span className="side-link-name">{name}</span>
-      <span className="side-view-detail">{detail}</span>
-    </span>
+    <>
+      <Glyph className="side-icon" />
+      <span className="side-view-text">
+        <span className="side-link-name">{name}</span>
+        <span className="sr-only">, {detail}</span>
+      </span>
+    </>
   );
 }
 
@@ -279,6 +296,7 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
                 </div>
               ) : (
                 <button type="button" className="side-link side-add" data-side-add={kind} onClick={() => setAdding(true)}>
+                  <AddIcon className="side-icon" />
                   <span className="side-link-name">{words.add}</span>
                 </button>
               )}

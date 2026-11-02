@@ -4,7 +4,7 @@
   "description": "Every task, note, calendar, and message of each client and project in one place, with a chat that acts on it when you ask.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f1f4f9",
+  "background_color": "#f7f7f7",
   "theme_color": "#ffffff",
   "icons": [
     {

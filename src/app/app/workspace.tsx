@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
+import { AddIcon, CloseIcon, MenuIcon } from "@/components/ui/icons";
 import { today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
 import { PRODUCT_NAME } from "@/lib/product";
@@ -427,8 +428,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       </a>
       <div className="shell" data-chat={chatColumn ? "open" : undefined}>
         <header className="topbar">
-          <Button className="drawer-trigger" size="sm" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
-            Menu
+          <Button className="drawer-trigger btn-icon" size="sm" variant="quiet" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
+            <MenuIcon />
+            <span className="sr-only">Menu</span>
           </Button>
           <Link href="/app" className="brand" aria-label={`${PRODUCT_NAME}, Overview`}>
             <BrandMark className="brand-mark" />
@@ -450,7 +452,8 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       </div>
       {}
       <Button variant="primary" className="add-task-float" data-add-task-float onClick={() => startTask(currentNode)} aria-keyshortcuts="Q">
-        Add task
+        <AddIcon />
+        <span className="btn-label">Add task</span>
       </Button>
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -568,8 +571,9 @@ function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => vo
           <h2 id="drawer-title" className="t-title">
             Menu
           </h2>
-          <Button size="sm" onClick={onClose}>
-            Close
+          <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} title="Close">
+            <CloseIcon />
+            <span className="sr-only">Close</span>
           </Button>
         </div>
         <SideNav inDrawer onLeave={onClose} onSignOut={onSignOut} />

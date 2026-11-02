@@ -144,7 +144,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
       <div className="page page-boxes" data-overview data-today={now ?? undefined}>
         <PageHeader
           title="Overview"
-          count={now ? `${longDay(now)}. What is due, what is on the calendar and what arrived.` : <span className="page-count-wait" aria-hidden="true" />}
+          count={now ? longDay(now) : <span className="page-count-wait" aria-hidden="true" />}
           filters={
             <>
               <TasksPlaceFilter place={place} onChange={(next) => set({ place: placeValue(next), account: null })} tree={tree} now={now} />

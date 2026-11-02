@@ -1,6 +1,7 @@
 // What escapes the design system, counted on every `pnpm check`. Each count has a cap that only goes down; today every
 // cap is zero. Exits 1 listing each finding, 0 with the counts it read.
-//   - icons from a stock set (the product draws its own marks or says it in words);
+//   - icons from outside the product's one set: Lucide, imported only in src/components/ui/icons.tsx, where each concept
+//     takes its one icon;
 //   - native pickers in the screens (select, date, checkbox): the product's own controls replace them;
 //   - color literals outside the roles (src/app/styles/tokens.css);
 //   - text sizes and colors written as Tailwind utilities instead of the roles' classes;
@@ -32,9 +33,16 @@ const productName = /PRODUCT_NAME = "([^"]+)"/.exec(readFileSync(join(src, "lib"
 
 const checks = [
   {
-    name: "stock icon sets",
+    name: "icons outside the product's set",
     cap: 0,
-    find: () => findIn(code, /lucide|heroicons|react-icons|@tabler\/icons|feather-icons/g),
+    // One family, Lucide, and one door to it: the icons module names each concept's icon, so a concept never takes two.
+    find: () => [
+      ...findIn(code, /heroicons|react-icons|@tabler\/icons|feather-icons|phosphor-icons|@radix-ui\/react-icons/g),
+      ...findIn(
+        code.filter((f) => rel(f) !== "src/components/ui/icons.tsx"),
+        /from ["']lucide-react["']/g,
+      ),
+    ],
   },
   {
     name: "native pickers in the screens",

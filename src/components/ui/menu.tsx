@@ -3,20 +3,24 @@
 import { Menu as Base } from "@base-ui/react/menu";
 import type { ReactNode } from "react";
 import { buttonClass } from "./button";
+import { cx } from "@/lib/utils";
+import { MoreIcon, type Icon } from "./icons";
 import { usePopupContainer } from "./popup-layer";
 import "@/app/styles/task.css";
 
 
 
 
+
 export type MenuEntry =
-  | { kind: "action"; label: string; onSelect: () => void; disabled?: boolean; tone?: "danger"; detail?: string; id?: string }
-  | { kind: "choice"; label: string; value: string | null; options: Array<{ value: string; label: string }>; onChoose: (value: string) => void }
-  | { kind: "submenu"; label: string; detail?: string; entries: MenuEntry[] }
+  | { kind: "action"; label: string; onSelect: () => void; disabled?: boolean; tone?: "danger"; detail?: string; id?: string; icon?: Icon }
+  | { kind: "choice"; label: string; value: string | null; options: Array<{ value: string; label: string }>; onChoose: (value: string) => void; icon?: Icon }
+  | { kind: "submenu"; label: string; detail?: string; entries: MenuEntry[]; icon?: Icon }
   | { kind: "group"; label: string; entries: MenuEntry[] }
   | { kind: "separator" };
 
 type MenuProps = {
+  
   
   
   label: string;
@@ -37,10 +41,22 @@ type MenuProps = {
 
 export function Menu({ label, about, name, entries, variant = "quiet", className, onOpenChange, finalFocus }: MenuProps) {
   const container = usePopupContainer();
+  const dots = label === "More";
   return (
     <Base.Root modal={false} onOpenChange={(open) => onOpenChange?.(open)}>
-      <Base.Trigger className={buttonClass({ variant, size: "sm", className: className ? `menu-trigger ${className}` : "menu-trigger" })} aria-label={name ?? (about ? `${label} ${about}` : undefined)}>
-        <span className="btn-label">{label}</span>
+      <Base.Trigger
+        className={buttonClass({ variant, size: "sm", className: cx("menu-trigger", dots && "btn-icon", className) })}
+        aria-label={name ?? (about ? `${label} ${about}` : undefined)}
+        title={dots ? label : undefined}
+      >
+        {dots ? (
+          <>
+            <MoreIcon />
+            <span className="sr-only">{label}</span>
+          </>
+        ) : (
+          <span className="btn-label">{label}</span>
+        )}
       </Base.Trigger>
       <Base.Portal container={container}>
         <Base.Positioner className="positioner" sideOffset={6} align="end">
@@ -69,6 +85,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
             label={entry.label}
             onClick={() => entry.onSelect()}
           >
+            {entry.icon && <entry.icon className="menu-item-icon" />}
             <span className="menu-item-label">{entry.label}</span>
             {entry.detail && <span className="menu-item-detail">{entry.detail}</span>}
           </Base.Item>
@@ -84,6 +101,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
         return (
           <Base.SubmenuRoot key={key}>
             <Base.SubmenuTrigger className="option menu-item menu-sub" label={entry.label}>
+              {entry.icon && <entry.icon className="menu-item-icon" />}
               <span className="menu-item-label">{entry.label}</span>
               <span className="menu-item-detail">{entry.options.find((option) => option.value === entry.value)?.label ?? ""}</span>
             </Base.SubmenuTrigger>
@@ -106,6 +124,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
         return (
           <Base.SubmenuRoot key={key}>
             <Base.SubmenuTrigger className="option menu-item menu-sub" label={entry.label}>
+              {entry.icon && <entry.icon className="menu-item-icon" />}
               <span className="menu-item-label">{entry.label}</span>
               {entry.detail && <span className="menu-item-detail">{entry.detail}</span>}
             </Base.SubmenuTrigger>

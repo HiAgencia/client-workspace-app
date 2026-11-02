@@ -1,13 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Wix_Madefor_Display, Wix_Madefor_Text } from "next/font/google";
+import { Inter } from "next/font/google";
 import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
 import { BROWSER_BAR, THEME_KEY } from "@/lib/theme";
 import "./globals.css";
 
 
 
-const display = Wix_Madefor_Display({ variable: "--font-madefor-display", subsets: ["latin"] });
-const text = Wix_Madefor_Text({ variable: "--font-madefor-text", subsets: ["latin"] });
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
 
 
 
@@ -41,7 +40,7 @@ const BEFORE_PAINT = `(function(){var d=document.documentElement,k=${JSON.string
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${display.variable} ${text.variable}`} suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: BEFORE_PAINT }} />
       </head>
