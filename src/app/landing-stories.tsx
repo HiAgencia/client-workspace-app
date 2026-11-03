@@ -21,7 +21,7 @@ import { count } from "@/lib/count";
 import { ASSISTANT_MODELS, ASSISTANT_NAME } from "@/lib/product";
 import { PathText, SenderMark } from "./app/item-parts";
 import { TaskRow, TODAY } from "./landing-shot";
-import { Scene, VisitorStamp, type Frame, type SceneGlyphs } from "./landing-motion";
+import { RevealColumn, Scene, VisitorStamp, type Frame, type SceneGlyphs } from "./landing-motion";
 
 
 
@@ -519,8 +519,9 @@ function AgentScene() {
 }
 
 export function LandingStories({ endpoint }: { endpoint: string }) {
+  
   return (
-    <div className="stories">
+    <RevealColumn className="stories">
       <Story id="story-places" title="Every client keeps its own accounts." scene={<PlacesScene />}>
         Hang a Google account on the client or project it serves. Its calendar and its mail land there, beside the tasks, and an
         account on a client reaches every one of its projects.
@@ -561,6 +562,6 @@ export function LandingStories({ endpoint }: { endpoint: string }) {
         Issue a token on a client or a project and add one block to the repository’s .mcp.json. The agent asks what changed
         since its last session, and what it adds shows up marked as its own.
       </Story>
-    </div>
+    </RevealColumn>
   );
 }

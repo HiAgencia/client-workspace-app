@@ -631,6 +631,18 @@
   align-items: center;
   gap: clamp(1.75rem, 1rem + 2vw, 2.5rem);
 }
+.stories[data-reveal] > .story > * {
+  transition:
+    opacity var(--dur-enter) var(--ease-enter),
+    translate var(--dur-enter) var(--ease-enter);
+}
+.stories[data-reveal] > .story > :nth-child(2) {
+  transition-delay: calc(var(--enter-step) * 2);
+}
+.stories[data-reveal] > .story:not([data-entered]) > * {
+  opacity: 0.001;
+  translate: 0 var(--enter-rise);
+}
 @media (width >= 62rem) {
   .story {
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);

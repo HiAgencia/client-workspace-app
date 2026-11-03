@@ -158,6 +158,45 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
 }
 
 
+
+
+const REVEAL_MARGIN = "100000px 0px -12% 0px";
+
+
+
+
+
+export function RevealColumn({ className, children }: { className?: string; children: ReactNode }) {
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = root.current;
+    if (!node || window.matchMedia(REDUCED).matches) return;
+    const line = window.innerHeight * 0.88;
+    const waiting = [...node.children].filter((part) => part.getBoundingClientRect().top >= line);
+    if (waiting.length === 0) return;
+    for (const part of node.children) if (!waiting.includes(part)) part.setAttribute("data-entered", "");
+    node.setAttribute("data-reveal", "");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.setAttribute("data-entered", "");
+          observer.unobserve(entry.target);
+        }
+      },
+      { rootMargin: REVEAL_MARGIN },
+    );
+    waiting.forEach((part) => observer.observe(part));
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={root} className={className}>
+      {children}
+    </div>
+  );
+}
+
+
 export function VisitorDay() {
   const now = useSyncExternalStore(noSubscription, today, () => null);
   return <>{now ? longDay(now) : "\u00a0"}</>;
