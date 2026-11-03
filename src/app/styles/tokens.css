@@ -153,6 +153,10 @@
   --press-scale: 0.97;
   --press-scale-mark: 0.9;
   --opacity-press: 0.72;
+  --dur-enter: 520ms;
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --enter-rise: 0.75rem;
+  --enter-step: 45ms;
   --layer-header: 30;
   --layer-float: 40;
   --layer-notice: 50;

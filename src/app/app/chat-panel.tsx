@@ -117,7 +117,7 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
   }, [nodeId]);
 
   return (
-    <section className="card chat" aria-labelledby="chat-title" data-chat={nodeId ?? "workspace"}>
+    <section className="card chat" aria-labelledby="chat-title" data-chat={nodeId ?? "workspace"} data-cascade>
       <div className="chat-head">
         <span className="chat-icon" aria-hidden="true">
           <MetaMark />

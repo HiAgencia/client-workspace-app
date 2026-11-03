@@ -1257,6 +1257,49 @@ textarea.field {
     translate: 0 0.5rem;
   }
 }
+@keyframes enter-up {
+  from {
+    opacity: 0.001;
+    translate: 0 var(--enter-rise);
+  }
+}
+[data-cascade] > * {
+  animation: enter-up var(--dur-enter) var(--ease-enter) calc(var(--cascade-from, 0ms) + var(--cascade-i, 0) * var(--enter-step))
+    backwards;
+}
+[data-cascade] > :nth-child(2) {
+  --cascade-i: 1;
+}
+[data-cascade] > :nth-child(3) {
+  --cascade-i: 2;
+}
+[data-cascade] > :nth-child(4) {
+  --cascade-i: 3;
+}
+[data-cascade] > :nth-child(5) {
+  --cascade-i: 4;
+}
+[data-cascade] > :nth-child(6) {
+  --cascade-i: 5;
+}
+[data-cascade] > :nth-child(7) {
+  --cascade-i: 6;
+}
+[data-cascade] > :nth-child(8) {
+  --cascade-i: 7;
+}
+[data-cascade] > :nth-child(9) {
+  --cascade-i: 8;
+}
+[data-cascade] > :nth-child(10) {
+  --cascade-i: 9;
+}
+[data-cascade] > :nth-child(11) {
+  --cascade-i: 10;
+}
+[data-cascade] > :nth-child(n + 12) {
+  --cascade-i: 11;
+}
 @keyframes fade-in {
   from {
     opacity: 0.001;

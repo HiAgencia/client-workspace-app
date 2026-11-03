@@ -36,24 +36,25 @@ export function nameSeed(name: string): number {
 
 
 
+
 const SIGNS: Record<OrgSign, ReactElement> = {
   platform: (
     <>
-      <rect width="32" height="32" rx="8" fill="var(--demo-platform-tile)" />
+      <circle cx="16" cy="16" r="16" fill="var(--demo-platform-tile)" />
       <path d="M12.2 10.6 6.9 16l5.3 5.4M19.8 10.6l5.3 5.4-5.3 5.4" fill="none" stroke="var(--demo-platform-sign)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       <path d="m17.6 9.4-3.2 13.2" stroke="var(--demo-platform-accent)" strokeWidth="2.4" strokeLinecap="round" />
     </>
   ),
   pos: (
     <>
-      <rect width="32" height="32" rx="8" fill="var(--demo-pos-tile)" />
+      <circle cx="16" cy="16" r="16" fill="var(--demo-pos-tile)" />
       <path d="M10.5 7.5h11v17.6l-1.83-1.3-1.84 1.3L16 23.8l-1.83 1.3-1.84-1.3-1.83 1.3z" fill="var(--demo-pos-sign)" />
       <path d="M13.3 12.3h5.4M13.3 15.6h5.4M13.3 18.9h3.2" stroke="var(--demo-pos-tile)" strokeWidth="1.5" strokeLinecap="round" />
     </>
   ),
   mill: (
     <>
-      <rect width="32" height="32" rx="8" fill="var(--demo-mill-tile)" />
+      <circle cx="16" cy="16" r="16" fill="var(--demo-mill-tile)" />
       <g fill="var(--demo-mill-sign)">
         <path d="M15.25 12.5h1.5v14h-1.5z" />
         <ellipse cx="16" cy="7.6" rx="1.7" ry="3" />
@@ -68,7 +69,7 @@ const SIGNS: Record<OrgSign, ReactElement> = {
   ),
   hub: (
     <>
-      <rect width="32" height="32" rx="8" fill="var(--demo-hub-tile)" />
+      <circle cx="16" cy="16" r="16" fill="var(--demo-hub-tile)" />
       <path d="M10 10l12 12M22 10 10 22" stroke="var(--demo-hub-sign)" strokeWidth="1.6" />
       <g fill="var(--demo-hub-sign)">
         <circle cx="16" cy="16" r="3.6" />
@@ -85,7 +86,7 @@ export function OrgMark({ sign }: { sign: OrgSign }) {
   return (
     <svg viewBox="0 0 32 32" className="sender-art" data-sign={sign} aria-hidden="true" focusable="false">
       {SIGNS[sign]}
-      <rect className="sender-art-rim" x="0.5" y="0.5" width="31" height="31" rx="7.5" />
+      <circle className="sender-art-rim" cx="16" cy="16" r="15.5" />
     </svg>
   );
 }

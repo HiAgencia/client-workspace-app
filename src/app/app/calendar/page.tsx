@@ -289,7 +289,7 @@ function Calendar() {
     return () => {
       live = false;
     };
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, rangeKey, version, round]);
 
@@ -337,7 +337,7 @@ function Calendar() {
       counts.set(where, eventsOfAccount.filter((event) => byPlace.eventIn(event, where)).length + rangeTasks.filter((task) => byPlace.taskIn(task, where)).length);
     }
     return counts;
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, tasksAll, tree, chosen, byPlace]);
   const accountCounts = countsByAccount(loaded?.accounts ?? [], tree, (some) => placeEvents.filter((event) => event.origin === "google" && ofChosen(event, some)).length);
@@ -1321,7 +1321,7 @@ function EventComposer({
       <PopupLayerProvider container={ref}>
         {kept && (
           <form
-            className="cal-dialog-in"
+            className="cal-dialog-in" data-cascade
             onSubmit={(event) => {
               event.preventDefault();
               void add();
@@ -1472,7 +1472,7 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
   return (
     <dialog {...props} className="dialog cal-dialog" aria-labelledby="event-title" data-event-detail={shown.id}>
       <PopupLayerProvider container={ref}>
-        <div className="cal-dialog-in">
+        <div className="cal-dialog-in" data-cascade>
           <div className="cal-dialog-head">
             <p className="t-meta cal-dialog-origin">
               {shown.origin === "local" ? <BrandMark className="cal-origin-mark" /> : <GoogleCalendarMark className="cal-origin-mark" />}

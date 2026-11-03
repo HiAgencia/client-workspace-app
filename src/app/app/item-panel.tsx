@@ -194,7 +194,7 @@ export function ItemPanel({
       }}
     >
       {current && (
-        <div className="panel-in">
+        <div className="panel-in" data-cascade>
           <header className="panel-head">
             <div className="panel-title">
               <p key={current.type} className="t-label panel-kind fade-enter" data-kind={current.type}>

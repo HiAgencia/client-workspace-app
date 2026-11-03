@@ -55,7 +55,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     return () => {
       live = false;
     };
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
@@ -295,7 +295,7 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
   const [atOnce, setAtOnce] = useState(false);
   useLayoutEffect(() => {
     if (inView.length > 0 && inView.every((id) => reported.current[id])) setAtOnce(true);
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
@@ -523,7 +523,7 @@ function Box({
       aria-labelledby={titleId}
       data-shown={shown || undefined}
       aria-busy={!shown || spec.busy || undefined}
-      style={{ "--enter-delay": `${Math.min(index, 6) * 55}ms` } as CSSProperties}
+      style={{ "--enter-delay": `calc(var(--enter-step) * ${3 + Math.min(index, 8)})` } as CSSProperties}
     >
       <header
         className={cx("box-head", draggable && !fixed && "box-head-drag")}
@@ -771,7 +771,7 @@ export function useBoxRead<T>(
     return () => {
       live = false;
     };
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version, round]);
   const failed = error?.key === key ? error.message : null;

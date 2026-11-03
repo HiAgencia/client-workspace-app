@@ -244,7 +244,7 @@ export function TaskDetail() {
     void readTaskItem(id).then((found) => {
       if (found && current.current === id) setItem((was) => (was ? { ...found, body: was.body } : found));
     });
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
@@ -521,7 +521,8 @@ function TaskBody(props: BodyProps) {
   const hours = item.dueTime ? dueTimeOptions(item.dueTime) : dueTimeOptions(null).filter((option) => option.value !== NO_TIME);
 
   return (
-    <div className={cx("task-detail-body", props.arriving && "fade-enter")}>
+    
+    <div className={cx("task-detail-body", props.arriving && "fade-enter")} data-cascade>
       <div className="task-detail-title-row">
         <TaskCircle className="task-check" title={item.title} priority={item.priority} done={item.status === "done"} onToggle={props.onToggle} />
         <TitleField key={item.id} id={ids.title} title={item.title} headingRef={props.headingRef} onSave={props.onTitle} />
@@ -826,7 +827,7 @@ function useTaskMail(task: Item) {
     return () => {
       live = false;
     };
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repliesKey, version]);
   const shown = replies?.key === repliesKey ? replies.read : null;

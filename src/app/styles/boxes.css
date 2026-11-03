@@ -24,7 +24,7 @@
   border-radius: var(--radius-card);
   background: var(--card);
   box-shadow: var(--shadow-card);
-  animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+  animation: enter-up var(--dur-enter) var(--ease-enter) calc(var(--enter-step) * 2) backwards;
   transition: opacity var(--dur) var(--ease-std);
 
   &[data-stale] {
@@ -420,7 +420,7 @@
   }
 }
 .box {
-  animation: rise-in var(--dur-slow) var(--ease-out) var(--enter-delay, 0s) backwards;
+  animation: enter-up var(--dur-enter) var(--ease-enter) var(--enter-delay, calc(var(--enter-step) * 3)) backwards;
 }
 .box:not([data-shown]) {
   visibility: hidden;
@@ -1618,9 +1618,6 @@
     height: 100%;
   }
 }
-.sender-mark[data-art="org"] {
-  border-radius: 25%;
-}
 .sender-mark[data-art="person"] > .sender-art {
   clip-path: circle(50%);
 }
@@ -1983,6 +1980,12 @@
   justify-content: flex-start;
   gap: 1rem 2.5rem;
   padding-bottom: 0.25rem;
+  & > .node-strip-group {
+    animation: enter-up var(--dur-enter) var(--ease-enter) calc(var(--enter-step) * 2) backwards;
+  }
+  & > .node-strip-group + .node-strip-group {
+    animation-delay: calc(var(--enter-step) * 3);
+  }
 }
 .node-strip-group {
   display: flex;

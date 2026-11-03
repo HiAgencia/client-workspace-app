@@ -13,6 +13,7 @@ import type { PublicConfig } from "@/lib/env";
 import { PRODUCT_NAME } from "@/lib/product";
 import { sessionPerson, type SessionPerson } from "@/lib/session-person";
 import { browserClient } from "@/lib/supabase/browser";
+import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import { ChatDock, useDocked } from "./chat-panel";
 import { forgetLayout, peekTool, post, tool, type Item, type TreeNode } from "./client-api";
 import { EARLY_TREE, treeInput } from "./early-reads";
@@ -70,6 +71,9 @@ type Workspace = {
   
   person: Person | null;
   signOut: () => void;
+  
+  
+  switchAccount: () => Promise<void>;
   refreshTree: () => Promise<void>;
   
   version: number;
@@ -209,7 +213,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const accountsKey = mailAccounts?.map((account) => account.id).join() ?? "";
   useEffect(() => {
     for (const account of mailAccounts ?? []) mailStore.count(account);
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsKey, mailStore, version]);
 
@@ -257,7 +261,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       if (!known) return;
       for (const page of MAIN_PAGES) if (page !== window.location.pathname) warmPage(page, known);
     });
-    
+
   }, [treeKnown]);
   useEffect(() => {
     let last = "";
@@ -451,16 +455,28 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => window.removeEventListener("keydown", onKey);
   }, [currentNode]);
 
-  const signOut = useCallback(async () => {
+  
+  const forgetPerson = useCallback(async () => {
     await forgetLayout();
-    await browserClient(config).auth.signOut();
     forgetLastNode();
-    
     forgetReads();
     treeOfLoad = undefined;
+  }, []);
+  const signOut = useCallback(async () => {
+    await forgetPerson();
+    await browserClient(config).auth.signOut();
     router.replace("/");
-  }, [config, router]);
+  }, [config, router, forgetPerson]);
   const leave = useCallback(() => void signOut(), [signOut]);
+  
+  
+  const switchAccount = useCallback(async () => {
+    await forgetPerson();
+    await browserClient(config).auth.signOut({ scope: "local" });
+    const { error } = await signInWithGoogle(config);
+    
+    if (error) router.replace("/?auth=failed");
+  }, [config, router, forgetPerson]);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   
@@ -516,7 +532,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => cancelAnimationFrame(frame);
   }, []);
   const chat: Chat = { scope: chatScope, open: chatOpen, setOpen: setChatOpen };
-  const value: Workspace = { config, tree, treeError, taskCounts, generalTasks, notePlaces, mailAccounts, mailWaiting, mailStore, mailFigure, person, signOut: leave, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
+  const value: Workspace = { config, tree, treeError, taskCounts, generalTasks, notePlaces, mailAccounts, mailWaiting, mailStore, mailFigure, person, signOut: leave, switchAccount, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
   const chatColumn = docked && chatOpen && chatScope !== undefined;
 
   return (
@@ -686,7 +702,7 @@ function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => vo
         if (dialog.current) delete dialog.current.dataset.downOutside;
       }}
     >
-      <div className="drawer-in">
+      <div className="drawer-in" data-cascade>
         <div className="drawer-head">
           <h2 id="drawer-title" className="t-title">
             Menu

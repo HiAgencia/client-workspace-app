@@ -6,7 +6,8 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 
 
-export type Pace = { fast: number; base: number; slow: number; out: string; in: string; std: string };
+
+export type Pace = { fast: number; base: number; slow: number; out: string; in: string; std: string; enter: number; enterEase: string; step: number; rise: string };
 
 
 export function durationOf(value: string): number {
@@ -26,9 +27,22 @@ export function pace(): Pace | null {
   if (reducedMotion()) return null;
   const root = getComputedStyle(document.documentElement);
   const read = (name: string) => root.getPropertyValue(name).trim();
-  const motion = { fast: durationOf(read("--dur-fast")), base: durationOf(read("--dur")), slow: durationOf(read("--dur-slow")), out: read("--ease-out"), in: read("--ease-in"), std: read("--ease-std") };
+  const motion = {
+    fast: durationOf(read("--dur-fast")),
+    base: durationOf(read("--dur")),
+    slow: durationOf(read("--dur-slow")),
+    out: read("--ease-out"),
+    in: read("--ease-in"),
+    std: read("--ease-std"),
+    enter: durationOf(read("--dur-enter")),
+    enterEase: read("--ease-enter"),
+    step: durationOf(read("--enter-step")),
+    rise: read("--enter-rise"),
+  };
   
   if (!motion.fast || !motion.base || !motion.slow || !motion.out || !motion.in || !motion.std) return null;
+  
+  if (!motion.enter || !motion.enterEase || !motion.rise) return { ...motion, enter: motion.slow, enterEase: motion.out, step: 0, rise: "0.5rem" };
   return motion;
 }
 
@@ -92,6 +106,8 @@ export type FlipOptions = {
   
   
   arrangement?: string;
+  
+  cascade?: boolean;
 };
 
 
@@ -295,6 +311,24 @@ function flush() {
 
 function entrances(el: HTMLElement, subtree: boolean): CSSAnimation[] {
   return el.getAnimations({ subtree }).filter((animation): animation is CSSAnimation => animation instanceof CSSAnimation && animation.effect?.getComputedTiming().iterations !== Infinity);
+}
+
+
+
+
+
+const CASCADE_MOST = 11;
+function cascade(pieces: Map<string, HTMLElement>, motion: Pace) {
+  const bottom = window.innerHeight;
+  let step = 0;
+  for (const el of pieces.values()) {
+    if (entrances(el, false).length > 0) continue;
+    if (el.getBoundingClientRect().top > bottom) continue;
+    const timing = { duration: motion.enter, delay: Math.min(step, CASCADE_MOST) * motion.step, easing: motion.enterEase, fill: "backwards" as const };
+    run(el, [{ opacity: 0.001 }, { opacity: 1 }], timing);
+    run(el, [{ translate: `0 ${motion.rise}` }, { translate: "0 0" }], { ...timing, composite: "add" });
+    step++;
+  }
 }
 
 
@@ -530,7 +564,7 @@ export function useFlip(host: RefObject<HTMLElement | null>, options: FlipOption
       changes.disconnect();
       el.removeEventListener("scroll", again, { capture: true });
     };
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
@@ -548,10 +582,19 @@ function commit(host: HTMLElement, state: HostState) {
   if (!motion || (state.mounted && (rearranged || arrived.length > MOST || departed.length > MOST))) {
     state.mounted = true;
     state.placed = place(host, pieces, items);
+    
+    
+    
+    if (motion && rearranged) {
+      for (const animation of host.getAnimations({ subtree: true })) if (animation instanceof CSSTransition) animation.finish();
+      if (state.options.cascade !== false) cascade(pieces, motion);
+    }
     return;
   }
 
   if (!state.mounted) {
+    
+    if (pieces.size === 0) return;
     
     state.mounted = true;
     if (state.options.share) {
@@ -559,6 +602,7 @@ function commit(host: HTMLElement, state: HostState) {
       if (arrived.length) schedule();
     }
     state.placed = place(host, pieces, items);
+    if (state.options.cascade !== false) cascade(pieces, motion);
     return;
   }
 

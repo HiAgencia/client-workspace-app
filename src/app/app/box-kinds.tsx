@@ -217,7 +217,7 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
           {shown
             .filter((group) => zoneOf(group.key) === zone)
             .map((group) => (
-              <GroupSection key={group.key} group={group} placeId={placeId}>
+              <GroupSection key={group.key} group={group} layout={layout} placeId={placeId}>
                 {group.days ? (
                   <>
                     {group.days.length === 0 && <p className="t-help group-empty">{group.empty}</p>}
@@ -253,12 +253,13 @@ const ZONES = ["now", "ahead", "rest"] as const;
 const zoneOf = (group: string) => (group === "overdue" || group === "today" ? "now" : group === "upcoming" ? "ahead" : "rest");
 
 
-function GroupSection({ group, placeId, children }: { group: Group; placeId: string | null; children: ReactNode }) {
+function GroupSection({ group, layout, placeId, children }: { group: Group; layout: "list" | "board"; placeId: string | null; children: ReactNode }) {
   const add = useQuickAddInline({ day: group.add ?? null, placeId });
   const adds = group.add !== undefined;
   
+  
   const section = useRef<HTMLElement>(null);
-  useFlip(section, { items: ":scope > .group-day" });
+  useFlip(section, { items: ":scope > .group-day", arrangement: layout });
   return (
     <section ref={section} className="group" data-group={group.key} data-flip-key={`group:${group.key}`} aria-labelledby={`group-${group.key}`}>
       <div className="group-top">
@@ -668,7 +669,7 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
   const key = inPlace?.map((entry) => entry.id).join() ?? "";
   useEffect(() => {
     for (const entry of inPlace ?? []) mailStore.list(entry);
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version, round, mailStore]);
   const picked = chosenAccounts(account, inPlace ?? [], tree);

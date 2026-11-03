@@ -509,7 +509,7 @@ function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: st
 
   return (
     <dialog ref={dialog} className="dialog rename-dialog" aria-labelledby="rename-title" onClose={onClose}>
-      <form className="rename-form" onSubmit={(event) => void submit(event)}>
+      <form className="rename-form" onSubmit={(event) => void submit(event)} data-cascade>
         <h2 id="rename-title" className="t-title">
           Rename
         </h2>

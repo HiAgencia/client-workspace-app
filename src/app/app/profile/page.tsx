@@ -5,9 +5,10 @@ import { Avatar } from "@/components/ui/avatar";
 import { GoogleMark } from "@/components/ui/brands";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { SignOutIcon } from "@/components/ui/icons";
+import { SignOutIcon, SwitchAccountIcon } from "@/components/ui/icons";
 import { NAME_MAX, nameToStore } from "@/lib/session-person";
 import { browserClient } from "@/lib/supabase/browser";
+import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import { BoxWait } from "../boxes";
 import { PageHeader } from "../page-header";
 import { useWorkspace, type Person } from "../workspace";
@@ -41,8 +42,10 @@ export default function ProfilePage() {
 }
 
 function ProfileBox({ person }: { person: Person }) {
-  const { config, saving, signOut } = useWorkspace();
+  const { config, saving, signOut, switchAccount } = useWorkspace();
   const [draft, setDraft] = useState<string | null>(null);
+  
+  const [switching, setSwitching] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   
   const shown = draft ?? person.name ?? "";
@@ -114,15 +117,30 @@ function ProfileBox({ person }: { person: Person }) {
             {person.googleName ? "How the workspace names you. Leave it empty to use the name on your Google account." : "How the workspace names you."}
           </p>
         </div>
+        {}
         <div className="settings-line profile-session">
           <p className="t-help profile-signed">
             <GoogleMark />
-            <span>Signed in with Google.</span>
+            <span>Signed in with Google. Each Google account has a workspace of its own.</span>
           </p>
-          <Button onClick={signOut} data-sign-out>
-            <SignOutIcon />
-            <span className="btn-label">Sign out</span>
-          </Button>
+          <div className="profile-actions">
+            <Button
+              onClick={() => {
+                setSwitching(true);
+                void switchAccount();
+              }}
+              disabled={switching}
+              aria-busy={switching}
+              data-switch-account
+            >
+              <SwitchAccountIcon />
+              <span className="btn-label">Switch account</span>
+            </Button>
+            <Button onClick={signOut} disabled={switching} data-sign-out>
+              <SignOutIcon />
+              <span className="btn-label">Sign out</span>
+            </Button>
+          </div>
         </div>
       </div>
     </section>
@@ -130,8 +148,11 @@ function ProfileBox({ person }: { person: Person }) {
 }
 
 
+
 function DemoProfile() {
-  const { signOut } = useWorkspace();
+  const { config, signOut } = useWorkspace();
+  const [signing, setSigning] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   return (
     <section className="box settings-box profile-box" aria-labelledby="profile-title" data-shown="" data-profile="demo">
       <header className="box-head profile-head">
@@ -140,17 +161,41 @@ function DemoProfile() {
           <h2 id="profile-title" className="t-title box-title" tabIndex={-1}>
             Demo session
           </h2>
-          <p className="t-meta profile-email">A workspace of sample clients and projects</p>
+          <p className="t-meta profile-email">Sample clients and projects</p>
         </div>
       </header>
       <div className="box-body">
         <div className="settings-line profile-session">
           <p className="t-help">The demo has no profile. Sign in with Google to keep a workspace of your own.</p>
-          <Button onClick={signOut} data-sign-out>
-            <SignOutIcon />
-            <span className="btn-label">Sign out</span>
-          </Button>
+          <div className="profile-actions">
+            <Button
+              onClick={() => {
+                setSigning(true);
+                setFailed(null);
+                void signInWithGoogle(config).then(({ error }) => {
+                  if (!error) return;
+                  setSigning(false);
+                  setFailed(error.message);
+                });
+              }}
+              disabled={signing}
+              aria-busy={signing}
+              data-sign-in
+            >
+              <GoogleMark />
+              <span className="btn-label">Sign in with Google</span>
+            </Button>
+            <Button onClick={signOut} disabled={signing} data-sign-out>
+              <SignOutIcon />
+              <span className="btn-label">Sign out</span>
+            </Button>
+          </div>
         </div>
+        {failed && (
+          <p role="alert" className="inline-note" data-tone="alert">
+            Google sign-in is not available: {failed}
+          </p>
+        )}
       </div>
     </section>
   );

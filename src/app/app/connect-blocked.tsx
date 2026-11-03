@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { GoogleMark } from "@/components/ui/brands";
 import { Button } from "@/components/ui/button";
-import { browserClient } from "@/lib/supabase/browser";
+import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import { useWorkspace } from "./workspace";
 
 
@@ -22,8 +22,7 @@ export function ConnectBlockedNote({ reason, samples }: { reason: ConnectBlocked
   async function signIn() {
     setBusy(true);
     setFailed(null);
-    const redirectTo = new URL("/auth/callback", window.location.origin).toString();
-    const { error } = await browserClient(config).auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+    const { error } = await signInWithGoogle(config);
     if (error) {
       setBusy(false);
       setFailed(error.message);

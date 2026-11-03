@@ -574,10 +574,19 @@
   column-gap: 0.875rem;
   row-gap: 0.125rem;
   align-items: center;
+}
+.works-mark {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--card-rim), var(--shadow-control);
 
   & > .logo {
-    --icon: 1.75rem;
-    grid-row: span 2;
+    --icon: 1.375rem;
   }
 }
 .works-name {

@@ -18,6 +18,12 @@
   grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr);
   flex: 1 1 auto;
   gap: var(--gap-cards);
+  & > * {
+    animation: enter-up var(--dur-enter) var(--ease-enter) calc(var(--enter-step) * 3) backwards;
+  }
+  & > :nth-child(2) {
+    animation-delay: calc(var(--enter-step) * 4);
+  }
 }
 @media (width >= 64rem) {
   .main:has(> .mail-page) {

@@ -172,7 +172,7 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
         }}
       >
         <PopupLayerProvider container={dialog}>
-          <div className="filter-sheet-in">
+          <div className="filter-sheet-in" data-cascade>
             <div className="filter-sheet-head">
               <h2 id={titleId} className="t-title">
                 Filter

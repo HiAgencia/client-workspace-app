@@ -7,6 +7,7 @@ import { Button, buttonClass } from "@/components/ui/button";
 import type { PublicConfig } from "@/lib/env";
 import { dayOf } from "@/lib/dates";
 import { browserClient } from "@/lib/supabase/browser";
+import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import type { SessionUser } from "@/lib/supabase/server";
 import { askOnceMoreIfCut, forgetLayout } from "./app/client-api";
 
@@ -75,8 +76,7 @@ function useWay(config: PublicConfig): Way {
 async function withGoogle(config: PublicConfig, at: Spot) {
   const of = round;
   put({ busy: { what: "google", at }, error: null }, of);
-  const redirectTo = new URL("/auth/callback", window.location.origin).toString();
-  const { error } = await browserClient(config).auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+  const { error } = await signInWithGoogle(config);
   if (error) put({ busy: null, error: { text: `Google sign-in is not available: ${error.message}`, at } }, of);
 }
 

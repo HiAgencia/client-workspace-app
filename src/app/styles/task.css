@@ -1816,6 +1816,15 @@
   gap: 0.375rem;
   padding: 0.5rem 0 0;
 }
+.qa-dialog .qa > * {
+  animation: enter-up var(--dur-enter) var(--ease-enter) calc(var(--qa-i, 0) * var(--enter-step)) backwards;
+}
+.qa-dialog .qa > :nth-child(2) {
+  --qa-i: 1;
+}
+.qa-dialog .qa > :nth-child(n + 3) {
+  --qa-i: 2;
+}
 .qa-dialog .qa-box.field {
   border-color: transparent;
   background: transparent;

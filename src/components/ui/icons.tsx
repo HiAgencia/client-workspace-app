@@ -2,6 +2,7 @@ import type { LucideIcon, LucideProps } from "lucide-react";
 import {
   Activity,
   ArrowRight,
+  ArrowRightLeft,
   ArrowUp,
   AtSign,
   Bold,
@@ -126,6 +127,8 @@ export const ReplyIcon = named(Reply);
 export const UndoIcon = named(Undo2, "turn-back");
 export const RestoreIcon = named(RotateCcw, "turn-back");
 export const SignOutIcon = named(LogOut, "forward");
+
+export const SwitchAccountIcon = named(ArrowRightLeft);
 export const FilterIcon = named(SlidersHorizontal);
 export const MenuIcon = named(MenuGlyph);
 export const SendIcon = named(ArrowUp, "up");

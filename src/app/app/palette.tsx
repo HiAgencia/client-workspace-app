@@ -71,7 +71,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement | null>; onClose: () => void }) {
-  const { tree, treeError, refreshTree, mailAccounts, person } = useWorkspace();
+  const { tree, treeError, refreshTree, mailAccounts, person, switchAccount } = useWorkspace();
   const signedIn = person !== null && !person.isAnonymous;
   const router = useRouter();
   const pathname = usePathname();
@@ -97,7 +97,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     .join(",");
   useEffect(() => {
     if (!treeRead && treeError) void refreshTree();
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -153,7 +153,10 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
       { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
     ];
     
-    if (signedIn) list.push({ kind: "action", id: "go-profile", label: "Go to Profile", run: () => router.push("/app/profile") });
+    if (signedIn) {
+      list.push({ kind: "action", id: "go-profile", label: "Go to Profile", run: () => router.push("/app/profile") });
+      list.push({ kind: "action", id: "switch-account", label: "Switch account", run: () => void switchAccount() });
+    }
     if (here) {
       list.push({ kind: "action", id: "new-task", label: `New task in ${here.name}`, run: () => openQuickAdd({ placeId: here.id }) });
       list.push({ kind: "action", id: "agent", label: `Issue an agent token for ${here.name}`, run: () => router.push(`/app/settings?node=${here.id}#agent-tokens`) });
@@ -162,7 +165,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     list.push({ kind: "action", id: "theme", label: dark ? "Switch to light theme" : "Switch to dark theme", run: () => setTheme(dark ? "light" : "dark") });
     list.push({ kind: "action", id: "shortcuts", label: "Show keyboard shortcuts", run: showShortcuts });
     return list;
-  }, [here, router, signedIn]);
+  }, [here, router, signedIn, switchAccount]);
 
   
   
@@ -247,7 +250,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
                 : "";
   const noteFailed = treeFailed || itemsFailed;
   return (
-    <div ref={inner} className="palette-inner">
+    <div ref={inner} className="palette-inner" data-cascade>
       <div className="palette-search">
         <SearchIcon className="palette-search-icon" />
         <input

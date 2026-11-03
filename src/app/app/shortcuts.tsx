@@ -88,7 +88,7 @@ export function Shortcuts() {
       }}
     >
       {shown && (
-        <div className="shortcuts-in">
+        <div className="shortcuts-in" data-cascade>
           <div className="shortcuts-head">
             <h2 id="shortcuts-title" className="t-title">
               Keyboard shortcuts

@@ -59,7 +59,9 @@ function WorksWith() {
       <ul className="works-list">
         {services.map(({ Mark, name, what }) => (
           <li key={name} className="works-item">
-            <Mark />
+            <span className="works-mark">
+              <Mark />
+            </span>
             <span className="works-name">{name}</span>
             <span className="works-what">{what}</span>
           </li>
