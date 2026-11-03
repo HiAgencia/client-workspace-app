@@ -14,7 +14,7 @@ export async function GET() {
   const read = await readPreferences(db, user.id);
   if (!read.ok) {
     console.error("preferences:", read.message);
-    return problem(500, "the preferences could not be read");
+    return problem(500, "the preferences could not be loaded");
   }
   return json({ ok: true, preferences: read.preferences });
 }

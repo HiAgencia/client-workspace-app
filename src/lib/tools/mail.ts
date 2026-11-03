@@ -209,7 +209,7 @@ export async function unreadMail(
   opened?: Set<string>,
 ): Promise<ToolResult<{ unread: number; byAccount: Record<string, number>; failures: MailFailure[] }>> {
   if (accounts.length === 0) return ok({ unread: 0, byAccount: {}, failures: [] });
-  const { messages, failures } = await mailOf(ctx).unread({ db: ctx.db, ownerId: ctx.ownerId, accounts });
+  const held = await mailOf(ctx).unread({ db: ctx.db, ownerId: ctx.ownerId, accounts });
   let seen = opened;
   if (!seen) {
     const { data, error } = await ctx.db
@@ -220,6 +220,11 @@ export async function unreadMail(
     if (error) return dbFail("reading what was opened", error);
     seen = new Set(data.map((row) => `${row.account_id}:${row.message_id}`));
   }
+  return ok(unreadOf(accounts, held, seen));
+}
+
+
+function unreadOf(accounts: MailAccount[], { messages, failures }: Awaited<ReturnType<MailSource["unread"]>>, seen: Set<string>) {
   const fresh = messages.filter((message) => !seen.has(`${message.accountId}:${message.id}`));
   const failed = new Set(failures.map((failure) => failure.accountId));
   const counted = new Set(messages.map((message) => message.accountId));
@@ -227,7 +232,7 @@ export async function unreadMail(
     accounts.filter((account) => !failed.has(account.id) || counted.has(account.id)).map((account) => [account.id, 0]),
   );
   for (const message of fresh) byAccount[message.accountId] = (byAccount[message.accountId] ?? 0) + 1;
-  return ok({ unread: fresh.length, byAccount, failures });
+  return { unread: fresh.length, byAccount, failures };
 }
 
 
@@ -287,16 +292,24 @@ export const listMail = defineTool({
       return ok({ ...said, toRead: accounts.map((account) => account.id), groups: { forTasks: nothing, unread: nothing, earlier: nothing }, unread: null, unreadByAccount: {}, failures: [], countFailures: [] });
     }
     const [account] = accounts;
-    const { messages, failures } = await mailOf(ctx).list({ db: ctx.db, ownerId: ctx.ownerId, accounts, limit: input.limit });
-    const context = await mailContext(ctx, loaded.scope, [account.id]);
+    
+    
+    
+    const [listed, kept] = await Promise.allSettled([
+      mailOf(ctx).list({ db: ctx.db, ownerId: ctx.ownerId, accounts, limit: input.limit }),
+      mailContext(ctx, loaded.scope, [account.id]),
+    ]);
+    if (listed.status === "rejected") throw listed.reason;
+    if (kept.status === "rejected") throw kept.reason;
+    const context = kept.value;
     if (isError(context)) return context;
+    const { messages, failures } = listed.value;
     const rows = toRows(messages, context, new Map([[account.id, account]]), loaded.scope);
     const forTasks = rows.filter((row) => row.tasks.some((task) => task.status === "open"));
     const rest = rows.filter((row) => !forTasks.includes(row));
     const unread = rest.filter((row) => row.unread);
     const earlier = rest.filter((row) => !row.unread);
-    const count = await unreadMail(ctx, accounts, context.opened);
-    if (isError(count)) return count;
+    const count = unreadOf(accounts, await mailOf(ctx).unread({ db: ctx.db, ownerId: ctx.ownerId, accounts }), context.opened);
     return ok({
       ...said,
       toRead: [],

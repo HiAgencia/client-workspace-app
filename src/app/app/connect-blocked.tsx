@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GoogleMark } from "@/components/ui/brands";
 import { Button } from "@/components/ui/button";
 import { browserClient } from "@/lib/supabase/browser";
 import { useWorkspace } from "./workspace";
@@ -10,7 +11,8 @@ import { useWorkspace } from "./workspace";
 
 export type ConnectBlocked = "demo" | "not_configured" | null;
 
-export function ConnectBlockedNote({ reason }: { reason: ConnectBlocked }) {
+
+export function ConnectBlockedNote({ reason, samples }: { reason: ConnectBlocked; samples: boolean }) {
   const { config } = useWorkspace();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -30,10 +32,15 @@ export function ConnectBlockedNote({ reason }: { reason: ConnectBlocked }) {
 
   return (
     <div className="inline-note connect-blocked" data-connect-blocked={reason}>
-      <p>The accounts here are samples, read-only. To connect your own, sign in with Google: it opens a workspace of your own.</p>
+      <p>
+        {samples
+          ? "These accounts are samples and read-only. To connect your own, sign in with Google: it opens your own workspace."
+          : "To connect a Google account, sign in with Google: it opens your own workspace."}
+      </p>
       <div>
         <Button size="sm" onClick={() => void signIn()} disabled={busy} aria-busy={busy}>
-          Sign in with Google
+          <GoogleMark />
+          <span className="btn-label">Sign in with Google</span>
         </Button>
       </div>
       {failed && (

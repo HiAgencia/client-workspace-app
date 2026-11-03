@@ -51,25 +51,26 @@ export function TaskOutcome({ question, title, onClose, onCancel }: { question: 
           </Button>
         ))}
       </div>
-      <label className="t-label" htmlFor={otherId}>
+      <label className="t-meta task-outcome-label" htmlFor={otherId}>
         Or in your words
       </label>
-      <input
-        id={otherId}
-        className="field"
-        value={other}
-        maxLength={120}
-        onChange={(event) => setOther(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && written) {
-            event.preventDefault();
-            void close(written);
-          }
-        }}
-      />
-      <div className="task-reply-actions">
+      {}
+      <div className="task-outcome-own">
+        <input
+          id={otherId}
+          className="field"
+          value={other}
+          maxLength={120}
+          onChange={(event) => setOther(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && written) {
+              event.preventDefault();
+              void close(written);
+            }
+          }}
+        />
         <Button size="sm" variant="primary" disabled={!written} onClick={() => void close(written)}>
-          Close the task
+          Complete task
         </Button>
         <Button size="sm" variant="quiet" onClick={onCancel}>
           Cancel
@@ -86,13 +87,13 @@ export function useCompleteTask() {
   return async (task: { id: string; title: string }, reply: { accountId: string; id: string }, outcome: string): Promise<boolean> => {
     const answer = await tool<WriteOutput>("complete_task", { task: task.id, outcome, reply: { account: reply.accountId, id: reply.id } });
     if (!answer.ok) {
-      notify({ text: `“${inlinePlain(task.title)}” could not be closed: ${answer.message}`, tone: "error" });
+      notify({ text: `“${inlinePlain(task.title)}” could not be completed: ${answer.message}`, tone: "error" });
       return false;
     }
     touch();
     const card = WRITES.complete_task(answer);
     const undo = card?.undo;
-    notify({ text: card?.what ?? `Closed “${inlinePlain(task.title)}”`, tone: "status", undo: undo ? () => void saving(undo()) : undefined });
+    notify({ text: card?.what ?? `Completed “${inlinePlain(task.title)}”`, tone: "status", undo: undo ? () => void saving(undo()) : undefined });
     return true;
   };
 }

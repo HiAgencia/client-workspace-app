@@ -7,8 +7,11 @@ import { CloseIcon, DecisionIcon, DeleteIcon, NoteIcon, TasksIcon } from "@/comp
 import { RichEditor } from "@/components/ui/rich-editor";
 import { LOCALE } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { ASSISTANT_NAME } from "@/lib/product";
 import { get, post, tool, type Item } from "./client-api";
 import { Origin, TYPE_NAMES } from "./item-parts";
+import { PlaceName } from "./task-row";
+import { useWorkspace } from "./workspace";
 
 type Saving = (promise: Promise<{ ok: boolean; message?: string }>) => Promise<boolean>;
 type Status = "" | "saving" | "saved" | "failed";
@@ -23,7 +26,9 @@ type Revision = {
 const SAY: Record<Exclude<Status, "">, string> = { saving: "Saving…", saved: "Saved", failed: "Not saved" };
 
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-const by = (source: Revision["source"], label: string | null) => (source === "chat" ? "the chat" : source === "agent" ? `agent ${label}` : "you");
+const stampDay = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric" });
+const by = (source: Revision["source"], label: string | null) => (source === "chat" ? ASSISTANT_NAME : source === "agent" ? `agent ${label}` : "you");
+
 
 
 
@@ -43,6 +48,7 @@ export function ItemPanel({
   
   onDelete: (item: Item) => void;
 }) {
+  const { tree } = useWorkspace();
   const dialog = useRef<HTMLDialogElement>(null);
   const [shown, setShown] = useState<Item | null>(null);
   const [notes, setNotes] = useState("");
@@ -191,46 +197,56 @@ export function ItemPanel({
         <div className="panel-in">
           <header className="panel-head">
             <div className="panel-title">
-              <p key={current.type} className="pill panel-kind fade-enter" data-tone={current.type === "decision" ? "accent" : undefined}>
+              <p key={current.type} className="t-label panel-kind fade-enter" data-kind={current.type}>
                 {current.type === "decision" ? <DecisionIcon /> : current.type === "note" ? <NoteIcon /> : <TasksIcon />}
                 {TYPE_NAMES[current.type]}
               </p>
-              <h2 id={titleId} className="t-title">
-                {inlinePlain(current.title)}
-              </h2>
             </div>
             <Button size="sm" variant="quiet" className="btn-icon" onClick={close} title="Close">
               <CloseIcon />
               <span className="sr-only">Close</span>
             </Button>
           </header>
-          {current.nodeId ? (
-            <Link className="link t-meta panel-path" href={`/app/node/${current.nodeId}`} data-panel-path>
-              {current.nodePath}
-            </Link>
-          ) : (
-            <span className="t-meta panel-path" data-panel-path>
-              General
-            </span>
-          )}
-          <div className="panel-record" data-panel-record>
-            <Origin item={current} />
-          </div>
-          <div className="panel-field">
-            <label className="t-label" htmlFor={notesId}>
-              {fieldName}
-            </label>
-            <p className="t-help">Saves when you stop typing. Select words to make them bold, colored, or a link.</p>
-            <RichEditor key={current.id} id={notesId} label={fieldName} value={notes} placeholder="What matters about this item…" onChange={edit} onBlur={() => void flush()} onEscape={close} />
-            <p className="t-meta panel-status" role="status" data-panel-status={status || undefined}>
-              {status ? SAY[status] : ""}
+          <div className="panel-body">
+            <h2 id={titleId} className="panel-heading">
+              {inlinePlain(current.title)}
+            </h2>
+            {}
+            <p className="panel-meta t-meta">
+              {current.nodeId ? (
+                <Link className="link link-meta panel-path" href={`/app/node/${current.nodeId}`} data-panel-path>
+                  <PlaceName path={current.nodePath} color={tree?.find((node) => node.id === current.nodeId)?.color ?? null} />
+                </Link>
+              ) : (
+                <span className="panel-path" data-panel-path>
+                  <PlaceName path={null} color={null} />
+                </span>
+              )}
+              <span className="panel-record" data-panel-record>
+                <Origin item={current} />
+              </span>
+              <span className="panel-added">{`Added ${stampDay(current.createdAt)}`}</span>
             </p>
+            <div className="panel-field">
+              {}
+              <label className={current.type === "decision" ? "t-meta panel-field-name" : "sr-only"} htmlFor={notesId}>
+                {fieldName}
+              </label>
+              <RichEditor key={current.id} id={notesId} label={fieldName} value={notes} placeholder="Add details…" onChange={edit} onBlur={() => void flush()} onEscape={close} />
+              <div className="panel-field-foot">
+                <p className="t-meta panel-status" role="status" data-panel-status={status || undefined}>
+                  {status ? SAY[status] : ""}
+                </p>
+                <p className="t-meta panel-help">Saves as you type. Select words to make them bold, colored, or a link.</p>
+              </div>
+            </div>
+            <Versions revisions={revisions} onRestore={restore} />
           </div>
-          <Versions revisions={revisions} onRestore={restore} />
-          <div className="panel-foot">
+          <footer className="panel-foot">
             {current.type !== "task" && (
               <Button size="sm" data-panel-mark onClick={() => markDecision(current.type === "note")}>
-                {current.type === "note" ? "Mark as a decision" : "Make it a note again"}
+                {current.type === "note" ? <DecisionIcon /> : <NoteIcon />}
+                <span className="btn-label">{current.type === "note" ? "Mark as decision" : "Mark as note"}</span>
               </Button>
             )}
             <Button
@@ -248,7 +264,7 @@ export function ItemPanel({
               <DeleteIcon />
               <span className="btn-label">{`Delete this ${TYPE_NAMES[current.type].toLowerCase()}`}</span>
             </Button>
-          </div>
+          </footer>
         </div>
       )}
     </dialog>
@@ -256,37 +272,33 @@ export function ItemPanel({
 }
 
 
+
 function Versions({ revisions, onRestore }: { revisions: Revision[] | null; onRestore: (id: string) => Promise<void> }) {
-  if (revisions === null || revisions.length === 0) {
-    return (
-      <section className="panel-section stack" aria-labelledby="panel-versions" data-panel-versions>
-        <h3 id="panel-versions" className="t-label">
-          Versions
-        </h3>
-        <p className="t-help">{revisions === null ? "Reading the versions…" : "No earlier versions: every change from now on leaves one here."}</p>
-      </section>
-    );
-  }
   return (
-    <section className="panel-section stack" aria-labelledby="panel-versions" data-panel-versions>
-      <h3 id="panel-versions" className="t-label">
-        Versions <span className="t-meta">{revisions.length}</span>
+    <section className="panel-section" aria-labelledby="panel-versions" data-panel-versions>
+      <h3 id="panel-versions" className="panel-section-head">
+        Versions
+        {revisions && revisions.length > 0 && <span className="panel-section-count">{revisions.length}</span>}
       </h3>
-      <ul className="plain-list stack">
-        {revisions.slice(0, 12).map((revision) => (
-          <li key={revision.id} className="account-line" data-revision={revision.id}>
-            <span className="stack" style={{ gap: "0.1rem" }}>
-              <span className="t-value">{revision.snapshot.deleted_at ? `Deleted: ${revision.snapshot.title}` : revision.snapshot.title}</span>
-              <span className="t-meta">
-                Before a change by {by(revision.source, revision.agentLabel)}, {stamp(revision.createdAt)}
+      {revisions === null || revisions.length === 0 ? (
+        <p className="t-meta panel-section-empty">{revisions === null ? "Loading the versions…" : "No earlier versions: every change from now on leaves one here."}</p>
+      ) : (
+        <ul className="plain-list panel-versions">
+          {revisions.slice(0, 12).map((revision) => (
+            <li key={revision.id} className="panel-version" data-revision={revision.id}>
+              <span className="panel-version-text">
+                <span className="t-value">{revision.snapshot.deleted_at ? `Deleted: ${revision.snapshot.title}` : revision.snapshot.title}</span>
+                <span className="t-meta">
+                  Before a change by {by(revision.source, revision.agentLabel)}, {stamp(revision.createdAt)}
+                </span>
               </span>
-            </span>
-            <Button size="sm" variant="quiet" onClick={() => void onRestore(revision.id)} aria-label={`Restore the version of ${stamp(revision.createdAt)}`}>
-              Restore
-            </Button>
-          </li>
-        ))}
-      </ul>
+              <Button size="sm" variant="quiet" onClick={() => void onRestore(revision.id)} aria-label={`Restore the version of ${stamp(revision.createdAt)}`}>
+                Restore
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

@@ -19,7 +19,7 @@ export async function GET() {
   ]);
   if (accounts.error || links.error || calendars.error) {
     console.error("accounts:", (accounts.error ?? links.error ?? calendars.error)?.message);
-    return problem(500, "the accounts could not be read");
+    return problem(500, "the accounts could not be loaded");
   }
   return json({
     ok: true,

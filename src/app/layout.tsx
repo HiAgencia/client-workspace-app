@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
+import { SmoothScroll } from "@/components/smooth-scroll";
 import { BROWSER_BAR, THEME_KEY } from "@/lib/theme";
 import "./globals.css";
 
@@ -45,7 +46,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: BEFORE_PAINT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SmoothScroll />
+      </body>
     </html>
   );
 }

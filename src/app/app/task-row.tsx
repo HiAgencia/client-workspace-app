@@ -3,15 +3,18 @@
 import {
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { LinkMark } from "@/components/ui/brands";
 import { DatePicker } from "@/components/ui/date-picker";
+import { landFrom, useFlip } from "@/components/ui/flip";
+import { Fold } from "@/components/ui/fold";
 import { ByAgentIcon, ByChatIcon, DateIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon, TimeIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
@@ -105,12 +108,28 @@ export function InlineText({ text }: { text: string }) {
       {inlinePieces(text).map((piece, index) =>
         piece.href ? (
           <a key={index} className="link inline-link" href={piece.href} target="_blank" rel="noopener noreferrer">
-            {piece.text}
+            <LinkedWords href={piece.href} text={piece.text} />
           </a>
         ) : (
           <span key={index}>{piece.text}</span>
         ),
       )}
+    </>
+  );
+}
+
+
+
+
+export function LinkedWords({ href, text }: { href: string; text: string }) {
+  const [, first = text, rest = ""] = /^(\S*)([\s\S]*)$/.exec(text) ?? [];
+  return (
+    <>
+      <span className={first.length <= 24 ? "link-lead" : undefined}>
+        <LinkMark href={href} />
+        {first}
+      </span>
+      {rest}
     </>
   );
 }
@@ -176,7 +195,9 @@ export async function readTaskItem(id: string): Promise<Item | null> {
 
 
 type Op =
-  | { kind: "hide"; id: string; gone: boolean; settled: boolean }
+  
+  
+  | { kind: "hide"; id: string; task?: TaskData; place?: RowPlace | null; completed: boolean; folding: boolean; gone: boolean; settled: boolean }
   | { kind: "move"; id: string; to: string; task: TaskData; at?: number; settled: boolean }
   | { kind: "patch"; id: string; patch: Partial<TaskData>; settled: boolean }
   | { kind: "order"; id: string; ids: string[]; settled: boolean };
@@ -207,7 +228,7 @@ function settleOp(kind: Op["kind"], id: string) {
 
 function forgetSettled() {
   let changed = false;
-  for (const [key, op] of ops) if (op.settled) changed = ops.delete(key) || changed;
+  for (const [key, op] of ops) if (op.settled && !(op.kind === "hide" && !op.gone)) changed = ops.delete(key) || changed;
   if (changed) emit();
 }
 
@@ -223,14 +244,48 @@ export function useTaskLanding(group: string): boolean {
 const LEAVE_MS = 260;
 
 
-function hideRow(id: string) {
-  const op: Op = { kind: "hide", id, gone: false, settled: false };
+const DONE_HOLD_MS = 650;
+
+
+
+function hideRow(id: string, hold = 0, row?: { task: TaskData; place: RowPlace | null }) {
+  const op: Op = { kind: "hide", id, ...row, completed: hold > 0, folding: hold === 0, gone: false, settled: false };
   putOp(op);
+  const end = () =>
+    setTimeout(() => {
+      if (ops.get(`hide:${id}`) !== op) return;
+      op.gone = true;
+      emit();
+    }, LEAVE_MS);
+  if (hold === 0) {
+    holdPointer();
+    return void end();
+  }
   setTimeout(() => {
     if (ops.get(`hide:${id}`) !== op) return;
-    op.gone = true;
+    op.folding = true;
+    holdPointer();
     emit();
-  }, LEAVE_MS);
+    end();
+  }, hold);
+}
+
+
+
+
+function holdPointer() {
+  if (typeof window === "undefined" || !window.matchMedia("(hover: hover)").matches) return;
+  const root = document.documentElement;
+  if (root.dataset.pointerHeld !== undefined) return;
+  root.dataset.pointerHeld = "";
+  let moved = 0;
+  const onMove = (event: PointerEvent) => {
+    moved += Math.abs(event.movementX) + Math.abs(event.movementY);
+    if (moved < 6) return;
+    delete root.dataset.pointerHeld;
+    window.removeEventListener("pointermove", onMove);
+  };
+  window.addEventListener("pointermove", onMove, { passive: true });
 }
 
 
@@ -353,7 +408,7 @@ export function useTaskActions() {
     const title = inlinePlain(task.title);
     const focusAfter = focusAfterRow(task.id);
     const place = placeOfRow(task.id);
-    hideRow(task.id);
+    hideRow(task.id, reopening ? 0 : DONE_HOLD_MS, { task, place });
     const answer = await tool("update_item", { id: task.id, status: reopening ? "open" : "done" });
     if (!answer.ok) {
       dropOp("hide", task.id);
@@ -410,10 +465,11 @@ export function useTaskActions() {
     patch(task, { priority }, { priority }, `The priority of “${inlinePlain(task.title)}” could not be changed`);
 
   
-  async function moveToDay(task: TaskData, day: Day | null, group: string | null, label: string) {
+  
+  async function moveToDay(task: TaskData, day: Day | null, group: string | null, label: string, at?: number) {
     if (task.dueOn === day) return;
     const moved = { ...task, dueOn: day, dueTime: day ? task.dueTime : null };
-    if (group) putOp({ kind: "move", id: task.id, to: group, task: moved, settled: false });
+    if (group) putOp({ kind: "move", id: task.id, to: group, task: moved, at, settled: false });
     else putOp({ kind: "patch", id: task.id, patch: { dueOn: day, dueTime: moved.dueTime }, settled: false });
     const answer = await tool("update_item", { id: task.id, dueOn: day });
     const kind = group ? "move" : "patch";
@@ -543,10 +599,10 @@ export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode
           ),
         },
         { kind: "separator" },
-        { kind: "group", label: "Place", entries: places },
+        { kind: "group", label: "Client or project", entries: places },
       ],
     },
-    { kind: "action", label: "Link to an event…", icon: LinkIcon, onSelect: () => openTaskDetail({ id: task.id, task, list, focus: "event" }) },
+    { kind: "action", label: "Link calendar event…", icon: LinkIcon, onSelect: () => openTaskDetail({ id: task.id, task, list, focus: "event" }) },
     { kind: "action", label: "Duplicate", icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
     { kind: "separator" },
     { kind: "action", label: "Delete", tone: "danger", icon: DeleteIcon, onSelect: () => void actions.remove(task) },
@@ -563,7 +619,7 @@ export function TaskCircle({ title, priority, done, onToggle, className }: { tit
       aria-checked={done}
       
       
-      aria-label={`${done ? `Mark “${inlinePlain(title)}” open` : `Complete “${inlinePlain(title)}”`}, ${priorityName(priority)} priority`}
+      aria-label={`${done ? `Reopen “${inlinePlain(title)}”` : `Complete “${inlinePlain(title)}”`}, ${priorityName(priority)} priority`}
       className={cx("task-circle", className)}
       data-priority={priority ?? 4}
       onClick={(event) => {
@@ -637,7 +693,7 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
         onKeyDown={onKeyMove}
         onClick={() => openTaskDetail({ id: task.id, task, list })}
       />
-      <TaskCircle className="task-check" title={task.title} priority={task.priority} done={task.status === "done" || Boolean(leaving)} onToggle={() => void actions.complete(task)} />
+      <TaskCircle className="task-check" title={task.title} priority={task.priority} done={task.status === "done" || Boolean(leaving)} onToggle={() => void (leaving ? undefined : actions.complete(task))} />
       <p className="task-title t-value">
         <InlineText text={task.title} />
       </p>
@@ -709,9 +765,9 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
         <Menu label="More" about={`for “${plain}”`} entries={taskMenuEntries(task, actions, tree, list)} onOpenChange={setMenuOpen} />
       </div>
       {task.subtasks.total > 0 && (
-        <div className="fold task-subtasks" id={subtasksId} data-open={open}>
-          <div>{open && <Subtasks parent={task} />}</div>
-        </div>
+        <Fold open={open} id={subtasksId} className="task-subtasks" lazy follow>
+          <Subtasks parent={task} />
+        </Fold>
       )}
     </div>
   );
@@ -735,10 +791,10 @@ function Subtasks({ parent }: { parent: TaskData }) {
       live = false;
     };
   }, [parent.id, version]);
-  if (failed && !items) return <p className="inline-note" data-tone="alert">The subtasks could not be read: {failed}</p>;
+  if (failed && !items) return <p className="inline-note" data-tone="alert">The subtasks could not be loaded: {failed}</p>;
   if (!items) {
     return (
-      <div className="task-subtask-list" role="status" aria-busy="true" aria-label="Reading the subtasks">
+      <div className="task-subtask-list" role="status" aria-busy="true" aria-label="Loading the subtasks">
         <span className="skeleton" />
         <span className="skeleton" />
       </div>
@@ -784,23 +840,21 @@ type ListProps = {
   empty?: ReactNode;
 };
 
-type Drag = { id: string; group: string; task: TaskData };
+
+type Drag = { id: string; group: string; task: TaskData; height: number };
 let dragState: Drag | null = null;
 const setDragging = (value: Drag | null) => {
   dragState = value;
 };
 const currentDrag = () => dragState;
 
-
-
-const placeIn = (list: HTMLElement, node: HTMLElement) => (node.offsetParent === list ? node.offsetTop : node.offsetTop - list.offsetTop);
+const GRAB = { x: 24, y: 20 };
 
 export function TaskList({ group, label, tasks, layout = "list", showPlace = true, pageNode, dayShown, dropDay, reorderable = false, empty }: ListProps) {
   const actions = useTaskActions();
   
   useSyncExternalStore(subscribe, () => snapshot, () => 0);
   const list = useRef<HTMLUListElement>(null);
-  const last = useRef(new Map<string, number>());
   const seen = useRef(tasks);
   const [dropAt, setDropAt] = useState<number | null>(null);
   const [said, setSaid] = useState("");
@@ -823,19 +877,24 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
 
   
   const order = ops.get(`order:${group}`) as Extract<Op, { kind: "order" }> | undefined;
-  let shown: Array<{ task: TaskData; leaving: boolean }> = [];
+  let shown: Array<{ task: TaskData; leaving: boolean; folding: boolean; completed?: boolean }> = [];
   for (const task of tasks) {
     const moved = ops.get(`move:${task.id}`) as Extract<Op, { kind: "move" }> | undefined;
     if (moved && moved.to !== group) continue;
     const hide = ops.get(`hide:${task.id}`) as Extract<Op, { kind: "hide" }> | undefined;
     if (hide?.gone) continue;
     const patch = ops.get(`patch:${task.id}`) as Extract<Op, { kind: "patch" }> | undefined;
-    shown.push({ task: patch ? { ...task, ...patch.patch } : task, leaving: Boolean(hide) });
+    shown.push({ task: patch ? { ...task, ...patch.patch } : task, leaving: Boolean(hide), folding: Boolean(hide?.folding), completed: hide?.completed });
   }
   for (const op of ops.values()) {
     if (op.kind !== "move" || op.to !== group || tasks.some((task) => task.id === op.id)) continue;
     const hide = ops.get(`hide:${op.id}`) as Extract<Op, { kind: "hide" }> | undefined;
-    if (!hide?.gone) shown.splice(op.at ?? shown.length, 0, { task: op.task, leaving: Boolean(hide) });
+    if (!hide?.gone) shown.splice(op.at ?? shown.length, 0, { task: op.task, leaving: Boolean(hide), folding: Boolean(hide?.folding), completed: hide?.completed });
+  }
+  
+  for (const op of ops.values()) {
+    if (op.kind !== "hide" || op.gone || !op.task || op.place?.group !== group || shown.some((entry) => entry.task.id === op.id)) continue;
+    shown.splice(Math.min(op.place.at, shown.length), 0, { task: op.task, leaving: true, folding: op.folding, completed: op.completed });
   }
   if (order) {
     const at = new Map(order.ids.map((id, index) => [id, index]));
@@ -853,40 +912,9 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
   }, [group, label, dropDay]);
 
   
-  useLayoutEffect(() => {
-    const element = list.current;
-    if (!element) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const next = new Map<string, number>();
-    const first = last.current.size === 0;
-    element.querySelectorAll<HTMLElement>(":scope > [data-key]").forEach((node) => {
-      const key = node.dataset.key!;
-      const top = placeIn(element, node);
-      next.set(key, top);
-      if (reduced || first) return;
-      const before = last.current.get(key);
-      if (before === undefined) {
-        node.animate([{ opacity: 0.001, translate: "0 0.4rem" }, { opacity: 1, translate: "0 0" }], { duration: 280, easing: "cubic-bezier(0.22, 0.61, 0.36, 1)" });
-      } else if (Math.abs(before - top) > 1) {
-        
-        node.animate([{ translate: `0 ${before - top}px` }, { translate: "0 0" }], { duration: 300, easing: "cubic-bezier(0.4, 0, 0.2, 1)", composite: "add" });
-      }
-    });
-    last.current = next;
-  });
   
   
-  useEffect(() => {
-    const element = list.current;
-    if (!element) return;
-    const observer = new ResizeObserver(() => {
-      const next = new Map<string, number>();
-      element.querySelectorAll<HTMLElement>(":scope > [data-key]").forEach((node) => next.set(node.dataset.key!, placeIn(element, node)));
-      last.current = next;
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
+  useFlip(list, { items: ":scope > li", share: "tasks", arrangement: layout });
 
   const visible = shown.filter((entry) => !entry.leaving).map((entry) => entry.task);
   const ids = visible.map((task) => task.id);
@@ -964,28 +992,43 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     setDropAt(null);
     if (!drag || !accepts(drag.group)) return;
     event.preventDefault();
+    
+    
+    landFrom(drag.id, { x: event.clientX - GRAB.x, y: event.clientY - GRAB.y, w: 0, h: drag.height });
+    list.current?.querySelector<HTMLElement>(":scope > .task-drop-mark")?.setAttribute("data-flip-exit", "none");
     if (drag.group === group) {
+      
+      const carried = list.current?.querySelector<HTMLElement>(`:scope > [data-key="${CSS.escape(drag.id)}"]`);
+      if (carried) {
+        carried.setAttribute("data-dropped", "");
+        carried.removeAttribute("data-dragging");
+        requestAnimationFrame(() => requestAnimationFrame(() => carried.removeAttribute("data-dropped")));
+      }
       const without = ids.filter((id) => id !== drag.id);
       const at = indexAt(event);
       reorderTo(drag.id, Math.min(at, without.length));
     } else if (dropDay !== undefined) {
-      void actions.moveToDay(drag.task, dropDay, group, label);
+      void actions.moveToDay(drag.task, dropDay, group, label, reorderable && dropAt !== null ? dropAt : undefined);
     }
     setDragging(null);
   }
 
   
-  const mark = <li key="drop-mark" className="task-drop-mark" aria-hidden="true" />;
+  
+  const carried = currentDrag();
+  const mark = (
+    <li key="drop-mark" data-flip-key="drop-mark" className="task-drop-mark" aria-hidden="true" style={{ "--drop-room": `${carried?.height ?? 0}px` } as CSSProperties} />
+  );
   let markBefore: string | null | undefined;
   if (dropAt !== null) {
-    const dragged = currentDrag()?.id;
-    const others = shown.filter((entry) => entry.task.id !== dragged);
+    const others = shown.filter((entry) => entry.task.id !== carried?.id);
     markBefore = others[dropAt]?.task.id ?? null;
   }
 
-  const rows = shown.flatMap(({ task, leaving }) => [
+  const rows = shown.flatMap(({ task, leaving, folding, completed }) => [
     ...(markBefore === task.id ? [mark] : []),
-    <li key={task.id} data-key={task.id} className="task-item" data-leaving={leaving || undefined}>
+    
+    <li key={task.id} data-key={task.id} className="task-item" data-leaving={folding || undefined} data-completing={(leaving && completed) || undefined}>
       <TaskRowView
         task={task}
         layout={layout}
@@ -997,12 +1040,19 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
         onKeyMove={onKeyMove(task)}
         draggable={fine && !leaving}
         onDragStart={(event) => {
-          setDragging({ id: task.id, group, task });
+          const row = (event.currentTarget as HTMLElement).closest<HTMLElement>(".task");
+          const item = row?.parentElement ?? null;
+          setDragging({ id: task.id, group, task, height: item?.offsetHeight ?? 0 });
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", inlinePlain(task.title));
-          const row = (event.currentTarget as HTMLElement).closest<HTMLElement>(".task");
-          if (row) event.dataTransfer.setDragImage(row, 24, 20);
-          requestAnimationFrame(() => (event.target as HTMLElement).closest("li")?.setAttribute("data-dragging", ""));
+          
+          
+          row?.setAttribute("data-lifted", "");
+          if (row) event.dataTransfer.setDragImage(row, GRAB.x, GRAB.y);
+          requestAnimationFrame(() => {
+            row?.removeAttribute("data-lifted");
+            item?.setAttribute("data-dragging", "");
+          });
         }}
         onDragEnd={() => {
           setDragging(null);

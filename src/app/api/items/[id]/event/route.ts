@@ -19,6 +19,6 @@ export async function GET(_request: Request, { params }: RouteContext<"/api/item
   const loaded = await loadScope(session.ctx);
   if (isError(loaded)) return toolResponse("task event", loaded);
   const { data, error } = await session.ctx.db.from("events").select(EVENT_COLUMNS).eq("id", link.eventId).maybeSingle();
-  if (error) return problem(500, "the event could not be read");
+  if (error) return problem(500, "the event could not be loaded");
   return json({ ok: true, link, event: data && reaches(loaded.scope, session.ctx.ownerId, data) ? toLocalEvent(data, loaded.scope) : null });
 }

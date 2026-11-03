@@ -6,13 +6,14 @@ import { localEventsIn, type LocalEvent } from "./local-events";
 import { eventsFailureSchema, type CalendarEvent, type EventsFailure } from "./events-source";
 import { dbFail, isError, ok } from "./result";
 import { byPriorityThenDue, countInSubtrees, itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
-import { accountMap } from "./mail";
+import { accountMap, type AccountMap } from "./mail";
 import { groupOf, shownAsRow } from "./tasks";
 import { loadScope, reachOf, reaches, resolveNode, subtree, type ReadPlace, type Scope } from "./tree";
 import type { Database } from "@/lib/db/types";
 import type { ToolContext } from "./context";
 
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
+type TaskMailRow = Database["public"]["Tables"]["task_mail"]["Row"];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -50,17 +51,24 @@ const waitingTaskSchema = z.object({
 });
 
 
-async function mailIndexOf(ctx: ToolContext, scope: Scope, place: ReadPlace, open: ItemRow[]) {
-  const mapped = await accountMap(ctx, scope);
+async function mailSourcesOf(ctx: ToolContext, scope: Scope) {
+  const [mapped, waited] = await Promise.all([accountMap(ctx, scope), ctx.db.from("task_mail").select("item_id, account_id, waits_for").eq("owner_id", ctx.ownerId)]);
   if (isError(mapped)) return mapped;
-  const seen = place.kind === "node" ? mapped.map.seenFrom(place.node.id) : null;
-  const accounts = [...mapped.map.accounts.values()]
+  if (waited.error) return dbFail("reading what the tasks wait for", waited.error);
+  return ok({ map: mapped.map, waits: waited.data });
+}
+
+type MailSources = { map: AccountMap; waits: Array<Pick<TaskMailRow, "item_id" | "account_id" | "waits_for">> };
+
+
+function mailIndexOf(sources: MailSources, scope: Scope, place: ReadPlace, open: ItemRow[]) {
+  const { map } = sources;
+  const seen = place.kind === "node" ? map.seenFrom(place.node.id) : null;
+  const accounts = [...map.accounts.values()]
     .filter((account) => !seen || seen.has(account.id))
 
-    .map(({ id, email, isDemo, status, nodeId }) => ({ id, email, isDemo, status, nodeId: nodeId && scope.reachable.has(nodeId) ? nodeId : null, nodeIds: (mapped.map.hangsFrom.get(id) ?? []).filter((node) => scope.reachable.has(node)) }));
-  const { data, error } = await ctx.db.from("task_mail").select("item_id, account_id, waits_for").eq("owner_id", ctx.ownerId);
-  if (error) return dbFail("reading what the tasks wait for", error);
-  const waits = new Map(data.map((row) => [row.item_id, row]));
+    .map(({ id, email, isDemo, status, nodeId }) => ({ id, email, isDemo, status, nodeId: nodeId && scope.reachable.has(nodeId) ? nodeId : null, nodeIds: (map.hangsFrom.get(id) ?? []).filter((node) => scope.reachable.has(node)) }));
+  const waits = new Map(sources.waits.map((row) => [row.item_id, row]));
   const waiting = open
     .filter((row) => waits.has(row.id) && shownAsRow(row))
 
@@ -70,7 +78,7 @@ async function mailIndexOf(ctx: ToolContext, scope: Scope, place: ReadPlace, ope
       const wait = waits.get(row.id)!;
       return { id: row.id, title: row.title, nodeId: row.node_id, path: node?.path ?? null, color: node?.color ?? null, accountId: wait.account_id, waitsFor: wait.waits_for };
     });
-  return ok({ accounts, waiting });
+  return { accounts, waiting };
 }
 
 
@@ -128,12 +136,13 @@ export const listTree = defineTool({
       place = { kind: "node", node: resolved.node };
     }
     const reach = reachOf(scope, place);
-    const read = await selectAllItems(
-      ctx,
-      reach,
-      (query) => query.is("deleted_at", null).eq("status", "open").eq("type", "task"),
-      "counting open tasks",
-    );
+    
+    
+    const [read, mailSources, notes] = await Promise.all([
+      selectAllItems(ctx, reach, (query) => query.is("deleted_at", null).eq("status", "open").eq("type", "task"), "counting open tasks"),
+      input.withMail ? mailSourcesOf(ctx, scope) : null,
+      input.withNotes ? notePlacesOf(ctx, scope, place) : null,
+    ]);
     if (isError(read)) return read;
     
     
@@ -164,9 +173,8 @@ export const listTree = defineTool({
         )
       : null;
     const generalTasks = read.rows.filter((row) => row.node_id === null && shownAsRow(row)).length;
-    const mail = input.withMail ? await mailIndexOf(ctx, scope, place, read.rows) : null;
-    if (mail && isError(mail)) return mail;
-    const notes = input.withNotes ? await notePlacesOf(ctx, scope, place) : null;
+    if (mailSources && isError(mailSources)) return mailSources;
+    const mail = mailSources ? mailIndexOf(mailSources, scope, place, read.rows) : null;
     if (notes && isError(notes)) return notes;
     return ok({
       nodes,

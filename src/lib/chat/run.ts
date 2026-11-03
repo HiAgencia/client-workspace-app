@@ -62,9 +62,9 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
 export function describeModelError(error: unknown): string {
   const status = typeof error === "object" && error && "statusCode" in error ? Number((error as { statusCode: unknown }).statusCode) : 0;
   console.error("chat model:", status || "", error instanceof Error ? error.message : error);
-  if (status === 429) return "The model is busy right now. Try again in a minute.";
-  if (status === 401 || status === 403) return "The model rejected this server's key. The chat is unavailable.";
-  return "The model did not answer. Try again.";
+  if (status === 429) return "It is busy right now. Try again in a minute.";
+  if (status === 401 || status === 403) return "It is unavailable right now.";
+  return "Try again in a moment.";
 }
 
 export async function runChat(options: {

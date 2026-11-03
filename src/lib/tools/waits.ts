@@ -31,6 +31,29 @@ function toTaskMail(row: TaskMailRow): TaskMail {
 const IN_CHUNK = 200;
 
 
+const PAGE = 1000;
+
+
+
+export async function everyTaskMail(ctx: ToolContext): Promise<ToolResult<{ rows: TaskMailRow[] }>> {
+  const rows: TaskMailRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await ctx.db.from("task_mail").select(TASK_MAIL_COLUMNS).eq("owner_id", ctx.ownerId).order("item_id").range(from, from + PAGE - 1);
+    if (error) return dbFail("reading what the tasks wait for", error);
+    rows.push(...(data as TaskMailRow[]));
+    if (data.length < PAGE) return ok({ rows });
+  }
+}
+
+
+export function taskMailIn(rows: TaskMailRow[], itemIds: string[]): Map<string, TaskMail> {
+  const ids = new Set(itemIds);
+  const byTask = new Map<string, TaskMail>();
+  for (const row of rows) if (ids.has(row.item_id)) byTask.set(row.item_id, toTaskMail(row));
+  return byTask;
+}
+
+
 export async function taskMailOf(ctx: ToolContext, itemIds: string[]): Promise<ToolResult<{ byTask: Map<string, TaskMail> }>> {
   const byTask = new Map<string, TaskMail>();
   if (itemIds.length === 0) return ok({ byTask });

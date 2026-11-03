@@ -1,8 +1,11 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { DecisionIcon, MailIcon, NextIcon, NoteIcon, SearchIcon, TasksIcon } from "@/components/ui/icons";
+import { useAutoHeight } from "@/components/ui/use-auto-height";
+import { useExit } from "@/components/ui/use-exit";
+import { useMedia } from "@/components/ui/use-media";
 import { count } from "@/lib/count";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
@@ -15,6 +18,7 @@ import { TYPE_NAMES } from "./item-parts";
 import { subjectOf } from "./mail/subject";
 import { openQuickAdd } from "./quick-add-bus";
 import type { MailFailureRow } from "./mail-store";
+import { showShortcuts } from "./shortcuts";
 import { useWorkspace } from "./workspace";
 
 type Entry =
@@ -29,6 +33,9 @@ const LIMIT = { node: 6, item: 8, mail: 8 };
 const MAIL_WAIT_MS = 400;
 const NAME = "Search clients, projects, tasks, mail, and actions";
 
+const SHORT_NAME = "Search everything";
+const NARROW = "(width < 36rem)";
+
 
 
 
@@ -41,6 +48,8 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     if (open && !el.open) el.showModal();
     if (!open && el.open) el.close();
   }, [open]);
+  
+  const shown = useExit(open, dialog);
   return (
     <dialog
       ref={dialog}
@@ -56,20 +65,25 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
         if (dialog.current) delete dialog.current.dataset.downOutside;
       }}
     >
-      {open && <PaletteBody onClose={onClose} />}
+      {shown && <PaletteBody dialog={dialog} onClose={onClose} />}
     </dialog>
   );
 }
 
-function PaletteBody({ onClose }: { onClose: () => void }) {
-  const { tree, treeError, refreshTree, mailAccounts } = useWorkspace();
+function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement | null>; onClose: () => void }) {
+  const { tree, treeError, refreshTree, mailAccounts, person } = useWorkspace();
+  const signedIn = person !== null && !person.isAnonymous;
   const router = useRouter();
   const pathname = usePathname();
+  const narrow = useMedia(NARROW);
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Item[] | null>(null);
   const [itemsFailed, setItemsFailed] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
+  
+  const inner = useRef<HTMLDivElement>(null);
+  useAutoHeight(dialog, inner);
   const currentNode = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1] ?? null;
   const here = tree?.find((node) => node.id === currentNode);
 
@@ -132,18 +146,23 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
 
   const actions = useMemo<Entry[]>(() => {
     const list: Entry[] = [
-      { kind: "action", id: "go-overview", label: "Go to the Overview", run: () => router.push("/app") },
-      { kind: "action", id: "go-calendar", label: "Go to the Calendar", run: () => router.push("/app/calendar") },
+      { kind: "action", id: "go-overview", label: "Go to Overview", run: () => router.push("/app") },
+      { kind: "action", id: "go-tasks", label: "Go to Tasks", run: () => router.push("/app/tasks") },
+      { kind: "action", id: "go-calendar", label: "Go to Calendar", run: () => router.push("/app/calendar") },
+      { kind: "action", id: "go-mail", label: "Go to Mail", run: () => router.push("/app/mail") },
       { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
     ];
+    
+    if (signedIn) list.push({ kind: "action", id: "go-profile", label: "Go to Profile", run: () => router.push("/app/profile") });
     if (here) {
       list.push({ kind: "action", id: "new-task", label: `New task in ${here.name}`, run: () => openQuickAdd({ placeId: here.id }) });
       list.push({ kind: "action", id: "agent", label: `Issue an agent token for ${here.name}`, run: () => router.push(`/app/settings?node=${here.id}#agent-tokens`) });
     }
     const dark = currentTheme() === "dark";
-    list.push({ kind: "action", id: "theme", label: dark ? "Switch to the light theme" : "Switch to the dark theme", run: () => setTheme(dark ? "light" : "dark") });
+    list.push({ kind: "action", id: "theme", label: dark ? "Switch to light theme" : "Switch to dark theme", run: () => setTheme(dark ? "light" : "dark") });
+    list.push({ kind: "action", id: "shortcuts", label: "Show keyboard shortcuts", run: showShortcuts });
     return list;
-  }, [here, router]);
+  }, [here, router, signedIn]);
 
   
   
@@ -212,23 +231,23 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   
   
   const note = treeFailed
-    ? `Clients, projects, tasks and mail could not be read: ${treeError.replace(/\.+$/, "")}. Actions still work; open this again to retry.`
+    ? `Clients, projects, tasks and mail could not be loaded: ${treeError.replace(/\.+$/, "")}. Actions still work; open this again to retry.`
     : searching && (items === null || mailAccounts === null)
-      ? "Reading tasks and notes…"
+      ? "Loading tasks and notes…"
       : nothing && itemsFailed
-        ? `Some tasks and notes could not be read, and nothing else matches “${query.trim()}”.`
+        ? `Some tasks and notes could not be loaded, and nothing else matches “${query.trim()}”.`
         : nothing && mailNow.failures.length > 0
           ? `Nothing matches “${query.trim()}” in what could be searched.`
           : nothing
             ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
             : itemsFailed
-              ? "Some tasks and notes could not be read; projects and actions still work."
+              ? "Some tasks and notes could not be loaded; projects and actions still work."
               : accountsSearching > 0
                 ? `Searching the mail of ${count(accountsSearching, "account", "accounts")}…`
                 : "";
   const noteFailed = treeFailed || itemsFailed;
   return (
-    <div className="palette-inner">
+    <div ref={inner} className="palette-inner">
       <div className="palette-search">
         <SearchIcon className="palette-search-icon" />
         <input
@@ -242,7 +261,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           aria-autocomplete="list"
           aria-activedescendant={current ? `palette-${current.id}` : undefined}
           aria-label={NAME}
-          placeholder={NAME}
+          placeholder={narrow ? SHORT_NAME : NAME}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -310,7 +329,8 @@ function EntryView({ entry }: { entry: Entry }) {
         <span className="pill">{KIND_NAMES[entry.node.kind]}</span>
         <span className="stack palette-text">
           <span className="t-name">{entry.node.name}</span>
-          {entry.node.path !== entry.node.name && <span className="t-meta">{entry.node.path}</span>}
+          {}
+          {entry.node.path !== entry.node.name && <span className="t-meta">{entry.node.path.slice(0, entry.node.path.lastIndexOf(" / "))}</span>}
         </span>
       </>
     );

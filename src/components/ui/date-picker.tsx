@@ -1,7 +1,7 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   addDays,
   addMonths,
@@ -83,11 +83,23 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
   const weeks = monthGrid(active, weekStart);
   const month = active.slice(0, 7);
   const grid = useRef<HTMLTableElement>(null);
+  
+  const [from, setFrom] = useState<"next" | "previous" | null>(null);
+
+  
+  
+  const focusDay = useRef<Day | null>(null);
+  useLayoutEffect(() => {
+    const day = focusDay.current;
+    if (!day) return;
+    focusDay.current = null;
+    grid.current?.querySelector<HTMLButtonElement>(`[data-day="${day}"]`)?.focus();
+  }, [active]);
 
   function move(next: Day) {
+    if (next.slice(0, 7) !== month) setFrom(next > active ? "next" : "previous");
+    focusDay.current = next;
     setActive(next);
-    
-    requestAnimationFrame(() => grid.current?.querySelector<HTMLButtonElement>(`[data-day="${next}"]`)?.focus());
   }
 
   function onKey(event: KeyboardEvent<HTMLTableElement>) {
@@ -116,7 +128,9 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
           <span className="sr-only">Previous</span>
         </button>
         <p className="t-label cal-month-title" aria-live="polite">
-          {monthTitle(active)}
+          <span key={month} className="cal-month-name" data-from={from ?? undefined}>
+            {monthTitle(active)}
+          </span>
         </p>
         <button type="button" className="btn btn-quiet btn-sm btn-icon" title="Next month" onClick={() => move(addMonths(active, 1))}>
           <NextIcon />
@@ -133,7 +147,7 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody key={month} data-from={from ?? undefined}>
           {weeks.map((week) => (
             <tr key={week[0]}>
               {week.map((day) => {

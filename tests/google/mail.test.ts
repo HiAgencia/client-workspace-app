@@ -1329,9 +1329,16 @@ describe("what the screens read and say of the mail", () => {
       { unread: 1, failures: [] },
       { unread: null, failures: [{ accountId: "a", accountEmail: "uncounted@example.com", reason: "HTTP 500" }] },
     ];
-    const plainSum: MailFigure = { unread: counts.reduce((sum, counted) => sum + (counted.unread ?? 0), 0), partial: false, why: null };
+    const plainSum: MailFigure = { unread: counts.reduce((sum, counted) => sum + (counted.unread ?? 0), 0), partial: false, why: null, note: null };
     expect(figureText(plainSum)?.shown).toBe("1");
     expect(figureText(figureOf(counts))?.shown).not.toBe(figureText(plainSum)?.shown);
+  });
+
+  it("the sidebar's line under a partial count says how many accounts are missing, and leaves their reasons to Mail", () => {
+    const figure = figureOf([{ unread: null, failures: [{ accountId: "a", accountEmail: "uncounted@example.com", reason: "renewing the access token: HTTP 401 invalid_client" }] }]);
+    expect(figure.note).toBe("1 account is not counted in full: Mail says why.");
+    expect(figure.why).toContain("uncounted@example.com");
+    expect(figure.why).toContain("HTTP 401");
   });
 
   it("a count that could not read anything says so instead of a zero", () => {
@@ -1348,7 +1355,7 @@ describe("what the screens read and say of the mail", () => {
       expect(cut.failures).toHaveLength(1);
       expect(mailFailureText(cut.failures[0])).toMatch(/^In reads@example\.com, only the latest \d+ unread messages were counted\.$/);
       
-      expect(mailFailureText({ ...cut.failures[0], partial: false })).toMatch(/^The mail of reads@example\.com could not be read:/);
+      expect(mailFailureText({ ...cut.failures[0], partial: false })).toMatch(/^The mail of reads@example\.com could not be loaded:/);
     } finally {
       clearTrouble();
     }

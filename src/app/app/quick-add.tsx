@@ -4,10 +4,10 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type R
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Fold } from "@/components/ui/fold";
-import { AddIcon } from "@/components/ui/icons";
+import { AddIcon, DateIcon, EnterKeyIcon, GeneralIcon, PriorityIcon, TimeIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
-import { count } from "@/lib/count";
+import { afterExit } from "@/components/ui/use-exit";
 import { today, type Day } from "@/lib/dates";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
@@ -15,14 +15,15 @@ import { readQuickAdd, type PieceKind, type QuickAddPiece, type QuickAddPlace } 
 import { tool, type Item } from "./client-api";
 import { PRIORITIES } from "./item-parts";
 import { onOpenQuickAdd, type QuickAddStart } from "./quick-add-bus";
-import { pasteLinkOver, whenLabel } from "./task-row";
+import { pasteLinkOver, whenLabel, whenTone } from "./task-row";
 import { useWorkspace } from "./workspace";
 
 
+
+const LOW = 4;
 const clockNow = () => new Date().toTimeString().slice(0, 5);
 
-const KIND_NAMES: Record<PieceKind, string> = { date: "Date", place: "Place", priority: "Priority" };
-const NO_PRIORITY = "none";
+const KIND_NAMES: Record<PieceKind, string> = { date: "Date", place: "Client or project", priority: "Priority" };
 const GENERAL = "general";
 
 
@@ -71,6 +72,8 @@ function QuickAddEditor({
   const prepared = useMemo(() => places.map((place) => ({ place, prepared: prepare(`${place.path} ${place.name}`) })), [places]);
   const reading = useMemo(() => readQuickAdd(text, { today: now, clock, places, dismissed }), [text, now, clock, places, dismissed]);
   const byId = (id: string | null | undefined) => (id ? places.find((place) => place.id === id) ?? null : null);
+  
+  const colorOf = (id: string | null | undefined) => (id ? (tree?.find((node) => node.id === id)?.color ?? undefined) : undefined);
 
   
   const day = overrides.date !== undefined ? overrides.date.day : (reading.day ?? start.day ?? null);
@@ -90,6 +93,11 @@ function QuickAddEditor({
       : [];
   const listOpen = suggestions.length > 0;
   const highlighted = Math.min(active, Math.max(0, suggestions.length - 1));
+  
+  
+  const [lastShown, setLastShown] = useState(suggestions);
+  if (listOpen && (lastShown.length !== suggestions.length || lastShown.some((entry, index) => entry.id !== suggestions[index].id))) setLastShown(suggestions);
+  const drawn = listOpen ? suggestions : lastShown;
 
   function sync() {
     const el = field.current;
@@ -137,7 +145,7 @@ function QuickAddEditor({
       return field.current?.focus();
     }
     if (placeId === undefined) {
-      setProblem(`More than one place is called “${reading.pieces.find((piece) => piece.kind === "place")?.text.slice(1) ?? ""}”: choose one on the Place chip.`);
+      setProblem(`More than one client or project is called “${reading.pieces.find((piece) => piece.kind === "place")?.text.slice(1) ?? ""}”: choose one on its chip.`);
       return;
     }
     setBusy(true);
@@ -146,7 +154,7 @@ function QuickAddEditor({
         node: placeId,
         ...(start.parentId ? { parent: start.parentId } : {}),
         title,
-        priority: priority ?? 4,
+        priority: priority ?? LOW,
         ...(day ? { dueOn: day } : {}),
         ...(day && time ? { dueTime: time } : {}),
       });
@@ -215,7 +223,6 @@ function QuickAddEditor({
     { value: GENERAL, label: "General" },
     ...(candidates.length > 1 && overrides.place === undefined ? candidates : places).map((entry) => ({ value: entry.id, label: entry.path })),
   ];
-  const priorityOptions: SelectOption[] = [...PRIORITIES, { value: NO_PRIORITY, label: "No priority" }];
 
   return (
     <div className="qa" data-inline={inline || undefined}>
@@ -234,7 +241,7 @@ function QuickAddEditor({
           
           
           lang="en"
-          aria-label="Task: what to do, with a day, #place and p1 to p4"
+          aria-label="Task, with a date, #client or project and p1–p4 priority"
           placeholder="Call the printer tomorrow 4pm #Website p2"
           role="combobox"
           aria-autocomplete="list"
@@ -259,25 +266,35 @@ function QuickAddEditor({
             }
           }}
         />
-        <ul id={listId} className="popup qa-suggest" role="listbox" aria-label="Places" hidden={!listOpen}>
-          {suggestions.map((entry, index) => (
+        <ul id={listId} className="popup qa-suggest" role="listbox" aria-label="Clients and projects" hidden={!listOpen}>
+          {drawn.map((entry, index) => (
             <li
               key={entry.id}
               id={`${listId}-${index}`}
               role="option"
-              aria-selected={index === highlighted}
+              aria-selected={listOpen && index === highlighted}
               className="option"
-              data-highlighted={index === highlighted ? "" : undefined}
+              data-highlighted={listOpen && index === highlighted ? "" : undefined}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => pick(entry)}
             >
+              <span className="qa-suggest-disc" data-color={colorOf(entry.id)} aria-hidden="true" />
               {entry.path}
             </li>
           ))}
         </ul>
       </div>
+      {}
       <div className="qa-chips" role="group" aria-label="What the task will be">
-        <span className="qa-chip" data-read={readKinds.has("date") || undefined} data-set={day ? "" : undefined}>
+        <span
+          className="qa-chip task-prop"
+          data-prop="date"
+          data-read={readKinds.has("date") || undefined}
+          data-set={day ? "" : undefined}
+          data-unset={day ? undefined : ""}
+          data-when={day ? whenTone(day, now) : undefined}
+        >
+          {time ? <TimeIcon className="task-prop-icon" /> : <DateIcon className="task-prop-icon" />}
           <DatePicker
             look="chip"
             label={KIND_NAMES.date}
@@ -286,23 +303,33 @@ function QuickAddEditor({
             onChange={(next) => choose("date", { day: next, time: next ? time : null }, next === null)}
           />
         </span>
-        <span className="qa-chip" data-read={readKinds.has("place") || undefined} data-set="">
+        <span className="qa-chip task-prop" data-prop="place" data-read={readKinds.has("place") || undefined} data-set="" data-color={colorOf(placeId)}>
+          {placeId ? <span className="task-prop-disc" aria-hidden="true" /> : <GeneralIcon className="task-prop-icon" />}
           <Select
             look="chip"
             label={KIND_NAMES.place}
             value={placeId === undefined ? null : (placeId ?? GENERAL)}
-            placeholder={`Choose: ${count(candidates.length, "place", "places")}`}
+            placeholder={`Choose one of ${candidates.length}`}
             options={placeOptions}
             onChange={(value) => choose("place", value === GENERAL ? null : value, value === GENERAL)}
           />
         </span>
-        <span className="qa-chip" data-read={readKinds.has("priority") || undefined} data-set={priority ? "" : undefined}>
+        <span
+          className="qa-chip task-prop"
+          data-prop="priority"
+          data-read={readKinds.has("priority") || undefined}
+          data-set={priority ? "" : undefined}
+          data-unset={priority ? undefined : ""}
+          data-priority={priority ?? undefined}
+        >
+          <PriorityIcon className="task-prop-icon" />
           <Select
             look="chip"
             label={KIND_NAMES.priority}
-            value={priority ? String(priority) : NO_PRIORITY}
-            options={priorityOptions}
-            onChange={(value) => choose("priority", value === NO_PRIORITY ? null : Number(value), value === NO_PRIORITY)}
+            
+            value={String(priority ?? LOW)}
+            options={PRIORITIES}
+            onChange={(value) => choose("priority", Number(value), false)}
           />
         </span>
       </div>
@@ -314,14 +341,17 @@ function QuickAddEditor({
       <div className="qa-foot">
         {}
         <p className="t-meta qa-hint">
-          Type <kbd className="kbd">#</kbd> for a place, <kbd className="kbd">p1</kbd> to <kbd className="kbd">p4</kbd> for a priority, and a day like <span className="nowrap">“tomorrow 4pm”</span>.
+          <kbd className="kbd">#</kbd> client or project · <kbd className="kbd">p1</kbd>–<kbd className="kbd">p4</kbd> priority · <span className="nowrap">a day like “tomorrow 4pm”</span>
         </p>
         <div className="qa-actions">
           <Button size="sm" onClick={() => onDone("cancel")}>
             Cancel
           </Button>
-          <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !reading.title}>
-            {busy ? "Adding…" : submitLabel}
+          <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !reading.title} aria-keyshortcuts="Enter">
+            <span className="btn-label">{busy ? "Adding…" : submitLabel}</span>
+            <kbd className="kbd" aria-hidden="true">
+              <EnterKeyIcon />
+            </kbd>
           </Button>
         </div>
       </div>
@@ -367,7 +397,11 @@ export function QuickAddDialog() {
         event.preventDefault();
       }}
       onClose={() => {
-        setStart(null);
+        
+        const element = dialog.current;
+        afterExit(element, () => {
+          if (!element?.open) setStart(null);
+        });
         requestAnimationFrame(() => opener.current?.focus({ preventScroll: true }));
       }}
       onPointerDown={(event) => {

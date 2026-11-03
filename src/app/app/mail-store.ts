@@ -26,7 +26,9 @@ export type MailList = {
 };
 
 
-export type MailFigure = { unread: number; partial: boolean; why: string | null };
+
+
+export type MailFigure = { unread: number; partial: boolean; why: string | null; note: string | null };
 
 type Ask = (name: string, input: Record<string, unknown>) => Promise<Answer<unknown>>;
 type Counted = { unread: number | null; failures: MailFailureRow[] };
@@ -175,7 +177,8 @@ export function figureOf(counts: Counted[]): MailFigure {
   return {
     unread: counts.reduce((sum, counted) => sum + (counted.unread ?? 0), 0),
     partial: failures.length > 0,
-    why: failures.length === 0 ? null : failures.length === 1 ? mailFailureText(failures[0]) : `${count(failures.length, "account is", "accounts are")} not counted whole: Mail says why.`,
+    why: failures.length === 0 ? null : failures.length === 1 ? mailFailureText(failures[0]) : `${count(failures.length, "account is", "accounts are")} not counted in full: Mail says why.`,
+    note: failures.length === 0 ? null : `${count(failures.length, "account is", "accounts are")} not counted in full: Mail says why.`,
   };
 }
 

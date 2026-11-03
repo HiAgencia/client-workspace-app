@@ -76,7 +76,7 @@ describe.each([
     watchRequests();
     const answer = await POST(sendsMessage());
     expect(answer.status).toBe(503);
-    expect(await answer.json()).toMatchObject({ ok: false, code: "off", message: expect.stringMatching(/^The assistant is not available/) });
+    expect(await answer.json()).toMatchObject({ ok: false, code: "off", message: expect.stringMatching(/^Muse is not available/) });
     expect(asked, "no request left the server").toEqual([]);
   });
 
@@ -87,7 +87,7 @@ describe.each([
     watchRequests();
     const answer = await POST(sendsNote());
     expect(answer.status).toBe(503);
-    expect(await answer.json()).toMatchObject({ ok: false, code: "off", message: expect.stringMatching(/^The assistant is not available/) });
+    expect(await answer.json()).toMatchObject({ ok: false, code: "off", message: expect.stringMatching(/^Muse is not available/) });
     expect(asked, "no request left the server").toEqual([]);
     expect(await (await GET()).json()).toEqual({ ok: true, available: false });
     expect(toModel()).toEqual([]);
@@ -106,7 +106,7 @@ describe.each([
     const { GET } = await import("@/app/api/chat/route");
     const { NextRequest } = await import("next/server");
     const answer = await (await GET(new NextRequest(`${SITE}/api/chat`))).json();
-    expect(answer).toMatchObject({ ok: true, messages: [], off: expect.stringMatching(/^The assistant is not available/) });
+    expect(answer).toMatchObject({ ok: true, messages: [], off: expect.stringMatching(/^Muse is not available/) });
   });
 
   it("the rest of the app works the same: a task is written and read", async () => {

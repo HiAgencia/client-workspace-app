@@ -11,7 +11,7 @@ export default async function OverviewPage() {
   const saved = await savedLayout("overview");
   return (
     <Suspense fallback={<BoardShell />}>
-      <Overview saved={saved.board} />
+      <Overview saved={saved.board} settled={saved.settled} />
     </Suspense>
   );
 }

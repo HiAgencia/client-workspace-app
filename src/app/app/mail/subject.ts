@@ -12,5 +12,5 @@ export function taskLine(message: { tasks: Array<{ title: string; status: "open"
   const open = message.tasks.find((task) => task.status === "open");
   const task = open ?? message.tasks[0];
   if (!task) return null;
-  return { text: `${open ? "For" : "Done"}: ${inlinePlain(task.title)}`, done: !open };
+  return { text: `${open ? "For" : "Completed task"}: ${inlinePlain(task.title)}`, done: !open };
 }

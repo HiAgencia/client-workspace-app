@@ -231,25 +231,29 @@ export const browseEvents = defineTool({
     }
     const place: ReadPlace = node ? { kind: "node", node } : { kind: "all" };
     const reach = reachOf(scope, place);
-    
-    const linked = await nodeEventLinks(ctx, reach.nodeIds);
-    if (isError(linked)) return linked;
     const range = { from: input.from, to: input.to };
-    const [google, local] = await Promise.all([
+    
+    
+    const [{ linked, local }, google] = await Promise.all([
+      nodeEventLinks(ctx, reach.nodeIds).then(async (linked) => ({
+        linked,
+        
+        local:
+          isError(linked) || input.account
+            ? ok({ events: [] as LocalEvent[] })
+            : await localEventsIn(
+                ctx,
+                scope,
+                reach,
+                input.fromDay,
+                input.toDay,
+                range,
+                linked.links.flatMap((link) => (link.eventId ? [link.eventId] : [])),
+              ),
+      })),
       readCalendars(ctx, scope, place, range, input.account),
-      
-      input.account
-        ? ok({ events: [] as LocalEvent[] })
-        : localEventsIn(
-            ctx,
-            scope,
-            reach,
-            input.fromDay,
-            input.toDay,
-            range,
-            linked.links.flatMap((link) => (link.eventId ? [link.eventId] : [])),
-          ),
     ]);
+    if (isError(linked)) return linked;
     if (isError(google)) return google;
     if (isError(local)) return local;
     const events = new Map<string, BrowsedEvent>();

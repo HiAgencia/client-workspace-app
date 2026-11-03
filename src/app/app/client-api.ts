@@ -1,6 +1,7 @@
 "use client";
 
 import { READ_TOOLS } from "@/lib/tools/read-tools";
+import { forgetReads, keep, peek, readEnded, readStarted, stamp, wrote, type Kept } from "./read-cache";
 
 
 
@@ -35,11 +36,29 @@ export async function askOnceMoreIfCut(url: string, init: RequestInit): Promise<
 }
 
 
-async function send<T>(url: string, init: RequestInit, kind: "read" | "write"): Promise<Answer<T>> {
-  const response = kind === "read" ? await askOnceMoreIfCut(url, init) : await ask(url, init);
+
+async function adopted(started: Promise<Response>, url: string, init: RequestInit): Promise<Response | Failure> {
+  const first = await started.catch((): Failure => ({ ok: false, message: "No connection to the server." }));
+  if (!wasCut(first)) return first;
+  await new Promise((resolve) => setTimeout(resolve, SECOND_READ_PAUSE_MS));
+  return ask(url, init);
+}
+
+function takeEarly(key: string): Promise<Response> | undefined {
+  const early = (globalThis as { __cwEarly?: Record<string, Promise<Response>> }).__cwEarly;
+  const started = early?.[key];
+  if (started) delete early[key];
+  return started;
+}
+
+
+async function send<T>(url: string, init: RequestInit, kind: "read" | "write", early?: Promise<Response>): Promise<Answer<T>> {
+  const response = early ? await adopted(early, url, init) : kind === "read" ? await askOnceMoreIfCut(url, init) : await ask(url, init);
   if (!(response instanceof Response)) return response;
   if (response.status === 401) {
     
+    
+    forgetReads();
     window.location.assign(new URL("/", window.location.origin));
     return { ok: false, message: "Your session ended. Sign in again." };
   }
@@ -50,45 +69,90 @@ async function send<T>(url: string, init: RequestInit, kind: "read" | "write"): 
   }
 }
 
+
+const KEPT_GETS = new Set(["/api/accounts"]);
+
 export function get<T>(url: string): Promise<Answer<T>> {
-  return send<T>(url, { method: "GET" }, "read");
+  if (!KEPT_GETS.has(url)) return send<T>(url, { method: "GET" }, "read");
+  return shared(`GET ${url}`, () => send<T>(url, { method: "GET" }, "read"));
 }
 
-function postAs<T>(kind: "read" | "write", url: string, body: unknown, method = "POST"): Promise<Answer<T>> {
-  return send<T>(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, kind);
+
+export function peekGet<T>(url: string): Kept<{ ok: true } & T> | null {
+  return KEPT_GETS.has(url) ? peek(`GET ${url}`) : null;
+}
+
+function postAs<T>(kind: "read" | "write", url: string, body: unknown, method = "POST", early?: Promise<Response>): Promise<Answer<T>> {
+  return send<T>(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, kind, early);
 }
 
 export function post<T>(url: string, body: unknown, method = "POST"): Promise<Answer<T>> {
-  readsOnTheirWay.clear();
-  return postAs<T>("write", url, body, method);
+  return written(url, () => postAs<T>("write", url, body, method));
 }
 
 
 
 export async function forgetLayout(): Promise<void> {
-  const answer = await send<Record<string, never>>("/api/preferences", { method: "DELETE" }, "write");
+  const answer = await written("/api/preferences", () => send<Record<string, never>>("/api/preferences", { method: "DELETE" }, "write"));
   if (!answer.ok) console.error("The saved order of the boxes could not be forgotten on signing out:", answer.message);
+}
+
+
+const CHANGES_NO_READ = new Set(["/api/preferences"]);
+
+
+
+function written<T>(url: string, sending: () => Promise<Answer<T>>): Promise<Answer<T>> {
+  readsOnTheirWay.clear();
+  if (CHANGES_NO_READ.has(url)) return sending();
+  wrote();
+  return sending().finally(wrote);
 }
 
 
 
 const readsOnTheirWay = new Map<string, Promise<Answer<unknown>>>();
 
-
-export function tool<T>(name: string, input: Record<string, unknown>, scope?: string | null): Promise<Answer<T>> {
-  const url = scope ? `/api/tools/${name}?scope=${scope}` : `/api/tools/${name}`;
-  if (!READ_TOOLS.has(name)) {
-    readsOnTheirWay.clear();
-    return postAs<T>("write", url, input);
-  }
-  const key = `${url} ${JSON.stringify(input)}`;
+function shared<T>(key: string, asking: () => Promise<Answer<T>>, stored = false): Promise<Answer<T>> {
   const onItsWay = readsOnTheirWay.get(key);
   if (onItsWay) return onItsWay as Promise<Answer<T>>;
-  const read = postAs<T>("read", url, input).finally(() => {
-    if (readsOnTheirWay.get(key) === read) readsOnTheirWay.delete(key);
-  });
+  const asked = stamp();
+  readStarted();
+  const read: Promise<Answer<T>> = asking()
+    .then((answer) => {
+      if (answer.ok) keep(key, answer, asked, stored);
+      return answer;
+    })
+    .finally(() => {
+      readEnded();
+      if (readsOnTheirWay.get(key) === read) readsOnTheirWay.delete(key);
+    });
   readsOnTheirWay.set(key, read);
   return read;
+}
+
+
+const STORED_TOOLS = new Set(["list_tree"]);
+
+const toolUrl = (name: string, scope?: string | null) => (scope ? `/api/tools/${name}?scope=${scope}` : `/api/tools/${name}`);
+
+
+export function toolKey(name: string, input: Record<string, unknown>, scope?: string | null): string {
+  return `${toolUrl(name, scope)} ${JSON.stringify(input)}`;
+}
+
+
+export function tool<T>(name: string, input: Record<string, unknown>, scope?: string | null): Promise<Answer<T>> {
+  const url = toolUrl(name, scope);
+  if (!READ_TOOLS.has(name)) return written(url, () => postAs<T>("write", url, input));
+  const key = toolKey(name, input, scope);
+  return shared(key, () => postAs<T>("read", url, input, "POST", takeEarly(key)), STORED_TOOLS.has(name) && !scope);
+}
+
+
+
+export function peekTool<T>(name: string, input: Record<string, unknown>, stored = false): Kept<{ ok: true } & T> | null {
+  return peek(toolKey(name, input), stored && STORED_TOOLS.has(name));
 }
 
 export type Item = {

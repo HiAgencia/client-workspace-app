@@ -2,6 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { requireServerEnv, serverEnv } from "@/lib/env";
+import { ASSISTANT_NAME } from "@/lib/product";
 import { simulatedModel } from "./simulated";
 
 export const META_BASE_URL = "https://api.meta.ai/v1";
@@ -19,7 +20,7 @@ export function chatProvider(): ChatProvider {
 }
 
 
-export const AI_OFF_MESSAGE = "The assistant is not available right now: messages, dictation and images cannot be sent to it. Everything else works as usual.";
+export const AI_OFF_MESSAGE = `${ASSISTANT_NAME} is not available right now: messages, dictation and images cannot be sent to it. Everything else works as usual.`;
 
 
 export function chatModel(provider: LiveProvider): { model: LanguageModel; providerOptions?: ProviderOptions } {

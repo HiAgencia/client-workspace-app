@@ -16,6 +16,7 @@ import { workingMinutesBefore } from "@/lib/working-time";
 
 
 
+
 export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
 
 
@@ -237,6 +238,33 @@ export function demoSeedTree(today: string): Seed[] {
           children: [
             {
               name: "Ordering flow",
+              
+              
+              accounts: [
+                {
+                  email: "orders@larkspur.example",
+                  mail: [
+                    {
+                      from: { name: "Counter POS", email: "no-reply@counterpos.example" },
+                      subject: "New pickup order from Priya Shah",
+                      snippet: "Pickup tomorrow at 8:30 AM: 2 sourdough loaves and 6 butter croissants, $37.00 paid online.",
+                      text: "New pickup order from Priya Shah\n\nPickup tomorrow at 8:30 AM: 2 sourdough loaves and 6 butter croissants, $37.00 paid online.\n\n2 × Sourdough loaf: $16.00\n6 × Butter croissant: $21.00\nTotal: $37.00\n\nOrder 1048\nCounter POS",
+                      ago: 236,
+                      unread: false,
+                      important: false,
+                    },
+                    {
+                      from: { name: "Millbrook Flour", email: "sales@millbrookflour.example" },
+                      subject: "Your flour order is confirmed",
+                      snippet: "Order 4471 is confirmed: four sacks of bread flour and two of rye, on tomorrow's early delivery.",
+                      text: "Hello,\n\nOrder 4471 is confirmed: four sacks of bread flour and two of rye, on tomorrow's early delivery.\n\nTom\nMillbrook Flour",
+                      ago: 1460,
+                      unread: false,
+                      important: false,
+                    },
+                  ],
+                },
+              ],
               items: [
                 task({ title: "Map the pickup time slots", priority: 3, dueOn: day(2) }, { ago: 1534 }),
                 

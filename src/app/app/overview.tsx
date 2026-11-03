@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useSyncExternalStore, ViewTransition } from "react";
 import { Menu } from "@/components/ui/menu";
 import { firstWeekday, longDay, today } from "@/lib/dates";
+import { ASSISTANT_NAME } from "@/lib/product";
 import {
   ActivityBoxContent,
   allTasks,
@@ -26,13 +27,18 @@ import {
 } from "./box-kinds";
 import { FOOT, SPLIT, type BoardLayout } from "./board-layout";
 import { BoxBoard, customizeEntries, useBoardLayout, type BoxSpec } from "./boxes";
-import { GoogleOutcome } from "./node-view";
+import { useGuide } from "./guide";
+import { useGoogleOutcome } from "./google-outcome";
 import { PageHeader } from "./page-header";
 import { useQuickAddInline } from "./quick-add";
 import { MailAccountFilter, TasksPlaceFilter, useAddress, usePlaceParam } from "./page-filters";
 import { ReplyStrip } from "./reply-strip";
 import { useTaskReplies } from "./task-replies";
-import { useChatScope, useWorkspace } from "./workspace";
+import { ConnectOffer, connectWords, useConnectWay } from "./connect-offer";
+import { isFirstUse } from "./first-use";
+import { settledInBrowser } from "./started";
+import { Welcome } from "./welcome";
+import { useChatScope, useWorkspace, type Person } from "./workspace";
 
 
 
@@ -44,17 +50,49 @@ const noSubscription = () => () => {};
 
 
 
-export function Overview({ saved }: { saved: BoardLayout | null }) {
+
+export function Overview({ saved, settled = false }: { saved: BoardLayout | null; settled?: boolean }) {
+  const { tree, generalTasks, notePlaces, person } = useWorkspace();
+  useGoogleOutcome();
+  const empty = isFirstUse({ tree, generalTasks, notePlaces });
+  
+  if (empty && person === null) return <BoardShell />;
+  if (empty && person && !person.isAnonymous) return <FirstUse person={person} />;
+  return <OverviewBoard saved={saved} settled={settled} />;
+}
+
+
+
+function FirstUse({ person }: { person: Person }) {
+  const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
+  return (
+    <ViewTransition enter="page-in" exit="page-out" default="none">
+      <div className="page page-first-use" data-overview data-first-use>
+        <PageHeader title="Overview" count={mounted ? longDay(today()) : <span className="page-count-wait" aria-hidden="true" />} />
+        <Welcome person={person} />
+      </div>
+    </ViewTransition>
+  );
+}
+
+
+
+function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | null; settled: boolean }) {
   
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree } = useWorkspace();
+  
+  const settled = useSyncExternalStore(noSubscription, settledInBrowser, () => fromServer);
+  const deciding = tree === null && !settled;
   useChatScope(null);
   const board = useBoardLayout("overview", OVERVIEW_BOXES, saved);
+  const connectWay = useConnectWay();
+  
+  const guide = useGuide(tree !== null && tree.length > 0);
   const { set } = useAddress();
   const router = useRouter();
   const place = usePlaceParam(tree);
   const account = useSearchParams().get("account");
-  const google = useSearchParams().get("google");
   const [weekStart] = useState(() => (typeof window === "undefined" ? 1 : firstWeekday()));
   const now = mounted ? today() : null;
 
@@ -88,7 +126,7 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
               Open
             </HeadLink>
           ),
-          menu: [{ kind: "action", label: "Open Tasks", onSelect: () => router.push(tasksHref) }],
+          menu: [{ kind: "action", label: "Go to Tasks", onSelect: () => router.push(tasksHref) }],
           content: <TasksBoxContent read={tasks} now={now} place={place} placeId={placeId} showPlace layout="list" allHref={tasksHref} />,
         },
         calendar: {
@@ -112,7 +150,18 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
               Open
             </HeadLink>
           ),
-          content: <MailBoxContent read={mail} replies={replies} account={account} now={now} place={place} connectHref="/app/settings#google-accounts" />,
+          content: (
+            <MailBoxContent
+              read={mail}
+              replies={replies}
+              account={account}
+              now={now}
+              place={place}
+              connectHref="/app/settings#accounts-settings"
+              connect={<ConnectOffer way={connectWay} quiet />}
+              connectText={connectWords(connectWay, "its mail")}
+            />
+          ),
         },
         no_date: {
           id: "no_date",
@@ -127,14 +176,14 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
         activity: {
           id: "activity",
           title: NAMES.activity,
-          purpose: "What the chat and your agents did",
+          purpose: `What ${ASSISTANT_NAME} and your coding agents did`,
           surface: "rest",
           content: <ActivityBoxContent place={place} />,
         },
         notes: {
           id: "notes",
           title: NAMES.notes,
-          purpose: "Loose notes, before they find their place",
+          purpose: "Notes in General",
           surface: "rest",
           count: notesCount(notes.data?.total),
           action: noteAdd.trigger,
@@ -146,7 +195,8 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
 
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
-      <div className="page page-boxes" data-overview data-today={now ?? undefined}>
+      {}
+      <div className="page page-boxes" data-overview data-today={now ?? undefined} data-deciding={deciding || undefined}>
         <PageHeader
           title="Overview"
           count={now ? longDay(now) : <span className="page-count-wait" aria-hidden="true" />}
@@ -158,11 +208,11 @@ export function Overview({ saved }: { saved: BoardLayout | null }) {
           }
           filtersSet={(place.kind === "all" ? 0 : 1) + (account ? 1 : 0)}
           chat
-          more={<Menu label="More" about="for the Overview" entries={customizeEntries(board, NAMES)} />}
+          more={<Menu label="More" about="for the Overview" entries={[...customizeEntries(board, NAMES), { kind: "separator" }, { kind: "action", label: "Show the guide", onSelect: guide.start }]} />}
         />
-        {google && <GoogleOutcome outcome={google} />}
         <ReplyStrip read={replies} now={now} />
-        {now ? <BoxBoard board={board} boxes={boxes} label="The Overview's boxes" /> : <BoardShell />}
+        {now ? <BoxBoard board={board} boxes={boxes} label="The Overview's boxes" hold={deciding} /> : <BoardShell />}
+        {guide.layer}
       </div>
     </ViewTransition>
   );

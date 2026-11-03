@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useMedia } from "@/components/ui/use-media";
-import { DarkIcon, DownIcon, LightIcon, UpIcon } from "@/components/ui/icons";
+import { DarkIcon, DownIcon, ImageIcon, LightIcon, UpIcon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { LOCALE } from "@/lib/dates";
@@ -75,6 +75,8 @@ type ViewerProps = {
   onPrevious: (() => void) | null;
   onNext: (() => void) | null;
   
+  note?: ReactNode;
+  
   actions: ReactNode;
   below: ReactNode;
   
@@ -83,7 +85,7 @@ type ViewerProps = {
   onClose?: () => void;
 };
 
-export function MailViewer({ row, onPrevious, onNext, actions, below, more, onClose }: ViewerProps) {
+export function MailViewer({ row, onPrevious, onNext, note, actions, below, more, onClose }: ViewerProps) {
   const key = `${row.accountId}:${row.id}`;
   const [read, setRead] = useState<{ key: string; message: MailContent | null; error: string | null } | null>(null);
   const { mode, setMode } = useMailMode();
@@ -118,10 +120,18 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
             Back
           </Button>
         )}
-        <Button size="sm" className="btn-icon" title="Previous message" onClick={onPrevious ?? undefined} disabled={!onPrevious} aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}>
+        <Button
+          size="sm"
+          className="btn-icon"
+          title="Previous message (K)"
+          aria-keyshortcuts="K"
+          onClick={onPrevious ?? undefined}
+          disabled={!onPrevious}
+          aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}
+        >
           <UpIcon />
         </Button>
-        <Button size="sm" className="btn-icon" title="Next message" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
+        <Button size="sm" className="btn-icon" title="Next message (J)" aria-keyshortcuts="J" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
           <DownIcon />
         </Button>
       </div>
@@ -133,24 +143,16 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
   return (
     <article className="mail-viewer" aria-labelledby="mail-subject" data-mail-viewer={key}>
       <div className="mail-bar">
-        {onClose ? (
-          <>
-            {moving}
-            {acting}
-          </>
-        ) : (
-          <>
-            {moving}
-            {acting}
-          </>
-        )}
+        {moving}
+        {acting}
       </div>
-      <header className="mail-head">
+      {}
+      <header key={key} className="mail-head">
         <h2 id="mail-subject" className="t-title mail-head-subject" tabIndex={-1}>
           {subjectOf(row)}
         </h2>
         <div className="mail-from-line">
-          <SenderMark name={row.from.name ?? row.from.email} />
+          <SenderMark name={row.from.name ?? row.from.email} email={row.from.email} />
           <span className="mail-from-who">
             <span className="t-name">{row.from.name ?? row.from.email}</span>
             {row.from.name && <span className="t-meta mail-address">{row.from.email}</span>}
@@ -160,6 +162,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
         <div className="t-meta mail-where-line">
           <span>
             To <span className="mail-address">{row.accountEmail}</span>
+            {note}
           </span>
           <span className="mail-where-place">
             {row.place ? (
@@ -167,7 +170,7 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
                 In <PlaceName path={row.place.path} color={row.place.color} />
               </>
             ) : (
-              "In no client or project"
+              "Not linked to a client or project"
             )}
           </span>
           {row.important && (
@@ -178,24 +181,26 @@ export function MailViewer({ row, onPrevious, onNext, actions, below, more, onCl
         </div>
       </header>
 
+      {below}
+
+      {}
       {message && message.remoteImages > 0 && (
         <div className="mail-images" data-mail-images={imagesOn ? "shown" : "held"}>
-          <p className="t-help">
+          <ImageIcon className="mail-images-icon" />
+          <p className="t-meta">
             {imagesOn
-              ? `The images of ${row.from.email} load on their own.`
-              : `${count(message.remoteImages, "image waits", "images wait")} to load: an image from the network tells the sender the message was opened.`}
+              ? `Images from ${row.from.email} load automatically.`
+              : `${count(message.remoteImages, "image", "images")} hidden. Loading ${message.remoteImages === 1 ? "it" : "them"} tells the sender you opened this message.`}
           </p>
-          <Button size="sm" onClick={() => setImages(!imagesOn)} data-show-images={imagesOn ? undefined : ""}>
+          <Button size="sm" variant="quiet" onClick={() => setImages(!imagesOn)} data-show-images={imagesOn ? undefined : ""}>
             {imagesOn ? "Stop loading images" : "Show images"}
           </Button>
         </div>
       )}
 
-      {below}
-
       {read?.key === key && read.error ? (
         <p role="alert" className="inline-note" data-tone="alert">
-          This message could not be read: {read.error}
+          This message could not be loaded: {read.error}
         </p>
       ) : (
         <MailFrame message={message} messageKey={key} mode={mode} images={imagesOn} />
@@ -287,14 +292,12 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
     <div
       ref={host}
       className="mail-frame"
-      data-mode={mode}
-      data-adapts={shown?.adapts ? "" : undefined}
       data-leaving={leaving ? "" : undefined}
       data-loading={!ready ? "" : undefined}
       aria-busy={!ready}
     >
       {!shown ? (
-        <div className="mail-frame-wait" role="status" aria-label="Reading the message">
+        <div className="mail-frame-wait" role="status" aria-label="Loading the message">
           <span className="skeleton skeleton-title" />
           <span className="skeleton" />
           <span className="skeleton" />

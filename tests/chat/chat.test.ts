@@ -106,7 +106,7 @@ describe("the chat with the simulated model", () => {
     });
     const { chunks } = await drain(await runChat({ ctx: ctx(), model: failing, messages: ask("Hello"), timeZone: "UTC" }));
     const error = chunks.find((chunk) => chunk.type === "error") as { errorText: string } | undefined;
-    expect(error?.errorText).toBe("The model did not answer. Try again.");
+    expect(error?.errorText).toBe("Try again in a moment.");
   });
 });
 

@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Fold } from "@/components/ui/fold";
-import { NextIcon, RepliesIcon } from "@/components/ui/icons";
+import { DownIcon, NextIcon, RepliesIcon } from "@/components/ui/icons";
 import type { Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
@@ -40,12 +40,13 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
           <RepliesIcon />
         </span>
         <h2 id={titleId} className="t-title reply-strip-title">
-          For your tasks
+          Possible replies
         </h2>
-        <p className="reply-strip-purpose">What may answer the tasks that wait for mail. You decide which one does.</p>
+        <p className="sr-only">Mail that may answer the tasks that wait for it. You decide which one does, in the task.</p>
         {folded.length > 0 && (
-          <Button size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
-            {noneArrived ? `Show ${waiting === 1 ? "it" : "them"}` : `${folded.length} more`}
+          <Button variant="quiet" size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
+            <span className="btn-label">{open ? "Show less" : noneArrived ? `Show ${waiting === 1 ? "it" : "them"}` : `Show ${folded.length} more`}</span>
+            <DownIcon />
           </Button>
         )}
       </div>
@@ -53,13 +54,18 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
         read.error ? (
           <BoxFailed what="The possible replies of the tasks" message={read.error} kept={false} onRetry={read.retry} />
         ) : (
-          <p className="t-meta reply-strip-note" role="status" aria-busy="true">
-            Reading what may answer your tasks…
-          </p>
+          <div className="reply-strip-wait" role="status" aria-busy="true">
+            <span className="sr-only">Loading what may answer your tasks…</span>
+            <span className="reply-strip-wait-task" aria-hidden="true">
+              <span className="skeleton" />
+              <span className="skeleton" />
+            </span>
+            <span className="skeleton" aria-hidden="true" />
+          </div>
         )
       ) : tasks.length === 0 ? (
         <p className="t-help reply-strip-note" data-empty="no-waits">
-          No task waits for mail. In a task&apos;s details, say what it waits for, and what may answer it shows here.
+          No task waits for mail. Set what a task waits for in its details, and the mail that may answer it shows here.
         </p>
       ) : noneArrived ? (
         <>
@@ -99,7 +105,7 @@ function ReplyEntry({ entry, now }: { entry: TaskReplies; now: Day | null }) {
   const newest = entry.replies[0];
   const failure = entry.failures[0];
   const unread = entry.replies.length === 0 && failure;
-  const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? "Its mail could not be read" : "Nothing arrived yet";
+  const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? "Its mail could not be loaded" : "Nothing arrived yet";
   
   
   return (

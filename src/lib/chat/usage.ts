@@ -67,7 +67,7 @@ export async function takeUsageFor(
 
 
 export function capMessage(reason: "cap" | "demo_cap", kind: UsageKind, seconds = secondsToNextDay()): string {
-  const what = kind === "chat_message" ? "chat messages" : "voice notes";
+  const what = kind === "chat_message" ? "chat messages" : "dictations";
   const when = untilAgain(seconds);
   return reason === "demo_cap"
     ? `The demo reached today's limit of ${what} for everyone. Sign in with Google to keep going, or come back ${when}.`

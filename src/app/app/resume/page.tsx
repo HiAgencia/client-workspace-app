@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { LAST_NODE_KEY } from "../workspace";
+import { lastNode } from "../last-node";
 
 
 export default function Resume() {
   const router = useRouter();
   useEffect(() => {
-    const last = localStorage.getItem(LAST_NODE_KEY);
+    const last = lastNode();
     router.replace(last ? `/app/node/${last}` : "/app");
   }, [router]);
   return (

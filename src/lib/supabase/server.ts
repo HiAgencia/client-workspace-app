@@ -5,6 +5,7 @@ import type { Db } from "@/lib/db/client";
 import type { Database } from "@/lib/db/types";
 import { publicConfig, requireServerEnv } from "@/lib/env";
 import { problem } from "@/lib/http";
+import { sessionPerson } from "@/lib/session-person";
 
 
 
@@ -29,7 +30,9 @@ export function serviceClient(): Db {
   });
 }
 
-export type SessionUser = { id: string; email: string | null; isAnonymous: boolean };
+
+
+export type SessionUser = { id: string; email: string | null; isAnonymous: boolean; name: string | null; avatarUrl: string | null };
 
 
 
@@ -49,7 +52,8 @@ export async function readSession(db: Db): Promise<SessionReading> {
     const { data, error } = await db.auth.getUser();
     if (!error) {
       if (!data.user) return { kind: "none" };
-      return { kind: "user", user: { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false } };
+      const { name, avatarUrl } = sessionPerson(data.user.user_metadata);
+      return { kind: "user", user: { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false, name, avatarUrl } };
     }
     
     if (error.name === "AuthSessionMissingError") return { kind: "none" };

@@ -2,24 +2,26 @@
 
 import { useSearchParams } from "next/navigation";
 import { createContext, Suspense, useCallback, useContext, useEffect, useState, ViewTransition, type CSSProperties, type ReactNode } from "react";
+import { GoogleMark } from "@/components/ui/brands";
+import { Link } from "@/components/ui/link";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
-import { AccountIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from "@/components/ui/icons";
+import { AccountIcon, AddIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { LOCALE } from "@/lib/dates";
-import { mailFailureText } from "@/lib/mail/failure-text";
 import { useMailRead } from "../box-kinds";
 import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
 import { get, post } from "../client-api";
 import { ConfirmButton } from "../confirm-button";
 import { ConnectBlockedNote, type ConnectBlocked } from "../connect-blocked";
-import { SenderMark } from "../item-parts";
 import { lostWords } from "../mail-store";
 import { PageHeader } from "../page-header";
+import { accountGroups } from "../place-filters";
+import { PlaceName } from "../task-row";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 
@@ -48,7 +50,7 @@ export default function SettingsPage() {
     <Suspense fallback={null}>
       <ViewTransition enter="page-in" exit="page-out" default="none">
         <div className="page page-settings">
-          <PageHeader title="Settings" count="How the workspace looks, the Google accounts it reads, and the tokens your coding agents use." />
+          <PageHeader title="Settings" />
           <SettledContext.Provider value={{ ready: entered, report }}>
             <div className="settings-boxes" data-ready={entered || undefined} aria-busy={!entered || undefined}>
               <ThemeSection />
@@ -74,6 +76,7 @@ function useSettled(id: string, settled: boolean) {
 }
 
 
+
 function SettingsBox({ id, title, icon: Glyph, count: figure, order, children }: { id: string; title: string; icon: Icon; count?: ReactNode; order: number; children: ReactNode }) {
   const { ready } = useContext(SettledContext);
   return (
@@ -92,10 +95,24 @@ function SettingsBox({ id, title, icon: Glyph, count: figure, order, children }:
         <h2 id={`${id}-title`} className="t-title box-title" tabIndex={-1}>
           {title}
         </h2>
-        {figure !== undefined && figure !== null && <span className="pill box-count">{figure}</span>}
+        {figure !== undefined && figure !== null && <span className="box-count">{figure}</span>}
       </header>
       <div className="box-body">{children}</div>
     </section>
+  );
+}
+
+
+
+function FirstPlace({ what }: { what: string }) {
+  return (
+    <div className="settings-first" data-first-place>
+      <p className="t-help">{what}</p>
+      <Link href="/app" className={buttonClass({ size: "sm" })}>
+        <AddIcon />
+        <span className="btn-label">Add your own project</span>
+      </Link>
+    </div>
   );
 }
 
@@ -103,7 +120,7 @@ function ThemeSection() {
   return (
     <SettingsBox id="theme-settings" title="Theme" icon={ColorIcon} order={0}>
       <div className="settings-line">
-        <p className="t-help">Light or dark. It follows your system until you choose, and your choice applies to every open tab.</p>
+        <p className="t-help">Follows your system until you choose.</p>
         <ThemeSwitch />
       </div>
     </SettingsBox>
@@ -146,40 +163,47 @@ function AccountsSection() {
   }, [version, round]);
 
   const act = (body: Record<string, unknown>) => saving(post("/api/accounts", body));
-  const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A place no longer listed";
+  const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A client or project no longer listed";
+  const colorOf = (id: string) => tree?.find((node) => node.id === id)?.color ?? null;
   const nodeOptions = (tree ?? []).map((node) => ({ value: node.id, label: node.path }));
 
+  
   
   function mailLine(account: Account): { text: string; tone?: "alert"; failed?: boolean } {
     const failure = mail?.failures.find((entry) => entry.accountId === account.id);
     
-    if (failure) return failure.partial ? { text: mailFailureText(failure), failed: true } : { text: `Its mail could not be read: ${failure.reason}.`, tone: "alert", failed: true };
+    if (failure) {
+      const reason = failure.reason.replace(/\.+$/, "");
+      return failure.partial ? { text: reason.replace(/^\p{Ll}/u, (letter) => letter.toUpperCase()), failed: true } : { text: `Could not be read: ${reason}`, tone: "alert", failed: true };
+    }
     
     
     const listed = [...(mail?.groups.forTasks.messages ?? []), ...(mail?.groups.unread.messages ?? []), ...(mail?.groups.earlier.messages ?? [])].some((message) => message.accountId === account.id);
     const unread = mail?.unreadByAccount[account.id];
-    if (unread === undefined && !listed) return { text: "Reading its mail…" };
-    if (!listed && unread === 0) return { text: "No mail in this account yet." };
-    return { text: !unread ? "Nothing unread." : `${unread} unread.` };
+    if (unread === undefined && !listed) return { text: "Reading…" };
+    if (!listed && unread === 0) return { text: "No mail yet" };
+    return { text: !unread ? "Nothing unread" : `${unread} unread` };
   }
 
   return (
     <SettingsBox id="accounts-settings" title="Google accounts" icon={AccountIcon} order={1} count={accounts && accounts.length > 0 ? `${accounts.length} connected` : undefined}>
-      <p className="t-help">
-        Connect an account to a client or a project to see its calendars and its mail there, and in its projects and subprojects.
-      </p>
-      {canConnect ? (
-        <div className="settings-form" aria-label="Connect an account" role="group">
+      <p className="t-help">An account&apos;s calendars and mail show in the client or project it is connected to, and in its projects.</p>
+      {tree !== null && tree.length === 0 ? (
+        <FirstPlace what="An account is connected to a client or a project, so there is nowhere to connect one yet." />
+      ) : canConnect ? (
+        <div className="settings-form" aria-label="Connect Google account" role="group">
           <div className="settings-where">
-            <Select id="connect-where" label="Where the account connects" placeholder="Pick a client or a project…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
+            <Select id="connect-where" label="Connect to" placeholder="Pick a client or a project…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
           </div>
           {connectNode ? (
             <a className={buttonClass({ variant: "primary" })} href={`/api/google/connect?node=${connectNode}`}>
+              <GoogleMark />
               <span className="btn-label">Connect Google account</span>
             </a>
           ) : (
             <Button variant="primary" disabled aria-describedby="connect-why">
-              Connect Google account
+              <GoogleMark />
+              <span className="btn-label">Connect Google account</span>
             </Button>
           )}
           {!connectNode && (
@@ -190,109 +214,157 @@ function AccountsSection() {
         </div>
       ) : (
         
-        accounts && accounts.length > 0 && <ConnectBlockedNote reason={connectBlocked} />
+        accounts && accounts.length > 0 && <ConnectBlockedNote reason={connectBlocked} samples={accounts.some((account) => account.isDemo)} />
       )}
       {!accounts ? (
         error ? (
           <BoxFailed what="The accounts" message={error} kept={false} onRetry={() => setRound((n) => n + 1)} />
         ) : (
-          <BoxWait what="Reading the accounts…" rows={2} />
+          <BoxWait what="Loading the accounts…" rows={2} />
         )
       ) : (
         <>
           {error && <BoxFailed what="The accounts" message={error} kept onRetry={() => setRound((n) => n + 1)} />}
           {accounts.length === 0 ? (
-            <BoxEmpty text="No Google account connected yet: once one is, its calendars and its mail show in the clients and projects it serves." reason="no-accounts">
-              {!canConnect && <ConnectBlockedNote reason={connectBlocked} />}
+            <BoxEmpty text="No Google account connected yet." reason="no-accounts">
+              {!canConnect && <ConnectBlockedNote reason={connectBlocked} samples={false} />}
             </BoxEmpty>
           ) : (
-            <ul className="plain-list settings-accounts fade-enter">
-              {accounts.map((account) => {
-                const line = mailLine(account);
-                return (
-                  <li key={account.id} className="settings-account" data-account={account.email}>
-                    <div className="settings-account-head">
-                      <SenderMark name={account.email} />
-                      <h3 className="t-name">{account.email}</h3>
-                      {account.status !== "active" && !account.isDemo && (
-                        <span className="pill" data-tone="alert">
-                          {lostWords(account.status)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="settings-account-grid">
-                      <div className="stack settings-part">
-                        <h4 className="t-label">Connected to</h4>
-                        <ul className="plain-list stack settings-places">
-                          {account.nodeIds.map((nodeId) => (
-                            <li key={nodeId} className="account-line">
-                              <span className="t-value">{path(nodeId)}</span>
-                              {!account.isDemo && (
-                                <Button size="sm" onClick={() => void act({ action: "detach", accountId: account.id, nodeId })} aria-label={`Detach ${account.email} from ${path(nodeId)}`}>
-                                  Detach
-                                </Button>
-                              )}
-                            </li>
-                          ))}
-                          {account.nodeIds.length === 0 && <li className="t-help">No client or project yet: its calendars and mail show nowhere until it is connected to one.</li>}
-                        </ul>
-                        {!account.isDemo && (
-                          <Select
-                            label={`Also show ${account.email} in`}
-                            placeholder="Also show it in…"
-                            value={null}
-                            options={nodeOptions.filter((option) => !account.nodeIds.includes(option.value))}
-                            onChange={(nodeId) => void act({ action: "attach", accountId: account.id, nodeId })}
-                          />
-                        )}
-                      </div>
-                      <div className="stack settings-part" role="group" aria-labelledby={`calendars-${account.id}`}>
-                        <h4 className="t-label" id={`calendars-${account.id}`}>
-                          Calendars shown
-                        </h4>
-                        {account.calendars.length === 0 && <p className="t-help">This account shares no calendars.</p>}
-                        {account.calendars.map((calendar) => (
-                          <span key={calendar.id} className="check-row">
-                            <Checkbox
-                              checked={calendar.selected}
-                              disabled={account.isDemo}
-                              aria-labelledby={`calendar-${calendar.id}`}
-                              onCheckedChange={() => void act({ action: "select_calendar", accountId: account.id, calendarId: calendar.id, selected: !calendar.selected })}
-                            />
-                            <span className="calendar-swatch" style={{ "--swatch": calendar.color ?? undefined } as React.CSSProperties} aria-hidden="true" />
-                            <span id={`calendar-${calendar.id}`} className="t-value">
-                              {calendar.name}
-                            </span>
+            
+            
+            
+            <div className="settings-accounts-frame fade-enter">
+              <table className="settings-accounts" role="table" aria-labelledby="accounts-settings-title">
+                <thead role="rowgroup">
+                  <tr role="row">
+                    <th scope="col" role="columnheader">
+                      Account
+                    </th>
+                    <th scope="col" role="columnheader">
+                      Connected to
+                    </th>
+                    <th scope="col" role="columnheader">
+                      Calendars
+                    </th>
+                    <th scope="col" role="columnheader">
+                      Mail
+                    </th>
+                    <th scope="col" role="columnheader">
+                      <span className="sr-only">Its mail</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody role="rowgroup">
+                  {}
+                  {accountGroups(accounts, tree).flatMap((group) => group.accounts).map((account) => {
+                    const line = mailLine(account);
+                    return (
+                      <tr key={account.id} role="row" className="settings-account" data-account={account.email}>
+                        <th scope="row" role="rowheader" className="settings-account-who">
+                          <span className="settings-account-name">
+                            <GoogleMark />
+                            <span className="t-name">{account.email}</span>
                           </span>
-                        ))}
-                      </div>
-                      <div className="stack settings-part">
-                        <h4 className="t-label">Mail</h4>
-                        <div className="settings-mail-line">
-                          <p className={line.tone ? "inline-note" : "t-value"} data-tone={line.tone} data-account-mail data-mail-failure={line.failed ? "" : undefined}>
-                            {line.text}
-                          </p>
+                          {account.status !== "active" && !account.isDemo && (
+                            <span className="pill" data-tone="alert">
+                              {lostWords(account.status)}
+                            </span>
+                          )}
+                          {!account.isDemo && (
+                            <span className="settings-account-out">
+                              <ConfirmButton
+                                confirm={`${account.email} will be removed from every client and project, and its access revoked. This cannot be undone.`}
+                                onConfirm={() => void act({ action: "disconnect", accountId: account.id })}
+                              >
+                                Disconnect
+                              </ConfirmButton>
+                            </span>
+                          )}
+                        </th>
+                        <td role="cell">
+                          <span className="settings-cell-name" aria-hidden="true">
+                            Connected to
+                          </span>
+                          <div className="settings-cell-value">
+                            {account.nodeIds.length === 0 ? (
+                              <span className="t-help">Not connected yet</span>
+                            ) : (
+                              <ul className="plain-list settings-places">
+                                {account.nodeIds.map((nodeId) => (
+                                  <li key={nodeId}>
+                                    <PlaceName path={path(nodeId)} color={colorOf(nodeId)} />
+                                    {!account.isDemo && (
+                                      <Button size="sm" variant="quiet" onClick={() => void act({ action: "detach", accountId: account.id, nodeId })} aria-label={`Remove ${account.email} from ${path(nodeId)}`}>
+                                        Remove
+                                      </Button>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {!account.isDemo && (
+                              <Select
+                                label={`Also show ${account.email} in`}
+                                placeholder={account.nodeIds.length === 0 ? "Connect to…" : "Also connect to…"}
+                                value={null}
+                                options={nodeOptions.filter((option) => !account.nodeIds.includes(option.value))}
+                                onChange={(nodeId) => void act({ action: "attach", accountId: account.id, nodeId })}
+                              />
+                            )}
+                          </div>
+                        </td>
+                        <td role="cell">
+                          <span className="settings-cell-name" aria-hidden="true">
+                            Calendars
+                          </span>
+                          <div className="settings-cell-value">
+                            {account.calendars.length === 0 ? (
+                              <span className="t-help">None shared</span>
+                            ) : (
+                              <ul className="plain-list settings-calendars" aria-label={`Calendars of ${account.email} shown`}>
+                                {account.calendars.map((calendar) => (
+                                  <li key={calendar.id}>
+                                    <label className="check-row">
+                                      <Checkbox
+                                        checked={calendar.selected}
+                                        disabled={account.isDemo}
+                                        aria-labelledby={`calendar-${calendar.id}`}
+                                        onCheckedChange={() => void act({ action: "select_calendar", accountId: account.id, calendarId: calendar.id, selected: !calendar.selected })}
+                                      />
+                                      <span id={`calendar-${calendar.id}`} className="t-value">
+                                        {calendar.name}
+                                      </span>
+                                      {}
+                                      {calendar.color && <span className="settings-calendar-color" style={{ "--swatch": calendar.color } as CSSProperties} aria-hidden="true" />}
+                                    </label>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </td>
+                        <td role="cell">
+                          <span className="settings-cell-name" aria-hidden="true">
+                            Mail
+                          </span>
+                          <div className="settings-cell-value">
+                            <span className={line.tone ? "settings-mail-failed" : "t-value"} data-account-mail data-mail-failure={line.failed ? "" : undefined}>
+                              {line.text}
+                            </span>
+                          </div>
+                        </td>
+                        <td role="cell" className="settings-account-go">
                           <a className={buttonClass({ variant: "quiet", size: "sm", className: "head-action head-link" })} href={`/app/mail?account=${account.id}`}>
                             <span className="btn-label">Show its mail</span>
                             <OpenIcon />
                           </a>
-                        </div>
-                      </div>
-                    </div>
-                    {!account.isDemo && (
-                      <div>
-                        <ConfirmButton
-                          confirm={`${account.email} leaves every client and project, and its access is deleted. This cannot be undone.`}
-                          onConfirm={() => void act({ action: "disconnect", accountId: account.id })}
-                        >
-                          Disconnect
-                        </ConfirmButton>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}
@@ -372,19 +444,20 @@ function AgentTokensSection() {
     if (await saving(post("/api/agent-tokens", { action: "revoke", id: tokenId }))) setReads((n) => n + 1);
   }
 
-  const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A place no longer listed";
+  const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A client or project no longer listed";
   const live = data?.tokens.filter((token) => !token.revokedAt).length;
   return (
     <SettingsBox id="agent-tokens" title="Agent tokens" icon={TokenIcon} order={2} count={live ? `${live} in use` : undefined}>
-      <p className="t-help">
-        A token lets a coding agent read and update one client or project, its projects or subprojects included: its tasks, its notes,
-        its decisions, and what changed. Each token is shown once; revoke it when the agent no longer needs it.
-      </p>
+      <p className="t-help">A token lets a coding agent read and update one client or project, and everything in it.</p>
+      {tree !== null && tree.length === 0 ? (
+        <FirstPlace what="A token reaches one client or project, so there is none to issue one for yet." />
+      ) : (
+        <>
       <div className="settings-form">
         <div className="settings-where">
           <Select
             id="token-where"
-            label="What the token reaches"
+            label="Client or project"
             placeholder="Pick a client or a project…"
             value={nodeId}
             options={(tree ?? []).map((node) => ({ value: node.id, label: node.path }))}
@@ -417,9 +490,11 @@ function AgentTokensSection() {
             ? "Name the token after where the agent runs, such as Laptop."
             : "The name appears beside everything this agent adds."}
       </p>
+        </>
+      )}
       {issued && data && (
         <div className="stack inline-note" data-tone="accent" data-issued-token>
-          <p className="t-label">Copy it now: it is shown only once. Set it in the environment where the agent runs; it reaches {issued.path}.</p>
+          <p className="t-label">Copy it now: it won’t be shown again. Set it where the agent runs. It works for {issued.path}.</p>
           <pre id="issued-token" className="read-block t-code" tabIndex={0} aria-label="The new token">{`${data.tokenEnv}=${issued.token}`}</pre>
           <CopyButton text={`${data.tokenEnv}=${issued.token}`} target="issued-token" label="Copy the token" />
         </div>
@@ -428,7 +503,7 @@ function AgentTokensSection() {
         error ? (
           <BoxFailed what="The tokens" message={error} kept={false} onRetry={() => setReads((n) => n + 1)} />
         ) : (
-          <BoxWait what="Reading the agent tokens…" rows={2} />
+          <BoxWait what="Loading the agent tokens…" rows={2} />
         )
       ) : (
         <>
@@ -455,17 +530,15 @@ function AgentTokensSection() {
           <div className="stack">
             <h3 className="t-label">Issued tokens</h3>
             {data.tokens.length === 0 ? (
-              <BoxEmpty text="No tokens yet. Issue one for each place an agent runs, with the fields above." reason="no-tokens" />
+              <BoxEmpty text="No tokens yet." reason="no-tokens" />
             ) : (
               <ul className="plain-list settings-tokens">
                 {data.tokens.map((token) => (
                   <li key={token.id} className="settings-token" data-token={token.label}>
                     <div className="settings-token-main">
                       <span className="t-name">{token.label}</span>
-                      <span className="t-meta">
-                        Reaches {path(token.nodeId)}, issued {stamp(token.createdAt)}.{" "}
-                        {token.lastUsedAt ? `Last read what's new ${stamp(token.lastUsedAt)}.` : "It has not read what's new yet."}
-                      </span>
+                      {}
+                      <span className="t-meta">{[`For ${path(token.nodeId)}`, `Issued ${stamp(token.createdAt)}`, token.lastUsedAt ? `Last synced ${stamp(token.lastUsedAt)}` : null].filter(Boolean).join(" · ")}</span>
                     </div>
                     {token.revokedAt ? (
                       <span className="pill" data-tone="alert">
@@ -475,7 +548,7 @@ function AgentTokensSection() {
                       <ConfirmButton
                         
                         label={`Revoke “${token.label}” for ${path(token.nodeId)}`}
-                        confirm="The agent using it stops at once. This cannot be undone."
+                        confirm="Any agent using it loses access at once. This cannot be undone."
                         onConfirm={() => void revoke(token.id)}
                       >
                         Revoke

@@ -30,7 +30,7 @@ describe("the chat's cards", () => {
       removed: true,
       link: { itemId: "t1", eventId: "e1", accountId: null, calendarId: null, googleEventId: null },
     });
-    expect(card?.what).toBe("Took “Send the homepage draft” out of its event");
+    expect(card?.what).toBe("Unlinked “Send the homepage draft” from its calendar event");
     await card?.undo?.();
     expect(sent).toEqual([{ url: "/api/tools/link_task_event", body: { task: "t1", event: "e1" } }]);
   });
@@ -84,14 +84,14 @@ describe("the chat's cards", () => {
   it("a reply ruled out comes back among the possible ones", async () => {
     const sent = capture();
     const card = WRITES.dismiss_reply({ ok: true, task: "t5", title: "Wait for the transfer", reply: { account: "a1", id: "m1", dismissed: true } });
-    expect(card?.what).toBe("Ruled out a reply to “Wait for the transfer”");
+    expect(card?.what).toBe("Dismissed a possible reply to “Wait for the transfer”");
     await card?.undo?.();
     expect(sent).toEqual([{ url: "/api/tools/dismiss_reply", body: { task: "t5", account: "a1", id: "m1", dismissed: false } }]);
   });
 
   it("a task closed with its result opens again in one call, which finds what the closing left", async () => {
     const closed = WRITES.complete_task({ ok: true, item: { id: "t6", title: "Wait for the app review", type: "task" }, decision: { id: "d6", title: "Approved" } });
-    expect(closed?.what).toBe("Closed “Wait for the app review”: Approved");
+    expect(closed?.what).toBe("Completed “Wait for the app review”: Approved");
     const sent = capture();
     await closed?.undo?.();
     expect(sent).toEqual([{ url: "/api/tools/reopen_task", body: { task: "t6" } }]);
@@ -100,7 +100,7 @@ describe("the chat's cards", () => {
   it("makes a closing taken back again, with its words and its message, and marks done a task that had neither", async () => {
     const task = { id: "t7", title: "Wait for the app review", type: "task" as const };
     const opened = (closing: WriteOutput["closing"]) => WRITES.reopen_task({ ok: true, item: task, closing });
-    expect(opened(null)?.what).toBe("Opened “Wait for the app review” again");
+    expect(opened(null)?.what).toBe("Reopened “Wait for the app review”");
     const sent = capture();
     await opened({ outcome: "Approved", notes: "<p>From Meta</p>", reply: { account: "a1", id: "m7" } })?.undo?.();
     await opened({ outcome: "Rejected", notes: null, reply: null })?.undo?.();

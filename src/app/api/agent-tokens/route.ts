@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await (nodeId ? query.eq("node_id", nodeId) : query).order("created_at", { ascending: false });
   if (error) {
     console.error("agent tokens:", error.message);
-    return problem(500, "the tokens could not be read");
+    return problem(500, "the tokens could not be loaded");
   }
   return json({
     ok: true,

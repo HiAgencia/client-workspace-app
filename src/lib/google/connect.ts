@@ -2,6 +2,8 @@ import { CALENDAR_LIST_SCOPE, CONNECT_SCOPES, EVENTS_SCOPE, exchangeCode, GMAIL_
 import { encrypt } from "./crypto";
 import type { GoogleDeps } from "./events";
 
+
+
 export function authorizationUrl(clientId: string, redirectUri: string, state: string, loginHint?: string): string {
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set("client_id", clientId);
@@ -10,7 +12,7 @@ export function authorizationUrl(clientId: string, redirectUri: string, state: s
   url.searchParams.set("scope", CONNECT_SCOPES.join(" "));
   
   url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent select_account");
+  url.searchParams.set("prompt", loginHint ? "consent" : "consent select_account");
   url.searchParams.set("include_granted_scopes", "true");
   url.searchParams.set("state", state);
   if (loginHint) url.searchParams.set("login_hint", loginHint);

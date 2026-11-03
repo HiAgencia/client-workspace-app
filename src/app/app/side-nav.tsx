@@ -4,9 +4,12 @@ import { Link } from "@/components/ui/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { BrandMark } from "@/components/brand-mark";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
+import { Tick } from "@/components/ui/tick";
 import { AddIcon, CalendarIcon, MailIcon, OverviewIcon, SearchIcon, SettingsIcon, SignOutIcon, TasksIcon, TrashIcon, type Icon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
@@ -22,9 +25,10 @@ import { useWorkspace } from "./workspace";
 
 
 
+
 export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: boolean; onLeave?: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
-  const { taskCounts, mailFigure, openPalette, who } = useWorkspace();
+  const { taskCounts, mailFigure, openPalette, person } = useWorkspace();
   const mailNumber = mailFigure ? figureText(mailFigure) : null;
   const current = useCurrentNode();
   const mac = useMac();
@@ -106,9 +110,9 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
                 <ViewName icon={MailIcon} name="Mail" detail="For your tasks, then unread" />
                 {mailNumber && <Count value={mailNumber.shown} spoken={mailNumber.spoken} />}
               </Link>
-              {mailFigure?.why && (
-                <p className="t-meta" data-mail-partial title={mailFigure.why}>
-                  {mailFigure.why}
+              {mailFigure?.note && (
+                <p className="t-meta" data-mail-partial title={mailFigure.why ?? undefined}>
+                  {mailFigure.note}
                 </p>
               )}
             </li>
@@ -127,21 +131,25 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           <span className="side-link-name">Settings</span>
         </Link>
         {}
-        <div className="side-account">
-          {who && (
-            <>
-              <span className="side-avatar" aria-hidden="true">
-                {who.trim().charAt(0).toUpperCase()}
-              </span>
-              <span className="t-meta side-who" title={who}>
-                {who}
-              </span>
-            </>
+        <div className="side-account" data-session={person ? (person.isAnonymous ? "anonymous" : "google") : undefined}>
+          {person && !person.isAnonymous ? (
+            <Link href="/app/profile" className="side-link side-profile" aria-current={here("/app/profile")} title={person.email ?? undefined} data-side-profile>
+              <Avatar className="side-avatar" src={person.avatarUrl} name={person.name} email={person.email} />
+              <span className="side-link-name side-who">{person.name ?? person.email}</span>
+              <span className="sr-only">, Your profile</span>
+            </Link>
+          ) : (
+            person && (
+              <>
+                <Avatar className="side-avatar" src={null} name="Demo session" email={null} />
+                <span className="t-meta side-who">Demo session</span>
+                <Button size="sm" variant="quiet" className="btn-icon side-sign-out" onClick={onSignOut} title="Sign out">
+                  <SignOutIcon />
+                  <span className="sr-only">Sign out</span>
+                </Button>
+              </>
+            )
           )}
-          <Button size="sm" variant="quiet" className="btn-icon side-sign-out" onClick={onSignOut} title="Sign out">
-            <SignOutIcon />
-            <span className="sr-only">Sign out</span>
-          </Button>
         </div>
       </div>
     </nav>
@@ -184,7 +192,7 @@ function Count({ value, unit, spoken }: { value: number | string; unit?: string;
   return (
     <span className="side-count">
       <span aria-hidden="true">
-        {value}
+        <Tick value={value} />
         {unit ? ` ${unit}` : ""}
       </span>
       <span className="sr-only">, {spoken}</span>
@@ -282,11 +290,11 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
           ) : (
             <>
               {roots.length > 0 ? (
-                <ul className="tree">
+                <FlipList className="tree">
                   {roots.map((node) => (
                     <Branch key={node.id} node={node} tree={tree} openState={openState} current={current} ids={ids} />
                   ))}
-                </ul>
+                </FlipList>
               ) : (
                 !adding && <p className="t-help side-empty">{words.empty}</p>
               )}
@@ -321,7 +329,7 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
   const open = openState[node.id] ?? false;
   const children = tree.filter((child) => child.parentId === node.id);
   return (
-    <li>
+    <li data-flip-key={node.id}>
       <div className="tree-row" data-node={node.id}>
         {children.length > 0 ? (
           <button
@@ -351,11 +359,11 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
       </div>
       {children.length > 0 && (
         <Fold open={open} id={`${ids}-branch-${node.id}`}>
-          <ul className="tree tree-below">
+          <FlipList className="tree tree-below">
             {children.map((entry) => (
               <Branch key={entry.id} node={entry} tree={tree} openState={openState} current={current} ids={ids} depth={depth + 1} />
             ))}
-          </ul>
+          </FlipList>
         </Fold>
       )}
     </li>
@@ -371,7 +379,7 @@ function TreeSkeleton({ failed }: { failed: string | null }) {
   if (failed) {
     return (
       <p role="alert" className="inline-note" data-tone="alert">
-        The list could not be read: {sentence(failed)} Reload the page to try again.
+        The list could not be loaded: {sentence(failed)} Reload the page to try again.
       </p>
     );
   }

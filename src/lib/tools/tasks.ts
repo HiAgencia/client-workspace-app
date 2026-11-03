@@ -8,7 +8,7 @@ import { dueOn, titleText } from "./fields";
 import { insertItem, origin, reachableItem } from "./items";
 import { accountMap } from "./mail";
 import { taskMailSchema, type TaskMail } from "./mail-schema";
-import { taskMailOf } from "./waits";
+import { everyTaskMail, taskMailIn, taskMailOf } from "./waits";
 import { dbFail, fail, isError, ok } from "./result";
 import { hourOf, ITEM_COLUMNS, itemSchema, selectAllItems, toItem } from "./rows";
 import { describePlace, loadScope, reachOf, resolveReadPlace, resolveWritePlace, type Scope } from "./tree";
@@ -169,15 +169,18 @@ export const getTasks = defineTool({
     if (isError(resolved)) return resolved;
     
     
-    const read = await selectAllItems(
-      ctx,
-      reachOf(scope, resolved.place),
-      (query) => {
-        const live = query.is("deleted_at", null);
-        return input.withCompleted ? live : live.or("status.eq.open,parent_item_id.not.is.null");
-      },
-      "reading the tasks",
-    );
+    const [read, waited] = await Promise.all([
+      selectAllItems(
+        ctx,
+        reachOf(scope, resolved.place),
+        (query) => {
+          const live = query.is("deleted_at", null);
+          return input.withCompleted ? live : live.or("status.eq.open,parent_item_id.not.is.null");
+        },
+        "reading the tasks",
+      ),
+      everyTaskMail(ctx),
+    ]);
     if (isError(read)) return read;
     const counts = new Map<string, { done: number; total: number; notes: number }>();
     for (const row of read.rows) {
@@ -189,8 +192,10 @@ export const getTasks = defineTool({
       } else count.notes++;
       counts.set(row.parent_item_id, count);
     }
-    const waits = await taskMailOf(ctx, read.rows.filter((row) => row.type === "task").map((row) => row.id));
-    if (isError(waits)) return waits;
+    
+    const taskIds = read.rows.filter((row) => row.type === "task").map((row) => row.id);
+    if (taskIds.length > 0 && isError(waited)) return waited;
+    const waits = { byTask: isError(waited) ? new Map<string, TaskMail>() : taskMailIn(waited.rows, taskIds) };
     const groups: Record<TaskGroup, TaskRow[]> = { overdue: [], today: [], upcoming: [], noDate: [] };
     const completed: TaskRow[] = [];
     for (const row of read.rows) {

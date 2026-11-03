@@ -4,12 +4,17 @@ import { Link } from "@/components/ui/link";
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
+import { useFlip } from "@/components/ui/flip";
+import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
+import { Tick } from "@/components/ui/tick";
+import { GoogleCalendarMark, GoogleMark } from "@/components/ui/brands";
 import { AddIcon, ByAgentIcon, ByChatIcon, OpenIcon, RescheduleIcon, UndoIcon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { ASSISTANT_NAME } from "@/lib/product";
 import { mailFailureText } from "@/lib/mail/failure-text";
 import { repliesText } from "@/lib/mail/replies-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
@@ -22,6 +27,7 @@ import { useEventsRead } from "./use-events-read";
 import { get, post, tool, type CalendarEvent, type Item, type TreeNode } from "./client-api";
 import { PathText, SenderMark } from "./item-parts";
 import { accountsSeenFrom, figureWords, type MailList } from "./mail-store";
+import { chosenAccounts } from "./place-filters";
 import { subjectOf, taskLine } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
 import { useQuickAddInline } from "./quick-add";
@@ -151,8 +157,8 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       days: upcomingDays,
       action:
         mode === "box" && allHref && view.groups.upcoming.count > 0 ? (
-          <HeadLink href={allHref} name="Show all upcoming">
-            Show all
+          <HeadLink href={allHref} name="View all upcoming">
+            View all
           </HeadLink>
         ) : undefined,
     },
@@ -165,7 +171,8 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
             count: view.groups.noDate.count,
             dropDay: null,
             add: null,
-            empty: "Every task has a date.",
+            
+            empty: view.groups.overdue.count + view.groups.today.count + view.groups.upcoming.count > 0 ? "Every open task has a date." : "No tasks without a date.",
           } satisfies Group,
         ]
       : []),
@@ -183,7 +190,10 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       : []),
   ];
   
+  
   const shown = groups.filter((group) => group.key !== "overdue" || group.count > 0);
+  const host = useRef<HTMLDivElement>(null);
+  useFlip(host, { items: ".group", layout: layout === "board" ? "grid" : "list", arrangement: layout });
   const reorderable = (group: Group) => group.key !== "completed" && (manual || (sort === "date" && group.key === "noDate"));
 
   const list = (group: Group) => (
@@ -201,7 +211,7 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
   );
 
   return (
-    <div className="groups" data-layout={layout} data-mode={mode}>
+    <div ref={host} className="groups" data-layout={layout} data-mode={mode}>
       {ZONES.map((zone) => (
         <div key={zone} className="groups-zone" data-zone={zone}>
           {shown
@@ -246,14 +256,17 @@ const zoneOf = (group: string) => (group === "overdue" || group === "today" ? "n
 function GroupSection({ group, placeId, children }: { group: Group; placeId: string | null; children: ReactNode }) {
   const add = useQuickAddInline({ day: group.add ?? null, placeId });
   const adds = group.add !== undefined;
+  
+  const section = useRef<HTMLElement>(null);
+  useFlip(section, { items: ":scope > .group-day" });
   return (
-    <section className="group" data-group={group.key} aria-labelledby={`group-${group.key}`}>
+    <section ref={section} className="group" data-group={group.key} data-flip-key={`group:${group.key}`} aria-labelledby={`group-${group.key}`}>
       <div className="group-top">
         <div className="group-head">
           <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
             {group.label}
           </h3>
-          {group.count > 0 && <span className="group-count">{count(group.count, "task", "tasks")}</span>}
+          {group.count > 0 && <Figure n={group.count} one="task" many="tasks" className="group-count" />}
           {(group.action || adds) && (
             <div className="group-action">
               {group.action}
@@ -273,7 +286,7 @@ function DaySection({ day, placeId, children }: { day: Group; placeId: string | 
   const add = useQuickAddInline({ day: day.add ?? null, placeId });
   const adds = day.add !== undefined;
   return (
-    <div className="group-day" data-day={day.key}>
+    <div className="group-day" data-day={day.key} data-flip-key={`day:${day.key}`}>
       <div className="group-top">
         <div className="group-day-head">
           <h4 className="group-day-title" data-when={day.tone}>
@@ -308,7 +321,7 @@ function UpcomingDay({ day, tasks, now, children }: { day: Group; tasks: TaskDat
   }
 
   return (
-    <div className="group-day" data-day={day.key}>
+    <div className="group-day" data-day={day.key} data-flip-key={`day:${day.key}`}>
       <h4 className="upcoming-day-head">
         <button
           type="button"
@@ -374,7 +387,7 @@ export function useTasksRead(place: Place, now: Day | null, extra: Record<string
 export function TasksBoxContent({ read, now, place, placeId, showPlace, pageNode, layout, allHref }: { read: BoxRead<TasksView>; now: Day; place: Place; placeId: string | null; showPlace: boolean; pageNode?: string | null; layout: "list" | "board"; allHref: string }) {
   const { data, error, stale, retry } = read;
   useBoxSettled(read.settled);
-  if (!data) return error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the tasks…" />;
+  if (!data) return error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the tasks…" shape="tasks" rows={6} />;
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
       {error && <BoxFailed what="The tasks" message={error} kept onRetry={retry} />}
@@ -391,14 +404,26 @@ export function tasksCountLabel(view: TasksView | null): string | undefined {
 }
 
 
-export function noDateCount(view: TasksView | null): string | undefined {
+
+export function noDateCount(view: TasksView | null): ReactNode {
   const tasks = view?.groups.noDate.count ?? 0;
-  return tasks > 0 ? count(tasks, "task", "tasks") : undefined;
+  return tasks > 0 ? <Figure n={tasks} one="task" many="tasks" /> : undefined;
 }
 
-export function notesCount(total: number | undefined): string | undefined {
-  return total ? count(total, "note", "notes") : undefined;
+export function notesCount(total: number | undefined): ReactNode {
+  return total ? <Figure n={total} one="note" many="notes" /> : undefined;
 }
+
+
+export function Figure({ n, one, many, className }: { n: number; one: string; many: string; className?: string }) {
+  return (
+    <span className={className}>
+      <Tick value={n} />
+      <span className="sr-only"> {n === 1 ? one : many}</span>
+    </span>
+  );
+}
+
 
 
 const FIRST_SHOWN = 5;
@@ -412,7 +437,7 @@ export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<
   const landing = useTaskLanding("noDate");
   if (landing && !all) setAll(true);
   useBoxSettled(read.settled);
-  if (!data) return error ? <BoxFailed what="The tasks without a date" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the tasks without a date…" rows={2} />;
+  if (!data) return error ? <BoxFailed what="The tasks without a date" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the tasks without a date…" shape="tasks" rows={3} />;
   const group = data.groups.noDate;
   const folds = group.tasks.length > FIRST_SHOWN;
   return (
@@ -421,10 +446,10 @@ export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<
       <div id={rowsId} className="first-rows" data-open={all || !folds}>
         <TaskList group="noDate" label="No date" tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
       </div>
-      {group.tasks.length === 0 && <BoxEmpty text="Nothing waits without a date. One added here stays without one, in the order you give it." reason="no-date-empty" />}
+      {group.tasks.length === 0 && <BoxEmpty text="No tasks without a date." reason="no-date-empty" />}
       {folds && (
         <button type="button" className="task-add" aria-controls={rowsId} aria-expanded={all} onClick={() => setAll((value) => !value)}>
-          {all ? `Show the first ${FIRST_SHOWN}` : `Show all ${group.tasks.length}`}
+          {all ? "Show less" : `Show ${group.tasks.length - FIRST_SHOWN} more`}
         </button>
       )}
     </div>
@@ -454,9 +479,12 @@ if (typeof window !== "undefined") {
     const row = (event.target as Element | null)?.closest?.("[data-item]");
     draggedTask = row instanceof HTMLElement ? (row.dataset.item ?? null) : null;
   });
-  window.addEventListener("dragend", () => {
-    draggedTask = null;
-  });
+  
+  for (const end of ["dragend", "drop"]) {
+    window.addEventListener(end, () => {
+      draggedTask = null;
+    });
+  }
 }
 
 export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref }: { place: Place; now: Day; weekStart: number; tasks: TaskData[]; calendarHref: string }) {
@@ -497,7 +525,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   }
 
   if (!read.data && read.error) return <BoxFailed what="The calendar" message={read.error} kept={false} onRetry={read.retry} />;
-  if (!read.data) return <BoxWait what="Reading this week's events…" rows={2} />;
+  if (!read.data) return <BoxWait what="Loading this week's events…" shape="week" rows={3} />;
   const chosenEvents = ofDay(chosen);
   
   
@@ -511,7 +539,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         const who = read.data!.failures.filter((failure) => failure.reason === reason).map((failure) => failure.accountEmail || "The workspace's calendar");
         return (
           <p key={reason} className="inline-note" data-tone="alert">
-            {`${who.length === 1 ? who[0] : count(who.length, "calendar", "calendars")} could not be read: ${reason}.`}
+            {`${who.length === 1 ? who[0] : count(who.length, "calendar", "calendars")} could not be loaded: ${reason}.`}
             {who.length > 1 && <span className="calendar-failed-who">{who.join(", ")}</span>}
           </p>
         );
@@ -523,13 +551,13 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         </h3>
         {}
         {chosenEvents.length === 0 && reading ? (
-          <BoxWait what="Reading this week's events…" rows={2} />
+          <BoxWait what="Loading this week's events…" shape="events" rows={2} />
         ) : chosenEvents.length === 0 && unanswered > 0 ? (
-          <p className="t-help group-empty">This day could not be read.</p>
+          <p className="t-help group-empty">This day could not be loaded.</p>
         ) : chosenEvents.length === 0 ? (
-          <BoxEmpty text={`No events ${chosen === now ? "today" : `on ${longDay(chosen)}`} in the calendars in view.`} reason="no-events">
-            <Link className={buttonClass({ size: "sm" })} href={calendarHref}>
-              <span className="btn-label">Open the calendar</span>
+          <BoxEmpty text={`No events ${chosen === now ? "today" : `on ${longDay(chosen)}`}.`} reason="no-events">
+            <Link className={buttonClass({ variant: "quiet", size: "sm" })} href={calendarHref}>
+              <span className="btn-label">Open calendar</span>
             </Link>
           </BoxEmpty>
         ) : (
@@ -545,7 +573,8 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
                   <span className="event-when">{event.allDay ? "All day" : timeLabel(new Date(event.start).toTimeString().slice(0, 5))}</span>
                   <span className="event-what">
                     <span className="event-title">{event.title}</span>
-                    {!own && <span className="event-where">{where ? <PathText path={where} /> : event.origin === "google" ? event.accountEmail : "No client or project"}</span>}
+                    {!own && <span className="event-where">{where ? <PathText path={where} /> : event.origin === "google" ? event.accountEmail : "General"}</span>}
+                    {event.origin === "google" && <GoogleCalendarMark className="event-source" />}
                   </span>
                 </li>
               );
@@ -642,7 +671,8 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version, round, mailStore]);
-  const chosen = inPlace?.some((entry) => entry.id === account) ? inPlace.filter((entry) => entry.id === account) : inPlace;
+  const picked = chosenAccounts(account, inPlace ?? [], tree);
+  const chosen = picked && inPlace?.some((entry) => picked.has(entry.id)) ? inPlace.filter((entry) => picked.has(entry.id)) : inPlace;
   const data = chosen ? mailStore.mailOf(chosen) : null;
   return {
     data,
@@ -667,7 +697,10 @@ const MAIL_ROWS = 3;
 export function useMailCount(read: BoxRead<MailList>): string | undefined {
   const { mailStore } = useWorkspace();
   if (!read.data || read.data.accounts.length === 0) return undefined;
-  return figureWords(mailStore.figure(read.data.accounts)) ?? undefined;
+  const figure = mailStore.figure(read.data.accounts);
+  
+  if (figure && !figure.partial && figure.unread === 0) return undefined;
+  return figureWords(figure) ?? undefined;
 }
 
 
@@ -686,8 +719,8 @@ const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
 
 
 
-export function mailBoxRows(mail: MailList, replies: TaskReplies[], account: string | null): Array<{ message: MailRow; label: string | null }> {
-  const inAccount = (message: MailRow) => account === null || message.accountId === account;
+export function mailBoxRows(mail: MailList, replies: TaskReplies[], accounts: Set<string> | null): Array<{ message: MailRow; label: string | null }> {
+  const inAccount = (message: MailRow) => accounts === null || accounts.has(message.accountId);
   const seen = new Set<string>();
   const rows: Array<{ message: MailRow; label: string | null }> = [];
   for (const entry of replies) {
@@ -696,7 +729,7 @@ export function mailBoxRows(mail: MailList, replies: TaskReplies[], account: str
     const shown = own.find((message) => !seen.has(mailKey(message)));
     if (!shown) continue;
     seen.add(mailKey(shown));
-    const more = entry.more.some((id) => account === null || id === account);
+    const more = entry.more.some((id) => accounts === null || accounts.has(id));
     rows.push({ message: shown, label: `${repliesText(own.length, more)} for “${inlinePlain(entry.task.title)}”` });
   }
   const toDone = mail.groups.earlier.messages.filter((message) => message.tasks.length > 0);
@@ -715,6 +748,8 @@ export function MailBoxContent({
   now,
   place,
   connectHref,
+  connect,
+  connectText,
 }: {
   read: BoxRead<MailList>;
   replies: BoxRead<{ tasks: TaskReplies[] }>;
@@ -723,13 +758,18 @@ export function MailBoxContent({
   now: Day;
   place: Place;
   connectHref: string;
+  
+  
+  connect?: ReactNode;
+  connectText?: string;
 }) {
-  const { tree } = useWorkspace();
+  const { tree, mailAccounts } = useWorkspace();
   const { data, error, stale, retry } = read;
+  const chosen = chosenAccounts(account, mailAccounts ?? [], tree);
   useBoxSettled(read.settled && replies.settled);
-  if (!data) return error ? <BoxFailed what="The mail" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the mail…" rows={3} />;
-  const rows = mailBoxRows(data, replies.data?.tasks ?? [], account).slice(0, MAIL_ROWS);
-  const failures = [...data.failures, ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures).filter((failure) => account === null || failure.accountId === account)].filter(
+  if (!data) return error ? <BoxFailed what="The mail" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the mail…" shape="mail" rows={3} />;
+  const rows = mailBoxRows(data, replies.data?.tasks ?? [], chosen).slice(0, MAIL_ROWS);
+  const failures = [...data.failures, ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures).filter((failure) => chosen === null || chosen.has(failure.accountId))].filter(
     (failure, index, all) => all.findIndex((other) => other.accountId === failure.accountId) === index,
   );
   
@@ -737,39 +777,42 @@ export function MailBoxContent({
   const body = () => {
     if (data.accounts.length === 0) {
       return place.kind === "general" ? (
-        <BoxEmpty text="General has no mail account: the mail lives in the accounts of each client and project." reason="general">
-          <Link className={buttonClass({ size: "sm" })} href="/app/mail">
+        <BoxEmpty text="General has no mail account of its own." reason="general">
+          <Link className={buttonClass({ variant: "quiet", size: "sm" })} href="/app/mail">
             <span className="btn-label">Open all mail</span>
           </Link>
         </BoxEmpty>
       ) : (
-        <BoxEmpty text="Connect a Google account to see its mail here." reason="no-account">
-          <Link className={buttonClass({ size: "sm" })} href={connectHref}>
-            <span className="btn-label">Connect Google account</span>
-          </Link>
+        <BoxEmpty text={connectText ?? "Connect a Google account to see its mail here."} reason="no-account">
+          {connect ?? (
+            <Link className={buttonClass({ variant: "quiet", size: "sm" })} href={connectHref}>
+              <GoogleMark />
+              <span className="btn-label">Connect Google account</span>
+            </Link>
+          )}
         </BoxEmpty>
       );
     }
     if (rows.length === 0) {
-      if (reading) return <BoxWait what="Reading the mail…" rows={3} />;
+      if (reading) return <BoxWait what="Loading the mail…" shape="mail" rows={3} />;
       return (
-        <BoxEmpty text="Nothing unread, and nothing arrived for a task that waits for mail." reason="nothing-unread">
-          <Link className={buttonClass({ size: "sm" })} href="/app/mail">
+        <BoxEmpty text="Nothing unread." reason="nothing-unread">
+          <Link className={buttonClass({ variant: "quiet", size: "sm" })} href="/app/mail">
             <span className="btn-label">Open all mail</span>
           </Link>
         </BoxEmpty>
       );
     }
     return (
-      <ul className="mail-list">
+      <FlipList className="mail-list">
         {rows.map(({ message, label }) => {
           const line = taskLine(message);
           
           const where = message.place ? placeOnPage(message.place, true, place.kind === "node" ? place.id : null, tree) : null;
           return (
-            <li key={mailKey(message)}>
+            <li key={mailKey(message)} data-flip-key={mailKey(message)}>
               <Link className="mail-row" href={`/app/mail?account=${message.accountId}&message=${encodeURIComponent(message.id)}`} data-unread={message.unread || undefined}>
-                <SenderMark name={message.from.name || message.from.email} />
+                <SenderMark name={message.from.name || message.from.email} email={message.from.email} />
                 <span className="mail-from">{message.from.name || message.from.email}</span>
                 <span className="mail-side">
                   {message.important && (
@@ -795,7 +838,7 @@ export function MailBoxContent({
             </li>
           );
         })}
-      </ul>
+      </FlipList>
     );
   };
   return (
@@ -845,14 +888,14 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
   const { data, error, stale, retry } = read;
   const node = place.kind === "node" ? place.id : null;
   useBoxSettled(read.settled);
-  if (!data) return error ? <BoxFailed what="The notes" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading the notes…" rows={2} />;
+  if (!data) return error ? <BoxFailed what="The notes" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the notes…" shape="notes" rows={3} />;
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
       {error && <BoxFailed what="The notes" message={error} kept onRetry={retry} />}
       {data.notes.length === 0 ? (
-        <BoxEmpty text={node ? "No notes here yet: a note keeps in view what is not something to do." : "No loose notes yet: write one here, and give it a place later."} reason="no-notes" />
+        <BoxEmpty text={node ? "No notes here yet." : "No notes in General yet."} reason="no-notes" />
       ) : (
-        <ul className="note-list">
+        <FlipList className="note-list">
           {data.notes.map((note) => {
             
             const where = placeOnPage({ nodeId: note.nodeId, path: note.path }, note.path !== null, node, tree);
@@ -871,7 +914,7 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
               </li>
             );
           })}
-        </ul>
+        </FlipList>
       )}
       {data.total > data.notes.length && <p className="t-meta">{`The latest ${data.notes.length} of ${data.total}. Search finds the others.`}</p>}
     </div>
@@ -989,6 +1032,13 @@ type Entry = {
 const ACTIVITY_DAYS = 7;
 
 
+
+export function activitySince(now = Date.now()): string {
+  const hour = 3_600_000;
+  return new Date(Math.floor((now - ACTIVITY_DAYS * 86_400_000) / hour) * hour).toISOString();
+}
+
+
 function ago(at: string, now: number): string {
   const minutes = Math.max(0, Math.round((now - Date.parse(at)) / 60_000));
   if (minutes < 1) return "Just now";
@@ -1000,8 +1050,8 @@ function ago(at: string, now: number): string {
 }
 
 function actor(source: Item["source"], label: string | null): string {
-  if (source === "chat") return "The chat";
-  return label ? `The agent “${label}”` : "An agent";
+  if (source === "chat") return ASSISTANT_NAME;
+  return label ?? "A coding agent";
 }
 
 const TYPE_WORD: Record<Item["type"], string> = { task: "a task", note: "a note", decision: "a decision" };
@@ -1009,9 +1059,8 @@ const TYPE_WORD: Record<Item["type"], string> = { task: "a task", note: "a note"
 export function ActivityBoxContent({ place }: { place: Place }) {
   const { openItem, saving, chat } = useWorkspace();
   const [all, setAll] = useState(false);
-  const [since] = useState(() => new Date(Date.now() - ACTIVITY_DAYS * 86_400_000));
+  const [sinceIso] = useState(() => activitySince());
   const [readAt] = useState(() => Date.now());
-  const sinceIso = since.toISOString();
   const updates = useToolRead<Updates>("get_updates_since", { since: sinceIso, ...(place.kind === "node" ? { node: place.id } : {}) });
 
   const entries = useMemo(() => {
@@ -1052,46 +1101,51 @@ export function ActivityBoxContent({ place }: { place: Place }) {
   useBoxSettled(updates.settled);
   if (!updates.data) {
     if (failed) return <BoxFailed what="The activity" message={failed} kept={false} onRetry={updates.retry} />;
-    return <BoxWait what="Reading what the chat and the agents did…" rows={3} />;
+    return <BoxWait what={`Loading what ${ASSISTANT_NAME} and your coding agents did…`} shape="activity" rows={3} />;
   }
   return (
     <div className="box-read" data-stale={updates.stale || undefined}>
       {failed && <BoxFailed what="The activity" message={failed} kept onRetry={updates.retry} />}
       {entries.length === 0 ? (
-        <BoxEmpty text={`Nothing done by the chat or an agent in the last ${count(ACTIVITY_DAYS, "day", "days")}.`} reason="no-activity">
-          <Button size="sm" onClick={() => chat.setOpen(true)}>
-            Open the chat
+        <BoxEmpty text={`Nothing done by ${ASSISTANT_NAME} or a coding agent in the last ${count(ACTIVITY_DAYS, "day", "days")}.`} reason="no-activity">
+          <Button variant="quiet" size="sm" onClick={() => chat.setOpen(true)}>
+            Open chat
           </Button>
         </BoxEmpty>
       ) : (
         <>
-          <ol className="activity-list" id="activity-entries">
-            {entries.slice(0, all ? entries.length : FIRST_SHOWN).map((entry) => (
-              <li key={entry.key} className="activity-entry" data-activity={entry.key.split(":")[0]} data-by={entry.by}>
-                <span className="activity-icon" aria-hidden="true">
-                  {entry.by === "chat" ? <ByChatIcon /> : <ByAgentIcon />}
-                </span>
-                <span className="activity-what">
-                  {entry.what}
-                  <span className="activity-when">{ago(entry.at, readAt)}</span>
-                </span>
-                <Button size="sm" variant="quiet" className="activity-undo head-action" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
-                  <UndoIcon />
-                  <span className="btn-label">Undo</span>
-                </Button>
-                {entry.open ? (
-                  <button type="button" className="activity-title" onClick={entry.open}>
-                    {inlinePlain(entry.title)}
-                  </button>
-                ) : (
-                  <span className="activity-title activity-title-gone">{inlinePlain(entry.title)}</span>
-                )}
+          {}
+          <FlipList ordered className="activity-list" id="activity-entries" data-open={all || entries.length <= FIRST_SHOWN}>
+            {entries.map((entry) => (
+              <li key={entry.key} className="activity-row" data-flip-key={entry.key} data-activity={entry.key.split(":")[0]} data-by={entry.by}>
+                <div>
+                  <div className="activity-entry">
+                    <span className="activity-icon" aria-hidden="true">
+                      {entry.by === "chat" ? <ByChatIcon /> : <ByAgentIcon />}
+                    </span>
+                    <span className="activity-what">
+                      {entry.what}
+                      <span className="activity-when">{ago(entry.at, readAt)}</span>
+                    </span>
+                    <Button size="sm" variant="quiet" className="activity-undo head-action" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
+                      <UndoIcon />
+                      <span className="btn-label">Undo</span>
+                    </Button>
+                    {entry.open ? (
+                      <button type="button" className="activity-title" onClick={entry.open}>
+                        {inlinePlain(entry.title)}
+                      </button>
+                    ) : (
+                      <span className="activity-title activity-title-gone">{inlinePlain(entry.title)}</span>
+                    )}
+                  </div>
+                </div>
               </li>
             ))}
-          </ol>
+          </FlipList>
           {entries.length > FIRST_SHOWN && (
             <button type="button" className="task-add" aria-controls="activity-entries" aria-expanded={all} onClick={() => setAll((value) => !value)}>
-              {all ? `Show the latest ${FIRST_SHOWN}` : `Show all ${entries.length}`}
+              {all ? "Show less" : `Show ${entries.length - FIRST_SHOWN} more`}
             </button>
           )}
         </>
@@ -1112,12 +1166,12 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const byOther = (revision: Revision) => revision.source !== who || (who === "agent" && revision.agentLabel !== label);
   if (kind === "created") {
     
-    if (versions.revisions.some(byOther)) return { ok: false, message: `${name} was changed after it was added, so it stays: delete it from its "More" if it should go.` };
+    if (versions.revisions.some(byOther)) return { ok: false, message: `${name} was changed after it was added, so it stays. To remove it, delete it from its “More”.` };
     return tool("delete_item", { id: item.id });
   }
   
   const at = versions.revisions.findIndex((revision) => !byOther(revision));
-  if (at < 0) return { ok: false, message: `The version ${name} had before this change is not there to go back to.` };
+  if (at < 0) return { ok: false, message: `${name} has no earlier version to go back to.` };
   const before = versions.revisions[at].snapshot;
   const later = versions.revisions.slice(0, at);
   const current = await tool<{ item: Item }>("get_item", { id: item.id });
@@ -1136,10 +1190,10 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const hour = (value: string | null) => value?.slice(0, 5) ?? null;
   const same = (field: keyof Snapshot, a: Snapshot, b: Snapshot) => (field === "due_time" ? hour(a[field]) === hour(b[field]) : a[field] === b[field]);
   const fields = (["title", "body", "status", "priority", "due_on", "due_time", "parent_item_id"] as const).filter((field) => !same(field, before, after));
-  if (fields.length === 0) return { ok: false, message: `${name} reads as it did before this change: there is nothing to undo.` };
+  if (fields.length === 0) return { ok: false, message: `Nothing to undo: ${name} already reads as it did before this change.` };
   const touched = fields.filter((field) => !same(field, after, now));
-  if (touched.length > 0) return { ok: false, message: `${name} was changed again since, so it stays as it is: open it and go back from its "Versions".` };
-  if (fields.includes("parent_item_id")) return { ok: false, message: `This change moved ${name}: open it and go back from its "Versions".` };
+  if (touched.length > 0) return { ok: false, message: `${name} was changed again since, so it stays as it is. Open it to go back from its “Versions”.` };
+  if (fields.includes("parent_item_id")) return { ok: false, message: `This change moved ${name}. Open it to go back from its “Versions”.` };
   const note = item.type !== "task";
   const input: Record<string, unknown> = { id: item.id };
   if (fields.includes("title") && !note) input.title = before.title;

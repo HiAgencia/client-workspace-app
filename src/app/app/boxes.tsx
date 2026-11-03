@@ -14,11 +14,14 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { ActivityIcon, CalendarIcon, MailIcon, NoDateIcon, NoteIcon, TasksIcon, type Icon } from "@/components/ui/icons";
+import { ActivityIcon, CalendarIcon, GripIcon, MailIcon, NoDateIcon, NoteIcon, TasksIcon, type Icon } from "@/components/ui/icons";
+import { landFrom, useFlip } from "@/components/ui/flip";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
+import { Tick } from "@/components/ui/tick";
 import { cx } from "@/lib/utils";
 import { columnsOf, isMark, orderDropped, orderMovedTo, settleLayout, steppedOrder, type BoardLayout, type Zone } from "./board-layout";
-import { get, post, tool } from "./client-api";
+import { get, peekTool, post, tool } from "./client-api";
+import { isFresh, keep, peek, refreshEnded, refreshStarted, stamp, type Kept } from "./read-cache";
 import { useWorkspace } from "./workspace";
 import "../styles/boxes.css";
 
@@ -116,7 +119,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   }
 
   function hide(id: string, name: string) {
-    commit({ ...layout, hidden: [...layout.hidden, id] }, `${name} is hidden. "More" of the page, "Customize", shows it again.`);
+    commit({ ...layout, hidden: [...layout.hidden, id] }, `${name} hidden. Show it again from More › Customize.`);
     
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true }));
   }
@@ -127,7 +130,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   }
 
   function reset() {
-    commit({ order: defaults, hidden: [] }, "The boxes are back in their first order.");
+    commit({ order: defaults, hidden: [] }, "Layout reset.");
   }
 
   return { layout, step, moveOn, place, hide, show, reset, columns: columnsOf({ ...layout, order: visible(layout.order) }) };
@@ -155,9 +158,9 @@ export function customizeEntries(board: Board, names: Record<string, string>): M
       entries: [
         ...(hidden.length
           ? hidden.map((id): MenuEntry => ({ kind: "action", label: `Show ${names[id]}`, onSelect: () => board.show(id, names[id]) }))
-          : [{ kind: "action" as const, label: "Every box is in view", disabled: true, onSelect: () => {} }]),
+          : [{ kind: "action" as const, label: "No hidden boxes", disabled: true, onSelect: () => {} }]),
         { kind: "separator" },
-        { kind: "action", label: "Put the boxes back in their first order", onSelect: () => board.reset() },
+        { kind: "action", label: "Reset layout", onSelect: () => board.reset() },
       ],
     },
   ];
@@ -212,6 +215,28 @@ export type BoxSpec = {
 type BoxDrag = { id: string };
 let boxDrag: BoxDrag | null = null;
 
+const BOX_GRAB = { x: 32, y: 20 };
+
+
+
+function dropLine(board: HTMLElement, drop: { before: string | null; zone: Zone }, sideways: boolean): { x: number; y: number; w: number; h: number } | null {
+  const origin = board.getBoundingClientRect();
+  const gap = parseFloat(getComputedStyle(board).rowGap) || 0;
+  const inset = gap / 2;
+  const across = (rect: DOMRect, y: number) => ({ x: rect.left - origin.left + inset, y: y - origin.top - 1, w: Math.max(0, rect.width - gap), h: 2 });
+  if (drop.before) {
+    const target = board.querySelector<HTMLElement>(`[data-box="${CSS.escape(drop.before)}"]`)?.getBoundingClientRect();
+    if (!target) return null;
+    if (sideways) return { x: target.left - origin.left - inset - 1, y: target.top - origin.top + inset, w: 2, h: Math.max(0, target.height - gap) };
+    return across(target, target.top - inset);
+  }
+  const zone = board.querySelector<HTMLElement>(`[data-column="${drop.zone + 1}"]`);
+  const end = zone?.querySelector<HTMLElement>(":scope > .boxes-end")?.getBoundingClientRect();
+  if (end && end.width > 0) return across(end, end.top + inset);
+  const last = [...(zone?.querySelectorAll<HTMLElement>(":scope > [data-box]") ?? [])].at(-1)?.getBoundingClientRect();
+  return last ? across(last, last.bottom + inset) : null;
+}
+
 const fineQuery = "(hover: hover) and (pointer: fine)";
 function useFinePointer(): boolean {
   return useSyncExternalStore(
@@ -233,19 +258,26 @@ const BoxIdContext = createContext<string | null>(null);
 const SettledContext = createContext<((id: string, settled: boolean) => void) | null>(null);
 
 
+
 export function useBoxSettled(settled: boolean): void {
   const id = useContext(BoxIdContext);
   const report = useContext(SettledContext);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (id) report?.(id, settled);
   }, [id, settled, report]);
 }
 
-export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: Record<string, BoxSpec>; label: string; wide?: BoxSpec | null }) {
+
+
+export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: Board; boxes: Record<string, BoxSpec>; label: string; wide?: BoxSpec | null; hold?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const [settled, setSettled] = useState<Record<string, boolean>>({});
   const [capped, setCapped] = useState(false);
-  const report = useCallback((id: string, value: boolean) => setSettled((known) => (known[id] === value ? known : { ...known, [id]: value })), []);
+  const reported = useRef<Record<string, boolean>>({});
+  const report = useCallback((id: string, value: boolean) => {
+    reported.current[id] = value;
+    setSettled((known) => (known[id] === value ? known : { ...known, [id]: value }));
+  }, []);
   useEffect(() => {
     const timer = setTimeout(() => setCapped(true), ENTRY_CAP_MS);
     return () => clearTimeout(timer);
@@ -256,13 +288,21 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
   const lone = (shown(first).length === 0) !== (shown(second).length === 0);
   const inView = [...first, ...second, ...row, ...(wide ? [wide.id] : [])].filter((id) => boxes[id]);
   const [entered, setEntered] = useState(false);
-  if (!entered && (capped || inView.every((id) => settled[id]))) setEntered(true);
+  if (!entered && !hold && (capped || inView.every((id) => settled[id]))) setEntered(true);
   const ready = entered;
+  
+  
+  const [atOnce, setAtOnce] = useState(false);
+  useLayoutEffect(() => {
+    if (inView.length > 0 && inView.every((id) => reported.current[id])) setAtOnce(true);
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   
   const revealed = new Set<string>();
   if (entered) inView.forEach((id) => revealed.add(id));
-  else if (!wide || settled[wide.id]) {
+  else if (!hold && (!wide || settled[wide.id])) {
     if (wide) revealed.add(wide.id);
     for (const column of [first, second]) {
       for (const id of shown(column)) {
@@ -286,44 +326,43 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
   }, []);
 
   
-  const rects = useRef(new Map<string, DOMRect>());
-  const orderKey = board.layout.order.join() + "|" + board.layout.hidden.join();
-  const lastKey = useRef(orderKey);
-  useLayoutEffect(() => {
-    const element = host.current;
-    if (!element) return;
-    const nodes = [...element.querySelectorAll<HTMLElement>("[data-box]")];
-    const moved = lastKey.current !== orderKey;
-    lastKey.current = orderKey;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const next = new Map<string, DOMRect>();
-    for (const node of nodes) {
-      const id = node.dataset.box!;
-      const rect = node.getBoundingClientRect();
-      next.set(id, rect);
-      const before = rects.current.get(id);
-      if (!moved || reduced || !before) continue;
-      const dx = before.left - rect.left;
-      const dy = before.top - rect.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      node.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 360, easing: "cubic-bezier(0.4, 0, 0.2, 1)" });
-    }
-    rects.current = next;
-  });
+  
+  useFlip(host, { items: "[data-box]", layout: "grid" });
   
   useEffect(() => {
     const element = host.current;
     if (!element) return;
     const observer = new ResizeObserver(() => {
-      const next = new Map<string, DOMRect>();
-      element.querySelectorAll<HTMLElement>("[data-box]").forEach((node) => next.set(node.dataset.box!, node.getBoundingClientRect()));
-      rects.current = next;
       const columns = element.querySelector<HTMLElement>(".boxes-cols");
       if (columns) setSpread(getComputedStyle(columns).getPropertyValue("--spread").trim() === "1");
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  
+  
+  
+  const line = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const mark = line.current;
+    const element = host.current;
+    if (!mark || !element) return;
+    const at = drop ? dropLine(element, drop, ((drop.zone === 2 || lone) && spread)) : null;
+    if (!at) {
+      mark.removeAttribute("data-show");
+      return;
+    }
+    
+    const appearing = !mark.hasAttribute("data-show");
+    if (appearing) mark.setAttribute("data-placing", "");
+    Object.assign(mark.style, { translate: `${at.x}px ${at.y}px`, width: `${at.w}px`, height: `${at.h}px` });
+    mark.setAttribute("data-show", "");
+    if (appearing) {
+      void mark.offsetWidth;
+      mark.removeAttribute("data-placing");
+    }
+  }, [drop, lone, spread]);
 
   function onDragOver(event: DragEvent<HTMLElement>, zone: Zone) {
     if (!boxDrag) return;
@@ -358,6 +397,8 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
   function onDrop(event: DragEvent<HTMLElement>) {
     if (!boxDrag || !drop) return;
     event.preventDefault();
+    
+    landFrom(boxDrag.id, { x: event.clientX - BOX_GRAB.x, y: event.clientY - BOX_GRAB.y, w: 0, h: 0 });
     board.place(boxDrag.id, drop.before, drop.zone);
     boxDrag = null;
     setDrop(null);
@@ -398,7 +439,7 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
 
   return (
     <SettledContext.Provider value={report}>
-    <div ref={host} className="boxes" data-ready={ready || undefined} aria-label={label} role="region">
+    <div ref={host} className="boxes" data-ready={ready || undefined} data-at-once={atOnce || undefined} aria-label={label} role="region">
       {wide && (
         <div className="boxes-wide">
           <Box spec={wide} index={0} board={board} draggable={false} dropBefore={false} isFirst isLast zone={0} spread={spread} fixed shown={revealed.has(wide.id)} />
@@ -416,6 +457,7 @@ export function BoxBoard({ board, boxes, label, wide }: { board: Board; boxes: R
         {renderZone("boxes-col", 1)}
       </div>
       {renderZone("boxes-foot", 2)}
+      <div ref={line} className="boxes-drop" aria-hidden="true" />
       <p className="sr-only" role="status" aria-live="polite">
         {said}
       </p>
@@ -462,14 +504,14 @@ function Box({
   const moves: MenuEntry[] = fixed
     ? []
     : [
-        { kind: "action", label: "Move up", disabled: isFirst, detail: isFirst ? "First already" : undefined, onSelect: () => board.step(spec.id, -1, spec.title, spread) },
+        { kind: "action", label: "Move up", disabled: isFirst, detail: isFirst ? "Already first" : undefined, onSelect: () => board.step(spec.id, -1, spec.title, spread) },
         { kind: "action", label: "Move down", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.step(spec.id, 1, spec.title, spread) },
         spread
           ? { kind: "action", label: MOVE_ON[zone], onSelect: () => board.moveOn(spec.id, spec.title, spread) }
           : { kind: "action", label: "Move to the end", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.moveOn(spec.id, spec.title, spread) },
         { kind: "separator" },
       ];
-  const entries: MenuEntry[] = [...(spec.menu?.length ? [...spec.menu, { kind: "separator" } as const] : []), ...moves, { kind: "action", label: "Hide this box", onSelect: () => board.hide(spec.id, spec.title) }];
+  const entries: MenuEntry[] = [...(spec.menu?.length ? [...spec.menu, { kind: "separator" } as const] : []), ...moves, { kind: "action", label: "Hide box", onSelect: () => board.hide(spec.id, spec.title) }];
 
   return (
     <section
@@ -492,8 +534,14 @@ function Box({
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", spec.title);
           const box = (event.currentTarget as HTMLElement).closest<HTMLElement>(".box");
-          if (box) event.dataTransfer.setDragImage(box, 32, 20);
-          requestAnimationFrame(() => box?.setAttribute("data-dragging", ""));
+          
+          
+          box?.setAttribute("data-lifted", "");
+          if (box) event.dataTransfer.setDragImage(box, BOX_GRAB.x, BOX_GRAB.y);
+          requestAnimationFrame(() => {
+            box?.removeAttribute("data-lifted");
+            box?.setAttribute("data-dragging", "");
+          });
         }}
         onDragEnd={(event) => {
           boxDrag = null;
@@ -505,11 +553,14 @@ function Box({
             const Glyph = BOX_ICONS[spec.id] ?? TasksIcon;
             return <Glyph />;
           })()}
+          {draggable && !fixed && <GripIcon className="box-grip" />}
         </span>
         <h2 id={titleId} className="t-title box-title" tabIndex={-1}>
           {spec.title}
         </h2>
-        {spec.count !== undefined && spec.count !== null && <span className="pill box-count">{spec.count}</span>}
+        {spec.count !== undefined && spec.count !== null && (
+          <span className="pill box-count">{typeof spec.count === "string" || typeof spec.count === "number" ? <Tick value={spec.count} /> : spec.count}</span>
+        )}
         <div className="box-tools">
           <div className="box-more">
             <Menu label="More" about={`for ${spec.title}`} entries={entries} onOpenChange={setMenuOpen} />
@@ -528,28 +579,110 @@ function Box({
 
 
 
-export function BoxWait({ what, rows = 3 }: { what: string; rows?: number }) {
+
+
+
+
+export type WaitShape = "tasks" | "mail" | "week" | "events" | "notes" | "activity" | "lines";
+
+
+const TITLE_WIDTHS = [72, 52, 64, 44, 58];
+const META_WIDTHS = [40, 28, 46, 32, 36];
+
+function WaitRows({ rows, shape, from = 0 }: { rows: number; shape: WaitShape; from?: number }) {
+  
+  const marked = shape !== "lines" && shape !== "notes";
+  return Array.from({ length: rows }, (_, at) => {
+    const index = at + from;
+    return (
+      <span key={index} className="wait-row" aria-hidden="true">
+        {marked && <span className="skeleton wait-mark" />}
+        <span className="wait-lines">
+          <span className="skeleton wait-title" style={{ width: `${TITLE_WIDTHS[index % TITLE_WIDTHS.length]}%` }} />
+          {shape === "mail" && <span className="skeleton wait-title" style={{ width: `${TITLE_WIDTHS[(index + 2) % TITLE_WIDTHS.length] + 18}%` }} />}
+          {shape !== "lines" && <span className="skeleton wait-meta" style={{ width: `${META_WIDTHS[index % META_WIDTHS.length]}%` }} />}
+        </span>
+      </span>
+    );
+  });
+}
+
+export function BoxWait({ what, rows = 3, shape = "lines" }: { what: string; rows?: number; shape?: WaitShape }) {
+  
+  const groups = shape === "tasks" && rows >= 4 ? Math.ceil(rows / 2) : 0;
   return (
-    <div className="box-wait" role="status" aria-busy="true">
-      <p className="t-meta">{what}</p>
-      {Array.from({ length: rows }, (_, index) => (
-        <span key={index} className="skeleton" style={{ width: `${[78, 56, 66, 48][index % 4]}%` }} />
-      ))}
+    <div className="box-wait" data-shape={shape} role="status" aria-busy="true">
+      <span className="sr-only">{what}</span>
+      {shape === "week" && (
+        <>
+          <span className="wait-week" aria-hidden="true">
+            {Array.from({ length: 7 }, (_, index) => (
+              <span key={index} className="skeleton wait-day" />
+            ))}
+          </span>
+          <span className="skeleton wait-heading" aria-hidden="true" />
+        </>
+      )}
+      {groups > 0 ? (
+        Array.from({ length: groups }, (_, group) => (
+          <span key={group} className="wait-group" aria-hidden="true">
+            <span className="skeleton wait-heading" />
+            <WaitRows rows={Math.min(2, rows - group * 2)} shape={shape} from={group * 2} />
+          </span>
+        ))
+      ) : (
+        <WaitRows rows={rows} shape={shape === "week" ? "events" : shape} />
+      )}
     </div>
   );
 }
 
 
+
+export function GroupsWait({ what, layout }: { what: string; layout: "list" | "board" }) {
+  const group = (key: string, rows: number, days = 0) => (
+    <section key={key} className="group" data-group={key} aria-hidden="true">
+      <div className="group-head">
+        <span className="skeleton wait-heading" />
+      </div>
+      {days > 0
+        ? Array.from({ length: days }, (_, day) => (
+            <div key={day} className="group-day">
+              <span className="skeleton wait-day-heading" />
+              <span className="wait-rows">
+                <WaitRows rows={rows} shape="tasks" />
+              </span>
+            </div>
+          ))
+        : (
+          <span className="wait-rows">
+            <WaitRows rows={rows} shape="tasks" />
+          </span>
+        )}
+    </section>
+  );
+  return (
+    <div className="groups groups-wait" data-layout={layout} data-mode="page" role="status" aria-busy="true">
+      <span className="sr-only">{what}</span>
+      <div className="groups-zone" data-zone="now">
+        {group("overdue", 2)}
+        {group("today", 3)}
+      </div>
+      <div className="groups-zone" data-zone="ahead">
+        {group("upcoming", 2, 3)}
+      </div>
+      <div className="groups-zone" data-zone="rest">
+        {group("noDate", 3)}
+      </div>
+    </div>
+  );
+}
+
+
+
 export function BoxEmpty({ text, children, reason }: { text: ReactNode; children?: ReactNode; reason?: string }) {
-  const id = useContext(BoxIdContext);
-  const Glyph = id ? BOX_ICONS[id] : undefined;
   return (
     <div className="box-empty" data-empty={reason}>
-      {Glyph && (
-        <span className="box-empty-icon" aria-hidden="true">
-          <Glyph />
-        </span>
-      )}
       <p className="t-help">{text}</p>
       {children}
     </div>
@@ -562,7 +695,7 @@ export function BoxFailed({ what, message, kept, onRetry }: { what: string; mess
   return (
     <div className="box-failed" role="alert" data-failed>
       <p className="inline-note" data-tone="alert">
-        {kept ? `${what} could not be refreshed: ${message}. What you see is the last version read.` : `${what} could not be read: ${message}.`}
+        {kept ? `${what} could not be refreshed: ${message}. Showing the last version loaded.` : `${what} could not be loaded: ${message}.`}
       </p>
       <Button size="sm" onClick={onRetry}>
         Try again
@@ -577,33 +710,69 @@ export function BoxFailed({ what, message, kept, onRetry }: { what: string; mess
 
 export type BoxRead<T> = { data: T | null; error: string | null; stale: boolean; settled: boolean; retry: () => void };
 
-export function useBoxRead<T>(read: ((publish: (partial: T) => void) => Promise<{ ok: true } & T | { ok: false; message: string }>) | null, key: string): BoxRead<T> {
+
+
+type Held<T> = { key: string; value: T; partial?: boolean; freshIn?: number };
+
+const heldFrom = <T,>(key: string, hit: Kept<T> | null, version: number): Held<T> | null =>
+  hit ? { key, value: hit.value, freshIn: isFresh(hit) ? version : undefined } : null;
+
+
+
+
+export function useBoxRead<T>(
+  read: ((publish: (partial: T) => void) => Promise<{ ok: true } & T | { ok: false; message: string }>) | null,
+  key: string,
+  kept?: () => Kept<T> | null,
+): BoxRead<T> {
   const { version } = useWorkspace();
-  const [state, setState] = useState<{ key: string; value: T; partial?: boolean } | null>(null);
+  const look = (): Kept<T> | null => (read === null ? null : kept ? kept() : peek<T>(`box:${key}`));
+  const [state, setState] = useState<Held<T> | null>(() => heldFrom(key, look(), version));
   const [error, setError] = useState<{ key: string; message: string } | null>(null);
   const [round, setRound] = useState(0);
+  const [lookedFor, setLookedFor] = useState(key);
+  if (lookedFor !== key) {
+    setLookedFor(key);
+    const hit = heldFrom(key, look(), version);
+    if (hit) setState(hit);
+  }
   const reader = useRef(read);
+  const held = useRef(state);
   useEffect(() => {
     reader.current = read;
+    held.current = state;
   });
   useEffect(() => {
     const run = reader.current;
     if (!run) return;
+    
+    if (round === 0 && held.current?.key === key && held.current.freshIn === version) return;
     let live = true;
+    const asked = stamp();
     
     const publish = (partial: T) => {
       if (live) setState((now) => (now?.key === key && !now.partial ? now : { key, value: partial, partial: true }));
     };
-    void run(publish).then((answer) => {
-      if (!live) return;
-      if (answer.ok) {
-        setState({ key, value: answer as unknown as T });
-        setError(null);
-      } else setError({ key, message: answer.message });
-    });
+    
+    const behind = held.current !== null;
+    if (behind) refreshStarted();
+    void run(publish)
+      .then((answer) => {
+        if (answer.ok && !kept) keep(`box:${key}`, answer, asked);
+        if (!live) return;
+        if (answer.ok) {
+          setState({ key, value: answer as unknown as T });
+          setError(null);
+        } else setError({ key, message: answer.message });
+      })
+      .finally(() => {
+        if (behind) refreshEnded();
+      });
     return () => {
       live = false;
     };
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version, round]);
   const failed = error?.key === key ? error.message : null;
   return {
@@ -618,5 +787,5 @@ export function useBoxRead<T>(read: ((publish: (partial: T) => void) => Promise<
 
 export function useToolRead<T>(name: string, input: Record<string, unknown> | null): BoxRead<T> {
   const key = input ? `${name}:${JSON.stringify(input)}` : `${name}:off`;
-  return useBoxRead<T>(input ? () => tool<T>(name, input) : null, key);
+  return useBoxRead<T>(input ? () => tool<T>(name, input) : null, key, () => (input ? (peekTool<T>(name, input) as Kept<T> | null) : null));
 }

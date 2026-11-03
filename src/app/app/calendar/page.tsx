@@ -19,9 +19,13 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { BrandMark } from "@/components/brand-mark";
+import { GoogleCalendarMark } from "@/components/ui/brands";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
+import { FlipBox } from "@/components/ui/flip-list";
+import { ConnectOffer, connectWords, useConnectWay } from "../connect-offer";
 import { Fold } from "@/components/ui/fold";
 import { AddIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
@@ -32,13 +36,14 @@ import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, mon
 import { inlinePlain } from "@/lib/inline-links";
 import { PRODUCT_NAME } from "@/lib/product";
 import { BoxFailed } from "../boxes";
-import { get, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "../client-api";
-import { readEvents, type EventsRead } from "../events-read";
+import { get, peekGet, peekTool, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "../client-api";
+import { keptEvents, readEvents, type EventsRead } from "../events-read";
 import { PageHeader } from "../page-header";
 import { openQuickAdd } from "../quick-add-bus";
-import { AccountFilter, ALL, branchOf, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
+import { AccountFilter, accountFromUrl, ALL, branchOf, chosenAccounts, countsByAccount, EVENTS, GENERAL, ITEMS, lineOf, PlaceFilter, placeFromUrl } from "../place-filters";
 import { openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-row";
 import { useSwap } from "../use-swap";
+import { cascade } from "./cascade";
 import { activates, useGridKeys } from "./grid-keys";
 import { useChatScope, useWorkspace } from "../workspace";
 import "../../styles/calendar.css";
@@ -74,7 +79,7 @@ type Loaded = { key: string; view: View; anchor: Day; from: Day; to: Day; events
 
 
 type EmptyDay = "nothing" | "reading" | "unread";
-const EMPTY_DAY: Record<EmptyDay, string> = { nothing: "Nothing this day.", reading: "Reading this day…", unread: "This day could not be read." };
+const EMPTY_DAY: Record<EmptyDay, string> = { nothing: "Nothing this day.", reading: "Loading this day…", unread: "This day could not be loaded." };
 const EMPTY_MONTH_DAY: Record<EmptyDay, string> = { nothing: "nothing", reading: "still reading", unread: "not read" };
 type View = "week" | "month";
 
@@ -86,7 +91,9 @@ const VIEWS = [
 ];
 const OWN_CALENDAR = `${PRODUCT_NAME} calendar`;
 
-const BAND_PIECES = 3;
+
+const BAND_PIECES = 2;
+const folds = (count: number) => count > BAND_PIECES + 1;
 
 export default function CalendarPage() {
   return (
@@ -96,7 +103,35 @@ export default function CalendarPage() {
   );
 }
 
+
+function loadedOf(key: string, view: View, anchor: Day, range: { from: Day; to: Day }, events: EventsRead<CalEvent>, tasks: TasksAnswer, accounts: Answer<{ accounts: Account[] }>): Loaded {
+  return {
+    key,
+    view,
+    anchor,
+    from: range.from,
+    to: range.to,
+    events: events.events,
+    tasks: [...tasks.groups.overdue.tasks, ...tasks.groups.today.tasks, ...tasks.groups.upcoming.days.flatMap((day) => day.tasks), ...(tasks.completed?.tasks ?? [])],
+    failures: events.failures,
+    waiting: events.waiting,
+    accounts: accounts.ok ? accounts.accounts : [],
+  };
+}
+
+
+
+function keptLoaded(key: string, view: View, anchor: Day, range: { from: Day; to: Day }): Loaded | null {
+  const instants = instantsOf(range.from, range.to);
+  const events = keptEvents<CalEvent>({ from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to });
+  const tasks = peekTool<TasksAnswer>("get_tasks", { today: today(), withCompleted: true });
+  const accounts = peekGet<{ accounts: Account[] }>("/api/accounts");
+  return events && tasks && accounts ? loadedOf(key, view, anchor, range, events.value, tasks.value, accounts.value) : null;
+}
+
 const eventKey = (event: CalEvent) => `${event.origin}:${event.accountId}:${event.calendarId}:${event.id}`;
+
+const ofChosen = (event: CalEvent, some: Set<string> | null) => some === null || (event.origin === "google" && some.has(event.accountId));
 
 
 
@@ -172,7 +207,10 @@ function Calendar() {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const card = useRef<HTMLElement>(null);
   const narrow = useNarrow(card, mounted);
-  const { version, tree, notify, touch, saving } = useWorkspace();
+  const { version, tree, notify, touch, saving, mailAccounts } = useWorkspace();
+  
+  const connectWay = useConnectWay();
+  const noAccounts = mailAccounts !== null && mailAccounts.length === 0;
   useChatScope(null);
   const params = useSearchParams();
   const router = useRouter();
@@ -188,7 +226,13 @@ function Calendar() {
     return { from: weeks[0][0], to: weeks.at(-1)!.at(-1)! };
   }, [view, anchor, weekStart]);
   const rangeKey = `${view}:${range.from}:${range.to}`;
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [loaded, setLoaded] = useState<Loaded | null>(() => keptLoaded(rangeKey, view, anchor, range));
+  const [keptFor, setKeptFor] = useState(rangeKey);
+  if (keptFor !== rangeKey) {
+    setKeptFor(rangeKey);
+    const kept = keptLoaded(rangeKey, view, anchor, range);
+    if (kept) setLoaded(kept);
+  }
   const [readError, setReadError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -215,23 +259,7 @@ function Calendar() {
     let live = true;
     const instants = instantsOf(range.from, range.to);
     const beside = Promise.all([tool<TasksAnswer>("get_tasks", { today: today(), withCompleted: true }), get<{ accounts: Account[] }>("/api/accounts")]);
-    const made = (events: EventsRead<CalEvent>, tasks: TasksAnswer, accounts: Answer<{ accounts: Account[] }>): Loaded => ({
-      key: rangeKey,
-      view,
-      anchor,
-      from: range.from,
-      to: range.to,
-      events: events.events,
-      tasks: [
-        ...tasks.groups.overdue.tasks,
-        ...tasks.groups.today.tasks,
-        ...tasks.groups.upcoming.days.flatMap((day) => day.tasks),
-        ...(tasks.completed?.tasks ?? []),
-      ],
-      failures: events.failures,
-      waiting: events.waiting,
-      accounts: accounts.ok ? accounts.accounts : [],
-    });
+    const made = (events: EventsRead<CalEvent>, tasks: TasksAnswer, accounts: Answer<{ accounts: Account[] }>) => loadedOf(rangeKey, view, anchor, range, events, tasks, accounts);
     void Promise.all([
       readEvents<CalEvent>(
         { from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to },
@@ -291,8 +319,10 @@ function Calendar() {
   const inRange = (day: string | null) => Boolean(day && day >= shownFrom && day <= shownTo);
   const tasksAll = useMemo(() => (loaded?.tasks ?? []).map((task) => (moved.has(task.id) ? { ...task, dueOn: moved.get(task.id)! } : task)), [loaded, moved]);
   const placeEvents = useMemo(() => (loaded?.events ?? []).filter((event) => byPlace.eventIn(event, place)), [loaded, byPlace, place]);
-  const account = accountParam && (loaded?.accounts ?? []).some((entry) => entry.id === accountParam) ? accountParam : ALL;
-  const events = useMemo(() => placeEvents.filter((event) => account === ALL || (event.origin === "google" && event.accountId === account)), [placeEvents, account]);
+  
+  const account = accountFromUrl(accountParam, loaded?.accounts ?? [], tree);
+  const chosen = useMemo(() => chosenAccounts(account, loaded?.accounts ?? [], tree), [account, loaded, tree]);
+  const events = useMemo(() => placeEvents.filter((event) => ofChosen(event, chosen)), [placeEvents, chosen]);
   const tasks = useMemo(
     () => tasksAll.filter((task) => Boolean(task.dueOn && task.dueOn >= shownFrom && task.dueOn <= shownTo) && byPlace.taskIn(task, place)),
     [tasksAll, shownFrom, shownTo, byPlace, place],
@@ -301,7 +331,7 @@ function Calendar() {
   
   const placeCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    const eventsOfAccount = (loaded?.events ?? []).filter((event) => account === ALL || (event.origin === "google" && event.accountId === account));
+    const eventsOfAccount = (loaded?.events ?? []).filter((event) => ofChosen(event, chosen));
     const rangeTasks = tasksAll.filter((task) => inRange(task.dueOn));
     for (const where of [ALL, GENERAL, ...(tree ?? []).map((node) => node.id)]) {
       counts.set(where, eventsOfAccount.filter((event) => byPlace.eventIn(event, where)).length + rangeTasks.filter((task) => byPlace.taskIn(task, where)).length);
@@ -309,9 +339,8 @@ function Calendar() {
     return counts;
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, tasksAll, tree, account, byPlace]);
-  const accountCounts = new Map<string, number>([[ALL, placeEvents.filter((event) => event.origin === "google").length]]);
-  for (const entry of loaded?.accounts ?? []) accountCounts.set(entry.id, placeEvents.filter((event) => event.origin === "google" && event.accountId === entry.id).length);
+  }, [loaded, tasksAll, tree, chosen, byPlace]);
+  const accountCounts = countsByAccount(loaded?.accounts ?? [], tree, (some) => placeEvents.filter((event) => event.origin === "google" && ofChosen(event, some)).length);
 
   const byDay = useMemo(() => {
     const map = new Map<Day, { events: CalEvent[]; tasks: TaskData[] }>();
@@ -429,19 +458,22 @@ function Calendar() {
 
   if (!mounted) return null;
   const counted = `${count(events.length, "event", "events")} and ${count(tasks.length, "task", "tasks")}`;
+  
+  const filteredBy = [place === ALL ? null : "client or project", account === ALL ? null : "account"].filter(Boolean);
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page cal-page" data-calendar={view}>
         <PageHeader
           title="Calendar"
-          count={loaded ? `${[counted, reading ? `${count(unanswered, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : readError === null ? "Reading the calendar…" : "Events and the tasks with a date."}
+          count={loaded ? `${[counted, reading ? `${count(unanswered, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : readError === null ? "Loading the calendar…" : "Events and the tasks with a date."}
           filters={
             <>
               <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
               <AccountFilter
                 value={account}
                 accounts={loaded?.accounts ?? []}
-                counts={accountCounts}
+                tree={tree}
+                counts={loaded ? accountCounts : null}
                 unit={EVENTS}
                 onChange={(value) => set({ account: value === ALL ? null : value })}
               />
@@ -480,13 +512,13 @@ function Calendar() {
 
           {readError && shown && (
             <p role="alert" className="inline-note" data-tone="alert">
-              The calendar could not be read again: {readError}. What shows is from the last read.
+              The calendar could not be loaded again: {readError}. Showing the last read.
             </p>
           )}
           {}
           {loaded?.failures.filter((failure) => !loaded.accounts.some((entry) => entry.id === failure.accountId && entry.isDemo)).map((failure) => (
             <p key={failure.accountId || "accounts"} role="alert" className="inline-note" data-tone="alert">
-              {failure.accountEmail ? `The calendar of ${failure.accountEmail} could not be read: ${failure.reason}` : `Some calendars could not be read: ${failure.reason}`}
+              {failure.accountEmail ? `${failure.accountEmail}'s calendar could not be loaded: ${failure.reason}` : `Some calendars could not be loaded: ${failure.reason}`}
             </p>
           ))}
 
@@ -530,11 +562,13 @@ function Calendar() {
                 />
               )}
               {!stale && unanswered === 0 && events.length === 0 && tasks.length === 0 && (
-                <p className="t-help cal-empty">
-                  {place === ALL && account === ALL
-                    ? `Nothing in this ${view === "week" ? "week" : "month"}: no events and no tasks due. "New event" adds one.`
-                    : `Nothing in this ${view === "week" ? "week" : "month"} for the chosen place and account.`}
-                </p>
+                <div className="cal-empty">
+                  <p className="t-help">
+                    {`Nothing this ${view === "week" ? "week" : "month"}${filteredBy.length ? ` for the chosen ${filteredBy.join(" and ")}` : ""}.`}
+                    {noAccounts && ` ${connectWords(connectWay, "its events")}`}
+                  </p>
+                  {noAccounts && <ConnectOffer way={connectWay} />}
+                </div>
               )}
             </div>
           )}
@@ -582,7 +616,8 @@ function nodeColor(tree: TreeNode[] | null, id: string | null | undefined): stri
   return tree?.find((node) => node.id === id)?.color ?? undefined;
 }
 
-function EventChip({ event, chips, style, timed, minutes, lead }: { event: CalEvent; chips: ChipHandlers; style?: CSSProperties; timed?: boolean; minutes?: number; lead?: boolean }) {
+
+function EventChip({ event, chips, style, timed, minutes, lead, flipKey }: { event: CalEvent; chips: ChipHandlers; style?: CSSProperties; timed?: boolean; minutes?: number; lead?: boolean; flipKey?: string }) {
   const { tree } = useWorkspace();
   const color = nodeColor(tree, event.nodeId ?? event.linkedNodeIds[0] ?? event.fromNodeId);
   const moment = <span className="cal-event-when">{event.allDay ? "All day" : clock(event.start)}</span>;
@@ -595,8 +630,11 @@ function EventChip({ event, chips, style, timed, minutes, lead }: { event: CalEv
       data-short={timed && (minutes ?? 0) < 60 ? "" : undefined}
       data-origin={event.origin}
       style={style}
+      
+      title={event.title}
       onClick={() => chips.onOpenEvent(event)}
       data-cal-event={event.id}
+      data-flip-key={flipKey}
     >
       {}
       {lead && moment}
@@ -621,23 +659,27 @@ function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: 
     }
     touch();
     notify({
-      text: next ? `Completed “${inlinePlain(task.title)}”` : `Opened “${inlinePlain(task.title)}” again`,
+      text: next ? `Completed “${inlinePlain(task.title)}”` : `Reopened “${inlinePlain(task.title)}”`,
       tone: "status",
       undo: () => void saving(tool("update_item", { id: task.id, status: next ? "open" : "done" })),
     });
   }
   const hour = task.dueTime ? timeLabel(task.dueTime) : null;
+  const plain = inlinePlain(task.title);
+  
+  const hourShown = !timed && !lead && hour;
   return (
     <div
       className="cal-task"
       data-cal-task={task.id}
+      data-flip-key={`task:${task.id}`}
       data-color={task.color ?? undefined}
       data-done={done ? "" : undefined}
       data-timed={timed ? "" : undefined}
       style={style}
       draggable={fine && task.status === "open"}
       onDragStart={(event) => {
-        event.dataTransfer.setData("text/plain", inlinePlain(task.title));
+        event.dataTransfer.setData("text/plain", plain);
         event.dataTransfer.effectAllowed = "move";
         chips.onDragStart(task);
       }}
@@ -648,14 +690,16 @@ function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: 
       <button
         type="button"
         className="cal-task-open"
+        
+        title={hour ? `${plain}, ${hour}` : plain}
         onClick={() => openTaskDetail({ id: task.id, task, list: chips.list })}
         onKeyDown={(event) => chips.onTaskKey(event, task)}
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+ArrowUp Alt+ArrowDown"
       >
-        <span className="cal-task-title">{inlinePlain(task.title)}</span>
-        {!lead && hour && <span className="cal-task-when">{hour}</span>}
+        <span className="cal-task-title">{plain}</span>
+        {hourShown && <span className="cal-task-when">{hour}</span>}
         <span className="sr-only">
-          , task{lead && hour ? ` at ${hour}` : ""}. Alt with the arrows moves it to another day
+          , task{hour && !hourShown ? ` at ${hour}` : ""}. Alt with the arrows moves it to another day
         </span>
       </button>
     </div>
@@ -671,7 +715,11 @@ function subscribeFine(onChange: () => void) {
 
 
 
-const HOUR_REM = 3.5;
+
+const HOUR_REM = 3;
+
+const LINE_MINUTES = Math.ceil((1.5 / HOUR_REM) * 60);
+const remOf = (minutes: number) => `${(minutes / 60) * HOUR_REM}rem`;
 
 
 
@@ -712,11 +760,11 @@ function WeekGrid({
       if (!task.dueTime) continue;
       const start = minutesOfDay(task.dueTime);
       first = Math.min(first, Math.floor(start / 60));
-      last = Math.max(last, Math.ceil(pieceEnd(start) / 60) - 1);
+      last = Math.max(last, Math.ceil(Math.min(DAY_MINUTES, start + LINE_MINUTES) / 60) - 1);
     }
   }
   const hours = Array.from({ length: last - first + 1 }, (_, i) => first + i);
-  const top = (minutes: number) => `${((minutes - first * 60) / 60) * HOUR_REM}rem`;
+  const top = (minutes: number) => remOf(minutes - first * 60);
   
   const withTasks = days.some((day) => byDay.get(day)?.tasks.some((task) => !task.dueTime));
   const firstHourRow = withTasks ? 2 : 1;
@@ -755,7 +803,7 @@ function WeekGrid({
         grid={grid}
         dropOn={dropOn}
         onAdd={(day) => onCreate(day, null)}
-        pieces={(day) => (byDay.get(day)?.events ?? []).filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} />)}
+        pieces={(day) => (byDay.get(day)?.events ?? []).filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} flipKey={`${day}:${eventKey(event)}`} />)}
       />
       {withTasks && (
         <WeekBand
@@ -782,14 +830,16 @@ function WeekGrid({
           const entry = byDay.get(day);
           const timed = [
             ...(entry?.events ?? []).filter(onHours).map((event) => ({ kind: "event" as const, key: eventKey(event), start: minutesOf(event.start), end: pieceEnd(minutesOf(event.start), endOf(event)), event })),
+            
             ...(entry?.tasks ?? []).filter((task) => task.dueTime).map((task) => {
               const start = minutesOfDay(task.dueTime!);
-              return { kind: "task" as const, key: task.id, start, end: pieceEnd(start), task };
+              return { kind: "task" as const, key: task.id, start, end: Math.min(DAY_MINUTES, start + LINE_MINUTES), above: true, task };
             }),
           ];
-          const laned = lanes(timed);
+          const placed = cascade(timed, LINE_MINUTES);
           return (
-            <div key={day} role="gridcell" className="cal-day-hours" data-day={day} data-today={day === now ? "" : undefined} {...dropOn(day)}>
+            
+            <FlipBox key={day} share="week" role="gridcell" className="cal-day-hours" data-day={day} data-today={day === now ? "" : undefined} {...dropOn(day)}>
               {}
               {hours.map((hour, index) => (
                 <button
@@ -809,24 +859,33 @@ function WeekGrid({
                   </span>
                 </button>
               ))}
-              {laned.map(({ item, lane, of }) => {
+              {placed.map(({ item, inset, layer, textAt, room, clip }) => {
                 const minutes = item.end - item.start;
+                const place = {
+                  left: `calc(${inset * 100}% + 2px)`,
+                  width: `calc(${(1 - inset) * 100}% - 4px)`,
+                  zIndex: 1 + layer,
+                  ...(clip < 1 && { "--clip": clip }),
+                };
+                if (item.kind === "task") {
+                  
+                  const style = { ...place, top: top(Math.min(item.start, DAY_MINUTES - LINE_MINUTES)) } as CSSProperties;
+                  return <TaskChip key={item.key} task={item.task} chips={chips} style={style} timed />;
+                }
+                
                 const style = {
+                  ...place,
                   top: top(item.start),
-                  height: `${(minutes / 60) * HOUR_REM}rem`,
-                  left: `calc(${(lane / of) * 100}% + 2px)`,
-                  width: `calc(${100 / of}% - 4px)`,
-                  "--title-lines": titleLines(minutes),
+                  height: remOf(minutes),
+                  "--title-lines": titleLines(room),
+                  "--text-at": remOf(textAt),
+                  "--text-below": remOf(minutes - textAt - room),
                 } as CSSProperties;
-                return item.kind === "event" ? (
-                  <EventChip key={item.key} event={item.event} chips={chips} style={style} timed minutes={minutes} />
-                ) : (
-                  <TaskChip key={item.key} task={item.task} chips={chips} style={style} timed />
-                );
+                return <EventChip key={item.key} event={item.event} chips={chips} style={style} timed minutes={minutes} flipKey={`${day}:${item.key}`} />;
               })}
               {day === now && <NowLine first={first} last={last} />}
               <span className="sr-only">{fullDay(day)}, by the hour</span>
-            </div>
+            </FlipBox>
           );
         })}
       </div>
@@ -866,16 +925,22 @@ function WeekBand({
       if (!next.delete(day)) next.add(day);
       return next;
     });
+  const all = days.map(pieces);
+  
+  
+  const lines = all.map((list, index) => (!folds(list.length) ? list.length : (open.has(days[index]) ? list.length : BAND_PIECES) + 1));
+  const tallest = Math.max(...lines);
   return (
     <div className="cal-week-row cal-band" role="row">
       <span className="cal-gutter t-meta">{label}</span>
       {days.map((day, column) => {
-        const all = pieces(day);
-        const rest = all.length - BAND_PIECES;
+        const rest = folds(all[column].length) ? all[column].length - BAND_PIECES : 0;
         const unfolded = open.has(day);
         return (
-          <div
+          <FlipBox
             key={day}
+            share="week"
+            layout="list"
             role="gridcell"
             className="cal-slot"
             data-day={day}
@@ -891,11 +956,11 @@ function WeekBand({
             {...grid.cell(row, column)}
             {...dropOn(day)}
           >
-            {all.slice(0, BAND_PIECES)}
+            {rest > 0 ? all[column].slice(0, BAND_PIECES) : all[column]}
             {rest > 0 && (
               <>
                 <Fold open={unfolded} id={`${id}${day}`}>
-                  <div className="cal-band-rest">{all.slice(BAND_PIECES)}</div>
+                  <div className="cal-band-rest">{all[column].slice(BAND_PIECES)}</div>
                 </Fold>
                 <button
                   type="button"
@@ -912,10 +977,12 @@ function WeekBand({
             <span className="sr-only">
               {fullDay(day)}, {about}
             </span>
-            <span className="cal-add-hint" aria-hidden="true">
-              {hint}
-            </span>
-          </div>
+            {(lines[column] === 0 || lines[column] < tallest) && (
+              <span className="cal-add-hint" aria-hidden="true">
+                {hint}
+              </span>
+            )}
+          </FlipBox>
         );
       })}
     </div>
@@ -931,36 +998,7 @@ function NowLine({ first, last }: { first: number; last: number }) {
   }, []);
   
   if (minutes < first * 60 || minutes >= (last + 1) * 60) return null;
-  return <span className="cal-now" aria-hidden="true" style={{ top: `${((minutes - first * 60) / 60) * HOUR_REM}rem` }} />;
-}
-
-
-
-function lanes<T extends { start: number; end: number }>(items: T[]): Array<{ item: T; lane: number; of: number }> {
-  const sorted = [...items].sort((a, b) => a.start - b.start || b.end - a.end);
-  const out: Array<{ item: T; lane: number; of: number }> = [];
-  let run: Array<{ item: T; lane: number; of: number }> = [];
-  let runEnd = -1;
-  let ends: number[] = [];
-  const close = () => {
-    const of = Math.max(1, ends.length);
-    for (const entry of run) entry.of = of;
-    out.push(...run);
-    run = [];
-    ends = [];
-  };
-  for (const item of sorted) {
-    if (item.start >= runEnd && run.length) close();
-    let lane = ends.findIndex((end) => end <= item.start);
-    if (lane === -1) {
-      lane = ends.length;
-      ends.push(item.end);
-    } else ends[lane] = item.end;
-    run.push({ item, lane, of: 1 });
-    runEnd = Math.max(runEnd, item.end);
-  }
-  close();
-  return out;
+  return <span className="cal-now" aria-hidden="true" style={{ top: remOf(minutes - first * 60) }} />;
 }
 
 
@@ -1100,7 +1138,7 @@ function MonthGrid({
                     {}
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
                     <span className="sr-only">, {fullDay(day)}: </span>
-                    <span className="cal-month-count">{total > 0 ? total : ""}</span>
+                    <span className="cal-month-count">{total > 0 ? total : null}</span>
                     <span className="sr-only">{total > 0 ? ` ${plural(total, "item", "items")}` : EMPTY_MONTH_DAY[emptyDay]}</span>
                   </button>
                 </div>
@@ -1146,15 +1184,29 @@ function MonthGrid({
   );
 }
 
+
+const WAITING_EVENTS = [2, 1, 3, 1, 2, 0, 1];
+
+
+
 function CalendarSkeleton({ view }: { view: View }) {
   return (
-    <div className="cal-skeleton" role="status" aria-label="Reading the calendar">
-      {Array.from({ length: view === "week" ? 7 : 35 }, (_, i) => (
-        <span key={i} className="cal-skeleton-cell">
-          <span className="skeleton" />
-          <span className="skeleton" />
+    <div className="cal-skeleton" data-view={view} role="status" aria-label="Loading the calendar">
+      <div className="cal-skeleton-in" aria-hidden="true">
+        <span className="cal-skeleton-head">
+          {Array.from({ length: 7 }, (_, i) => (
+            <span key={i} className="skeleton" />
+          ))}
         </span>
-      ))}
+        {Array.from({ length: view === "month" ? 35 : 7 }, (_, i) => (
+          <span key={i} className="cal-skeleton-cell">
+            <span className="skeleton cal-skeleton-day" />
+            {Array.from({ length: view === "month" ? WAITING_EVENTS[(i * 3) % 7] % 3 : Math.max(1, WAITING_EVENTS[i]) }, (_, e) => (
+              <span key={e} className="skeleton cal-skeleton-event" />
+            ))}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1222,9 +1274,12 @@ function EventComposer({
     setCalendar("own");
     setWhere(place === ALL ? GENERAL : place);
   }
+  
   const calendars = [
-    { value: "own", label: OWN_CALENDAR },
-    ...accounts.flatMap((account) => account.calendars.filter((entry) => entry.selected).map((entry) => ({ value: `${account.id}|${entry.id}`, label: `${entry.name}, ${account.email}` }))),
+    { value: "own", label: OWN_CALENDAR, mark: BrandMark },
+    ...accounts.flatMap((account) =>
+      account.calendars.filter((entry) => entry.selected).map((entry) => ({ value: `${account.id}|${entry.id}`, label: `${entry.name}, ${account.email}`, mark: GoogleCalendarMark })),
+    ),
   ];
   const places = [{ value: GENERAL, label: "General" }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
 
@@ -1301,14 +1356,14 @@ function EventComposer({
               {calendars.length === 1 && (
                 <p className="t-help">
                   {demoOnly
-                    ? "The sample accounts are read only, so the event goes to the workspace's own calendar."
+                    ? "The sample accounts are read-only, so the event goes to the workspace's own calendar."
                     : "With a Google account connected, its calendars are offered here too."}
                 </p>
               )}
             </div>
             <div className="cal-field">
-              <span className="t-label">Place</span>
-              <Select label="Place" value={where} options={places} onChange={setWhere} />
+              <span className="t-label">Client or project</span>
+              <Select label="Client or project" value={where} options={places} onChange={setWhere} />
             </div>
             <div className="cal-dialog-foot">
               <Button onClick={onClose}>Cancel</Button>
@@ -1362,10 +1417,10 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
   }
   async function unlinkTask(item: Item) {
     const answer = await tool("unlink_task_event", { task: item.id });
-    if (!answer.ok) return notify({ text: `“${inlinePlain(item.title)}” could not be taken out: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: `“${inlinePlain(item.title)}” could not be unlinked: ${answer.message}`, tone: "error" });
     setReread((n) => n + 1);
     touch();
-    notify({ text: `Took “${inlinePlain(item.title)}” out of “${shown!.title}”`, tone: "status", undo: () => void saving(tool("link_task_event", { task: item.id, ...target })) });
+    notify({ text: `Unlinked “${inlinePlain(item.title)}” from “${shown!.title}”`, tone: "status", undo: () => void saving(tool("link_task_event", { task: item.id, ...target })) });
   }
   async function linkNode(node: TreeNode) {
     const answer = await tool("link_node_event", { node: node.id, ...target });
@@ -1375,9 +1430,9 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
   }
   async function unlinkNode(node: TreeNode) {
     const answer = await tool("unlink_node_event", { node: node.id, ...target });
-    if (!answer.ok) return notify({ text: `${node.path} could not be taken off: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: `${node.path} could not be unlinked: ${answer.message}`, tone: "error" });
     touch();
-    notify({ text: `Took ${node.path} off “${shown!.title}”`, tone: "status", undo: () => void saving(tool("link_node_event", { node: node.id, ...target })) });
+    notify({ text: `Unlinked ${node.path} from “${shown!.title}”`, tone: "status", undo: () => void saving(tool("link_node_event", { node: node.id, ...target })) });
   }
   async function remove() {
     const current = shown!;
@@ -1419,12 +1474,15 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
       <PopupLayerProvider container={ref}>
         <div className="cal-dialog-in">
           <div className="cal-dialog-head">
-            <p className="t-meta cal-dialog-origin">{shown.origin === "local" ? OWN_CALENDAR : `Google calendar, ${shown.accountEmail}`}</p>
+            <p className="t-meta cal-dialog-origin">
+              {shown.origin === "local" ? <BrandMark className="cal-origin-mark" /> : <GoogleCalendarMark className="cal-origin-mark" />}
+              {shown.origin === "local" ? OWN_CALENDAR : `Google calendar, ${shown.accountEmail}`}
+            </p>
             <div className="cal-dialog-tools">
               <Menu
                 label="More"
                 about={`for “${shown.title}”`}
-                entries={[{ kind: "action", label: "Delete", tone: "danger", disabled: sample, detail: sample ? "The sample accounts are read only" : undefined, onSelect: () => void remove() }]}
+                entries={[{ kind: "action", label: "Delete", tone: "danger", disabled: sample, detail: sample ? "The sample accounts are read-only" : undefined, onSelect: () => void remove() }]}
               />
               <Button size="sm" onClick={onClose}>
                 Close
@@ -1440,7 +1498,7 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
               <dd className="t-value">{whenText(shown)}</dd>
             </div>
             <div>
-              <dt className="t-label">Place</dt>
+              <dt className="t-label">Client or project</dt>
               <dd className="t-value">{place ?? "General"}</dd>
             </div>
             {shown.location && (
@@ -1456,21 +1514,21 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
               <h3 id="event-linked" className="t-label">
                 Linked
               </h3>
-              <Menu label="Link…" name={`Link… to “${shown.title}”`} entries={linkEntries} className="cal-link-menu" />
+              <Menu label="Link to…" name={`Link “${shown.title}” to…`} entries={linkEntries} className="cal-link-menu" />
             </div>
             <h4 className="t-meta cal-linked-kind">Tasks and subtasks</h4>
             {shown.origin === "google" ? (
-              <p className="t-help">A task linked to a Google event shows it in the task&apos;s own detail.</p>
+              <p className="t-help">Linked tasks show this event in their own detail.</p>
             ) : items === null ? (
               inside?.key === key && inside.error ? (
                 <p className="inline-note" data-tone="alert">
-                  The tasks of this event could not be read: {inside.error}
+                  This event&apos;s tasks could not be loaded: {inside.error}
                 </p>
               ) : (
-                <span className="skeleton" aria-label="Reading the tasks of the event" />
+                <span className="skeleton" aria-label="Loading the tasks of the event" />
               )
             ) : items.length === 0 ? (
-              <p className="t-help">No task is linked yet: &ldquo;Link…&rdquo; puts one in this event.</p>
+              <p className="t-help">No linked tasks.</p>
             ) : (
               <ul className="cal-linked-list">
                 {items.map((item) => (
@@ -1486,8 +1544,8 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
                       <span className="t-value">{inlinePlain(item.title)}</span>
                       <span className="t-meta">{item.parentId ? "Subtask" : "Task"}, {item.nodePath ?? "General"}</span>
                     </button>
-                    <Button size="sm" variant="quiet" onClick={() => void unlinkTask(item)} aria-label={`Take “${inlinePlain(item.title)}” out of the event`}>
-                      Take out
+                    <Button size="sm" variant="quiet" onClick={() => void unlinkTask(item)} aria-label={`Unlink “${inlinePlain(item.title)}” from the event`}>
+                      Unlink
                     </Button>
                   </li>
                 ))}
@@ -1495,7 +1553,7 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
             )}
             <h4 className="t-meta cal-linked-kind">Clients and projects</h4>
             {linkedNodes.length === 0 ? (
-              <p className="t-help">No client or project is linked yet.</p>
+              <p className="t-help">No linked clients or projects.</p>
             ) : (
               <ul className="cal-linked-list">
                 {linkedNodes.map((node) => (
@@ -1503,8 +1561,8 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
                     <span className="t-value cal-linked-node" data-color={node.color ?? undefined}>
                       {node.path}
                     </span>
-                    <Button size="sm" variant="quiet" onClick={() => void unlinkNode(node)} aria-label={`Take ${node.path} off the event`}>
-                      Take off
+                    <Button size="sm" variant="quiet" onClick={() => void unlinkNode(node)} aria-label={`Unlink ${node.path} from the event`}>
+                      Unlink
                     </Button>
                   </li>
                 ))}

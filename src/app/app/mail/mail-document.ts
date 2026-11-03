@@ -46,7 +46,7 @@ img,video,[background],[style*="background-image"]{filter:invert(1) hue-rotate(1
       : markup.replace(/<img\b[^>]*>/gi, (tag) => {
           if (!/\ssrc="https?:/i.test(tag)) return tag;
           const alt = /\salt="([^"]*)"/i.exec(tag)?.[1] ?? "";
-          const label = alt.trim() || "Image held";
+          const label = alt.trim() || "Image hidden";
           return `<span class="cw-held" role="img" aria-label="${escapeAttr(label)}">${escapeText(label)}</span>`;
         });
   const body = html ? held(forMode(html, mode)) :`<pre class="cw-plain">${escapeText(message.text ?? message.snippet)}</pre>`;

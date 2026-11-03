@@ -80,7 +80,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
       : null,
   link_task_event: (o) => {
     const link = o.link as EventLink | null | undefined;
-    return link?.itemId && o.title ? { what: `Put ${quoted(o.title)} in an event`, undo: () => tool("unlink_task_event", { task: link.itemId }) } : null;
+    return link?.itemId && o.title ? { what: `Linked ${quoted(o.title)} to a calendar event`, undo: () => tool("unlink_task_event", { task: link.itemId }) } : null;
   },
   
   unlink_task_event: (o) => {
@@ -89,7 +89,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
     const back = was.eventId
       ? { task: was.itemId, event: was.eventId }
       : { task: was.itemId, account: was.accountId, calendar: was.calendarId, googleEvent: was.googleEventId };
-    return { what: `Took ${quoted(o.title)} out of its event`, undo: () => tool("link_task_event", back) };
+    return { what: `Unlinked ${quoted(o.title)} from its calendar event`, undo: () => tool("link_task_event", back) };
   },
   link_mail: (o) => {
     const link = o.link as MailLink | null | undefined;
@@ -118,7 +118,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
     const reply = o.reply;
     if (!o.task || !o.title || !reply) return null;
     return {
-      what: reply.dismissed ? `Ruled out a reply to ${quoted(o.title)}` : `Took back a ruled-out reply to ${quoted(o.title)}`,
+      what: reply.dismissed ? `Dismissed a possible reply to ${quoted(o.title)}` : `Restored a possible reply to ${quoted(o.title)}`,
       undo: () => tool("dismiss_reply", { task: o.task!, account: reply.account, id: reply.id, dismissed: !reply.dismissed }),
     };
   },
@@ -127,7 +127,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
   complete_task: (o) => {
     if (!o.item || !o.decision) return null;
     const task = o.item;
-    return { what: `Closed ${quoted(task.title)}: ${o.decision.title}`, undo: () => tool("reopen_task", { task: task.id }) };
+    return { what: `Completed ${quoted(task.title)}: ${o.decision.title}`, undo: () => tool("reopen_task", { task: task.id }) };
   },
   
   reopen_task: (o) => {
@@ -135,7 +135,7 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
     const { id } = o.item;
     const was = o.closing;
     return {
-      what: `Opened ${quoted(o.item.title)} again`,
+      what: `Reopened ${quoted(o.item.title)}`,
       undo: () =>
         was
           ? tool("complete_task", { task: id, outcome: was.outcome, ...(was.notes ? { notes: was.notes } : {}), ...(was.reply ? { reply: was.reply } : {}) })

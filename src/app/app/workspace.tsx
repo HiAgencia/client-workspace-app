@@ -6,19 +6,27 @@ import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
-import { AddIcon, CloseIcon, MenuIcon } from "@/components/ui/icons";
-import { today } from "@/lib/dates";
+import { afterExit } from "@/components/ui/use-exit";
+import { AddIcon, AlertIcon, CloseIcon, CopiedIcon, MenuIcon } from "@/components/ui/icons";
+import { firstWeekday, today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
 import { PRODUCT_NAME } from "@/lib/product";
+import { sessionPerson, type SessionPerson } from "@/lib/session-person";
 import { browserClient } from "@/lib/supabase/browser";
 import { ChatDock, useDocked } from "./chat-panel";
-import { forgetLayout, post, tool, type Item, type TreeNode } from "./client-api";
+import { forgetLayout, peekTool, post, tool, type Item, type TreeNode } from "./client-api";
+import { EARLY_TREE, treeInput } from "./early-reads";
 import { dropFocusRequestOutside, hasFocusRequest, onFocusRequest } from "./focus-request";
 import { ItemPanel } from "./item-panel";
+import { forgetLastNode, rememberLastNode } from "./last-node";
+import { markStarted } from "./started";
 import { createMailStore, type MailAccountRef, type MailFigure, type MailStore } from "./mail-store";
 import { Palette } from "./palette";
+import { Shortcuts } from "./shortcuts";
 import { QuickAddDialog } from "./quick-add";
 import { watchRounds } from "./read-again";
+import { forgetReads, onReads, onRefreshes, refreshesInFlight, wrote } from "./read-cache";
+import { MAIN_PAGES, warmPage, whenSettled, type Warmth } from "./warm-reads";
 import { TaskDetail } from "./task-detail";
 import { SCREEN_TITLES } from "./screen-titles";
 import { openTaskDetail } from "./task-row";
@@ -27,6 +35,12 @@ import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
 
 type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void; focusAfter?: () => HTMLElement | null };
+
+
+
+
+
+const WARM_MAIN_PAGES = false;
 
 
 const noticeLife = (notice: Notice) => (notice.undo ? 6000 : 3000);
@@ -53,19 +67,29 @@ type Workspace = {
   mailStore: MailStore;
   mailFigure: MailFigure | null;
   
-  who: string | null;
+  
+  person: Person | null;
+  signOut: () => void;
   refreshTree: () => Promise<void>;
   
   version: number;
   touch: () => void;
   notify: (notice: Omit<Notice, "id">) => void;
-  saving: (promise: Promise<{ ok: boolean; message?: string }>) => Promise<boolean>;
+  
+  
+  saving: (promise: Promise<{ ok: boolean; message?: string }>, options?: { reread?: boolean }) => Promise<boolean>;
   openPalette: () => void;
   
   openItem: (item: Item) => void;
   chat: Chat;
   setChatScope: (scope: string | null | undefined) => void;
 };
+
+export type Person = SessionPerson & { email: string | null; isAnonymous: boolean };
+
+function personOf(user: { email?: string; is_anonymous?: boolean; user_metadata?: Record<string, unknown> }): Person {
+  return { email: user.email ?? null, isAnonymous: user.is_anonymous ?? false, ...sessionPerson(user.user_metadata) };
+}
 
 export type WaitingRead = { id: string; title: string; nodeId: string | null; path: string | null; color: TreeNode["color"]; accountId: string | null; waitsFor: string };
 
@@ -96,7 +120,6 @@ export function useChatScope(scope: string | null): void {
 
 const noRevision = () => 0;
 
-export const LAST_NODE_KEY = "client-workspace:last-node";
 const CHAT_OPEN_KEY = "client-workspace:chat-open";
 
 function subscribeStorage(onChange: () => void) {
@@ -108,14 +131,29 @@ function subscribeStorage(onChange: () => void) {
   };
 }
 
+
+
+let treeOfLoad: { read: TreeRead | null } | undefined;
+function keptTreeOfLoad(): TreeRead | null {
+  treeOfLoad ??= { read: peekTool<TreeRead>("list_tree", treeInput(today()), true)?.value ?? null };
+  return treeOfLoad.read;
+}
+const noTree = () => null;
+const noSubscription = () => () => {};
+const NO_ACCOUNTS: MailAccountRef[] = [];
+const NO_WAITING: WaitingRead[] = [];
+
 export function WorkspaceShell({ config, children }: { config: PublicConfig; children: ReactNode }) {
-  const [tree, setTree] = useState<TreeNode[] | null>(null);
+  const [treeRead, setTreeRead] = useState<TreeRead | null>(null);
+  const keptTree = useSyncExternalStore(noSubscription, keptTreeOfLoad, noTree);
+  const shownTree = treeRead ?? keptTree;
   const [treeError, setTreeError] = useState<string | null>(null);
-  const [taskCounts, setTaskCounts] = useState<Workspace["taskCounts"]>(null);
-  const [generalTasks, setGeneralTasks] = useState<number | null>(null);
-  const [notePlaces, setNotePlaces] = useState<Workspace["notePlaces"]>(null);
-  const [mailAccounts, setMailAccounts] = useState<MailAccountRef[] | null>(null);
-  const [mailWaiting, setMailWaiting] = useState<WaitingRead[] | null>(null);
+  const tree = shownTree?.nodes ?? null;
+  const taskCounts = shownTree ? shownTree.tasks : null;
+  const generalTasks = shownTree ? shownTree.generalTasks : null;
+  const notePlaces = shownTree ? shownTree.notes : null;
+  const mailAccounts = shownTree ? (shownTree.mail?.accounts ?? NO_ACCOUNTS) : null;
+  const mailWaiting = shownTree ? (shownTree.mail?.waiting ?? NO_WAITING) : null;
   const [mailStore] = useState(() => createMailStore(tool));
   useSyncExternalStore(mailStore.subscribe, mailStore.revision, noRevision);
   const mailFigure = mailAccounts ? mailStore.figure(mailAccounts) : null;
@@ -125,7 +163,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const [status, setStatus] = useState("");
   
   const [lastStatus, setLastStatus] = useState("");
-  const [who, setWho] = useState<string | null>(null);
+  const [person, setPerson] = useState<Person | null>(null);
   const [detail, setDetail] = useState<Item | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -153,16 +191,12 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   const refreshTree = useCallback(
     () =>
-      tool<TreeRead>("list_tree", { today: today(), withMail: true, withNotes: true }).then((answer) => {
+      tool<TreeRead>("list_tree", treeInput(today())).then((answer) => {
         
         if (answer.ok) {
-          setTree(answer.nodes);
-          setTaskCounts(answer.tasks);
-          setGeneralTasks(answer.generalTasks);
-          setNotePlaces(answer.notes);
-          setMailAccounts(answer.mail?.accounts ?? []);
-          setMailWaiting(answer.mail?.waiting ?? []);
+          setTreeRead(answer);
           setTreeError(null);
+          markStarted(answer.nodes.length > 0);
         } else setTreeError(answer.message);
       }),
     [],
@@ -180,13 +214,20 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   }, [accountsKey, mailStore, version]);
 
   const lastRound = useRef(0);
-  const touch = useCallback(() => {
+  const readAgain = useCallback(() => {
     lastRound.current = Date.now();
     mailStore.forget();
     setVersion((v) => v + 1);
     void refreshTree();
   }, [refreshTree, mailStore]);
+  
+  
+  const touch = useCallback(() => {
+    wrote();
+    readAgain();
+  }, [readAgain]);
 
+  
   
   useEffect(() => {
     lastRound.current = Date.now();
@@ -195,10 +236,50 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       () => Date.now() - lastRound.current,
       () => {
         mailStore.aged();
-        touch();
+        readAgain();
       },
     );
-  }, [mailStore, touch]);
+  }, [mailStore, readAgain]);
+
+  
+  
+  
+  const [weekStart] = useState(() => (typeof window === "undefined" ? 1 : firstWeekday()));
+  const warmth = useRef<Warmth | null>(null);
+  useEffect(() => {
+    warmth.current = tree && mailAccounts && mailWaiting ? { today: today(), weekStart, tree, accounts: mailAccounts, waiting: mailWaiting, mailStore } : null;
+  });
+  const treeKnown = tree !== null;
+  useEffect(() => {
+    if (!treeKnown || !WARM_MAIN_PAGES) return;
+    return whenSettled(() => {
+      const known = warmth.current;
+      if (!known) return;
+      for (const page of MAIN_PAGES) if (page !== window.location.pathname) warmPage(page, known);
+    });
+    
+  }, [treeKnown]);
+  useEffect(() => {
+    let last = "";
+    const onTheWay = (event: Event) => {
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href^='/app']") : null;
+      const href = link?.getAttribute("href");
+      if (!href || href === last || !warmth.current) return;
+      last = href;
+      warmPage(href, warmth.current);
+    };
+    
+    const stop = onReads(() => {
+      last = "";
+    });
+    document.addEventListener("pointerover", onTheWay);
+    document.addEventListener("focusin", onTheWay);
+    return () => {
+      stop();
+      document.removeEventListener("pointerover", onTheWay);
+      document.removeEventListener("focusin", onTheWay);
+    };
+  }, []);
 
   
   const shown = useRef<Notice | null>(null);
@@ -224,13 +305,17 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       );
     }
     setLeaving(true);
-    timer.current = setTimeout(() => {
+  }, [show]);
+  
+  useEffect(() => {
+    if (!leaving) return;
+    return afterExit(noticeBox.current, () => {
       setLeaving(false);
       const next = queued.current;
       queued.current = null;
       show(next);
-    }, 140);
-  }, [show]);
+    });
+  }, [leaving, show]);
 
   useEffect(() => {
     if (!notice || leaving) return;
@@ -263,7 +348,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   );
 
   const saving = useCallback(
-    async (promise: Promise<{ ok: boolean; message?: string }>) => {
+    async (promise: Promise<{ ok: boolean; message?: string }>, { reread = true }: { reread?: boolean } = {}) => {
       clearTimeout(statusTimer.current);
       setStatus("Saving…");
       setLastStatus("Saving…");
@@ -273,7 +358,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
         setLastStatus("Saved");
         
         statusTimer.current = setTimeout(() => setStatus(""), 2000);
-        touch();
+        if (reread) touch();
         return true;
       }
       setStatus("");
@@ -287,19 +372,22 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     void refreshTree();
     
     
-    void browserClient(config)
-      .auth.getSession()
-      .then(({ data }) => {
-        const user = data.session?.user;
-        if (!user) return;
-        setWho(user.is_anonymous ? "Demo session" : (user.email ?? null));
-      });
+    const auth = browserClient(config).auth;
+    void auth.getSession().then(({ data }) => {
+      if (data.session) setPerson(personOf(data.session.user));
+    });
+    const {
+      data: { subscription },
+    } = auth.onAuthStateChange((event, session) => {
+      if (event === "USER_UPDATED" && session) setPerson(personOf(session.user));
+    });
+    return () => subscription.unsubscribe();
   }, [refreshTree, config]);
 
   
   useEffect(() => {
     const match = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/);
-    if (match) localStorage.setItem(LAST_NODE_KEY, match[1]);
+    if (match) rememberLastNode(match[1]);
   }, [pathname]);
 
   
@@ -363,12 +451,16 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => window.removeEventListener("keydown", onKey);
   }, [currentNode]);
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     await forgetLayout();
     await browserClient(config).auth.signOut();
-    localStorage.removeItem(LAST_NODE_KEY);
+    forgetLastNode();
+    
+    forgetReads();
+    treeOfLoad = undefined;
     router.replace("/");
-  }
+  }, [config, router]);
+  const leave = useCallback(() => void signOut(), [signOut]);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   
@@ -417,16 +509,24 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     },
     [notify, touch, saving],
   );
+  
+  const [chatMotion, setChatMotion] = useState(false);
+  useEffect(() => {
+    let frame = requestAnimationFrame(() => (frame = requestAnimationFrame(() => setChatMotion(true))));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const chat: Chat = { scope: chatScope, open: chatOpen, setOpen: setChatOpen };
-  const value: Workspace = { config, tree, treeError, taskCounts, generalTasks, notePlaces, mailAccounts, mailWaiting, mailStore, mailFigure, who, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
+  const value: Workspace = { config, tree, treeError, taskCounts, generalTasks, notePlaces, mailAccounts, mailWaiting, mailStore, mailFigure, person, signOut: leave, refreshTree, version, touch, notify, saving, openPalette, openItem, chat, setChatScope };
   const chatColumn = docked && chatOpen && chatScope !== undefined;
 
   return (
     <WorkspaceContext.Provider value={value}>
+      <EarlyTree />
+      <ReadingLine />
       <a href="#content" className="skip-link btn btn-primary">
         <span className="btn-label">Skip to content</span>
       </a>
-      <div className="shell" data-chat={chatColumn ? "open" : undefined}>
+      <div className="shell" data-chat={chatColumn ? "open" : undefined} data-chat-motion={chatMotion || undefined}>
         <header className="topbar">
           <Button className="drawer-trigger btn-icon" size="sm" variant="quiet" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
             <MenuIcon />
@@ -439,7 +539,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
         </header>
         {}
         <div className="sidebar">
-          <SideNav onSignOut={() => void signOut()} />
+          <SideNav onSignOut={leave} />
         </div>
         {}
         <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
@@ -455,8 +555,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
         <AddIcon />
         <span className="btn-label">Add task</span>
       </Button>
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={() => void signOut()} />
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={leave} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <Shortcuts />
       <TaskDetail />
       <QuickAddDialog />
       <ItemPanel item={detail} saving={saving} version={version} onClose={closeItem} onDelete={(item) => void deleteItem(item)} />
@@ -490,6 +591,10 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                 if (!leaving && notice.tone === "status") timer.current = setTimeout(dismiss, noticeLife(notice));
               }}
             >
+              {}
+              <span className="notice-mark" aria-hidden="true">
+                {notice.tone === "error" ? <AlertIcon /> : <CopiedIcon />}
+              </span>
               <span className="t-value notice-text">{notice.text}</span>
               {notice.undo && (
                 <Button
@@ -514,6 +619,21 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       )}
     </WorkspaceContext.Provider>
   );
+}
+
+
+
+function EarlyTree() {
+  const fromServer = useSyncExternalStore(noSubscription, () => false, () => true);
+  return fromServer ? <script dangerouslySetInnerHTML={{ __html: EARLY_TREE }} /> : null;
+}
+
+
+
+
+function ReadingLine() {
+  const reading = useSyncExternalStore(onRefreshes, () => refreshesInFlight() > 0, () => false);
+  return <div className="reading-line" data-reading={reading || undefined} aria-hidden="true" />;
 }
 
 

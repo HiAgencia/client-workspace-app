@@ -4,10 +4,15 @@ import { userClient } from "@/lib/supabase/server";
 
 
 
+const AFTER_SIGN_IN = "/app/resume";
+
+
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const code = url.searchParams.get("code");
-  const next = safeNext(url.searchParams.get("next"), url.origin);
+  const asked = url.searchParams.get("next");
+  const next = asked ? safeNext(asked, url.origin) : AFTER_SIGN_IN;
   const failed = new URL("/", url.origin);
   failed.searchParams.set("auth", "failed");
 

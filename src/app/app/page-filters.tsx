@@ -6,7 +6,7 @@ import { firstWeekday, instantsOf, weekOf, type Day } from "@/lib/dates";
 import { useEventsRead } from "./use-events-read";
 import { mailBoxRows, placeValue, readPlace, type MailList, type Place } from "./box-kinds";
 import type { TreeNode } from "./client-api";
-import { AccountFilter, ALL, GENERAL, MESSAGES, PlaceFilter, placesThatShow, TASKS, type ShownEvent } from "./place-filters";
+import { AccountFilter, ALL, countsByAccount, GENERAL, MESSAGES, PlaceFilter, placesThatShow, TASKS, type ShownEvent } from "./place-filters";
 import type { TaskReplies } from "./task-replies";
 import { useWorkspace } from "./workspace";
 
@@ -72,7 +72,10 @@ export function MailAccountFilter({
   mail: MailList | null;
   replies: TaskReplies[];
 }) {
-  const counts = new Map<string, number>([[ALL, mail ? mailBoxRows(mail, replies, null).length : 0]]);
-  for (const entry of mail?.accounts ?? []) counts.set(entry.id, mail ? mailBoxRows(mail, replies, entry.id).length : 0);
-  return <AccountFilter value={account ?? ALL} accounts={mail?.accounts ?? []} counts={counts} unit={MESSAGES} onChange={(value) => onChange(value === ALL ? null : value)} />;
+  const { tree, mailAccounts } = useWorkspace();
+  const accounts = mail?.accounts ?? [];
+  const counts = mail ? countsByAccount(accounts, tree, (chosen) => mailBoxRows(mail, replies, chosen).length) : null;
+  
+  const pending = mail === null && mailAccounts?.length !== 0;
+  return <AccountFilter value={account ?? ALL} accounts={accounts} tree={tree} counts={counts} unit={MESSAGES} pending={pending} known={mailAccounts} onChange={(value) => onChange(value === ALL ? null : value)} />;
 }

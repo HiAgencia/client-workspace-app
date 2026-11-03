@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     return json({ ok: true, messages: await loadHistory(session.ctx.db, nodeId, SHOWN_MESSAGES), off });
   } catch (error) {
     console.error("chat history:", error instanceof Error ? error.message : error);
-    return problem(500, "the conversation could not be read");
+    return problem(500, "the conversation could not be loaded");
   }
 }
 
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     history = await loadHistory(ctx.db, nodeId);
   } catch (error) {
     console.error("chat:", error instanceof Error ? error.message : error);
-    return problem(500, "the conversation could not be read");
+    return problem(500, "the conversation could not be loaded");
   }
   const stored = continuing ? history.at(-1) : undefined;
   const continued = continuing ? continuedTurn(stored, message) : null;
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       .select("id");
     if (taken.error) {
       console.error("chat: taking the turn failed", taken.error.message);
-      return problem(500, "the conversation could not be read");
+      return problem(500, "the conversation could not be loaded");
     }
     if (taken.data.length === 0) return problem(409, NOTHING_WAITING);
   }

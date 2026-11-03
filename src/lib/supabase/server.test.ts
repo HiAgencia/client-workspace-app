@@ -32,13 +32,13 @@ type Answer = number | "no answer" | { status: number; code: string };
 
 
 
-function clientAgainst(answers: Answer[], cookies = [sessionCookie()]) {
+function clientAgainst(answers: Answer[], cookies = [sessionCookie()], user: object = USER) {
   const calls: string[] = [];
   const fetchFake = async (input: RequestInfo | URL) => {
     calls.push(String(input));
     const answer = answers[Math.min(calls.length - 1, answers.length - 1)];
     if (answer === "no answer") throw new TypeError("fetch failed");
-    if (answer === 200) return Response.json(USER);
+    if (answer === 200) return Response.json(user);
     if (typeof answer === "object") {
       return Response.json({ code: answer.status, error_code: answer.code, msg: answer.code }, { status: answer.status });
     }
@@ -63,7 +63,7 @@ describe("reading the session", () => {
     const { db, calls } = clientAgainst([502, 200]);
     await expect(readSession(db)).resolves.toEqual({
       kind: "user",
-      user: { id: USER.id, email: USER.email, isAnonymous: false },
+      user: { id: USER.id, email: USER.email, isAnonymous: false, name: null, avatarUrl: null },
     });
     expect(calls).toHaveLength(2);
     expect(console.error).toHaveBeenCalledWith("auth: reading the user failed", 502, "AuthRetryableFetchError");
@@ -89,6 +89,17 @@ describe("reading the session", () => {
     const { db, calls } = clientAgainst([answer]);
     await expect(readSession(db)).resolves.toEqual({ kind: "none" });
     expect(calls).toHaveLength(1);
+  });
+
+  it("brings the name and the photo a Google sign-in leaves, and the name the person chose before Google's", async () => {
+    const google = { full_name: "Alex Rivera", name: "Alex Rivera", avatar_url: "https://lh3.googleusercontent.com/a/photo=s96-c", picture: "https://lh3.googleusercontent.com/a/photo=s96-c" };
+    const signedIn = clientAgainst([200], [sessionCookie()], { ...USER, user_metadata: google });
+    await expect(readSession(signedIn.db)).resolves.toEqual({
+      kind: "user",
+      user: { id: USER.id, email: USER.email, isAnonymous: false, name: "Alex Rivera", avatarUrl: "https://lh3.googleusercontent.com/a/photo=s96-c" },
+    });
+    const renamed = clientAgainst([200], [sessionCookie()], { ...USER, user_metadata: { ...google, display_name: "Alex" } });
+    await expect(readSession(renamed.db)).resolves.toMatchObject({ user: { name: "Alex" } });
   });
 
   it("without a session cookie it asks the auth server nothing", async () => {

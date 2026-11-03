@@ -92,21 +92,28 @@ export async function selectAllItems(
   narrow: (query: ItemQuery) => ItemQuery,
   what: string,
 ): Promise<ToolResult<{ rows: ItemRow[] }>> {
-  const rows: ItemRow[] = [];
+  
   
   const parts: Array<(query: ItemQuery) => ItemQuery> = [];
   if (reach.nodeIds.length > 0) parts.push((query) => query.in("node_id", reach.nodeIds));
   if (reach.general) parts.push((query) => query.is("node_id", null));
-  for (const part of parts) {
-    for (let from = 0; ; from += PAGE) {
-      const query = narrow(part(baseQuery(ctx).eq("owner_id", ctx.ownerId)));
-      const { data, error } = await query.order("id").range(from, from + PAGE - 1);
-      if (error) return dbFail(what, error);
-      rows.push(...data);
-      if (data.length < PAGE) break;
-    }
+  const read = await Promise.all(parts.map((part) => readPart(ctx, (query) => narrow(part(query)))));
+  const rows: ItemRow[] = [];
+  for (const part of read) {
+    if ("error" in part) return dbFail(what, part.error);
+    rows.push(...part.rows);
   }
   return ok({ rows });
+}
+
+async function readPart(ctx: ToolContext, narrow: (query: ItemQuery) => ItemQuery): Promise<{ rows: ItemRow[] } | { error: { message: string } }> {
+  const rows: ItemRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await narrow(baseQuery(ctx).eq("owner_id", ctx.ownerId)).order("id").range(from, from + PAGE - 1);
+    if (error) return { error };
+    rows.push(...data);
+    if (data.length < PAGE) return { rows };
+  }
 }
 
 function baseQuery(ctx: ToolContext) {

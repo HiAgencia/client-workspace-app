@@ -5,10 +5,11 @@ import { useEffect, useSyncExternalStore, ViewTransition } from "react";
 import { Menu } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { today } from "@/lib/dates";
-import { BoxFailed, BoxWait, savePreference } from "../boxes";
+import { BoxFailed, GroupsWait, savePreference } from "../boxes";
 import { placeValue, TaskGroups, useTasksRead, type Sort } from "../box-kinds";
 import { PageHeader, type PageLayout } from "../page-header";
 import { TasksPlaceFilter, useAddress, usePlaceParam } from "../page-filters";
+import { useSwap } from "../use-swap";
 import { useChatScope, useWorkspace } from "../workspace";
 
 const SORTS: Array<{ value: Sort; label: string }> = [
@@ -30,6 +31,8 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   const place = usePlaceParam(tree);
   const layoutParam = params.get("layout");
   const layout: PageLayout = layoutParam === "board" || layoutParam === "list" ? layoutParam : (savedLayout ?? "list");
+  
+  const swap = useSwap(layout, layout);
   const sortParam = params.get("sort");
   const sort: Sort = sortParam === "priority" || sortParam === "manual" ? sortParam : "date";
   const completed = params.get("completed") === "1";
@@ -57,7 +60,7 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
 
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
-      <div className="page page-tasks" data-tasks-page data-layout={layout}>
+      <div className="page page-tasks" data-tasks-page data-layout={swap.shown}>
         <PageHeader
           title="Tasks"
           count={
@@ -91,11 +94,17 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
             Every task
           </h2>
           {!data ? (
-            <div className="card">{error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Reading every task…" rows={5} />}</div>
+            error ? (
+              <div className="card">
+                <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} />
+              </div>
+            ) : (
+              <GroupsWait what="Loading every task…" layout={layout} />
+            )
           ) : (
-            <div className="box-read fade-enter" data-stale={stale || undefined}>
+            <div className="box-read fade-enter" data-stale={stale || undefined} data-leaving={swap.leaving || undefined}>
               {error && <BoxFailed what="The tasks" message={error} kept onRetry={retry} />}
-              <TaskGroups view={data} now={now!} mode="page" layout={layout} placeId={placeId} place={place} showPlace sort={sort} />
+              <TaskGroups view={data} now={now!} mode="page" layout={swap.shown} placeId={placeId} place={place} showPlace sort={sort} />
             </div>
           )}
         </section>

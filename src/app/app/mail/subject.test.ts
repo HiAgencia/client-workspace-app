@@ -11,7 +11,7 @@ describe("what a message says of the task it is linked to", () => {
   });
 
   it("names a task already done as done", () => {
-    expect(taskLine({ tasks: [{ title: "Send the draft", status: "done" }] })).toEqual({ text: "Done: Send the draft", done: true });
+    expect(taskLine({ tasks: [{ title: "Send the draft", status: "done" }] })).toEqual({ text: "Completed task: Send the draft", done: true });
   });
 
   it("prefers the open task, wherever it sits", () => {

@@ -199,8 +199,8 @@ describe("the mail the screens hold", () => {
   });
 
   it("says nothing when nothing is unread and nothing failed", () => {
-    expect(figureText({ unread: 0, partial: false, why: null })).toBeNull();
-    expect(figureText({ unread: 2, partial: false, why: null })).toEqual({ shown: "2", spoken: "2 unread" });
+    expect(figureText({ unread: 0, partial: false, why: null, note: null })).toBeNull();
+    expect(figureText({ unread: 2, partial: false, why: null, note: null })).toEqual({ shown: "2", spoken: "2 unread" });
   });
 });
 

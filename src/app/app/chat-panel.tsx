@@ -2,12 +2,16 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { MetaMark } from "@/components/ui/brands";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
-import { AttachImageIcon, ByChatIcon, CloseIcon, MicIcon, SendIcon } from "@/components/ui/icons";
+import { AttachImageIcon, CloseIcon, CopiedIcon, MicIcon, SendIcon, UndoIcon } from "@/components/ui/icons";
+import { afterExit } from "@/components/ui/use-exit";
 import { BROWSER_READS, leftUnfinished, turnGoesOn } from "@/lib/chat/browser-reads";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
+import { ASSISTANT_MODELS, ASSISTANT_NAME } from "@/lib/product";
+import { PathText } from "./item-parts";
 import { get, tool } from "./client-api";
 import { onFocusRequest } from "./focus-request";
 import { WRITES, type WriteOutput } from "./chat-cards";
@@ -30,31 +34,45 @@ export function useDocked(): boolean {
 }
 
 
+
+
 export function ChatDock() {
   const { chat } = useWorkspace();
   const docked = useDocked();
   const { setOpen } = chat;
   const close = useCallback(() => setOpen(false), [setOpen]);
-  if (chat.scope === undefined || !chat.open) return null;
-  const panel = <ChatPanel key={`chat-${chat.scope ?? "workspace"}`} nodeId={chat.scope} onClose={close} />;
-  return docked ? (
-    <aside className="chat-dock" id="chat-panel" aria-label="Chat">
+  const open = chat.scope !== undefined && chat.open;
+  const [kept, setKept] = useState<{ scope: string | null; docked: boolean } | null>(null);
+  if (open && (kept === null || kept.scope !== chat.scope || kept.docked !== docked)) setKept({ scope: chat.scope ?? null, docked });
+  const dock = useRef<HTMLElement>(null);
+  const sheet = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (open || kept === null) return;
+    return afterExit(kept.docked ? [dock.current, dock.current?.parentElement] : sheet.current, () => setKept(null));
+  }, [open, kept]);
+  if (kept === null) return null;
+  const panel = <ChatPanel key={`chat-${kept.scope ?? "workspace"}`} nodeId={kept.scope} onClose={close} />;
+  return kept.docked ? (
+    <aside ref={dock} className="chat-dock" id="chat-panel" aria-label="Chat" data-leaving={open ? undefined : ""}>
       {panel}
     </aside>
   ) : (
-    <ChatSheet onClose={close}>{panel}</ChatSheet>
+    <ChatSheet dialog={sheet} open={open} onClose={close}>
+      {panel}
+    </ChatSheet>
   );
 }
 
-function ChatSheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTMLDialogElement | null>; open: boolean; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const el = dialog.current;
-    if (el && !el.open) el.showModal();
-  }, []);
+    if (!el) return;
+    if (open && !el.open) el.showModal();
+    if (!open && el.open) el.close();
+  }, [dialog, open]);
   
   
-  useEffect(() => onFocusRequest(onClose), [onClose]);
+  useEffect(() => (open ? onFocusRequest(onClose) : undefined), [open, onClose]);
   return (
     <dialog
       ref={dialog}
@@ -63,12 +81,13 @@ function ChatSheet({ onClose, children }: { onClose: () => void; children: React
       aria-label="Chat"
       onClose={onClose}
       onPointerDown={(event) => {
-        if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
+        if (event.target === event.currentTarget) event.currentTarget.dataset.downOutside = "";
       }}
       onClick={(event) => {
         
-        if (event.target === dialog.current && dialog.current.dataset.downOutside !== undefined) onClose();
-        if (dialog.current) delete dialog.current.dataset.downOutside;
+        const sheet = event.currentTarget;
+        if (event.target === sheet && sheet.dataset.downOutside !== undefined) onClose();
+        delete sheet.dataset.downOutside;
       }}
     >
       {children}
@@ -87,7 +106,8 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
   const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
-  const reach = nodeId === null ? "It works on every client and project." : node ? `It works on ${node.path}${below}.` : "It works on this page's client or project.";
+  
+  const reach = nodeId === null ? "All clients and projects" : node ? <><PathText path={node.path} />{below}</> : "This page's client or project";
 
   useEffect(() => {
     void get<{ messages: UIMessage[]; off: string | null }>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat").then((answer) => {
@@ -100,13 +120,15 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
     <section className="card chat" aria-labelledby="chat-title" data-chat={nodeId ?? "workspace"}>
       <div className="chat-head">
         <span className="chat-icon" aria-hidden="true">
-          <ByChatIcon />
+          <MetaMark />
         </span>
         <div className="stack chat-title">
           <h2 id="chat-title" className="t-title">
-            Chat
+            {ASSISTANT_NAME}
           </h2>
-          <p className="t-meta">{reach}</p>
+          {}
+          <p className="t-meta chat-models">{ASSISTANT_MODELS}</p>
+          <p className="t-meta chat-reach">{reach}</p>
         </div>
         <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title="Close chat">
           <CloseIcon />
@@ -117,7 +139,7 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
         <div className="chat-log" role="status" aria-busy="true" aria-label="Loading the conversation">
           {error ? (
             <p className="inline-note" data-tone="alert">
-              The conversation could not be read: {error}. Reload the page to try again.
+              The conversation could not be loaded: {error}. Reload the page to try again.
             </p>
           ) : (
             <>
@@ -210,13 +232,13 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
         {messages.length === 0 && !off && (
           <li className="inline-note">
             {nodeId === null
-              ? "Ask what is pending across every client and project, to add a task to one of them by its name, or what arrived for the tasks that wait for mail. Attach an image of a message and it turns it into tasks."
-              : "Ask it to add a task, record a decision, or tell you what is pending here. Attach an image of a message and it turns it into tasks."}
+              ? `Ask what is pending, add a task to any client or project by its name, or check what arrived for the tasks that wait for mail. Attach an image of a message to turn it into tasks. ${ASSISTANT_NAME} acts only when you ask.`
+              : `Ask it to add a task, record a decision, or say what is pending here. Attach an image of a message to turn it into tasks. ${ASSISTANT_NAME} acts only when you ask.`}
           </li>
         )}
         {messages.map((message) => (
           <li key={message.id} data-role={message.role} className="msg">
-            <span className="t-meta">{message.role === "user" ? "You" : "Assistant"}</span>
+            <span className="t-meta">{message.role === "user" ? "You" : ASSISTANT_NAME}</span>
             {message.parts.map((part, index) => {
               if (part.type === "text") {
                 return message.role === "user" ? (
@@ -252,7 +274,7 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
         {}
         {(busy || messages.length > 0) && (
           <li className="msg msg-working" data-working={busy || undefined} aria-busy={busy || undefined} aria-hidden={!busy || undefined}>
-            <span className="t-meta">Assistant</span>
+            <span className="t-meta">{ASSISTANT_NAME}</span>
             <span className="typing" role={busy ? "status" : undefined} aria-label={busy ? "Working…" : undefined}>
               <span />
               <span />
@@ -271,7 +293,7 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
         <form onSubmit={send} className="chat-compose">
           {error && (
             <p role="alert" className="inline-note" data-tone="alert" data-chat-error>
-              {error.message.includes("limit") ? error.message : `The assistant could not answer: ${readable(error.message)}`}
+              {error.message.includes("limit") ? error.message : `${ASSISTANT_NAME} could not answer. ${readable(error.message)}`}
             </p>
           )}
           {notice && (
@@ -289,8 +311,8 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
           )}
           <div className="compose-line">
             <TextArea
-              aria-label="Message to the assistant"
-              placeholder="Create a task to…"
+              aria-label={`Message to ${ASSISTANT_NAME}`}
+              placeholder={`Ask ${ASSISTANT_NAME}…`}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -336,7 +358,7 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
   if (!output?.ok) {
     return (
       <p className="action-card t-help" data-card="failed">
-        Could not {toolName.replace(/_/g, " ")}: {output?.message}
+        That could not be done: {output?.message}
       </p>
     );
   }
@@ -348,13 +370,17 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
   }
 
   return (
-    <div className="action-card" data-card={toolName}>
+    <div className="action-card" data-card={toolName} data-undone={undone || undefined}>
+      <span className="action-mark" aria-hidden="true">
+        {undone ? <UndoIcon /> : <CopiedIcon />}
+      </span>
       <span className="t-value action-text">{card.what}</span>
       {undone ? (
         <span className="pill">Undone</span>
       ) : card.undo ? (
-        <Button size="sm" onClick={() => void undo()} aria-label={`Undo: ${card.what}`}>
-          Undo
+        <Button size="sm" variant="quiet" onClick={() => void undo()} aria-label={`Undo: ${card.what}`}>
+          <UndoIcon />
+          <span className="btn-label">Undo</span>
         </Button>
       ) : (
         card.why && <span className="t-meta action-sentence">{card.why}</span>
@@ -391,7 +417,7 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
       recorder.current = next;
       setRecording(true);
     } catch {
-      onNotice("The microphone is not available: allow it in the browser to record a note.");
+      onNotice("The microphone is not available: allow it in the browser to dictate.");
     }
   }
 

@@ -1,0 +1,92 @@
+.guide-card {
+  position: fixed;
+  z-index: var(--layer-notice);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(23rem, calc(100vw - var(--gutter) * 2));
+  padding: var(--pad-card);
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-pop);
+  opacity: 1;
+  transition: opacity var(--dur) var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+  }
+  &[data-leaving] {
+    opacity: 0;
+    pointer-events: none;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-in);
+  }
+  &[data-guide="offer"] {
+    right: var(--gutter);
+    bottom: var(--gutter);
+  }
+  &[data-guide="step"] {
+    top: 0;
+    left: 0;
+    translate: var(--guide-x, 0) var(--guide-y, 0);
+  }
+}
+@media (width < 40rem) {
+  .guide-card,
+  .guide-card[data-guide="step"] {
+    inset: auto var(--gutter) max(var(--gutter), env(safe-area-inset-bottom));
+    width: auto;
+    translate: none;
+  }
+}
+.guide-count {
+  margin: 0;
+}
+.guide-title {
+  margin: 0;
+  text-wrap: balance;
+}
+.guide-text {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+.guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+.guide-skip {
+  margin-right: auto;
+}
+.guide-ring {
+  position: fixed;
+  z-index: var(--layer-notice);
+  top: 0;
+  left: 0;
+  width: var(--guide-w, 0);
+  height: var(--guide-h, 0);
+  border-radius: var(--guide-radius, var(--radius-card));
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--focus-halo);
+  opacity: 1;
+  pointer-events: none;
+  translate: var(--guide-x, 0) var(--guide-y, 0);
+  transition: opacity var(--dur) var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+  }
+  &[data-leaving] {
+    opacity: 0;
+    transition-duration: var(--dur-fast);
+    transition-timing-function: var(--ease-in);
+  }
+  @media (forced-colors: active) {
+    outline: 2px solid Highlight;
+  }
+}

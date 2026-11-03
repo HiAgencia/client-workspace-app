@@ -10,6 +10,12 @@ function fromBase64Url(value: string): string {
 }
 
 export function sessionOwner(cookies: Array<{ name: string; value: string }>): string | null {
+  return sessionCookieUser(cookies)?.id ?? null;
+}
+
+
+
+export function sessionCookieUser(cookies: Array<{ name: string; value: string }>): { id: string; isAnonymous: boolean } | null {
   const parts = cookies
     .flatMap((cookie) => {
       const match = SESSION_COOKIE.exec(cookie.name);
@@ -23,9 +29,25 @@ export function sessionOwner(cookies: Array<{ name: string; value: string }>): s
   try {
     raw = decodeURIComponent(raw);
     const json = raw.startsWith("base64-") ? fromBase64Url(raw.slice("base64-".length)) : raw;
-    const session = JSON.parse(json) as { user?: { id?: unknown } } | null;
-    return typeof session?.user?.id === "string" ? session.user.id : null;
+    const session = JSON.parse(json) as { user?: { id?: unknown; is_anonymous?: unknown } } | null;
+    return typeof session?.user?.id === "string" ? { id: session.user.id, isAnonymous: session.user.is_anonymous === true } : null;
   } catch {
     return null;
+  }
+}
+
+
+export function documentCookies(): Array<{ name: string; value: string }> {
+  try {
+    return document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const at = part.indexOf("=");
+        return { name: at < 0 ? part : part.slice(0, at), value: at < 0 ? "" : part.slice(at + 1) };
+      });
+  } catch {
+    return [];
   }
 }

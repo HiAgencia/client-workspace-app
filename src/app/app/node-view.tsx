@@ -5,11 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
+import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
+import { GoogleMark } from "@/components/ui/brands";
 import { AddIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { firstWeekday, today } from "@/lib/dates";
+import { ASSISTANT_NAME } from "@/lib/product";
 import { NODE_COLORS } from "@/lib/node-colors";
 import { cx } from "@/lib/utils";
 import { get, post, type TreeNode } from "./client-api";
@@ -35,8 +38,10 @@ import {
 import { FOOT, SPLIT, type BoardLayout } from "./board-layout";
 import { BoxBoard, customizeEntries, savePreference, useBoardLayout, useBoxRead, type BoxSpec } from "./boxes";
 import type { ConnectBlocked } from "./connect-blocked";
+import { ConnectSession } from "./connect-session";
 import { land, onFocusRequest, takeFocusRequest } from "./focus-request";
-import { accountsSeenFrom, figureWords, lostWords } from "./mail-store";
+import { accountsSeenFrom, figureWords, lostWords, type MailFigure } from "./mail-store";
+import { useGoogleOutcome } from "./google-outcome";
 import { BoardShell } from "./overview";
 import { PageHeader, type PageLayout } from "./page-header";
 import { useAddress } from "./page-filters";
@@ -77,11 +82,12 @@ const noSubscription = () => () => {};
 
 export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved: BoardLayout | null; savedLayout: PageLayout | null }) {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
-  const { tree, notify, saving, refreshTree } = useWorkspace();
+  const { tree, notify, saving, refreshTree, person } = useWorkspace();
   const router = useRouter();
   useChatScope(nodeId);
   const page = `node:${nodeId}`;
   const params = useSearchParams();
+  useGoogleOutcome();
   const { set } = useAddress();
   const layoutParam = params.get("layout");
   const layout: PageLayout = layoutParam === "board" || layoutParam === "list" ? layoutParam : (savedLayout ?? "list");
@@ -101,7 +107,6 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   
   const [addRound, setAddRound] = useState(0);
   const [renaming, setRenaming] = useState(false);
-  const google = params.get("google");
 
   const node = tree?.find((entry) => entry.id === nodeId);
   const chain = tree && node ? chainOf(tree, nodeId) : [];
@@ -133,10 +138,13 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   if (!node || !now) return <BoardShell />;
 
   const root = chain[0];
+  
+  const sessionEmail = root.kind === "project" && person && !person.isAnonymous ? person.email : null;
+  const blocked = accounts.data && !accounts.data.canConnect ? (accounts.data.connectBlocked === "demo" ? "Connecting needs a Google sign-in" : "Connecting Google accounts is not set up on this server") : null;
   const trail = [{ label: root.kind === "client" ? "Clients" : "Projects" }, ...chain.slice(0, -1).map((entry) => ({ label: entry.name, href: `/app/node/${entry.id}` }))];
   const ids = new Set(chain.map((entry) => entry.id));
   const seen = (accounts.data?.accounts ?? []).filter((account) => account.nodeIds.some((id) => ids.has(id)));
-  const connectHref = accounts.data?.canConnect ? `/api/google/connect?node=${nodeId}` : "/app/settings#google-accounts";
+  const connectHref = accounts.data?.canConnect ? `/api/google/connect?node=${nodeId}` : "/app/settings#accounts-settings";
   const one = node.kind === "client" ? "project" : "subproject";
   const childName = node.kind === "client" ? "Projects" : "Subprojects";
   const names: Record<string, string> = { tasks: "Tasks", no_date: "No date", calendar: "Calendar", mail: "Mail", notes: "Notes", activity: "Activity" };
@@ -180,19 +188,19 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       label: "Google accounts",
       detail: seen.length ? String(seen.length) : undefined,
       entries: [
-        ...seen.map((account): MenuEntry => ({ kind: "action", label: account.email, detail: account.nodeIds.includes(nodeId) ? "Connected here" : "From a place above", disabled: true, onSelect: () => {} })),
+        ...seen.map((account): MenuEntry => ({ kind: "action", label: account.email, icon: GoogleMark, detail: account.nodeIds.includes(nodeId) ? "Connected here" : "Inherited", disabled: true, onSelect: () => {} })),
         ...(seen.length ? [{ kind: "separator" } as const] : []),
         accounts.data?.canConnect
-          ? { kind: "action", label: "Connect a Google account here", onSelect: () => window.location.assign(new URL(`/api/google/connect?node=${nodeId}`, window.location.origin).toString()) }
-          : { kind: "action", label: "Connect a Google account here", disabled: true, detail: accounts.data?.connectBlocked === "demo" ? "Needs a Google sign-in" : "Not set up on this server", onSelect: () => {} },
-        { kind: "action", label: "Manage them in Settings", onSelect: () => router.push("/app/settings#google-accounts") },
+          ? { kind: "action", label: "Connect Google account", icon: GoogleMark, onSelect: () => window.location.assign(new URL(`/api/google/connect?node=${nodeId}`, window.location.origin).toString()) }
+          : { kind: "action", label: "Connect Google account", icon: GoogleMark, disabled: true, detail: accounts.data?.connectBlocked === "demo" ? "Needs a Google sign-in" : "Not set up on this server", onSelect: () => {} },
+        { kind: "action", label: "Manage them in Settings", onSelect: () => router.push("/app/settings#accounts-settings") },
       ],
     },
     {
       kind: "choice",
       label: "Color",
       value: node.ownColor ?? "none",
-      options: [{ value: "none", label: node.color && !node.ownColor ? "None (the one above)" : "None" }, ...NODE_COLORS.map((color) => ({ value: color, label: COLOR_NAMES[color] }))],
+      options: [{ value: "none", label: node.color && !node.ownColor ? "Inherited" : "None" }, ...NODE_COLORS.map((color) => ({ value: color, label: COLOR_NAMES[color] }))],
       onChoose: (value) => void setColor(value === "none" ? null : value),
     },
     ...customizeEntries(board, names),
@@ -245,7 +253,17 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
           Open
         </HeadLink>
       ),
-      content: <MailBoxContent read={mail} replies={replies} account={null} now={now} place={place} connectHref={connectHref} />,
+      content: (
+        <MailBoxContent
+          read={mail}
+          replies={replies}
+          account={null}
+          now={now}
+          place={place}
+          connectHref={connectHref}
+          connect={sessionEmail ? <ConnectSession nodeId={nodeId} email={sessionEmail} size="sm" blocked={blocked} /> : undefined}
+        />
+      ),
     },
     notes: {
       id: "notes",
@@ -260,7 +278,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     activity: {
       id: "activity",
       title: "Activity",
-      purpose: "What the chat and your agents did here",
+      purpose: `What ${ASSISTANT_NAME} and your coding agents did here`,
       surface: "rest",
       content: <ActivityBoxContent place={place} />,
     },
@@ -279,13 +297,14 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
         chat
         more={<Menu label="More" about={`for ${node.name}`} entries={more} />}
       />
-      {google && <GoogleOutcome outcome={google} />}
       <NodeStrip
         node={node}
         below={children}
         name={childName}
         one={one}
         connectHref={connectHref}
+        sessionEmail={sessionEmail}
+        blocked={blocked}
         calendars={accounts.data?.accounts ?? null}
         adding={adding}
         addRound={addRound}
@@ -309,11 +328,14 @@ function NodeMark({ node }: { node: TreeNode }) {
 }
 
 
-function accountFacts(unread: string | null, calendars: number | null): string {
+function accountFacts(figure: MailFigure | null, calendars: number | null): string {
+  
+  const unread = figure && !figure.partial && figure.unread === 0 ? "nothing unread" : figureWords(figure);
   const shown = calendars === null ? null : calendars === 0 ? "no calendars" : count(calendars, "calendar", "calendars");
   const words = [unread, shown].filter(Boolean).join(", ");
-  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "Reading…";
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : READING;
 }
+const READING = "Reading…";
 
 
 
@@ -323,6 +345,8 @@ function NodeStrip({
   name,
   one,
   connectHref,
+  sessionEmail,
+  blocked,
   calendars,
   adding,
   addRound,
@@ -334,6 +358,9 @@ function NodeStrip({
   name: string;
   one: string;
   connectHref: string;
+  
+  sessionEmail: string | null;
+  blocked: string | null;
   calendars: Account[] | null;
   adding: boolean;
   addRound: number;
@@ -345,16 +372,19 @@ function NodeStrip({
   const fold = useRef<HTMLDivElement>(null);
   const id = useId();
   const seen = new Set(accountsSeenFrom(tree, mailAccounts ?? [], node.id));
-  const accounts = (mailAccounts ?? []).filter((account) => seen.has(account.id));
+  const address = sessionEmail?.toLowerCase() ?? null;
+  
+  const accounts = (mailAccounts ?? []).filter((account) => seen.has(account.id)).sort((a, b) => Number(b.email === address) - Number(a.email === address));
+  const offerOwn = sessionEmail !== null && mailAccounts !== null && !accounts.some((account) => account.email === address);
   return (
     <div className="node-strip">
       <section className="node-strip-group" aria-labelledby={`${id}below`}>
         <h2 id={`${id}below`} className="t-label named-label">
           {name}
         </h2>
-        <ul className="node-chips">
+        <FlipList className="node-chips" layout="grid">
           {below.map((child) => (
-            <li key={child.id}>
+            <li key={child.id} data-flip-key={child.id}>
               <Link className={cx(buttonClass({}), "node-chip")} href={`/app/node/${child.id}`}>
                 <span className="node-chip-name task-place-name" data-color={child.color ?? undefined}>
                   {child.name}
@@ -363,13 +393,13 @@ function NodeStrip({
               </Link>
             </li>
           ))}
-          <li>
+          <li data-flip-key="add">
             <Button ref={addButton} className="node-add" data-add-child aria-expanded={adding} aria-controls={`${id}new`} onClick={onAdd}>
               <AddIcon />
               <span className="btn-label">{`Add ${one}`}</span>
             </Button>
           </li>
-        </ul>
+        </FlipList>
         <div ref={fold}>
           <Fold open={adding} id={`${id}new`}>
             {addRound > 0 && (
@@ -395,33 +425,60 @@ function NodeStrip({
         <h2 id={`${id}accounts`} className="t-label named-label">
           Accounts
         </h2>
-        <ul className="node-chips">
+        <FlipList className="node-chips" layout="grid">
+          {offerOwn && (
+            <li data-flip-key="connect-own">
+              <ConnectSession nodeId={node.id} email={sessionEmail!} primary={accounts.length === 0} detail="Brings its calendar and mail here" blocked={blocked} />
+            </li>
+          )}
           {accounts.map((account) => {
             const known = calendars?.find((entry) => entry.id === account.id);
             const lost = account.status !== "active" && !account.isDemo;
+            
+            const own = account.email === address;
+            const facts = accountFacts(mailStore.figure([account]), known ? known.calendars.filter((calendar) => calendar.selected).length : null);
             return (
-              <li key={account.id}>
-                <Link className={cx(buttonClass({}), "node-chip")} href={lost ? "/app/settings#google-accounts" : `/app/mail?account=${account.id}`}>
-                  <span className="node-chip-name t-name">{account.email}</span>
+              <li key={account.id} data-flip-key={account.id}>
+                <Link className={cx(buttonClass({}), "node-chip")} href={lost ? "/app/settings#accounts-settings" : `/app/mail?account=${account.id}`}>
+                  <span className="node-chip-name t-name">
+                    <GoogleMark className="node-chip-mark" />
+                    {account.email}
+                  </span>
                   {lost ? (
                     <span className="node-chip-detail" data-tone="alert">
                       {lostWords(account.status)}
                     </span>
                   ) : (
-                    <span className="node-chip-detail">{accountFacts(figureWords(mailStore.figure([account])), known ? known.calendars.filter((calendar) => calendar.selected).length : null)}</span>
+                    <span className="node-chip-detail">
+                      {own ? (
+                        <>
+                          <span className="node-chip-own">Connected</span>
+                          {facts === READING ? null : ` · ${facts}`}
+                        </>
+                      ) : (
+                        facts
+                      )}
+                    </span>
                   )}
                 </Link>
               </li>
             );
           })}
-          {mailAccounts && accounts.length === 0 && (
-            <li>
-              <Link className={buttonClass({})} href={connectHref}>
-                <span className="btn-label">Connect Google account</span>
+          {mailAccounts && accounts.length === 0 && !offerOwn && (
+            <li data-flip-key="connect">
+              {}
+              <Link className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
+                <span className="node-chip-name">
+                  <GoogleMark className="node-chip-mark" />
+                  Connect Google account
+                </span>
+                <span id={`${id}connect`} className="node-chip-detail">
+                  {`The one you use with ${node.name}`}
+                </span>
               </Link>
             </li>
           )}
-        </ul>
+        </FlipList>
       </section>
     </div>
   );
@@ -479,27 +536,10 @@ function NotHere() {
       <p className="t-help">It was deleted, or it belongs to another account. Pick one in the sidebar, or go back to the Overview.</p>
       <div>
         <Link className={buttonClass({ variant: "primary" })} href="/app">
-          <span className="btn-label">Go to the Overview</span>
+          <span className="btn-label">Go to Overview</span>
         </Link>
       </div>
     </section>
   );
 }
 
-const outcomes: Record<string, string> = {
-  connected: "The Google account is connected here.",
-  cancelled: "Connecting the Google account was cancelled.",
-  failed: "The Google account could not be connected. Try again.",
-  "invalid-state": "That connection link expired or was started elsewhere. Start again from here.",
-  "not-configured": "Connecting Google accounts is not configured on this server.",
-};
-
-export function GoogleOutcome({ outcome }: { outcome: string }) {
-  const text = outcomes[outcome];
-  if (!text) return null;
-  return (
-    <p role={outcome === "connected" ? "status" : "alert"} className="inline-note page-note" data-tone={outcome === "connected" ? "accent" : "alert"}>
-      {text}
-    </p>
-  );
-}

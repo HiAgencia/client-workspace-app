@@ -108,10 +108,14 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     editor.commands.setContent(value, { emitUpdate: false });
   }, [editor, value]);
 
+  
+  
+  
   const state = useEditorState({
     editor,
-    selector: ({ editor: current }) =>
-      current
+    selector: ({ editor: snapshot }) => {
+      const current = snapshot ?? editor;
+      return current
         ? {
             bold: current.isActive("bold"),
             italic: current.isActive("italic"),
@@ -119,9 +123,10 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
             ordered: current.isActive("orderedList"),
             link: current.isActive("link"),
             tone: (current.getAttributes("tone").tone as Tone | null) ?? "none",
-            empty: current.isEmpty,
+            empty: current.isEmpty && current.state.doc.childCount === 1 && current.state.doc.firstChild?.type.name === "paragraph",
           }
-        : null,
+        : null;
+    },
   });
 
   function applyLink() {

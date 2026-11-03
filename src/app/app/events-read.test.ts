@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Answer } from "./client-api";
-import { readEvents } from "./events-read";
+import { keptEvents, readEvents } from "./events-read";
 
 type Event = { id: string; origin: "google" | "local"; accountId: string; calendarId: string; start: string; allDay: boolean };
 
@@ -123,5 +123,38 @@ describe("reading the events account by account", () => {
     const read = await readEvents<Event>(INPUT, { ask, withAccounts: false });
     expect(read).toMatchObject({ ok: true, events: [], failures: [] });
     expect(asked).toEqual([INPUT]);
+  });
+});
+
+describe("the events put together from what each request last brought", () => {
+  
+  function kept(entries: Record<string, { value: unknown; at: number }>) {
+    return (name: string, input: Record<string, unknown>) => {
+      expect(name).toBe("browse_events");
+      return entries[JSON.stringify(input)] ?? null;
+    };
+  }
+  const first = { ok: true, events: [own("mine", "2026-11-03")], failures: [], accounts: ACCOUNTS, toRead: ["a", "b"] };
+
+  it("is the same read the page would make, aged as its oldest part", () => {
+    const peek = kept({
+      [JSON.stringify(INPUT)]: { value: first, at: 300 },
+      [JSON.stringify({ ...INPUT, account: "a" })]: { value: { ok: true, events: [google("a", "late", "2026-11-05T10:00:00Z")], failures: [] }, at: 200 },
+      [JSON.stringify({ ...INPUT, account: "b" })]: { value: { ok: true, events: [google("b", "early", "2026-11-02T10:00:00Z")], failures: [] }, at: 400 },
+    });
+    const read = keptEvents<Event>(INPUT, { peek });
+    expect(read?.at).toBe(200);
+    expect(read?.value.events.map((event) => event.id)).toEqual(["early", "mine", "late"]);
+    expect(read?.value.waiting).toBe(0);
+  });
+
+  it("is nothing while any account's part is missing: the page reads it as it arrives", () => {
+    const peek = kept({
+      [JSON.stringify(INPUT)]: { value: first, at: 300 },
+      [JSON.stringify({ ...INPUT, account: "a" })]: { value: { ok: true, events: [], failures: [] }, at: 200 },
+    });
+    expect(keptEvents<Event>(INPUT, { peek })).toBeNull();
+    
+    expect(keptEvents<Event>(INPUT, { peek, withAccounts: false })?.value.events.map((event) => event.id)).toEqual(["mine"]);
   });
 });

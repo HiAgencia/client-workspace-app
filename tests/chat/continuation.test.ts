@@ -329,7 +329,7 @@ describe("going on with a turn", () => {
     try {
       const failed = await POST(goesOn({ ok: true }));
       expect(failed.status).toBe(200);
-      expect(await failed.text()).toContain("The model did not answer");
+      expect(await failed.text()).toContain("Try again in a moment.");
     } finally {
       spy.mockRestore();
       script = answering;
