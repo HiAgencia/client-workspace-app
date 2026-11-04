@@ -30,7 +30,7 @@ export function sourceName(source: Item["source"], agentLabel: string | null): s
   if (source === "manual") return "By you";
   if (source === "chat") return `By ${ASSISTANT_NAME}`;
   if (source === "review") return "Automatically";
-  return agentLabel ? `By ${agentLabel}` : "By a coding agent";
+  return agentLabel ? `By your agent ${agentLabel}` : "By your agent";
 }
 
 export function Origin({ item }: { item: Item }) {
