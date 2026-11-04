@@ -662,6 +662,18 @@ textarea.field {
   border-collapse: separate;
   border-spacing: 2px;
 }
+@media (pointer: coarse) {
+  .cal-grid {
+    border-spacing: 0;
+  }
+  .cal-grid .cal-day {
+    width: var(--touch);
+    height: var(--touch);
+  }
+  .popup.calendar {
+    padding-inline: 2px;
+  }
+}
 .cal-grid th {
   padding-bottom: 0.25rem;
   text-align: center;

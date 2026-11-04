@@ -486,6 +486,18 @@
 .cal-month[data-narrow] .cal-month-row {
   gap: 4px;
 }
+@media (pointer: coarse) {
+  .cal-month[data-narrow],
+  .cal-month[data-narrow] .cal-month-row {
+    gap: 0;
+  }
+}
+@media (pointer: coarse) and (width < 24rem) {
+  .cal-card:has(.cal-month[data-narrow]) .cal-body {
+    margin-inline: calc(-1 * var(--pad-card) - 1rem - 1px);
+    padding-inline: 0;
+  }
+}
 .cal-month-name {
   padding: 0 0.4rem 0.2rem 0.75rem;
   font-family: var(--font-display);
