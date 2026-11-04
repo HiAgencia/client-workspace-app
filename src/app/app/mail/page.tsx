@@ -409,8 +409,8 @@ function Mail() {
                     return (
                       <div key={group.key} className="mail-group" role="group" aria-labelledby={`mail-group-${group.key}`}>
                         <h2 id={`mail-group-${group.key}`} className="mail-group-head">
-                          <span className="t-label">{group.label}</span>
-                          {held > 0 && <Figure n={held} one="message" many="messages" className="t-meta" />}
+                          <span className="group-title">{group.label}</span>
+                          {held > 0 && <Figure n={held} one="message" many="messages" className="group-count" />}
                         </h2>
                         {group.key === "forTasks" && waiting.map((entry) => <TaskRepliesGroup key={entry.task.id} entry={entry} listed={listed} />)}
                         {group.messages.length > 0 && (
@@ -472,7 +472,7 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
     <div className="mail-task" role="group" aria-labelledby={headId}>
       <div className="mail-task-head">
         <h3 id={headId} className="mail-task-title">
-          <span className="t-meta">{`${repliesText(entry.replies.length, entry.more.length > 0)} for`}</span>
+          <span className="mail-task-tally">{`${repliesText(entry.replies.length, entry.more.length > 0)} for`}</span>
           <span className="t-value">{title}</span>
         </h3>
         <Button size="sm" variant="quiet" className="head-action head-link" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
@@ -502,7 +502,7 @@ function MailRowView({ row, unread, current, account, onOpen }: { row: MailRow; 
             Important
           </span>
         )}
-        <span className="t-meta mail-row-time">{shortWhen(row.receivedAt)}</span>
+        <span className="mail-row-time">{shortWhen(row.receivedAt)}</span>
       </span>
       <span className="mail-row-subject">
         {unread && <span className="sr-only">Unread: </span>}
@@ -675,7 +675,7 @@ function OpenMessage({
       </Button>
       <Menu
         label="Mark as answer to…"
-        name={`Mark “${row.subject}” as the answer to…`}
+        name={`Mark as answer to… “${row.subject}”`}
         entries={answers}
         variant={answersFirst ? "primary" : "control"}
         className="mail-answers-menu"

@@ -128,7 +128,7 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
           </h2>
           {}
           <p className="t-meta chat-models">{ASSISTANT_MODELS}</p>
-          <p className="t-meta chat-reach">{reach}</p>
+          <p className="t-value chat-reach">{reach}</p>
         </div>
         <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title="Close chat">
           <CloseIcon />

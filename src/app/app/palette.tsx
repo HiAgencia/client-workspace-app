@@ -278,7 +278,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
         <div className="palette-list" id="palette-list" role="listbox" aria-label="Results" ref={list}>
           {groups.map((group) => (
             <div key={group.key} role="group" aria-labelledby={`palette-group-${group.key}`}>
-              <div id={`palette-group-${group.key}`} role="presentation" className="palette-group-label t-label">
+              <div id={`palette-group-${group.key}`} role="presentation" className="palette-group-label">
                 {group.name}
               </div>
               {group.entries.map((entry) => (

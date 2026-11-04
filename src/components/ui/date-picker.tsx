@@ -127,7 +127,7 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
           <PreviousIcon />
           <span className="sr-only">Previous</span>
         </button>
-        <p className="t-label cal-month-title" aria-live="polite">
+        <p className="t-group cal-month-title" aria-live="polite">
           <span key={month} className="cal-month-name" data-from={from ?? undefined}>
             {monthTitle(active)}
           </span>

@@ -207,6 +207,7 @@
   }
   @media (hover: hover) {
     &:hover::before {
+      border-color: color-mix(in srgb, var(--prio) 78%, var(--ink));
       background: color-mix(in srgb, var(--prio) 18%, transparent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--prio) 22%, transparent);
       transition-duration: var(--dur-hover);
@@ -831,7 +832,7 @@
       line-height: 1.5rem;
     }
     & .task-title .inline-link {
-      padding-block: max(0px, (1.5rem - 1.25em) / 2);
+      padding-block: max(0px, (1.5rem - 1.15em) / 2);
     }
     & .task-check {
       margin-top: calc((1.5rem - var(--hit)) / 2);
@@ -1412,17 +1413,6 @@
   min-height: 0;
   line-height: 1.6;
 }
-.task-detail-desc .rich-field.field:not(:focus) {
-  border-color: transparent;
-  background: transparent;
-}
-@media (hover: hover) {
-  .task-detail-desc .rich-field.field:hover:not(:focus) {
-    border-color: var(--division);
-    background: var(--interior);
-    box-shadow: var(--shadow-field-hover), 0 0 0 3px transparent;
-  }
-}
 .task-detail-desc .rich-bar {
   max-height: 8rem;
   opacity: 1;
@@ -1826,12 +1816,10 @@
   --qa-i: 2;
 }
 .qa-dialog .qa-box.field {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: var(--shadow-none);
+  margin-inline: 0.5rem;
 }
 .qa-dialog .qa-box :is(.qa-mirror, .qa-input) {
-  padding: 0.75rem 1.125rem 0.5rem;
+  padding: 0.625rem calc(1.125rem - 0.5rem - 1px) 0.5rem;
   font-size: 1.0625rem;
 }
 .qa-dialog .qa-chips {
@@ -2006,7 +1994,6 @@
 .qa-hint {
   flex: 1 1 16rem;
   margin: 0;
-  font-size: var(--text-xs);
   line-height: 1.6;
 
   & .kbd {

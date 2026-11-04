@@ -1039,7 +1039,6 @@
 }
 .agent-config-name {
   margin: 0;
-  font-family: var(--font-mono);
 }
 .agent-config-block.read-block {
   margin: 0;

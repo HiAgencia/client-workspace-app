@@ -374,7 +374,7 @@ function ChatScene() {
             <div className="stack chat-title">
               <p className="t-title">{ASSISTANT_NAME}</p>
               <p className="t-meta chat-models">{ASSISTANT_MODELS}</p>
-              <p className="t-meta chat-reach">All clients and projects</p>
+              <p className="t-value chat-reach">All clients and projects</p>
             </div>
             <span className="btn btn-quiet btn-sm btn-icon">
               <CloseIcon />
@@ -540,7 +540,7 @@ export function LandingStories({ endpoint }: { endpoint: string }) {
         scene={<AgentScene />}
         text={
           <div className="agent-config">
-            <p className="t-meta agent-config-name">
+            <p className="t-code agent-config-name">
               .mcp.json
             </p>
             <pre className="read-block t-code agent-config-block">

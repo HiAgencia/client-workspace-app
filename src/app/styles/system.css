@@ -86,7 +86,7 @@
 .t-value {
   font-family: var(--font-text);
   font-size: var(--text-body);
-  font-weight: 400;
+  font-weight: 450;
   line-height: 1.45;
   color: var(--ink);
 }
@@ -270,6 +270,20 @@
       transition-duration: var(--dur-hover), var(--dur-nudge), var(--dur-nudge);
       transition-timing-function: var(--ease-hover), var(--ease-nudge), var(--ease-nudge);
     }
+    &:hover:not(:disabled, [aria-disabled="true"]) > .icon {
+      color: var(--btn-ink);
+    }
+  }
+}
+.btn .logo {
+  transition: color var(--dur-hover-out) var(--ease-hover-out), translate var(--dur-hover-out) var(--ease-hover-out),
+    rotate var(--dur-hover-out) var(--ease-hover-out);
+}
+@media (hover: hover) {
+  .btn:hover:not(:disabled, [aria-disabled="true"]) .logo {
+    rotate: var(--mark-nod);
+    transition-duration: var(--dur-hover), var(--dur-nudge), var(--dur-nudge);
+    transition-timing-function: var(--ease-hover), var(--ease-nudge), var(--ease-nudge);
   }
 }
 .btn-icon {
@@ -323,6 +337,11 @@
   &[data-popup-open] {
     --btn-fill: var(--interior-hover);
     --btn-ink: var(--ink);
+  }
+  @media (hover: hover) {
+    &:is([aria-expanded="true"], [data-popup-open]):hover:not(:disabled, [aria-disabled="true"]) {
+      --btn-fill: var(--interior-press);
+    }
   }
   &:active:not(:disabled, [aria-disabled="true"]) {
     --btn-fill: var(--interior-press);
@@ -389,13 +408,13 @@
     scale: none;
   }
 }
-:where(.icon-forward, .icon-back, .icon-up, .icon-down, .icon-turn, .icon-turn-back, .icon-out) {
+:where(.icon-forward, .icon-back, .icon-up, .icon-down, .icon-turn, .icon-turn-back) {
   transition: color var(--dur-hover-out) var(--ease-hover-out), translate var(--dur-hover-out) var(--ease-hover-out),
     rotate var(--dur-hover-out) var(--ease-hover-out);
 }
 @media (hover: hover) {
   :is(a, button, [role="button"]):is(:hover, :focus-visible):not(:disabled, [aria-disabled="true"]) {
-    & > :where(.icon-forward, .icon-back, .icon-up, .icon-down, .icon-turn, .icon-turn-back, .icon-out) {
+    & > :where(.icon-forward, .icon-back, .icon-up, .icon-down, .icon-turn, .icon-turn-back) {
       transition-duration: var(--dur-hover), var(--dur-nudge), var(--dur-nudge);
       transition-timing-function: var(--ease-hover), var(--ease-nudge), var(--ease-nudge);
     }
@@ -416,9 +435,6 @@
     }
     & > .icon-turn-back {
       rotate: calc(var(--hover-turn) / -2);
-    }
-    & > .icon-out {
-      translate: calc(var(--hover-step) * 0.75) calc(var(--hover-step) * -0.75);
     }
   }
   [aria-expanded="true"]:is(:hover, :focus-visible) > .icon-down {
@@ -496,7 +512,7 @@
   @media (hover: hover) {
     &:is(:focus, [data-popup-open]):hover {
       background: var(--field-hover);
-      box-shadow: var(--shadow-field-hover), 0 0 0 3px var(--focus-halo);
+      box-shadow: var(--shadow-field-hover), 0 0 0 4px var(--focus-halo-hover);
       transition-duration: var(--dur-hover);
     }
   }
@@ -600,8 +616,6 @@ textarea.field {
 }
 .cal-month-title {
   margin: 0;
-  color: var(--ink);
-  font-weight: 600;
 }
 .cal-month-name {
   display: inline-block;
@@ -655,7 +669,7 @@ textarea.field {
   @media (hover: hover) {
     &:hover:not([aria-pressed="true"]) {
       background: var(--interior-hover);
-      border-color: transparent;
+      border-color: var(--hover-rim);
       color: var(--ink);
       box-shadow: var(--shadow-none);
       transition-duration: var(--dur-hover);
@@ -745,6 +759,7 @@ textarea.field {
   @media (hover: hover) {
     &:hover {
       background: var(--interior-hover);
+      box-shadow: inset 0 0 0 1px var(--hover-rim);
       transition-duration: var(--dur-hover);
     }
   }
@@ -1040,7 +1055,7 @@ textarea.field {
   border: 0;
   border-radius: calc(var(--radius-control) - 0.1875rem);
   background: transparent;
-  color: var(--muted);
+  color: var(--rail-ink);
   font-family: var(--font-display);
   font-size: var(--text-body);
   font-weight: 500;
@@ -1080,6 +1095,16 @@ textarea.field {
 }
 .seg::before {
   transition: box-shadow var(--dur-hover-out) var(--ease-hover-out);
+}
+.seg-option:is([aria-selected="true"], [aria-pressed="true"]) > .icon {
+  color: color-mix(in srgb, var(--ink) 80%, transparent);
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
+}
+@media (hover: hover) {
+  .seg-option:is([aria-selected="true"], [aria-pressed="true"]):hover > .icon {
+    color: var(--ink);
+    transition-duration: var(--dur-hover);
+  }
 }
 @media (forced-colors: active) {
   .seg::before,
@@ -1492,6 +1517,11 @@ textarea.field {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     transition-delay: 0s !important;
+  }
+  :root {
+    --hover-step: 0rem;
+    --hover-turn: 0deg;
+    --mark-nod: 0deg;
   }
   .skeleton {
     animation: none;

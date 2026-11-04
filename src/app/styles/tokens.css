@@ -16,10 +16,12 @@
   --control: #ffffff;
   --control-hover: #fafafa;
   --control-rim: #e3e3e3;
+  --hover-rim: color-mix(in srgb, var(--ink) 10%, var(--control-rim));
   --rail: #f2f2f2;
   --rail-page: #f0f0f0;
   --piece: #ffffff;
   --piece-rim: #e3e3e3;
+  --rail-ink: var(--muted);
   --scrim: color-mix(in srgb, var(--shadow-ink) 32%, transparent);
   --tile: #f5f5f5;
   --tile-rim: #ebebeb;
@@ -78,6 +80,7 @@
   --tone-violet: var(--node-violet);
   --focus: #1567d3;
   --focus-halo: color-mix(in srgb, var(--accent) 24%, transparent);
+  --focus-halo-hover: color-mix(in srgb, var(--accent) 34%, transparent);
   --selection-bg: #d4e4fc;
   --scroll-thumb: #cfcfcf;
   --shadow-ink: #000000;
@@ -149,6 +152,7 @@
   --hover-step: 0.125rem;
   --hover-lift: -1px;
   --hover-turn: 90deg;
+  --mark-nod: -10deg;
   --dur-press: 60ms;
   --press-scale: 0.97;
   --press-scale-mark: 0.9;
@@ -203,6 +207,7 @@
   --rail-page: #1a1a1a;
   --piece: #2e2e2e;
   --piece-rim: #3a3a3a;
+  --rail-ink: #868686;
   --scrim: color-mix(in srgb, var(--shadow-ink) 62%, transparent);
   --tile: #222222;
   --tile-rim: #2e2e2e;
@@ -256,6 +261,7 @@
 
   --focus: #6aa8ff;
   --focus-halo: color-mix(in srgb, var(--accent) 30%, transparent);
+  --focus-halo-hover: color-mix(in srgb, var(--accent) 42%, transparent);
   --selection-bg: #1f4a7e;
   --scroll-thumb: #3a3a3a;
   --shadow-ink: #000000;

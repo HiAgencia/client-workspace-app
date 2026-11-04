@@ -70,14 +70,6 @@
   gap: 0.5rem;
   margin: 0;
   padding: 0.5rem 0.65rem 0.25rem;
-  & > .t-label {
-    color: var(--ink);
-    font-size: var(--text-group);
-    font-weight: 600;
-  }
-  & > .t-meta {
-    font-size: var(--text-xs);
-  }
 }
 .mail-rows {
   display: flex;
@@ -103,13 +95,10 @@
   border-radius: var(--radius-control);
   background: transparent;
 
-  & .t-meta {
+  & .mail-task-tally {
     color: var(--accent-ink);
     font-size: var(--text-xs);
     font-weight: 500;
-  }
-  & .t-value {
-    font-weight: 600;
   }
 }
 .mail-task-title {
@@ -211,15 +200,15 @@
   white-space: nowrap;
   transition: color var(--dur-hover-out) var(--ease-hover-out);
 }
-.mail-page .mail-row .mail-row-from {
-  font-weight: 450;
-}
 .mail-page .mail-row[data-unread] .mail-row-from {
   font-weight: 600;
 }
 .mail-row-time {
   flex: none;
+  color: var(--muted);
   font-size: var(--text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .mail-row-important {
@@ -597,9 +586,6 @@
     display: none;
   }
 }
-.mail-why {
-  margin: 0;
-}
 .mail-linked {
   display: flex;
   flex-direction: column;
@@ -610,15 +596,6 @@
   background: var(--card);
   box-shadow: inset 0 0 0 1px var(--division);
   list-style: none;
-
-  & .t-meta {
-    color: var(--muted);
-    font-size: var(--text-xs);
-    font-weight: 500;
-  }
-  & .t-value {
-    font-weight: 500;
-  }
 }
 .mail-linked-row {
   display: flex;
@@ -989,7 +966,6 @@
   text-decoration: none;
 
   & > .t-value {
-    font-weight: 500;
     overflow-wrap: anywhere;
   }
   & > .t-meta {

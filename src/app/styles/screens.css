@@ -337,9 +337,6 @@
     margin: 0;
   }
 }
-.chat-reach {
-  color: var(--ink-soft);
-}
 .chat-sheet {
   width: min(30rem, 100vw);
 }
@@ -512,32 +509,18 @@
   position: relative;
   display: flex;
   align-items: center;
+  padding: 0.5rem;
   border-bottom: 1px solid var(--division);
 
   & > .field {
-    min-height: 3.25rem;
-    padding: 0 1rem 0 2.75rem;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: var(--shadow-none);
+    min-height: 2.75rem;
+    padding: 0 0.875rem 0 calc(0.375rem + 0.65rem + 1.25rem + 0.75rem - 0.5rem - 1px);
     font-size: 1rem;
-
-    &:focus,
-    &:focus-visible {
-      border: 0;
-      box-shadow: var(--shadow-none);
-    }
-    @media (hover: hover) {
-      &:hover {
-        box-shadow: var(--shadow-none);
-      }
-    }
   }
 }
 .palette-search-icon {
   position: absolute;
-  left: 1rem;
+  left: calc(0.375rem + 0.65rem + (1.25rem - 1.0625rem) / 2);
   --icon: 1.0625rem;
   color: var(--muted);
   pointer-events: none;
@@ -554,8 +537,9 @@
 .palette-group-label {
   padding: 0.65rem 0.65rem 0.3rem;
   color: var(--muted);
-  font-size: var(--text-xs);
+  font-size: var(--text-meta);
   font-weight: 500;
+  user-select: none;
 }
 .palette-note {
   padding: 0.65rem 1.15rem;
@@ -583,6 +567,7 @@
   width: 1.25rem;
   height: 1.25rem;
   color: var(--muted);
+  transition: color var(--dur-hover-out) var(--ease-hover-out);
 
   & > .icon {
     --icon: 1.0625rem;
@@ -590,6 +575,13 @@
 }
 .option[data-highlighted] .palette-icon {
   color: var(--ink);
+  transition-duration: var(--dur-hover);
+}
+@media (hover: hover) {
+  .option:hover .palette-icon {
+    color: var(--ink);
+    transition-duration: var(--dur-hover);
+  }
 }
 .palette-dot {
   width: 0.625rem;
@@ -613,7 +605,6 @@
   padding: 0.6rem 1rem;
   border-top: 1px solid var(--division);
   background: var(--read);
-  font-size: var(--text-xs);
 }
 @media (pointer: coarse) {
   .palette-foot {
@@ -895,17 +886,6 @@ fieldset.stack {
   min-height: 9rem;
   max-height: none;
   line-height: 1.6;
-}
-.panel-field .rich-field.field:not(:focus) {
-  border-color: transparent;
-  background: transparent;
-}
-@media (hover: hover) {
-  .panel-field .rich-field.field:hover:not(:focus) {
-    border-color: var(--division);
-    background: var(--interior);
-    box-shadow: var(--shadow-field-hover), 0 0 0 3px transparent;
-  }
 }
 .panel-field-foot {
   display: flex;
