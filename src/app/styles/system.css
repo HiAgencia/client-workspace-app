@@ -142,7 +142,7 @@
   white-space: nowrap;
 }
 .path-text {
-  text-wrap: balance;
+  text-wrap-style: balance;
 }
 .icon {
   flex: none;
