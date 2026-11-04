@@ -516,6 +516,7 @@ function Calendar() {
                   dropOn={dropOn}
                   onAdd={(day) => setDraft({ day, time: null })}
                   emptyDay={emptyDay}
+                  counted
                 />
               )}
               {!stale && unanswered === 0 && events.length === 0 && tasks.length === 0 && (
@@ -935,6 +936,7 @@ function WeekList({
   dropOn,
   onAdd,
   emptyDay,
+  counted = false,
 }: {
   days: Day[];
   byDay: Map<Day, { events: CalEvent[]; tasks: TaskData[] }>;
@@ -942,6 +944,7 @@ function WeekList({
   dropOn: DropOn;
   onAdd: (day: Day) => void;
   emptyDay: EmptyDay;
+  counted?: boolean;
 }) {
   const now = today();
   return (
@@ -957,7 +960,15 @@ function WeekList({
         return (
           <li key={day} className="cal-list-day" data-day={day} data-empty={empty ? "" : undefined} aria-current={day === now ? "date" : undefined} {...dropOn(day)}>
             <div className="cal-list-head">
-              <h3 className="t-label">{day === now ? `Today, ${fullDay(day)}` : fullDay(day)}</h3>
+              <h3 className="t-label">
+                {day === now ? `Today, ${fullDay(day)}` : fullDay(day)}
+                {counted && !empty && (
+                  <>
+                    <span className="sr-only">, </span>
+                    <span className="t-meta cal-list-count">{holds(events.length, tasks.length)}</span>
+                  </>
+                )}
+              </h3>
               <Button size="sm" variant="quiet" onClick={() => onAdd(day)} aria-label={`Add event on ${fullDay(day)}`}>
                 Add event
               </Button>
@@ -976,6 +987,11 @@ function WeekList({
       })}
     </ol>
   );
+}
+
+function holds(events: number, tasks: number): string {
+  if (events > 0 && tasks > 0) return `${events + tasks} events and tasks`;
+  return events > 0 ? count(events, "event", "events") : count(tasks, "task", "tasks");
 }
 
 const MONTH_SHOWN = 4;

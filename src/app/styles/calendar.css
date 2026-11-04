@@ -122,8 +122,11 @@
       box-shadow: inset 0 0 0 1px var(--place-ring), 0 0 0 1px var(--card), var(--shadow-control-hover);
     }
   }
-  &[data-timed][data-short] {
-    row-gap: 3rem;
+  &[data-timed][data-short] > .cal-event-when {
+    display: none;
+  }
+  &:not([data-timed]) {
+    flex-wrap: nowrap;
   }
   &[data-timed]:not([data-short]) {
     flex-direction: column;
@@ -708,6 +711,10 @@
     margin: 0;
     text-wrap: balance;
   }
+}
+.cal-list-count {
+  display: block;
+  margin-top: 0.1rem;
 }
 .cal-list-items {
   --row: 2.25rem;
