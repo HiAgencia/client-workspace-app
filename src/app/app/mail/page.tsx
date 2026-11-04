@@ -601,7 +601,7 @@ function OpenMessage({
       : { kind: "action", label: "Open in Gmail", icon: GmailMark, onSelect: () => void window.open(gmail, "_blank", "noopener,noreferrer") },
     {
       kind: "choice",
-      label: "Colors",
+      label: "Mail colors",
       value: mode,
       options: [
         { value: "light", label: "Light" },
@@ -719,7 +719,7 @@ function OpenMessage({
 
   const note = isDemo ? (
     <span id="mail-gmail-why" className="pill mail-sample">
-      <span aria-hidden="true">Sample</span>
+      <span aria-hidden="true">Sample account</span>
       <span className="sr-only">A sample account: its messages live only in this demo, with no Gmail to open.</span>
     </span>
   ) : null;
