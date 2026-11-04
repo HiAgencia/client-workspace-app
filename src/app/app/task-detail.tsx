@@ -21,6 +21,7 @@ import {
   GeneralIcon,
   MailIcon,
   NoteIcon,
+  PlaceIcon,
   PriorityIcon,
   UpIcon,
   VersionsIcon,
@@ -57,7 +58,6 @@ import {
   useTaskActions,
   whenLabel,
   whenTone,
-  type TaskData,
   type TaskDetailRequest,
 } from "./task-row";
 import { useWorkspace } from "./workspace";
@@ -263,7 +263,7 @@ export function TaskDetail() {
       setLoaded(false);
       setShowVersions(false);
     });
-    focusAfterClose(() => (id ? document.querySelector<HTMLElement>(`[data-item="${id}"] .task-open`) : null) ?? opener.current);
+    focusAfterClose(() => (id ? document.querySelector<HTMLElement>(`[data-item="${id}"] .task-open`) : null) ?? opener.current, opener.current);
   }
 
   const list = request?.list ?? [];
@@ -524,7 +524,13 @@ function TaskBody(props: BodyProps) {
           <Select look="chip" label="Priority" value={String(item.priority ?? 4)} options={PRIORITIES} onChange={(value) => props.onChange({ priority: Number(value) })} />
         </Prop>
         <Prop kind="place" data-color={placeColor ?? undefined}>
-          {item.nodeId ? <span className="task-prop-disc" aria-hidden="true" /> : <GeneralIcon className="task-prop-icon" />}
+          {item.nodeId && placeColor ? (
+            <span className="task-prop-disc" aria-hidden="true" />
+          ) : item.nodeId ? (
+            <PlaceIcon className="task-prop-icon" />
+          ) : (
+            <GeneralIcon className="task-prop-icon" />
+          )}
           <Select look="chip" label="Client or project" value={item.nodeId ?? "general"} options={places} onChange={props.onMove} />
         </Prop>
         <EventField key={item.id} task={item} wrapRef={props.eventRef} />
@@ -1690,5 +1696,3 @@ function Versions({ id, task, version, onRestored }: { id: string; task: Item; v
     </section>
   );
 }
-
-export type { TaskData };

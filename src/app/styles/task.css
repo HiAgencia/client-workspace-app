@@ -448,13 +448,13 @@
   gap: 0.4em;
   font-weight: 500;
 }
-.task-place-name::before {
+.task-place-name[data-color]::before {
   content: "";
   flex: none;
   width: 0.5em;
   height: 0.5em;
   border-radius: 50%;
-  background: var(--place, color-mix(in srgb, var(--muted) 45%, transparent));
+  background: var(--place);
   translate: 0 -0.05em;
 }
 .task-desc {
@@ -1004,13 +1004,20 @@
   white-space: nowrap;
 
   & .link {
+    display: flex;
     min-width: 0;
     color: var(--ink-soft);
     font-weight: 500;
     text-decoration-color: transparent;
   }
   & .task-place-name {
+    min-width: 0;
     color: var(--ink-soft);
+    & > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 }
 @media (hover: hover) {
@@ -1163,7 +1170,7 @@
   width: 0.5625rem;
   height: 0.5625rem;
   border-radius: 50%;
-  background: var(--place, color-mix(in srgb, var(--muted) 45%, transparent));
+  background: var(--place);
 }
 .task-prop > .picker.chip-picker,
 .task-prop > .btn.menu-trigger {
@@ -1391,7 +1398,7 @@
 .task-detail-desc {
   position: relative;
   margin-top: 0.875rem;
-  margin-inline-start: calc(var(--detail-words) - 0.75rem - 1px);
+  margin-inline-start: var(--detail-words);
 }
 .task-detail-desc .rich-field {
   min-height: 0;
@@ -1800,6 +1807,7 @@
   --qa-i: 2;
 }
 .qa-dialog .qa-box.field {
+  width: auto;
   margin-inline: 0.5rem;
 }
 .qa-dialog .qa-box :is(.qa-mirror, .qa-input) {
@@ -1924,7 +1932,7 @@
   margin-left: -1.1rem;
   margin-right: 0.15rem;
   border-radius: 50%;
-  background: var(--place, color-mix(in srgb, var(--muted) 45%, transparent));
+  background: var(--place, transparent);
 }
 .qa-chips {
   display: flex;
