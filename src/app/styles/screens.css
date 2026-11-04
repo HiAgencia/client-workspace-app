@@ -532,6 +532,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   list-style: none;
+  scrollbar-width: thin;
 }
 .palette-group-label {
   padding: 0.65rem 0.65rem 0.3rem;

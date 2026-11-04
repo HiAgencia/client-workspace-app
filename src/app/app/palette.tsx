@@ -14,7 +14,7 @@ import type { MailRow } from "@/lib/tools/mail-schema";
 import { currentTheme, setTheme } from "@/lib/theme";
 import { tool, type Item, type TreeNode } from "./client-api";
 import { requestFocus, type FocusTarget } from "./focus-request";
-import { TYPE_NAMES } from "./item-parts";
+import { PathText, TYPE_NAMES } from "./item-parts";
 import { subjectOf } from "./mail/subject";
 import { openQuickAdd } from "./quick-add-bus";
 import type { MailFailureRow } from "./mail-store";
@@ -341,7 +341,7 @@ function EntryView({ entry }: { entry: Entry }) {
         </span>
         <span className="stack palette-text">
           <span className="t-value">{inlinePlain(item.title)}</span>
-          <span className="t-meta">{item.nodePath}</span>
+          {item.nodePath && <span className="t-meta"><PathText path={item.nodePath} /></span>}
         </span>
       </>
     );
