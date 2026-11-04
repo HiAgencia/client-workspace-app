@@ -17,6 +17,7 @@ import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/da
 import { inlinePlain } from "@/lib/inline-links";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { mailFailureText } from "@/lib/mail/failure-text";
+import { mailWhen } from "@/lib/mail/when";
 import { repliesText } from "@/lib/mail/replies-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import type { NoteRow } from "@/lib/tools/notes";
@@ -413,7 +414,7 @@ export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<
       {group.tasks.length === 0 && <BoxEmpty text="No tasks without a date." reason="no-date-empty" />}
       {folds && (
         <button type="button" className="task-add" aria-controls={rowsId} aria-expanded={all} onClick={() => setAll((value) => !value)}>
-          {all ? "Show less" : `Show ${group.tasks.length - FIRST_SHOWN} more`}
+          {all ? "Show less" : `Show ${count(group.tasks.length - FIRST_SHOWN, "more task", "more tasks")}`}
         </button>
       )}
     </div>
@@ -637,14 +638,7 @@ export function useMailCount(read: BoxRead<MailList>): string | undefined {
   return figureWords(figure) ?? undefined;
 }
 
-export function mailWhen(iso: string, now: Day): string {
-  const date = new Date(iso);
-  const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  if (day === now) return new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(date);
-  if (day === addDays(now, -1)) return "Yesterday";
-  const sameYear = date.getFullYear() === Number(now.slice(0, 4));
-  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
-}
+export { mailWhen };
 
 const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
 
@@ -1051,7 +1045,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
           </FlipList>
           {entries.length > FIRST_SHOWN && (
             <button type="button" className="task-add" aria-controls="activity-entries" aria-expanded={all} onClick={() => setAll((value) => !value)}>
-              {all ? "Show less" : `Show ${entries.length - FIRST_SHOWN} more`}
+              {all ? "Show less" : `Show ${count(entries.length - FIRST_SHOWN, "more entry", "more entries")}`}
             </button>
           )}
         </>

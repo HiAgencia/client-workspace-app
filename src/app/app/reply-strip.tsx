@@ -8,7 +8,7 @@ import type { Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
 import { repliesTally } from "@/lib/mail/replies-text";
-import { mailWhen } from "./box-kinds";
+import { mailWhen } from "@/lib/mail/when";
 import { BoxFailed, type BoxRead } from "./boxes";
 import { subjectOf } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
