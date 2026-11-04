@@ -84,6 +84,9 @@ type Replies = { task?: { id: string; title: string }; accounts?: Array<{ id: st
 
 const CALENDAR = /\b(?:on (?:my|the) calendars?|en (?:mi|el) calendario|en mis calendarios)\b/i;
 
+const PENDING = /pending|what('s| is) (left|next)|advise|what should/i;
+const TODAY = /\b(?:today|hoy)\b/i;
+
 type EventsRead = { ok?: boolean; message?: string; accounts?: Array<{ id: string }>; toRead?: string[]; events?: Array<{ title: string }>; failures?: Array<{ accountEmail: string; reason: string }> };
 
 function weekAhead(prompt: LanguageModelV4Prompt) {
@@ -101,7 +104,7 @@ function waitingTasks(value: TaskRows | undefined): WaitingRow[] {
   return rows.filter((row) => row.mail);
 }
 
-export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart[] {
+function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart[] {
   const results = toolResults(prompt);
   const request = lastUserText(prompt);
   if (ARRIVED.test(request) && results.some((result) => result.toolName === "list_task_replies")) {
@@ -130,6 +133,14 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
     const waiting = waitingTasks((answer.output as { value?: TaskRows }).value);
     if (waiting.length === 0) return text("No task waits for mail.");
     return calls(...waiting.map((task) => ({ toolName: "list_task_replies", input: { task: task.id } })));
+  }
+  if (PENDING.test(request) && TODAY.test(request) && results.some((result) => result.toolName === "get_tasks")) {
+    const groups = (results.find((result) => result.toolName === "get_tasks")!.output as { value?: TaskRows }).value?.groups;
+    const late = groups?.overdue?.tasks ?? [];
+    const due = groups?.today?.tasks ?? [];
+    if (late.length + due.length === 0) return text("Nothing is due today, and nothing is late.");
+    const said = [late.length > 0 ? `Late: ${late.map((row) => row.title).join("; ")}.` : "", due.length > 0 ? `Due today: ${due.map((row) => row.title).join("; ")}.` : ""];
+    return text(`${said.filter(Boolean).join(" ")} Start with "${(late[0] ?? due[0]).title}".`);
   }
   if (CALENDAR.test(request) && results.some((result) => result.toolName === "browse_events")) {
     const answers = results.filter((result) => result.toolName === "browse_events").map(({ output }) => (output as { value?: EventsRead }).value);
@@ -184,7 +195,8 @@ export function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart
   if (hasImage(prompt)) return call("create_task", { title: "Follow up on the attached screenshot" });
   if (ARRIVED.test(request)) return call("get_tasks", { today: personDay(prompt).today });
   if (CALENDAR.test(request)) return call("browse_events", weekAhead(prompt));
-  if (/pending|what('s| is) (left|next)|advise|what should/i.test(request)) {
+  if (PENDING.test(request) && TODAY.test(request)) return call("get_tasks", { today: personDay(prompt).today });
+  if (PENDING.test(request)) {
     return workspaceWide(prompt) ? call("browse_items", { type: ["task"], status: "open", sort: "priority", limit: 5 }) : call("get_overview", {});
   }
   return text(`(simulated model) You said: ${request}`);
