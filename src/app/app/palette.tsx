@@ -33,6 +33,7 @@ const MAIL_WAIT_MS = 400;
 const NAME = "Search clients, projects, tasks, mail, and actions";
 const SHORT_NAME = "Search everything";
 const NARROW = "(width < 36rem)";
+const TOUCH = "(pointer: coarse)";
 
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -68,6 +69,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
   const router = useRouter();
   const pathname = usePathname();
   const narrow = useMedia(NARROW);
+  const touch = useMedia(TOUCH);
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Item[] | null>(null);
   const [itemsFailed, setItemsFailed] = useState(false);
@@ -135,6 +137,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
       { kind: "action", id: "go-tasks", label: "Go to Tasks", run: () => router.push("/app/tasks") },
       { kind: "action", id: "go-calendar", label: "Go to Calendar", run: () => router.push("/app/calendar") },
       { kind: "action", id: "go-mail", label: "Go to Mail", run: () => router.push("/app/mail") },
+      { kind: "action", id: "go-trash", label: "Go to Trash", run: () => router.push("/app/trash") },
       { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
     ];
     if (signedIn) {
@@ -147,9 +150,9 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     }
     const dark = currentTheme() === "dark";
     list.push({ kind: "action", id: "theme", label: dark ? "Switch to light theme" : "Switch to dark theme", run: () => setTheme(dark ? "light" : "dark") });
-    list.push({ kind: "action", id: "shortcuts", label: "Show keyboard shortcuts", run: showShortcuts });
+    if (!touch) list.push({ kind: "action", id: "shortcuts", label: "Show keyboard shortcuts", run: showShortcuts });
     return list;
-  }, [here, router, signedIn, switchAccount]);
+  }, [here, router, signedIn, switchAccount, touch]);
 
   function go(target: FocusTarget) {
     requestFocus(target);
@@ -160,9 +163,14 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
   const itemIndex = useMemo(() => (items ?? []).map((item) => ({ item, prepared: prepare(`${item.title} ${item.body ?? ""}`) })), [items]);
   const actionIndex = useMemo(() => actions.map((action) => ({ action, prepared: prepare(action.kind === "action" ? action.label : "") })), [actions]);
 
+  const tops = useMemo(() => {
+    const roots = (tree ?? []).filter((node) => node.parentId === null);
+    return [...roots.filter((node) => node.kind === "client"), ...roots.filter((node) => node.kind !== "client")];
+  }, [tree]);
+
   const groups = useMemo(() => {
     const q = query.trim();
-    const nodeHits = q ? rank(q, nodeIndex, (hit) => hit.prepared).slice(0, LIMIT.node).map((hit) => hit.entry.node) : (tree ?? []).slice(0, LIMIT.node);
+    const nodeHits = q ? rank(q, nodeIndex, (hit) => hit.prepared).slice(0, LIMIT.node).map((hit) => hit.entry.node) : tops;
     const itemHits = q ? rank(q, itemIndex, (hit) => hit.prepared).slice(0, LIMIT.item).map((hit) => hit.entry.item) : [];
     const actionHits = q ? rank(q, actionIndex, (hit) => hit.prepared).map((hit) => hit.entry.action) : actions;
     return [
@@ -171,10 +179,10 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
       { key: "mail", name: "Mail", entries: mailRows.slice(0, LIMIT.mail).map((row): Entry => ({ kind: "mail", id: `mail-${row.accountId}-${row.id}`, row })) },
       { key: "actions", name: "Actions", entries: actionHits },
     ].filter((group) => group.entries.length > 0);
-  }, [query, tree, nodeIndex, itemIndex, actionIndex, actions, mailRows]);
+  }, [query, tops, nodeIndex, itemIndex, actionIndex, actions, mailRows]);
 
   const flat = groups.flatMap((group) => group.entries);
-  const current = activeId === null ? flat[0] : (flat.find((entry) => entry.id === activeId) ?? null);
+  const current = activeId === null ? (touch && !query.trim() ? null : flat[0]) : (flat.find((entry) => entry.id === activeId) ?? null);
 
   useEffect(() => {
     if (!current) return;
@@ -274,6 +282,9 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
       )}
       <p className={noteFailed ? "palette-note inline-note" : "palette-note t-help"} data-tone={noteFailed ? "alert" : undefined} role="status">
         {note}
+      </p>
+      <p className="sr-only" role="status">
+        {searching && !note && flat.length > 0 ? `${count(flat.length, "result", "results")} for “${words}”` : ""}
       </p>
       {mailNow.failures.map((failure) => (
         <p key={failure.accountId} className="palette-note t-help" data-mail-failure>
