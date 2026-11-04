@@ -6,7 +6,7 @@ export function setSmoothScroll(lenis: Lenis | null): void {
   smooth = lenis;
 }
 
-const HOLDING_LAYER = "dialog:modal, .positioner[data-open]";
+export const HOLDING_LAYER = "dialog:modal, .positioner[data-open]";
 
 export function pageHeld(): boolean {
   return document.querySelector(HOLDING_LAYER) !== null;
