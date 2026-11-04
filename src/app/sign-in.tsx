@@ -125,7 +125,7 @@ export function SignIn({ config, failed, go }: { config: PublicConfig; failed: b
 
   const said = busy && busy.at !== "end" ? progress(busy) : null;
   return (
-    <section className="stack" aria-live="polite">
+    <section className="stack">
       {session.kind === "loading" && <SignInPlaceholder />}
       {session.kind === "out" && (
         <div className="inline fade-enter">
