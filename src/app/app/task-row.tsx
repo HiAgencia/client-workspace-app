@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  createContext,
+  useCallback,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -850,6 +853,38 @@ const currentDrag = () => dragState;
 
 const GRAB = { x: 24, y: 20 };
 
+
+
+
+
+type HeadDrop = { over: (event: DragEvent<HTMLElement>) => void; drop: (event: DragEvent<HTMLElement>) => void; leave: () => void };
+
+type LendHead = (handlers: HeadDrop) => () => void;
+const DropHead = createContext<LendHead | null>(null);
+
+export function useDropHead() {
+  const lent = useRef<HeadDrop | null>(null);
+  const lend = useCallback<LendHead>((handlers) => {
+    lent.current = handlers;
+    return () => {
+      if (lent.current === handlers) lent.current = null;
+    };
+  }, []);
+  const head = {
+    onDragOver: (event: DragEvent<HTMLElement>) => lent.current?.over(event),
+    onDrop: (event: DragEvent<HTMLElement>) => lent.current?.drop(event),
+    
+    onDragLeave: (event: DragEvent<HTMLElement>) => {
+      if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) lent.current?.leave();
+    },
+  };
+  return { lend, head };
+}
+
+export function DropHeadScope({ lend, children }: { lend: LendHead | null; children: ReactNode }) {
+  return <DropHead value={lend}>{children}</DropHead>;
+}
+
 export function TaskList({ group, label, tasks, layout = "list", showPlace = true, pageNode, dayShown, dropDay, reorderable = false, empty }: ListProps) {
   const actions = useTaskActions();
   
@@ -1012,6 +1047,10 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     }
     setDragging(null);
   }
+
+  
+  const lendHead = useContext(DropHead);
+  useEffect(() => lendHead?.({ over: onDragOver, drop: onDrop, leave: () => setDropAt(null) }));
 
   
   

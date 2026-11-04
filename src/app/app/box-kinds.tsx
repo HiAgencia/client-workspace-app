@@ -31,7 +31,7 @@ import { chosenAccounts } from "./place-filters";
 import { subjectOf, taskLine } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
 import { useQuickAddInline } from "./quick-add";
-import { dayHeading, dayName, InlineText, pasteLinkOver, PlaceName, placeOnPage, TaskList, timeLabel, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
+import { dayHeading, dayName, DropHeadScope, InlineText, pasteLinkOver, PlaceName, placeOnPage, TaskList, timeLabel, useDropHead, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
 
@@ -260,25 +260,30 @@ function GroupSection({ group, layout, placeId, children }: { group: Group; layo
   
   const section = useRef<HTMLElement>(null);
   useFlip(section, { items: ":scope > .group-day", arrangement: layout });
+  
+  
+  const drop = useDropHead();
   return (
-    <section ref={section} className="group" data-group={group.key} data-flip-key={`group:${group.key}`} aria-labelledby={`group-${group.key}`}>
-      <div className="group-top">
-        <div className="group-head">
-          <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
-            {group.label}
-          </h3>
-          {group.count > 0 && <Figure n={group.count} one="task" many="tasks" className="group-count" />}
-          {(group.action || adds) && (
-            <div className="group-action">
-              {group.action}
-              {adds && add.trigger}
-            </div>
-          )}
+    <DropHeadScope lend={group.days ? null : drop.lend}>
+      <section ref={section} className="group" data-group={group.key} data-flip-key={`group:${group.key}`} aria-labelledby={`group-${group.key}`}>
+        <div className="group-top" {...drop.head}>
+          <div className="group-head">
+            <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
+              {group.label}
+            </h3>
+            {group.count > 0 && <Figure n={group.count} one="task" many="tasks" className="group-count" />}
+            {(group.action || adds) && (
+              <div className="group-action">
+                {group.action}
+                {adds && add.trigger}
+              </div>
+            )}
+          </div>
+          {adds && add.editor}
         </div>
-        {adds && add.editor}
-      </div>
-      {children}
-    </section>
+        {children}
+      </section>
+    </DropHeadScope>
   );
 }
 
@@ -286,19 +291,22 @@ function GroupSection({ group, layout, placeId, children }: { group: Group; layo
 function DaySection({ day, placeId, children }: { day: Group; placeId: string | null; children: ReactNode }) {
   const add = useQuickAddInline({ day: day.add ?? null, placeId });
   const adds = day.add !== undefined;
+  const drop = useDropHead();
   return (
-    <div className="group-day" data-day={day.key} data-flip-key={`day:${day.key}`}>
-      <div className="group-top">
-        <div className="group-day-head">
-          <h4 className="group-day-title" data-when={day.tone}>
-            {day.label}
-          </h4>
-          {adds && <div className="group-action">{add.trigger}</div>}
+    <DropHeadScope lend={drop.lend}>
+      <div className="group-day" data-day={day.key} data-flip-key={`day:${day.key}`}>
+        <div className="group-top" {...drop.head}>
+          <div className="group-day-head">
+            <h4 className="group-day-title" data-when={day.tone}>
+              {day.label}
+            </h4>
+            {adds && <div className="group-action">{add.trigger}</div>}
+          </div>
+          {adds && add.editor}
         </div>
-        {adds && add.editor}
+        {children}
       </div>
-      {children}
-    </div>
+    </DropHeadScope>
   );
 }
 
