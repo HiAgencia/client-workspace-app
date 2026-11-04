@@ -61,6 +61,14 @@ describe("laying out what overlaps on a day's hours", () => {
     expect(over.clip).toBe(1);
   });
 
+  it("splits the column in halves between two that start together and cover each other whole", () => {
+    const placed = byName(cascade([event("review", at(11, 30), at(12)), task("call", at(11, 30))], LINE));
+    expect(placed.review).toMatchObject({ inset: 0, textAt: 0, room: LINE, clip: 0.5 });
+    expect(placed.call).toMatchObject({ inset: 0.5, clip: 1 });
+    const later = byName(cascade([event("review", at(11, 30), at(12)), task("call", at(11, 40))], LINE));
+    expect(later.call.inset).toBeLessThan(0.5);
+  });
+
   it("reaches the column's edge with the text of every piece that keeps a stretch of its own", () => {
     const placed = cascade([event("review", at(11), at(12)), task("call", at(11, 30)), event("workshop", at(11), at(13))], LINE);
     for (const entry of placed) expect(entry.clip).toBe(1);
