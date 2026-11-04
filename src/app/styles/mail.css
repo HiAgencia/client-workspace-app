@@ -127,7 +127,7 @@
   column-gap: 0.75rem;
   row-gap: 0.15rem;
   width: 100%;
-  padding: 0.65rem 0.65rem;
+  padding: 0.625rem 0.6rem;
 
   & > .sender-mark {
     grid-row: 1 / span 3;
@@ -420,8 +420,7 @@
   box-shadow: 0 1px 0 var(--division);
 }
 .mail-actions,
-.mail-action-row,
-.mail-steps {
+.mail-action-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -434,25 +433,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-}
-.mail-steps {
-  gap: 0;
-
-  & > .btn {
-    --btn-shadow: var(--shadow-none);
-    border-radius: 0;
-  }
-  & > .btn + .btn {
-    margin-inline-start: -1px;
-  }
-  & > .btn:first-child {
-    border-start-start-radius: var(--radius-control);
-    border-end-start-radius: var(--radius-control);
-  }
-  & > .btn:last-child {
-    border-start-end-radius: var(--radius-control);
-    border-end-end-radius: var(--radius-control);
-  }
 }
 .mail-actions {
   margin-inline-start: auto;

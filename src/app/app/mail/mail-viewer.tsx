@@ -98,7 +98,7 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
 
   const moving = (
     <div className="mail-bar-move">
-      <div className="mail-steps" role="group" aria-label="Move through the list">
+      <div className="btn-group" role="group" aria-label="Move through the list">
         {onClose && (
           <Button size="sm" onClick={onClose} aria-label="Back to the list">
             Back
