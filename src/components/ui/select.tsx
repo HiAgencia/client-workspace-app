@@ -17,7 +17,7 @@ export type SelectOption = {
   mark?: (props: { className?: string }) => ReactElement;
 };
 
-export function optionRuns(options: SelectOption[]): Array<{ group: SelectGroup | null; options: SelectOption[] }> {
+function optionRuns(options: SelectOption[]): Array<{ group: SelectGroup | null; options: SelectOption[] }> {
   const runs: Array<{ group: SelectGroup | null; options: SelectOption[] }> = [];
   for (const option of options) {
     const last = runs.at(-1);
@@ -36,6 +36,8 @@ type SelectProps = {
   placeholder?: string;
   look?: "field" | "chip";
   id?: string;
+  invalid?: boolean;
+  describedBy?: string;
 };
 
 const item = (option: SelectOption, marked: boolean) => (
@@ -46,7 +48,7 @@ const item = (option: SelectOption, marked: boolean) => (
   </Base.Item>
 );
 
-export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", id }: SelectProps) {
+export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", id, invalid, describedBy }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
   const marked = options.some((option) => option.mark);
   const container = usePopupContainer();
@@ -62,6 +64,8 @@ export function Select({ value, onChange, options, label, placeholder = "Choose�
       <Base.Trigger
         id={id}
         aria-label={`${label}: ${chosen?.label ?? placeholder}`}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         className={cx("picker", look === "field" ? "field" : "chip-picker")}
         data-tone={look === "chip" ? chosen?.tone : undefined}
       >

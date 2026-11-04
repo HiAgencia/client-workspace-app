@@ -21,12 +21,16 @@
     background-color: var(--scrim-ground);
     transition: background-color var(--dur) var(--ease-out);
   }
+  body * {
+    scrollbar-width: thin;
+  }
   body {
     min-height: 100svh;
     background: var(--canvas);
     font-size: var(--text-body);
     line-height: 1.5;
     text-rendering: optimizeLegibility;
+    text-wrap-style: pretty;
   }
   ::selection {
     background: var(--selection-bg);
@@ -243,17 +247,23 @@
     scale: var(--press-scale);
     transition-duration: var(--dur-press);
   }
-  &:disabled,
-  &[aria-disabled="true"] {
+  &:is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]) {
     --btn-fill: transparent;
     --btn-rim: var(--control-rim);
     --btn-ink: var(--muted);
     --btn-shadow: var(--shadow-none);
     cursor: not-allowed;
   }
-  &.btn-quiet:is(:disabled, [aria-disabled="true"]) {
+  &.btn-quiet:is(:disabled, [aria-disabled="true"]):not([aria-busy="true"]) {
     --btn-rim: transparent;
     opacity: 0.6;
+  }
+  &[aria-busy="true"] {
+    cursor: progress;
+
+    & > .icon-forward {
+      animation: way-on 1.4s var(--ease-std) infinite;
+    }
   }
   & > .icon {
     flex: none;
@@ -273,6 +283,14 @@
       color: var(--btn-ink);
     }
   }
+}
+@keyframes way-on {
+  50% {
+    translate: var(--hover-step) 0;
+  }
+}
+:root.page-hidden .btn[aria-busy="true"] > .icon-forward {
+  animation-play-state: paused;
 }
 .btn .logo {
   transition: color var(--dur-hover-out) var(--ease-hover-out), translate var(--dur-hover-out) var(--ease-hover-out),
@@ -518,6 +536,9 @@
   &:-webkit-autofill {
     -webkit-text-fill-color: var(--ink);
     box-shadow: inset 0 0 0 100px var(--field), 0 0 0 3px transparent;
+  }
+  &[aria-invalid="true"]:not(:focus, :focus-visible, [data-popup-open]) {
+    border-color: var(--alert-ink);
   }
 }
 @media (pointer: coarse) {
@@ -831,7 +852,7 @@ textarea.field {
   margin-left: -1.1rem;
   margin-right: 0.6rem;
   border-radius: 50%;
-  background: var(--place, color-mix(in srgb, var(--muted) 45%, transparent));
+  background: var(--place, transparent);
 }
 .check {
   position: relative;
@@ -888,9 +909,17 @@ textarea.field {
     border-color: var(--division);
     cursor: not-allowed;
   }
+  &:disabled[aria-checked="true"] {
+    background: var(--muted);
+    border-color: var(--muted);
+  }
   @media (forced-colors: active) {
     &[aria-checked="true"] {
       background: Highlight;
+    }
+    &:disabled[aria-checked="true"] {
+      background: GrayText;
+      border-color: GrayText;
     }
   }
 }
@@ -1072,22 +1101,21 @@ textarea.field {
     color: var(--ink);
     transition-duration: var(--dur-press);
   }
-  &[aria-selected="true"],
   &[aria-pressed="true"],
   &[aria-current="page"] {
     color: var(--ink);
     font-weight: 500;
   }
 }
-.seg-option:is([aria-selected="true"], [aria-pressed="true"]) {
+.seg-option[aria-pressed="true"] {
   cursor: default;
 }
 @media (hover: hover) {
-  .seg[data-piece-ready] > .seg-option:is([aria-selected="true"], [aria-pressed="true"]):is(:hover, :active) {
+  .seg[data-piece-ready] > .seg-option[aria-pressed="true"]:is(:hover, :active) {
     background: transparent;
     color: var(--ink);
   }
-  .seg:has(> .seg-option:is([aria-selected="true"], [aria-pressed="true"]):hover)::before {
+  .seg:has(> .seg-option[aria-pressed="true"]:hover)::before {
     box-shadow: var(--shadow-piece-hover), inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, var(--piece-rim));
     transition-duration: var(--dur), var(--dur), var(--dur), var(--dur), var(--dur-hover);
   }
@@ -1095,19 +1123,19 @@ textarea.field {
 .seg::before {
   transition: box-shadow var(--dur-hover-out) var(--ease-hover-out);
 }
-.seg-option:is([aria-selected="true"], [aria-pressed="true"]) > .icon {
+.seg-option[aria-pressed="true"] > .icon {
   color: color-mix(in srgb, var(--ink) 80%, transparent);
   transition: color var(--dur-hover-out) var(--ease-hover-out);
 }
 @media (hover: hover) {
-  .seg-option:is([aria-selected="true"], [aria-pressed="true"]):hover > .icon {
+  .seg-option[aria-pressed="true"]:hover > .icon {
     color: var(--ink);
     transition-duration: var(--dur-hover);
   }
 }
 @media (forced-colors: active) {
   .seg::before,
-  .seg:not([data-piece-ready]) > .seg-option:is([aria-selected="true"], [aria-pressed="true"]),
+  .seg:not([data-piece-ready]) > .seg-option[aria-pressed="true"],
   [data-over],
   [data-drop-over],
   .task-group-body[data-drop] {
@@ -1118,19 +1146,9 @@ textarea.field {
     background: Highlight;
   }
 }
-.seg:not([data-piece-ready]) > .seg-option:is([aria-selected="true"], [aria-pressed="true"]) {
+.seg:not([data-piece-ready]) > .seg-option[aria-pressed="true"] {
   background: var(--piece);
   box-shadow: var(--shadow-piece);
-}
-.seg[data-fit="tight"] > .seg-option {
-  padding-inline: var(--seg-air-tight);
-}
-.seg[data-fit="grid"] {
-  grid-auto-flow: row;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.seg[data-fit="grid"] > .seg-option:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
 }
 .switch {
   display: inline-flex;
@@ -1636,8 +1654,8 @@ textarea.field {
   :where(.btn, .seg-option, .brand, .activity-title, .task-subtasks-toggle, .task-add, .side-search, .side-toggle, .task-detail-head .link-meta, .picker) {
     position: relative;
   }
-  :is(.btn, .seg-option, .brand, .activity-title, .task-subtasks-toggle, .task-add, .side-search, .side-toggle, .task-detail-title-edit, .task-detail-head .link-meta)::after,
-  .picker::before {
+  :is(.btn, .seg-option, .brand, .activity-title, .task-subtasks-toggle, .task-add, .side-search, .task-detail-title-edit, .task-detail-head .link-meta)::after,
+  :is(.picker, .side-toggle)::before {
     content: "";
     position: absolute;
     inset: min(0px, calc((100% - var(--touch)) / 2));

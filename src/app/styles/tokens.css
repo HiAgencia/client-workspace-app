@@ -8,10 +8,9 @@
   --interior-hover: #f0f0f0;
   --interior-press: #e8e8e8;
   --division: #efefef;
-  --guide: #8c8c8c;
   --read: #fafafa;
-  --field: #ffffff;
-  --field-hover: #ffffff;
+  --field: #f7f7f7;
+  --field-hover: #f0f0f0;
   --field-rim: #8f8f8f;
   --control: #ffffff;
   --control-hover: #fafafa;
@@ -19,6 +18,7 @@
   --hover-rim: color-mix(in srgb, var(--ink) 10%, var(--control-rim));
   --rail: #f2f2f2;
   --rail-page: #f0f0f0;
+  --lane: #f0f0f0;
   --piece: #ffffff;
   --piece-rim: #e3e3e3;
   --rail-ink: var(--muted);
@@ -123,7 +123,6 @@
   --gutter: clamp(1rem, 0.75rem + 0.8vw, 1.5rem);
   --pad-card: clamp(1rem, 0.9rem + 0.3vw, 1.25rem);
   --gap-cards: 1rem;
-  --gap-rows: 0.25rem;
   --header-h: 3.25rem;
   --sidebar-w: 15.5rem;
   --nav-row: 2rem;
@@ -197,7 +196,6 @@
   --interior-hover: #252525;
   --interior-press: #2d2d2d;
   --division: #232323;
-  --guide: #666666;
   --read: #141414;
   --field: #121212;
   --field-hover: #151515;
@@ -207,6 +205,7 @@
   --control-rim: #2e2e2e;
   --rail: #1d1d1d;
   --rail-page: #1a1a1a;
+  --lane: #141414;
   --piece: #2e2e2e;
   --piece-rim: #3a3a3a;
   --rail-ink: #868686;
