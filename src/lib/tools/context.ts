@@ -5,7 +5,7 @@ import type { CalendarEvent, EventsFailure } from "./events-source";
 
 export type ToolSource = "manual" | "chat" | "agent";
 
-export type EventsAccount = { id: string; email: string; isDemo: boolean; status: string };
+type EventsAccount = { id: string; email: string; isDemo: boolean; status: string };
 
 export type EventsSource = (args: {
   db: Db;

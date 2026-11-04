@@ -83,11 +83,11 @@ function rowWhen(task: TaskData, dayShown: Day | null | undefined, now: Day): st
   return whenLabel(task.dueOn, task.dueTime, now);
 }
 
-export function priorityName(priority: number | null): string {
+function priorityName(priority: number | null): string {
   return PRIORITIES.find((option) => option.value === String(priority ?? 4))?.label ?? "Low";
 }
 
-export function mailState(mail: unknown): "waiting" | null {
+function mailState(mail: unknown): "waiting" | null {
   return mail && typeof mail === "object" ? "waiting" : null;
 }
 
@@ -107,7 +107,7 @@ export function InlineText({ text }: { text: string }) {
   );
 }
 
-export function LinkedWords({ href, text }: { href: string; text: string }) {
+function LinkedWords({ href, text }: { href: string; text: string }) {
   const [, first = text, rest = ""] = /^(\S*)([\s\S]*)$/.exec(text) ?? [];
   return (
     <>
@@ -297,7 +297,7 @@ function placeOfRow(id: string): RowPlace | null {
   return { group: entry.group, at: [...entry.element.querySelectorAll(":scope > [data-key]")].indexOf(row) };
 }
 
-export type TaskActions = ReturnType<typeof useTaskActions>;
+type TaskActions = ReturnType<typeof useTaskActions>;
 type Actions = TaskActions;
 
 export function taskFromItem(item: Item, extra: Partial<TaskData> = {}): TaskData {
@@ -499,7 +499,7 @@ function groupOfDay(day: Day | null, now: Day): string {
   return day;
 }
 
-export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode[] | null, list?: TaskData[]): MenuEntry[] {
+function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode[] | null, list?: TaskData[]): MenuEntry[] {
   const now = today();
   const places: MenuEntry[] = [
     { kind: "action", label: "General", disabled: task.nodeId === null, onSelect: () => void actions.moveToPlace(task, null) },
@@ -580,7 +580,7 @@ type RowProps = {
   leaving?: boolean;
 };
 
-export function TaskRowView({ task, layout = "list", showPlace = true, pageNode, dayShown, list, onKeyMove, draggable, onDragStart, onDragEnd, leaving }: RowProps) {
+function TaskRowView({ task, layout = "list", showPlace = true, pageNode, dayShown, list, onKeyMove, draggable, onDragStart, onDragEnd, leaving }: RowProps) {
   const { tree } = useWorkspace();
   const actions = useTaskActions();
   const now = today();

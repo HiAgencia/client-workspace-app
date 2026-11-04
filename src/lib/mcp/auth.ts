@@ -11,7 +11,7 @@ export type AgentAccess = {
 
 export type AuthOutcome = { ok: true; access: AgentAccess } | { ok: false; status: 401 | 403 | 503; message: string };
 
-export function originAllowed(request: Request): boolean {
+function originAllowed(request: Request): boolean {
   const origin = request.headers.get("origin");
   return origin === null || origin === new URL(request.url).origin;
 }

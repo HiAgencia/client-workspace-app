@@ -1,12 +1,12 @@
 import { requireServerEnv } from "@/lib/env";
 import { META_BASE_URL, type LiveProvider } from "./model";
 
-export const VOICE_MODEL = "muse-voice-transcribe-1.0";
+const VOICE_MODEL = "muse-voice-transcribe-1.0";
 const TIMEOUT_MS = 30_000;
 
 export type Transcript = { ok: true; text: string } | { ok: false; status: number; message: string };
 
-export const SIMULATED_TRANSCRIPT = "Create a task to call the client back about the invoice";
+const SIMULATED_TRANSCRIPT = "Create a task to call the client back about the invoice";
 
 export async function transcribe(provider: LiveProvider, wav: Uint8Array<ArrayBuffer>, fetcher: typeof fetch = fetch): Promise<Transcript> {
   if (provider === "simulated") return { ok: true, text: SIMULATED_TRANSCRIPT };

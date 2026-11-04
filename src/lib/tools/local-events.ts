@@ -337,7 +337,7 @@ async function reachableTarget(ctx: ToolContext, input: { event?: string; accoun
   return account ? null : fail("not_found", `no account with id ${input.account} is reachable here`);
 }
 
-export const nodeEventSchema = z.object({
+const nodeEventSchema = z.object({
   nodeId: z.string(),
   eventId: z.string().nullable(),
   accountId: z.string().nullable(),

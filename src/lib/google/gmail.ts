@@ -17,12 +17,12 @@ const RATE_PAUSE_MS = 1000;
 const REVOKED = "access was revoked: connect the account again";
 const NOT_GRANTED = "reading mail was not granted: connect the account again and allow Gmail";
 
-export function headerOf(part: GmailPart | undefined, name: string): string | null {
+function headerOf(part: GmailPart | undefined, name: string): string | null {
   const wanted = name.toLowerCase();
   return part?.headers?.find((header) => header.name.toLowerCase() === wanted)?.value ?? null;
 }
 
-export function base64Bytes(text: string): Uint8Array {
+function base64Bytes(text: string): Uint8Array {
   const normal = text.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, "");
   const binary = atob(normal + "=".repeat((4 - (normal.length % 4)) % 4));
   const bytes = new Uint8Array(binary.length);
@@ -30,7 +30,7 @@ export function base64Bytes(text: string): Uint8Array {
   return bytes;
 }
 
-export function decodeBytes(bytes: Uint8Array, charset: string | null): string {
+function decodeBytes(bytes: Uint8Array, charset: string | null): string {
   try {
     return new TextDecoder((charset ?? "utf-8").trim().toLowerCase()).decode(bytes);
   } catch {
@@ -172,11 +172,11 @@ export function toMailMessage(message: GmailMessage, account: { id: string; emai
   };
 }
 
-export function toMailContent(message: GmailMessage, account: { id: string; email: string }): MailContent {
+function toMailContent(message: GmailMessage, account: { id: string; email: string }): MailContent {
   return { ...toMailMessage(message, account), ...bodiesOf(message.payload), contentLanguage: headerOf(message.payload, "Content-Language") };
 }
 
-export function arrived(message: GmailMessage): boolean {
+function arrived(message: GmailMessage): boolean {
   return !(message.labelIds ?? []).some((label) => NOT_RECEIVED.has(label));
 }
 

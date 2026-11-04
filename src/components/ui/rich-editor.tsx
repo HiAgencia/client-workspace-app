@@ -30,7 +30,7 @@ const ToneMark = Mark.create<{ tone: Tone | null }>({
   },
 });
 
-export const TONE_NAMES: Record<Tone, string> = { red: "Red", amber: "Amber", green: "Green", blue: "Blue", violet: "Violet" };
+const TONE_NAMES: Record<Tone, string> = { red: "Red", amber: "Amber", green: "Green", blue: "Blue", violet: "Violet" };
 
 type RichEditorProps = {
   value: string;

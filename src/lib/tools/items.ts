@@ -30,8 +30,6 @@ const parentRef = z
   .optional()
   .describe("The id of the task it hangs from (a subtask, or a note of that task). Its place is the task's.");
 
-export { dueOn, dueTime, priority, titleText };
-
 export const richText = (what: string) =>
   z
     .string()

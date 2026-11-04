@@ -9,7 +9,7 @@ import { useWorkspace, type WaitingRead } from "./workspace";
 
 export { accountsSeenFrom };
 
-export type WaitingTask = Omit<WaitingRead, "accountId">;
+type WaitingTask = Omit<WaitingRead, "accountId">;
 export type TaskReplies = { task: WaitingTask; replies: MailRow[]; more: string[]; failures: MailFailureRow[] };
 
 type RepliesAnswer = Answer<{ replies: MailRow[]; more: string[]; failures: MailFailureRow[] }>;

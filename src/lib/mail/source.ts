@@ -81,7 +81,7 @@ function holdsWhole(text: string, word: string): boolean {
   return false;
 }
 
-export function holdsWords(message: Pick<MailMessage, "from" | "subject" | "snippet">, words: string): boolean {
+function holdsWords(message: Pick<MailMessage, "from" | "subject" | "snippet">, words: string): boolean {
   const wanted = words.trim().toLowerCase();
   return [message.subject, message.snippet, message.from.name ?? "", message.from.email].some((value) => value.toLowerCase().includes(wanted));
 }
@@ -122,7 +122,7 @@ function fromDemo(row: DemoRow, email: string): MailContent {
   };
 }
 
-export function withoutBody(message: MailContent): MailMessage {
+function withoutBody(message: MailContent): MailMessage {
   const { id, threadId, accountId, accountEmail, from, to, subject, snippet, receivedAt, unread, important } = message;
   return { id, threadId, accountId, accountEmail, from, to, subject, snippet, receivedAt, unread, important };
 }

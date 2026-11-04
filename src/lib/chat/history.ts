@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import type { Db } from "@/lib/db/client";
 
-export const HISTORY_MESSAGES = 30;
+const HISTORY_MESSAGES = 30;
 
 type Row = { id: string; role: string; parts: unknown; seq: number };
 

@@ -12,7 +12,7 @@ const OUTCOMES: Record<string, { text: string; tone: "status" | "error" }> = {
   "not-configured": { text: "Connecting Google accounts is not configured on this server.", tone: "error" },
 };
 
-export function googleOutcome(outcome: string | null) {
+function googleOutcome(outcome: string | null) {
   return outcome ? (OUTCOMES[outcome] ?? null) : null;
 }
 

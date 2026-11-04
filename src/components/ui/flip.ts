@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
-export type Pace = { fast: number; base: number; slow: number; out: string; in: string; std: string; enter: number; enterEase: string; step: number; rise: string };
+type Pace = { fast: number; base: number; slow: number; out: string; in: string; std: string; enter: number; enterEase: string; step: number; rise: string };
 
 export function durationOf(value: string): number {
   const text = value.trim();
@@ -13,11 +13,11 @@ export function durationOf(value: string): number {
   return 0;
 }
 
-export function reducedMotion(): boolean {
+function reducedMotion(): boolean {
   return typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function pace(): Pace | null {
+function pace(): Pace | null {
   if (reducedMotion()) return null;
   const root = getComputedStyle(document.documentElement);
   const read = (name: string) => root.getPropertyValue(name).trim();

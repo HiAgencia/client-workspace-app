@@ -20,7 +20,7 @@ const facetCounts = z.object({
   date: z.object({ overdue: z.number(), dated: z.number(), undated: z.number() }),
 });
 
-export type Facets = z.infer<typeof facetCounts>;
+type Facets = z.infer<typeof facetCounts>;
 
 type Filters = {
   type?: (typeof itemTypes)[number][];
@@ -53,7 +53,7 @@ function passes(item: Item, filters: Filters, plain: string, skip?: Facet): bool
   return true;
 }
 
-export function browseInMemory(items: Item[], filters: Filters) {
+function browseInMemory(items: Item[], filters: Filters) {
   const text = filters.text?.toLowerCase();
   const prepared = items.map((item) => ({ item, plain: text ? `${item.title}\n${richTextToPlain(item.body)}`.toLowerCase() : "" }));
   const narrowed = { ...filters, text };

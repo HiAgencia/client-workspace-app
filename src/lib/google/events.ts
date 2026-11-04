@@ -21,7 +21,7 @@ export type TokenRow = {
   access_token_expires_at: string | null;
 };
 
-export async function accessTokenFor(deps: GoogleDeps, account: TokenRow, now = Date.now(), renew = false): Promise<string> {
+async function accessTokenFor(deps: GoogleDeps, account: TokenRow, now = Date.now(), renew = false): Promise<string> {
   const expires = account.access_token_expires_at ? Date.parse(account.access_token_expires_at) : 0;
   if (!renew && account.access_token && expires - RENEW_MARGIN_MS > now) return decrypt(deps.key, account.access_token);
   if (!account.refresh_token) throw new GoogleError("the account has no refresh token: connect it again", 0, "invalid_grant");

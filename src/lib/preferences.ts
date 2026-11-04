@@ -1,16 +1,16 @@
 import { z } from "zod";
 import type { Db } from "@/lib/db/client";
 
-export const pageKey = z.string().regex(/^(overview|tasks|node:[0-9a-f-]{36})$/, "a page is overview, tasks, or node:<id>");
+const pageKey = z.string().regex(/^(overview|tasks|node:[0-9a-f-]{36})$/, "a page is overview, tasks, or node:<id>");
 
 const boxId = z.string().regex(/^[a-z][a-z_]{0,31}$/, "a box is named in lowercase letters and underscores");
 
-export const boardSchema = z.strictObject({
+const boardSchema = z.strictObject({
   order: z.array(boxId).max(24),
   hidden: z.array(boxId).max(24).default([]),
 });
 
-export const layoutSchema = z.enum(["list", "board"]);
+const layoutSchema = z.enum(["list", "board"]);
 
 export const preferencesSchema = z.object({
   boards: z.record(pageKey, boardSchema),

@@ -14,7 +14,7 @@ import { callTool } from "@/lib/tools/registry";
 import { stepsTaken, whatWasDone } from "./browser-reads";
 import { chatTools } from "./tools";
 
-export const MAX_STEPS = 6;
+const MAX_STEPS = 6;
 
 type TreeRow = { id: string; path: string; openTasks: number };
 
@@ -54,7 +54,7 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
     .join("\n");
 }
 
-export function describeModelError(error: unknown): string {
+function describeModelError(error: unknown): string {
   const status = typeof error === "object" && error && "statusCode" in error ? Number((error as { statusCode: unknown }).statusCode) : 0;
   console.error("chat model:", status || "", error instanceof Error ? error.message : error);
   if (status === 429) return "It is busy right now. Try again in a minute.";

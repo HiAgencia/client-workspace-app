@@ -12,7 +12,7 @@ import { itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
 import { rowOf, taskRowSchema } from "./tasks";
 import { reaches } from "./tree";
 
-export const itemDetailOutput = z.object({
+const itemDetailOutput = z.object({
   item: itemSchema.extend({ color: z.string().nullable() }),
   parent: z.object({ id: z.string(), title: z.string(), status: z.enum(["open", "done"]) }).nullable(),
   subtasks: z.array(taskRowSchema),

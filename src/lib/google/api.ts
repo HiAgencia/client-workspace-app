@@ -204,7 +204,7 @@ export async function deleteEvent(fetcher: Fetch, accessToken: string, calendarI
   await call<null>(fetcher, eventUrl(calendarId, eventId), { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }, "deleting the event");
 }
 
-export type GmailHeader = { name: string; value: string };
+type GmailHeader = { name: string; value: string };
 
 export type GmailPart = {
   partId?: string;
@@ -259,7 +259,7 @@ export function getMessage(fetcher: Fetch, accessToken: string, id: string, form
   );
 }
 
-export const BATCH_SIZE = 50;
+const BATCH_SIZE = 50;
 
 export async function getMessages(
   fetcher: Fetch,

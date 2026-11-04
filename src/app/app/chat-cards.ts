@@ -30,7 +30,7 @@ export type WriteOutput = {
 type Undo = () => Promise<{ ok: boolean; message?: string }>;
 type Card = { what: string; undo?: Undo; why?: string } | null;
 
-export const quoted = (title: string) => `“${inlinePlain(title)}”`;
+const quoted = (title: string) => `“${inlinePlain(title)}”`;
 
 export const WRITES: Record<string, (output: WriteOutput) => Card> = {
   create_task: (o) => created("Added task", o),

@@ -21,7 +21,7 @@ export function dailyCap(scope: keyof typeof DEFAULTS, kind: UsageKind): number 
   return Number.isInteger(configured) && configured > 0 ? configured : DEFAULTS[scope][kind];
 }
 
-export function usageDay(now = new Date()): string {
+function usageDay(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 

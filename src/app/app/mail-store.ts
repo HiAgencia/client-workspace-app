@@ -7,7 +7,7 @@ export type MailAccountRef = { id: string; email: string; isDemo: boolean; statu
 export type MailFailureRow = { accountId: string; accountEmail: string; reason: string; partial?: boolean; atLimit?: boolean };
 
 type Group = { count: number; messages: MailRow[] };
-export type MailGroups = Record<"forTasks" | "unread" | "earlier", Group>;
+type MailGroups = Record<"forTasks" | "unread" | "earlier", Group>;
 
 export type AccountMail = { groups: MailGroups; unread: number | null; unreadByAccount: Record<string, number>; failures: MailFailureRow[]; countFailures: MailFailureRow[] };
 

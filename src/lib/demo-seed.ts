@@ -2,7 +2,7 @@ import type { Db } from "@/lib/db/client";
 import { inlineLink } from "@/lib/inline-links";
 import { workingMinutesBefore } from "@/lib/working-time";
 
-export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
+type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
 
 export type SeedChat = { ask: string; answer: string; workspace?: true };
 
@@ -20,7 +20,7 @@ export type SeedItem = {
   waitsFor?: { account: string; words: string };
 };
 
-export type SeedMail = {
+type SeedMail = {
   from: { name: string; email: string };
   subject: string;
   snippet: string;
@@ -31,7 +31,7 @@ export type SeedMail = {
   linkedTo?: string;
 };
 
-export type SeedMeeting = { title: string; day: string; at: string; until: string; location: string | null };
+type SeedMeeting = { title: string; day: string; at: string; until: string; location: string | null };
 
 export type SeedAccount = { email: string; mail: SeedMail[]; calendar?: { name: string; meetings: SeedMeeting[] } };
 

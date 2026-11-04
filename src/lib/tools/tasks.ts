@@ -50,7 +50,7 @@ export type TaskRow = z.infer<typeof taskRowSchema>;
 
 const groupSchema = z.object({ count: z.number(), tasks: z.array(taskRowSchema) });
 
-export const tasksOutput = z.object({
+const tasksOutput = z.object({
   scope: z.object({ kind: z.enum(["all", "general", "node"]), id: z.string().nullable(), path: z.string().nullable() }),
   day: z.string(),
   groups: z.object({

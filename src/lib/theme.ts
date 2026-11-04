@@ -16,7 +16,7 @@ export function currentTheme(): Theme {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
-export function applyTheme(next: Theme): void {
+function applyTheme(next: Theme): void {
   document.documentElement.dataset.theme = next;
   let bar = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (!bar) {

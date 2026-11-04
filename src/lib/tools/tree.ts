@@ -4,7 +4,7 @@ import { isNodeColor, type NodeColor } from "@/lib/node-colors";
 import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 
-export type NodeKind = Database["public"]["Enums"]["node_kind"];
+type NodeKind = Database["public"]["Enums"]["node_kind"];
 
 export type TreeNode = {
   id: string;
@@ -26,7 +26,7 @@ export type Scope = {
   general: boolean;
 };
 
-export const PATH_SEPARATOR = " / ";
+const PATH_SEPARATOR = " / ";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,7 +34,7 @@ export function isUuid(value: string): boolean {
   return uuidPattern.test(value);
 }
 
-export function normalizeName(value: string): string {
+function normalizeName(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
@@ -139,7 +139,7 @@ export function subtree(all: Map<string, TreeNode>, rootId: string): Set<string>
   return ids;
 }
 
-export function describeNode(node: TreeNode) {
+function describeNode(node: TreeNode) {
   return { id: node.id, path: node.path, kind: node.kind };
 }
 

@@ -112,7 +112,7 @@ export function PlaceFilter({ onChange, ...read }: PlaceOptions & { onChange: (v
 
 export type FilterAccount = { id: string; email: string; nodeIds: string[] };
 
-export const ACCOUNTS_OF = "of:";
+const ACCOUNTS_OF = "of:";
 
 function clientOf(byId: Map<string, TreeNode>, nodeId: string): { client: TreeNode; depth: number } | null {
   let node = byId.get(nodeId);

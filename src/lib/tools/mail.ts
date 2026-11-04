@@ -8,7 +8,7 @@ import { defineTool } from "./define";
 import { dueOn, dueTime, priority, titleText } from "./fields";
 import { insertItem, reachableItem } from "./items";
 import { itemSchema } from "./rows";
-import { mailRowSchema, taskMailSchema, type MailRow, type TaskMail } from "./mail-schema";
+import { mailRowSchema, type MailRow } from "./mail-schema";
 import { dbFail, fail, isError, ok, type ToolError, type ToolResult } from "./result";
 import { describePlace, loadScope, reaches, resolveNode, resolveReadPlace, resolveWritePlace, type ReadPlace, type Scope } from "./tree";
 
@@ -182,7 +182,7 @@ export async function rowsOf(ctx: ToolContext, scope: Scope, messages: MailMessa
   return ok({ rows: toRows(messages, context, accounts, scope) });
 }
 
-export async function unreadMail(
+async function unreadMail(
   ctx: ToolContext,
   accounts: MailAccount[],
   opened?: Set<string>,
@@ -545,4 +545,4 @@ export async function itemMailOf(ctx: ToolContext, scope: Scope, itemId: string,
   return ok({ rows: toRows(ordered, context, accounts, scope), failures: failuresByAccount(...answers.map((answer) => answer.failures)), toRead });
 }
 
-export { mailRowSchema, taskMailSchema, type MailRow, type TaskMail };
+export type { MailRow };

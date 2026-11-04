@@ -11,7 +11,7 @@ export function suiteDir(): string {
 const registryDir = () => join(suiteDir(), "cw-test-users");
 const RUN_FILE = /^run-\d+(?:-\d+)?\.txt$/;
 
-export function startOf(pid: number): number | null {
+function startOf(pid: number): number | null {
   if (process.platform !== "win32") return null;
   try {
     const out = execFileSync("powershell", ["-NoProfile", "-Command", `(Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}').CreationDate.ToFileTimeUtc()`], {
@@ -26,7 +26,7 @@ export function startOf(pid: number): number | null {
   }
 }
 
-export function runAlive(pid: number, start: number | null): boolean {
+function runAlive(pid: number, start: number | null): boolean {
   try {
     process.kill(pid, 0);
   } catch (error) {

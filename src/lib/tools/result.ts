@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const errorCodes = [
+const errorCodes = [
   "invalid_input",
   "not_found",
   "ambiguous",
@@ -13,7 +13,7 @@ export const errorCodes = [
 
 export type ErrorCode = (typeof errorCodes)[number];
 
-export const candidateSchema = z.object({ id: z.string(), path: z.string(), kind: z.string() });
+const candidateSchema = z.object({ id: z.string(), path: z.string(), kind: z.string() });
 
 export const toolErrorSchema = z.object({
   ok: z.literal(false),

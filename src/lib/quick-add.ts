@@ -2,7 +2,7 @@ import { addDays, addMonths, type Day } from "./dates";
 import { normalize } from "./fuzzy";
 
 export type QuickAddPlace = { id: string; name: string; path: string };
-export type Priority = 1 | 2 | 3 | 4;
+type Priority = 1 | 2 | 3 | 4;
 export type PieceKind = "date" | "place" | "priority";
 
 export type QuickAddPiece = { kind: PieceKind; start: number; end: number; text: string };

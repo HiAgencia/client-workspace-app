@@ -70,7 +70,7 @@ export function GoogleCalendarMark({ className }: { className?: string }) {
 const PAGE = "M58,88H6c-3.3,0-6-2.7-6-6V6c0-3.3,2.7-6,6-6h36l22,22v60C64,85.3,61.3,88,58,88z";
 const FOLD = "M42,0l22,22H42V0z";
 
-export function GoogleDocsMark({ className }: { className?: string }) {
+function GoogleDocsMark({ className }: { className?: string }) {
   return (
     <Logo name="google-docs" viewBox="0 0 64 88" className={className}>
       <path fill="var(--logo-docs)" d={PAGE} />
@@ -80,7 +80,7 @@ export function GoogleDocsMark({ className }: { className?: string }) {
   );
 }
 
-export function GoogleSheetsMark({ className }: { className?: string }) {
+function GoogleSheetsMark({ className }: { className?: string }) {
   return (
     <Logo name="google-sheets" viewBox="0 0 64 88" className={className}>
       <path fill="var(--logo-sheets-fold)" d="M42,0L64,22L53,24L42,22L40,11Z" />
@@ -93,7 +93,7 @@ export function GoogleSheetsMark({ className }: { className?: string }) {
   );
 }
 
-export function GoogleSlidesMark({ className }: { className?: string }) {
+function GoogleSlidesMark({ className }: { className?: string }) {
   return (
     <Logo name="google-slides" viewBox="0 0 64 88" className={className}>
       <path fill="var(--logo-slides)" d={PAGE} />
@@ -103,7 +103,7 @@ export function GoogleSlidesMark({ className }: { className?: string }) {
   );
 }
 
-export function GoogleDriveMark({ className }: { className?: string }) {
+function GoogleDriveMark({ className }: { className?: string }) {
   return (
     <Logo name="google-drive" viewBox="0 0 87.3 78" className={className}>
       <path fill="var(--logo-drive-blue-deep)" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" />
@@ -116,7 +116,7 @@ export function GoogleDriveMark({ className }: { className?: string }) {
   );
 }
 
-export function GoogleMeetMark({ className }: { className?: string }) {
+function GoogleMeetMark({ className }: { className?: string }) {
   return (
     <Logo name="google-meet" viewBox="0 0 87.5 72" className={className}>
       <path fill="var(--logo-drive-green-deep)" d="M49.5 36l8.53 9.75 11.47 7.33 2-17.02-2-16.64-11.69 6.44z" />
@@ -132,7 +132,7 @@ export function GoogleMeetMark({ className }: { className?: string }) {
   );
 }
 
-export function GoogleAnalyticsMark({ className }: { className?: string }) {
+function GoogleAnalyticsMark({ className }: { className?: string }) {
   return (
     <Logo name="google-analytics" viewBox="0 0 192 192" className={className}>
       <path fill="var(--logo-analytics)" d="M130,29v132c0,14.77,10.19,23,21,23c10,0,21-7,21-23V30c0-13.54-10-22-21-22S130,17.33,130,29z" />
@@ -153,7 +153,7 @@ export function GitHubMark({ className }: { className?: string }) {
   );
 }
 
-export function FigmaMark({ className }: { className?: string }) {
+function FigmaMark({ className }: { className?: string }) {
   return (
     <Logo name="figma" viewBox="0 0 200 300" className={className}>
       <path fill="var(--logo-figma-green)" d="M50 300c27.6 0 50-22.4 50-50v-50H50c-27.6 0-50 22.4-50 50s22.4 50 50 50z" />
@@ -165,7 +165,7 @@ export function FigmaMark({ className }: { className?: string }) {
   );
 }
 
-export function NotionMark({ className }: { className?: string }) {
+function NotionMark({ className }: { className?: string }) {
   return (
     <Logo name="notion" viewBox="0 0 100 100" className={className}>
       <path
@@ -182,7 +182,7 @@ export function NotionMark({ className }: { className?: string }) {
   );
 }
 
-export function SlackMark({ className }: { className?: string }) {
+function SlackMark({ className }: { className?: string }) {
   return (
     <Logo name="slack" viewBox="0 0 127 127" className={className}>
       <path
@@ -205,7 +205,7 @@ export function SlackMark({ className }: { className?: string }) {
   );
 }
 
-export function YouTubeMark({ className }: { className?: string }) {
+function YouTubeMark({ className }: { className?: string }) {
   return (
     <Logo name="youtube" viewBox="0 0 28.57 20" className={className}>
       <path
