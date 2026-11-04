@@ -557,7 +557,7 @@ function TaskBody(props: BodyProps) {
       </div>
       <MailBox wait={wait} task={item} known={known} onLeave={props.onLeave} />
       {!isSubtask && <SubtaskSection key={`s-${item.id}`} task={item} version={version} expected={known?.subtasks?.total} />}
-      <NoteSection key={`n-${item.id}`} task={item} version={version} expected={known?.notes} />
+      <NoteSection key={`n-${item.id}`} task={item} version={version} expected={known?.notes === undefined ? undefined : known.notes + (known.decisions ?? 0)} />
       <Fold open={props.showVersions} id={`${ids.versions}-fold`} lazy follow>
         <Versions key={`v-${item.id}`} id={ids.versions} task={item} version={version} onRestored={props.onRestored} />
       </Fold>
