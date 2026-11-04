@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
 import { AddIcon, ClientIcon, OwnProjectIcon, type Icon } from "@/components/ui/icons";
+import { focusAfterClose } from "@/components/ui/use-exit";
 import { firstName } from "@/lib/session-person";
 import { post } from "./client-api";
 import { requestFocus } from "./focus-request";
@@ -71,7 +72,7 @@ function WelcomePath({ kind, order, icon: Glyph, title, text, add, field, submit
   function close() {
     setAdding(false);
     setName("");
-    requestAnimationFrame(() => opener.current?.focus({ preventScroll: true }));
+    focusAfterClose(() => opener.current);
   }
 
   async function create(event: FormEvent) {

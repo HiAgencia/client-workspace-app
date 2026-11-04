@@ -10,6 +10,7 @@ import { Fold } from "@/components/ui/fold";
 import { Tick } from "@/components/ui/tick";
 import { GoogleCalendarMark, GoogleMark } from "@/components/ui/brands";
 import { AddIcon, ByAgentIcon, ByChatIcon, OpenIcon, RescheduleIcon, UndoIcon } from "@/components/ui/icons";
+import { focusAfterClose } from "@/components/ui/use-exit";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
@@ -967,7 +968,7 @@ export function useAddNote(node: string | null) {
 
   function close() {
     setOpen(false);
-    requestAnimationFrame(() => button.current?.focus({ preventScroll: true }));
+    focusAfterClose(() => button.current);
   }
 
   const trigger = (

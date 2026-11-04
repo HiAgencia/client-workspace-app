@@ -30,7 +30,7 @@ import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { RichEditor, RichText } from "@/components/ui/rich-editor";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { useAutoHeight } from "@/components/ui/use-auto-height";
-import { afterExit } from "@/components/ui/use-exit";
+import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
 import { addDays, instantsOf, LOCALE, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
 import { ASSISTANT_NAME } from "@/lib/product";
@@ -289,10 +289,7 @@ export function TaskDetail() {
       setShowVersions(false);
     });
     
-    requestAnimationFrame(() => {
-      const row = id ? document.querySelector<HTMLElement>(`[data-item="${id}"] .task-open`) : null;
-      (row ?? opener.current)?.focus({ preventScroll: true });
-    });
+    focusAfterClose(() => (id ? document.querySelector<HTMLElement>(`[data-item="${id}"] .task-open`) : null) ?? opener.current);
   }
 
   const list = request?.list ?? [];
@@ -908,7 +905,7 @@ function useTaskMail(task: Item) {
   
   function stopChoosing(trigger: string) {
     setChoosing(null);
-    requestAnimationFrame(() => document.getElementById(trigger)?.focus());
+    focusAfterClose(() => document.getElementById(trigger));
   }
 
   async function dismiss(reply: MailMessageRow) {
@@ -1222,13 +1219,15 @@ function TitleField({ id, title, headingRef, onSave }: { id: string; title: stri
     });
   }
 
-  function finish(save: boolean) {
+  
+  
+  function finish(save: boolean, refocus = true) {
     if (done.current) return;
     done.current = true;
     setEditing(false);
     const next = value.replace(/\s+/g, " ").trim();
     if (save && next && next !== title) void onSave(next);
-    requestAnimationFrame(() => headingRef.current?.querySelector<HTMLElement>(".task-detail-title-edit")?.focus({ preventScroll: true }));
+    if (refocus) focusAfterClose(() => headingRef.current?.querySelector<HTMLElement>(".task-detail-title-edit"));
   }
 
   if (editing) {
@@ -1258,7 +1257,7 @@ function TitleField({ id, title, headingRef, onSave }: { id: string; title: stri
             finish(false);
           }
         }}
-        onBlur={() => finish(true)}
+        onBlur={(event) => finish(true, !event.relatedTarget)}
       />
     );
   }
@@ -1412,7 +1411,7 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
           onAdd={(title) => saving(tool("create_task", { parent: task.id, title }))}
           onDone={() => {
             setAdding(false);
-            requestAnimationFrame(() => addButton.current?.focus({ preventScroll: true }));
+            focusAfterClose(() => addButton.current);
           }}
         />
       ) : (
@@ -1449,13 +1448,14 @@ function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (
     }, 60);
   }
 
-  function finish(save: boolean) {
+  
+  function finish(save: boolean, refocus = true) {
     if (done.current) return;
     done.current = true;
     const next = value.trim();
     setEditing(false);
     if (save && next && next !== text) void onSave(next);
-    requestAnimationFrame(() => editButton.current?.focus({ preventScroll: true }));
+    if (refocus) focusAfterClose(() => editButton.current);
   }
 
   const plain = inlinePlain(note.title);
@@ -1488,7 +1488,7 @@ function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (
               finish(false);
             }
           }}
-          onBlur={() => finish(true)}
+          onBlur={(event) => finish(true, !event.relatedTarget)}
         />
       ) : (
         <div className="task-note-body">
@@ -1603,7 +1603,7 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
         void saving(post(`/api/items/${note.id}/restore`, {}));
       },
     });
-    requestAnimationFrame(() => addButton.current?.focus({ preventScroll: true }));
+    focusAfterClose(() => addButton.current);
   }
 
   const shownNotes = (notes ?? []).filter((note) => !hidden.has(note.id));
@@ -1642,7 +1642,7 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
           onAdd={(text) => saving(tool("add_note", { parent: task.id, text }))}
           onDone={() => {
             setAdding(false);
-            requestAnimationFrame(() => addButton.current?.focus({ preventScroll: true }));
+            focusAfterClose(() => addButton.current);
           }}
         />
       ) : (

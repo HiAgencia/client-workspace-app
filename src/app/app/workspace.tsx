@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
-import { afterExit } from "@/components/ui/use-exit";
+import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
 import { AddIcon, AlertIcon, CloseIcon, CopiedIcon, MenuIcon } from "@/components/ui/icons";
 import { firstWeekday, today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
@@ -503,10 +503,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   
   const closeItem = useCallback((id: string) => {
     setDetail(null);
-    requestAnimationFrame(() => {
+    focusAfterClose(() => {
       const row = document.querySelector<HTMLElement>(`[data-item="${id}"]`);
-      const target = row?.querySelector<HTMLElement>("[data-detail]") ?? row?.querySelector<HTMLElement>("[data-item-title]");
-      target?.focus({ preventScroll: true });
+      return row?.querySelector<HTMLElement>("[data-detail]") ?? row?.querySelector<HTMLElement>("[data-item-title]");
     });
   }, []);
   

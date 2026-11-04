@@ -24,6 +24,23 @@ export function afterExit(elements: Leaving | Leaving[], done: () => void): () =
 
 
 
+
+export function focusAfterClose(target: () => HTMLElement | null | undefined): void {
+  let acted = false;
+  const act = () => {
+    acted = true;
+  };
+  window.addEventListener("keydown", act, { capture: true, once: true });
+  window.addEventListener("pointerdown", act, { capture: true, once: true });
+  requestAnimationFrame(() => {
+    window.removeEventListener("keydown", act, { capture: true });
+    window.removeEventListener("pointerdown", act, { capture: true });
+    if (!acted) target()?.focus({ preventScroll: true });
+  });
+}
+
+
+
 export function useExit(open: boolean, element: RefObject<Element | null>): boolean {
   const [held, setHeld] = useState(open);
   if (open && !held) setHeld(true);

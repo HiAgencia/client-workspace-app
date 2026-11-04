@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { focusAfterClose } from "@/components/ui/use-exit";
 
 
 
@@ -13,7 +14,7 @@ export function ConfirmButton({ children, confirm, label, onConfirm }: { childre
 
   function back() {
     setAsking(false);
-    requestAnimationFrame(() => opener.current?.focus({ preventScroll: true }));
+    focusAfterClose(() => opener.current);
   }
 
   if (!asking) {

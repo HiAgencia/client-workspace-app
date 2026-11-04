@@ -7,7 +7,7 @@ import { Fold } from "@/components/ui/fold";
 import { AddIcon, DateIcon, EnterKeyIcon, GeneralIcon, PriorityIcon, TimeIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
-import { afterExit } from "@/components/ui/use-exit";
+import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
 import { today, type Day } from "@/lib/dates";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
@@ -134,7 +134,7 @@ function QuickAddEditor({
       edit(next, Math.min(piece.start, next.length));
     }
     setOverrides((was) => ({ ...was, [kind]: value }) as Overrides);
-    requestAnimationFrame(() => field.current?.focus({ preventScroll: true }));
+    focusAfterClose(() => field.current);
   }
 
   async function add() {
@@ -402,7 +402,7 @@ export function QuickAddDialog() {
         afterExit(element, () => {
           if (!element?.open) setStart(null);
         });
-        requestAnimationFrame(() => opener.current?.focus({ preventScroll: true }));
+        focusAfterClose(() => opener.current);
       }}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
@@ -454,7 +454,7 @@ export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }
             onDone={(reason) => {
               if (reason === "added") return setRound((value) => value + 1);
               setOpen(false);
-              requestAnimationFrame(() => button.current?.focus({ preventScroll: true }));
+              focusAfterClose(() => button.current);
             }}
           />
         </div>

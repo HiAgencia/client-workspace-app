@@ -11,6 +11,7 @@ import { AddIcon, NextIcon } from "@/components/ui/icons";
 import { Field } from "@/components/ui/field";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
+import { focusAfterClose } from "@/components/ui/use-exit";
 import { useMedia } from "@/components/ui/use-media";
 import { count } from "@/lib/count";
 import { today } from "@/lib/dates";
@@ -595,7 +596,7 @@ function OpenMessage({
   
   function stopAnswering() {
     setAnswering(null);
-    requestAnimationFrame(() => actions.current?.querySelector<HTMLElement>(".mail-answers-menu")?.focus());
+    focusAfterClose(() => actions.current?.querySelector<HTMLElement>(".mail-answers-menu"));
   }
 
   const entries: MenuEntry[] = [
