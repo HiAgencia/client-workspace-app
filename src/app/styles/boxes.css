@@ -68,6 +68,17 @@
     rotate: 180deg;
   }
 }
+.reply-more-short {
+  display: none;
+}
+@container reply-strip (width < 20rem) {
+  .reply-more-long {
+    display: none;
+  }
+  .reply-more-short {
+    display: inline;
+  }
+}
 @media (pointer: coarse) {
   .reply-strip {
     --reply-row: var(--control-h);

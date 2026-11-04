@@ -40,7 +40,10 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
         <p className="sr-only">Mail that may answer the tasks that wait for it. You decide which one does, in the task.</p>
         {folded.length > 0 && (
           <Button variant="quiet" size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
-            <span className="btn-label">{open ? "Show less" : noneArrived ? `Show the ${unit(waiting)}` : `Show ${folded.length} more ${unit(folded.length)}`}</span>
+            <span className="btn-label">
+              <span className="reply-more-long">{open ? "Show less" : noneArrived ? `Show the ${unit(waiting)}` : `Show ${folded.length} more ${unit(folded.length)}`}</span>
+              <span className="reply-more-short">{open ? "Show less" : noneArrived ? "Show all" : `${folded.length} more`}</span>
+            </span>
             <DownIcon />
           </Button>
         )}
