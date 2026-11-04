@@ -4,7 +4,6 @@ import { gmailMailSource } from "@/lib/google/gmail";
 import { mcpEndpoint } from "@/lib/mcp/server";
 import { serviceClient } from "@/lib/supabase/server";
 
-
 async function serve(request: Request): Promise<Response> {
   const deps = await googleDeps();
   return mcpEndpoint({

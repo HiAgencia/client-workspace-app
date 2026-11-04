@@ -6,11 +6,6 @@ import { Button } from "@/components/ui/button";
 import { get, post } from "./client-api";
 import { useWorkspace } from "./workspace";
 
-
-
-
-
-
 export function ConnectSession({
   nodeId,
   email,
@@ -23,10 +18,8 @@ export function ConnectSession({
   nodeId: string;
   email: string;
   primary?: boolean;
-  
   quiet?: boolean;
   size?: "sm";
-  
   detail?: string;
   blocked?: string | null;
 }) {
@@ -37,7 +30,6 @@ export function ConnectSession({
 
   async function connect() {
     setBusy(true);
-    
     let accountId = mailAccounts?.find((account) => account.email === address)?.id;
     if (!accountId) {
       const listed = await get<{ accounts: Array<{ id: string; email: string }> }>("/api/accounts");
@@ -49,7 +41,6 @@ export function ConnectSession({
       if (done) notify({ text: `${email} is connected here.`, tone: "status" });
       return;
     }
-    
     window.location.assign(new URL(`/api/google/connect?node=${nodeId}&as=session`, window.location.origin).toString());
   }
 

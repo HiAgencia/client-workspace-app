@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-
-
 const sessionContext = vi.hoisted(() => vi.fn(async () => ({ ok: false as const, response: new Response(null, { status: 401 }) })));
 vi.mock("@/lib/session-context", () => ({ sessionContext }));
 

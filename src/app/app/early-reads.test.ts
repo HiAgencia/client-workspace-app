@@ -3,8 +3,6 @@ import { today } from "@/lib/dates";
 import { toolKey } from "./client-api";
 import { EARLY_TREE, treeInput } from "./early-reads";
 
-
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });

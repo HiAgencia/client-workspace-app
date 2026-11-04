@@ -7,7 +7,6 @@ import type { PublicConfig } from "@/lib/env";
 
 let client: Db | undefined;
 
-
 export function browserClient(config: PublicConfig): Db {
   client ??= createBrowserClient<Database>(config.supabaseUrl, config.supabaseKey);
   return client;

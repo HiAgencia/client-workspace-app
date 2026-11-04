@@ -5,7 +5,6 @@ import { listRevisions } from "@/lib/tools/items";
 import { isError } from "@/lib/tools/result";
 import { isUuid } from "@/lib/tools/tree";
 
-
 export async function GET(_request: Request, { params }: RouteContext<"/api/items/[id]/revisions">) {
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such item");

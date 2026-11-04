@@ -3,7 +3,6 @@ import { tools } from "@/lib/tools/registry";
 import { READ_TOOLS } from "@/lib/tools/read-tools";
 import { askOnceMoreIfCut, get, post, tool } from "./client-api";
 
-
 const cut = () => new Response(null, { status: 503 });
 const cutWithText = () => new Response("Internal Server Error", { status: 500, headers: { "content-type": "text/plain" } });
 const fine = () => Response.json({ ok: true, value: 1 });

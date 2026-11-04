@@ -7,10 +7,6 @@ import { AddIcon } from "@/components/ui/icons";
 import { ConnectSession } from "./connect-session";
 import { useWorkspace } from "./workspace";
 
-
-
-
-
 export type ConnectWay = { kind: "start" } | { kind: "own"; nodeId: string; email: string } | { kind: "settings" };
 
 export function useConnectWay(): ConnectWay | null {
@@ -23,11 +19,9 @@ export function useConnectWay(): ConnectWay | null {
   return { kind: "settings" };
 }
 
-
 export function connectWords(way: ConnectWay | null, what: string): string {
   return way?.kind === "start" ? `Add your own project first: a Google account connected to it brings ${what} here.` : `Connect a Google account to see ${what} here.`;
 }
-
 
 export function ConnectOffer({ way, quiet = false }: { way: ConnectWay | null; quiet?: boolean }) {
   if (!way) return null;

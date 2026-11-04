@@ -6,9 +6,6 @@ import { hashAgentToken, newAgentToken } from "@/lib/agent-token";
 import { mcpEndpoint } from "@/lib/mcp/server";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
 const URL_MCP = "http://localhost:8787/api/mcp";
 let user: DisposableUser | undefined;
 const ids = { acme: "", web: "", mobile: "" };
@@ -141,7 +138,6 @@ describe("the MCP endpoint", () => {
   });
 
   it("a failing token lookup refuses rather than lets through", async () => {
-    
     const broken = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "boom" } }) }) }) }) };
     const response = await mcpEndpoint({ service: broken as unknown as ReturnType<typeof serviceClient> })(
       new Request(URL_MCP, {
@@ -175,7 +171,6 @@ describe("the MCP endpoint", () => {
 
   it("what's new starts from where the token last read, and reading moves the mark", async () => {
     const client = await connect(token);
-    
     const first = parse(await client.callTool({ name: "get_updates_since", arguments: {} })) as {
       created: Array<{ title: string }>;
       until: string;

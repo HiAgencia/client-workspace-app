@@ -1,8 +1,3 @@
-
-
-
-
-
 function tagOf(value: string | null | undefined): string | null {
   const first = value?.split(",")[0]?.trim();
   if (!first) return null;

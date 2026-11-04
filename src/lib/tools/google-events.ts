@@ -7,9 +7,6 @@ import { defineTool } from "./define";
 import { dbFail, fail, isError, ok, type ToolError } from "./result";
 import { loadScope } from "./tree";
 
-
-
-
 const day = z.iso.date();
 const instant = z.iso.datetime({ offset: true });
 
@@ -36,7 +33,6 @@ export const googleEventSchema = z.object({
   calendarId: z.string(),
 });
 
-
 function description(notes: string): string {
   return isRichHtml(notes) ? richTextToPlain(notes) : notes;
 }
@@ -44,7 +40,6 @@ function description(notes: string): string {
 function shape(event: GoogleEvent, accountId: string, calendarId: string): z.infer<typeof googleEventSchema> {
   const start = event.start?.dateTime ?? event.start?.date ?? null;
   const allDay = !event.start?.dateTime;
-  
   const rawEnd = event.end?.dateTime ?? event.end?.date ?? null;
   const end = allDay && rawEnd ? new Date(Date.parse(`${rawEnd}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10) : rawEnd;
   return { id: event.id, title: event.summary ?? "(no title)", start, end, allDay, link: event.htmlLink ?? null, accountId, calendarId };
@@ -69,7 +64,6 @@ function moment(input: { startsOn?: string; endsOn?: string; startsAt?: string; 
   }
   return null;
 }
-
 
 async function reachableAccount(ctx: ToolContext, accountId: string): Promise<ToolError | null> {
   if (!ctx.calendar) return fail("not_found", "writing to Google calendars is not configured on this server");
@@ -162,7 +156,6 @@ export const deleteGoogleEvent = defineTool({
     if (refused) return refused;
     try {
       await ctx.calendar!.remove({ ownerId: ctx.ownerId, accountId: input.account, calendarId: input.calendar, eventId: input.event });
-      
       const { error } = await ctx.db.from("item_events").delete().eq("account_id", input.account).eq("google_event_id", input.event);
       if (error) return dbFail("the event was deleted in Google, but letting go of its tasks failed", error);
       return ok({ deleted: { id: input.event, accountId: input.account, calendarId: input.calendar } });

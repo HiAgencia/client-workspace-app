@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { folded, holdsEveryWord, waitWords } from "./source";
 
-
-
-
 type Holds = typeof holdsEveryWord;
 
 const APPROVAL = { from: { name: "Developer Platform", email: "noreply@developers.example" }, subject: "Your app review was approved" };
@@ -32,26 +29,21 @@ function noWordNoReply(holds: Holds) {
   expect(holds(APPROVAL, []), "a wait with no word takes no message").toBe(false);
 }
 
-
 function wholeWords(holds: Holds) {
   expect(holds(APPROVAL, ["dev"]), "a word is whole, as Gmail reads it: part of a longer one is no reply").toBe(false);
   expect(holds(APPROVAL, ["approve"]), "a word is whole, as Gmail reads it: part of a longer one is no reply").toBe(false);
   expect(holds(APPROVAL, ["review"]), "a whole word between others still counts").toBe(true);
 }
 
-
 function unspacedScripts(holds: Holds) {
   const message = { from: { name: "総務部", email: "soumu@example.jp" }, subject: "会議室のご案内" };
   expect(holds(message, ["会議"]), "a word of a script written without spaces is found inside a longer run").toBe(true);
 }
 
-
 function wholeAcrossPlanes(holds: Holds) {
   const message = { from: { name: "Ops", email: "ops@example.com" }, subject: "𝐀pproved today" };
   expect(holds(message, ["pproved"]), "a letter outside the basic plane before a word makes it part of a longer one").toBe(false);
 }
-
-
 
 function marksThatTellWordsApart(holds: Holds) {
   const gas = { from: { name: "東京ガス", email: "info@example.jp" }, subject: "ガス料金のお知らせ" };
@@ -71,12 +63,10 @@ function marksThatTellWordsApart(holds: Holds) {
   expect(holds(own, ["мой".normalize("NFD")]), "«мой» typed in its parts finds «Мой»").toBe(true);
 }
 
-
 function aMarkMakesAWordLonger(holds: Holds) {
   const message = { from: { name: "कि", email: "info@example.in" }, subject: "" };
   expect(holds(message, ["क"]), "«क» is not found whole in «कि»").toBe(false);
 }
-
 
 function failsWith(control: (holds: Holds) => void, broken: Holds, phrase: string) {
   let failure: unknown = null;
@@ -144,7 +134,6 @@ describe("a possible reply to what a task waits for", () => {
     failsWith(noWordNoReply, everyMessage, "a wait with no word takes no message");
     const anyPart: Holds = (message, words) => words.length > 0 && words.every((word) => folded(fieldsOf(message, ["name", "address", "subject"])).includes(folded(word)));
     failsWith(wholeWords, anyPart, "a word is whole, as Gmail reads it");
-    
     const wholeByUnits = (text: string, word: string) => {
       for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
         if (!/[\p{L}\p{N}]/u.test(text[at - 1] ?? "") && !/[\p{L}\p{N}]/u.test(text[at + word.length] ?? "")) return true;

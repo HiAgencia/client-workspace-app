@@ -2,9 +2,6 @@
 
 import { createContext, useContext, type ReactNode, type RefObject } from "react";
 
-
-
-
 const PopupLayer = createContext<RefObject<HTMLElement | null> | null>(null);
 
 export function PopupLayerProvider({ container, children }: { container: RefObject<HTMLElement | null>; children: ReactNode }) {

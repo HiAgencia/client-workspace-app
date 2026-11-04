@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WRITES, type WriteOutput } from "./chat-cards";
 
-
-
-
 type Sent = { url: string; body: unknown };
 
 function capture(): Sent[] {

@@ -7,8 +7,6 @@ import { readInput } from "@/lib/route-input";
 import { requireUser, userClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tools/tree";
 
-
-
 export async function GET(request: NextRequest) {
   const nodeId = request.nextUrl.searchParams.get("node");
   if (nodeId !== null && !isUuid(nodeId)) return problem(400, "no such node");

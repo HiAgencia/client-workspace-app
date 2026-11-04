@@ -1,37 +1,19 @@
-
-
-
-
-
-
-
 export type Span = { start: number; end: number; above?: boolean };
 
 export type Placed<T> = {
   item: T;
-  
   inset: number;
-  
   layer: number;
-  
-  
   textAt: number;
   room: number;
-  
-  
   clip: number;
 };
-
-
 
 export const KEEP = 0.64;
 export const STEP = 0.25;
 
-
 export function cascade<T extends Span>(items: T[], line: number): Array<Placed<T>> {
-  
   const order = [...items].sort((a, b) => a.start - b.start || b.end - a.end || Number(Boolean(a.above)) - Number(Boolean(b.above)));
-  
   const depths: number[] = [];
   const runs: number[][] = [];
   let runEnd = -Infinity;
@@ -45,14 +27,12 @@ export function cascade<T extends Span>(items: T[], line: number): Array<Placed<
     for (let before = 0; before < index; before++) if (order[before].end > item.start) deepest = Math.max(deepest, depths[before]);
     depths.push(deepest + 1);
   });
-  
   const insets: number[] = [];
   for (const run of runs) {
     const deepest = Math.max(...run.map((index) => depths[index]));
     const step = deepest === 0 ? 0 : Math.min(STEP, (1 - KEEP) / deepest);
     for (const index of run) insets[index] = depths[index] * step;
   }
-  
   const drawn = order.map((_, index) => index).sort((a, b) => Number(Boolean(order[a].above)) - Number(Boolean(order[b].above)) || a - b);
   const layers: number[] = [];
   drawn.forEach((index, layer) => (layers[index] = layer));
@@ -72,7 +52,6 @@ export function cascade<T extends Span>(items: T[], line: number): Array<Placed<
       from = Math.max(from, end);
     }
     const free = until - from >= line;
-    
     const strip = over.filter(({ other, at }) => other.start < item.start + line && insets[at] > insets[index]).map(({ at }) => insets[at]);
     return {
       item,

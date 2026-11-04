@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionUser } from "@/lib/supabase/server";
 
-
 const PERSON: SessionUser = { id: "11111111-1111-4111-8111-111111111111", email: "alex.rivera@studio.example", isAnonymous: false, name: "Alex Rivera", avatarUrl: null };
 const NODE = "22222222-2222-4222-8222-222222222222";
 let person: SessionUser = PERSON;

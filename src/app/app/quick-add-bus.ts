@@ -1,7 +1,3 @@
-
-
-
-
 export type QuickAddStart = {
   placeId?: string | null;
   day?: string | null;

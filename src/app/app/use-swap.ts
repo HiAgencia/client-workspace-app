@@ -2,10 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-
-
-
-
 const LEAVE_MS = 130;
 
 export function useSwap<T>(value: T, key: string): { shown: T; shownKey: string; leaving: boolean } {

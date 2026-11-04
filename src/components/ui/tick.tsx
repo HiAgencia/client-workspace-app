@@ -2,9 +2,6 @@
 
 import { useState } from "react";
 
-
-
-
 export function Tick({ value }: { value: number | string }) {
   const [seen, setSeen] = useState(value);
   const [way, setWay] = useState<"up" | "down" | null>(null);
@@ -18,7 +15,6 @@ export function Tick({ value }: { value: number | string }) {
     </span>
   );
 }
-
 
 function amount(value: number | string): number {
   const number = typeof value === "number" ? value : parseFloat(value);

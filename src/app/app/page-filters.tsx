@@ -10,9 +10,6 @@ import { AccountFilter, ALL, countsByAccount, GENERAL, MESSAGES, PlaceFilter, pl
 import type { TaskReplies } from "./task-replies";
 import { useWorkspace } from "./workspace";
 
-
-
-
 export function useAddress() {
   const params = useSearchParams();
   const router = useRouter();
@@ -35,31 +32,21 @@ export function usePlaceParam(tree: TreeNode[] | null): Place {
   return readPlace(useSearchParams().get("place"), tree);
 }
 
-
-
-
-
 function useShows(now: Day | null): Set<string> {
   const { tree, mailAccounts, notePlaces } = useWorkspace();
   const week = now ? weekOf(now, firstWeekday()) : null;
   const instants = week ? instantsOf(week.from, week.to) : null;
   const read = useEventsRead<ShownEvent>(week && instants ? { from: instants.from, to: instants.to, fromDay: week.from, toDay: week.to } : null, false);
-  
   if (!read.data) return new Set([GENERAL, ...(tree ?? []).map((node) => node.id)]);
   return placesThatShow(tree, mailAccounts ?? [], notePlaces, read.data.events);
 }
 
-
-
 export function TasksPlaceFilter({ place, onChange, tree, now }: { place: Place; onChange: (place: Place) => void; tree: TreeNode[] | null; now: Day | null }) {
   const { generalTasks } = useWorkspace();
   const shows = useShows(now);
-  
   const counts = tree === null || generalTasks === null ? null : new Map<string, number>([[ALL, tree.filter((node) => node.parentId === null).reduce((sum, node) => sum + node.openTasks, 0) + generalTasks], ["general", generalTasks], ...tree.map((node): [string, number] => [node.id, node.openTasks])]);
   return <PlaceFilter value={placeValue(place) ?? ALL} tree={tree} counts={counts} unit={TASKS} shows={shows} onChange={(value) => onChange(value === ALL ? { kind: "all" } : readPlace(value, tree))} />;
 }
-
-
 
 export function MailAccountFilter({
   account,
@@ -75,7 +62,6 @@ export function MailAccountFilter({
   const { tree, mailAccounts } = useWorkspace();
   const accounts = mail?.accounts ?? [];
   const counts = mail ? countsByAccount(accounts, tree, (chosen) => mailBoxRows(mail, replies, chosen).length) : null;
-  
   const pending = mail === null && mailAccounts?.length !== 0;
   return <AccountFilter value={account ?? ALL} accounts={accounts} tree={tree} counts={counts} unit={MESSAGES} pending={pending} known={mailAccounts} onChange={(value) => onChange(value === ALL ? null : value)} />;
 }

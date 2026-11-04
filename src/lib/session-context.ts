@@ -5,8 +5,6 @@ import { demoMailSource } from "@/lib/mail/source";
 import { requireUser, userClient, type SessionUser } from "@/lib/supabase/server";
 import type { ToolContext, ToolSource } from "@/lib/tools/context";
 
-
-
 export async function sessionContext(
   source: ToolSource,
   scopeNodeId?: string,
@@ -23,7 +21,6 @@ export async function sessionContext(
       ownerId: who.user.id,
       source,
       scopeNodeId,
-      
       events: who.user.isAnonymous ? demoEventsSource() : deps ? googleEventsSource(deps) : undefined,
       calendar: deps ? googleCalendarWriter(deps) : undefined,
       mail: deps ? gmailMailSource(deps) : demoMailSource(),

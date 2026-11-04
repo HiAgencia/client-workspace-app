@@ -2,41 +2,28 @@ import { post, tool } from "./client-api";
 import { count } from "@/lib/count";
 import { inlinePlain } from "@/lib/inline-links";
 
-
-
-
-
 type Previous = { title: string; body: string | null; type: "task" | "note" | "decision"; priority: number | null; dueOn: string | null; dueTime: string | null; status: "open" | "done" };
 type Moved = { nodeId: string | null; parentId: string | null };
 type TaskMail = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
 type MailLink = { accountId: string; messageId: string; taskId: string | null; nodeId: string | null };
 type EventLink = { itemId: string; eventId: string | null; accountId: string | null; calendarId: string | null; googleEventId: string | null };
 
-
 export type WriteOutput = {
   ok: boolean;
   message?: string;
   item?: { id: string; title: string; type: "task" | "note" | "decision" };
-  
   previous?: Previous | Moved | TaskMail | null;
-  
   count?: number;
   changed?: Array<{ id: string; title: string; previousDueOn: string }>;
-  
   items?: Array<{ id: string; title: string; position: number; previous: number }>;
-  
   title?: string;
-  
   link?: MailLink | EventLink | null;
   removed?: boolean;
   created?: boolean;
   task?: string;
   mail?: TaskMail | null;
-  
   decision?: { id: string; title: string };
-  
   closing?: { outcome: string; notes: string | null; reply: { account: string; id: string } | null } | null;
-  
   reply?: { account: string; id: string; dismissed: boolean };
 };
 
@@ -44,7 +31,6 @@ type Undo = () => Promise<{ ok: boolean; message?: string }>;
 type Card = { what: string; undo?: Undo; why?: string } | null;
 
 export const quoted = (title: string) => `“${inlinePlain(title)}”`;
-
 
 export const WRITES: Record<string, (output: WriteOutput) => Card> = {
   create_task: (o) => created("Added task", o),
@@ -70,7 +56,6 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
           },
         }
       : null,
-  
   reorder_items: (o) =>
     o.items?.length
       ? {
@@ -82,7 +67,6 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
     const link = o.link as EventLink | null | undefined;
     return link?.itemId && o.title ? { what: `Linked ${quoted(o.title)} to a calendar event`, undo: () => tool("unlink_task_event", { task: link.itemId }) } : null;
   },
-  
   unlink_task_event: (o) => {
     const was = o.link as EventLink | null | undefined;
     if (!o.removed || !o.title || !was) return null;
@@ -101,7 +85,6 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
         }
       : null;
   },
-  
   set_task_mail: (o) => {
     if (!o.task || !o.title) return null;
     const was = o.previous as TaskMail | null | undefined;
@@ -113,7 +96,6 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
           : tool("set_task_mail", { task: o.task!, waiting: false }),
     };
   },
-  
   dismiss_reply: (o) => {
     const reply = o.reply;
     if (!o.task || !o.title || !reply) return null;
@@ -122,14 +104,11 @@ export const WRITES: Record<string, (output: WriteOutput) => Card> = {
       undo: () => tool("dismiss_reply", { task: o.task!, account: reply.account, id: reply.id, dismissed: !reply.dismissed }),
     };
   },
-  
-  
   complete_task: (o) => {
     if (!o.item || !o.decision) return null;
     const task = o.item;
     return { what: `Completed ${quoted(task.title)}: ${o.decision.title}`, undo: () => tool("reopen_task", { task: task.id }) };
   },
-  
   reopen_task: (o) => {
     if (!o.item) return null;
     const { id } = o.item;
@@ -148,7 +127,6 @@ function created(verb: string, output: WriteOutput): Card {
   const item = output.item;
   return item ? { what: `${verb} ${quoted(item.title)}`, undo: () => tool("delete_item", { id: item.id }) } : null;
 }
-
 
 function putBack(item: { id: string; type: string }, p: Previous) {
   if (p.type === "task") return tool("update_item", { id: item.id, title: p.title, notes: p.body, priority: p.priority, dueOn: p.dueOn, dueTime: p.dueTime, status: p.status });

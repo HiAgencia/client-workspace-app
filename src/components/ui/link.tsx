@@ -3,8 +3,6 @@
 import NextLink from "next/link";
 import { useState, type ComponentProps } from "react";
 
-
-
 export function Link({ onPointerEnter, onFocus, ...props }: ComponentProps<typeof NextLink>) {
   const [going, setGoing] = useState(false);
   return (
@@ -22,8 +20,6 @@ export function Link({ onPointerEnter, onFocus, ...props }: ComponentProps<typeo
     />
   );
 }
-
-
 
 export function LinkOrAnchor({ href, ...props }: Omit<ComponentProps<"a">, "href"> & { href: string }) {
   return href.startsWith("/api/") ? <a href={href} {...props} /> : <Link href={href} {...props} />;

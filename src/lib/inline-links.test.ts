@@ -16,7 +16,6 @@ describe("links over words", () => {
     ]);
     expect(inlinePieces("[run](javascript:alert(1))")).toEqual([{ text: "[run](javascript:alert(1))", href: null }]);
     expect(inlinePieces("Plain text, Vec<String> and [brackets] stay whole")).toEqual([{ text: "Plain text, Vec<String> and [brackets] stay whole", href: null }]);
-    
     const written = inlineLink("Draft (v2)", "https://site.example/a_(b)");
     expect(inlinePieces(written)).toEqual([{ text: "Draft (v2)", href: "https://site.example/a_%28b%29" }]);
   });
@@ -26,10 +25,8 @@ describe("links over words", () => {
     expect(body).toBe('<p>Compare <a href="https://ads.example/prices">the new prices</a> first</p><p>Then decide</p>');
     expect(noteTitle(body)).toBe("Compare [the new prices](https://ads.example/prices) first");
     expect(firstLine(body)).toBe("Compare the new prices first");
-    
     expect(writtenBody("Vec<String> stays whole")).toBe("<p>Vec&lt;String&gt; stays whole</p>");
     expect(writtenBody('<p><a href="https://a.example/x">A</a></p>')).toBe('<p><a href="https://a.example/x">A</a></p>');
-    
     expect(writtenBody("[run](javascript:alert)")).toBe("<p>[run](javascript:alert)</p>");
     expect(noteTitle('<p><a href="https://a.example/x">A [draft]</a> and more</p>')).toBe("[A (draft)](https://a.example/x) and more");
   });

@@ -7,14 +7,9 @@ import { afterExit } from "./use-exit";
 
 type FoldProps = { open: boolean; id: string; className?: string; lazy?: boolean; follow?: boolean; children: ReactNode };
 
-
-
-
-
 export function Fold(props: FoldProps) {
   return props.follow ? <FollowingFold {...props} /> : <GridFold {...props} />;
 }
-
 
 function GridFold({ open, id, className, lazy, children }: FoldProps) {
   const [settled, setSettled] = useState(open);
@@ -41,8 +36,6 @@ function GridFold({ open, id, className, lazy, children }: FoldProps) {
     </div>
   );
 }
-
-
 
 function FollowingFold({ open, id, className, lazy, children }: FoldProps) {
   const box = useRef<HTMLDivElement>(null);

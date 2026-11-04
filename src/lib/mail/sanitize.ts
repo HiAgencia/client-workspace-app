@@ -1,12 +1,5 @@
 import { Parser } from "htmlparser2";
 
-
-
-
-
-
-
-
 const ALLOWED = new Set([
   "a", "abbr", "address", "article", "b", "bdi", "bdo", "blockquote", "br", "caption", "center", "cite", "code", "col",
   "colgroup", "dd", "del", "dfn", "div", "dl", "dt", "em", "figcaption", "figure", "font", "footer", "h1", "h2", "h3",
@@ -14,12 +7,10 @@ const ALLOWED = new Set([
   "samp", "section", "small", "span", "strike", "strong", "style", "sub", "sup", "table", "tbody", "td", "tfoot", "th",
   "thead", "time", "tr", "tt", "u", "ul", "var", "wbr",
 ]);
-
 const DROPPED_WITH_CONTENT = new Set([
   "script", "noscript", "template", "iframe", "frame", "frameset", "object", "embed", "applet", "form", "button", "select",
   "textarea", "option", "optgroup", "datalist", "svg", "math", "canvas", "audio", "video", "portal", "title", "head",
 ]);
-
 const VOID_DROPPED = new Set(["input", "link", "meta", "base", "source", "track", "param", "keygen", "area", "map"]);
 const VOID = new Set(["br", "col", "hr", "img", "wbr"]);
 
@@ -31,9 +22,7 @@ const ATTRIBUTES = new Set([
 
 export type SanitizedMail = {
   html: string;
-  
   removed: { elements: number; handlers: number; links: number; styles: number };
-  
   remoteImages: number;
 };
 
@@ -49,7 +38,6 @@ function safeLink(raw: string): string | null {
   }
 }
 
-
 function safeImage(raw: string): { src: string; remote: boolean } | null {
   const value = raw.trim();
   if (/^data:image\/(png|gif|jpe?g|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) return { src: value, remote: false };
@@ -62,11 +50,7 @@ function safeImage(raw: string): { src: string; remote: boolean } | null {
   }
 }
 
-
-
 const ACTIVE_PATTERN = /@import|expression\s*\(|javascript:|vbscript:|behavior\s*:|-moz-binding|url\s*\(|image-set\s*\(|image\s*\(/i;
-
-
 
 function decodedCss(css: string): string {
   return css
@@ -88,7 +72,6 @@ function cleanStyle(css: string): string | null {
   const kept = rules.filter((rule) => !ACTIVE_STYLE.test(rule));
   return kept.length === rules.length ? css : kept.length > 0 ? kept.join("; ") : null;
 }
-
 
 function cleanSheet(css: string): { css: string; dropped: number } {
   let dropped = 0;
@@ -115,7 +98,6 @@ export function sanitizeMailHtml(input: string | null | undefined): SanitizedMai
   let skipping = 0;
   let inStyle = false;
   let sheet = "";
-  
   const stack: Array<{ name: string; written: boolean }> = [];
 
   const parser = new Parser(
@@ -173,7 +155,6 @@ export function sanitizeMailHtml(input: string | null | undefined): SanitizedMai
           }
           written += ` ${key}="${escapeAttr(value)}"`;
         }
-        
         if (name === "a" && written.includes(" href=")) written += ' target="_blank" rel="noopener noreferrer"';
         out += `${written}>`;
         if (name === "style") {
@@ -191,7 +172,6 @@ export function sanitizeMailHtml(input: string | null | undefined): SanitizedMai
         const name = rawName.toLowerCase();
         const at = stack.map((entry) => entry.name).lastIndexOf(name);
         if (at === -1) return;
-        
         while (stack.length > at) {
           const entry = stack.pop()!;
           if (DROPPED_WITH_CONTENT.has(entry.name) && skipping > 0) skipping--;
@@ -199,7 +179,6 @@ export function sanitizeMailHtml(input: string | null | undefined): SanitizedMai
           if (entry.name === "style") {
             const { css, dropped } = cleanSheet(sheet);
             removed.styles += dropped;
-            
             out += css.replace(/</g, "\\3C ");
             inStyle = false;
           }

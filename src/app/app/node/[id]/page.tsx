@@ -3,8 +3,6 @@ import { NodeView } from "../../node-view";
 import { BoardShell } from "../../overview";
 import { savedLayout } from "../../saved-layout";
 
-
-
 export default async function NodePage({ params }: PageProps<"/app/node/[id]">) {
   const { id } = await params;
   const saved = await savedLayout(`node:${id}`);

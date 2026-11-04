@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { tasksMatching } from "./link-task";
 
-
 const many = Array.from({ length: 500 }, (_, index) => ({ id: `t${index}`, title: `Follow up number ${index}`, path: index % 2 ? "Acme / Web" : null }));
 const hidden = { id: "needle", title: "Call the [printer](https://printer.example) about the Invoice", path: "Larkspur Bakery" };
 const tasks = [...many, hidden];

@@ -67,7 +67,6 @@ type Note = { id: string; title: string; body: string | null; decision: boolean;
 type Revision = { id: string; createdAt: string; source: Item["source"]; agentLabel: string | null; snapshot: { title: string; deleted_at: string | null } };
 type EventLink = { link: { eventId: string | null; googleEventId: string | null } | null; event: { title: string; allDay: boolean; startsOn: string | null; startsAt: string | null } | null };
 type BrowsedEvent = { id: string; title: string; start: string; allDay: boolean; origin: "google" | "local"; localId: string | null; accountId: string; calendarId: string };
-
 type Known = TaskDetailRequest["task"];
 type SaveStatus = "" | "saving" | "saved" | "failed";
 
@@ -88,9 +87,6 @@ function eventWhen(event: { allDay: boolean; startsOn?: string | null; startsAt?
   const local = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   return `${dayName(local)}, ${new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(date)}`;
 }
-
-
-
 
 function paintedFrom(id: string, known: Known): Item | null {
   if (!known?.title || known.status === undefined || known.priority === undefined || known.dueOn === undefined) return null;
@@ -113,16 +109,10 @@ function paintedFrom(id: string, known: Known): Item | null {
   };
 }
 
-
-
 function focusIsFree(dialog: HTMLDialogElement | null): boolean {
   const active = document.activeElement;
   return !active || active === document.body || active === dialog || active.matches(".task-detail-shape") || Boolean(active.closest(".task-detail-head"));
 }
-
-
-
-
 
 export function TaskDetail() {
   const { tree, saving, version } = useWorkspace();
@@ -134,18 +124,14 @@ export function TaskDetail() {
   const eventTrigger = useRef<HTMLSpanElement>(null);
   const shape = useRef<HTMLDivElement>(null);
   const popupOpen = useRef(false);
-  
   const landing = useRef<"title" | "event" | null>(null);
   const [request, setRequest] = useState<TaskDetailRequest | null>(null);
   const [item, setItem] = useState<Item | null>(null);
-  
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [status, setStatus] = useState<SaveStatus>("");
   const [showVersions, setShowVersions] = useState(false);
-  
-  
   const [arriving, setArriving] = useState(false);
   const inner = useRef<HTMLDivElement>(null);
   useAutoHeight(dialog, inner, { ready: request !== null });
@@ -153,7 +139,6 @@ export function TaskDetail() {
   const descId = useId();
   const versionsId = useId();
 
-  
   const latest = useRef("");
   const confirmed = useRef("");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -176,7 +161,6 @@ export function TaskDetail() {
     return queue.current;
   }, [saving]);
 
-  
   const take = useCallback((found: Item) => {
     setItem(found);
     setLoaded(true);
@@ -198,8 +182,6 @@ export function TaskDetail() {
     [take],
   );
 
-  
-  
   const show = useCallback(
     (next: TaskDetailRequest) => {
       clearTimeout(timer.current);
@@ -218,7 +200,6 @@ export function TaskDetail() {
     [load],
   );
 
-  
   useEffect(
     () =>
       onOpenTaskDetail((next) => {
@@ -232,7 +213,6 @@ export function TaskDetail() {
     [flush, show],
   );
 
-  
   useEffect(() => {
     if (!item || !landing.current) return;
     const where = landing.current;
@@ -245,14 +225,12 @@ export function TaskDetail() {
     });
   }, [item]);
 
-  
   useEffect(() => {
     const id = current.current;
     if (!id || !dialog.current?.open || !item) return;
     void readTaskItem(id).then((found) => {
       if (found && current.current === id) setItem((was) => (was ? { ...found, body: was.body } : found));
     });
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
@@ -260,13 +238,11 @@ export function TaskDetail() {
     void flush().then(() => dialog.current?.close());
   }
 
-  
   function leave(event: MouseEvent<HTMLAnchorElement>) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     dialog.current?.close();
   }
 
-  
   function go(href: string) {
     void flush().then(() => {
       dialog.current?.close();
@@ -279,7 +255,6 @@ export function TaskDetail() {
     const id = current.current;
     current.current = null;
     landing.current = null;
-    
     const element = dialog.current;
     afterExit(element, () => {
       if (element?.open) return;
@@ -288,7 +263,6 @@ export function TaskDetail() {
       setLoaded(false);
       setShowVersions(false);
     });
-    
     focusAfterClose(() => (id ? document.querySelector<HTMLElement>(`[data-item="${id}"] .task-open`) : null) ?? opener.current);
   }
 
@@ -341,7 +315,6 @@ export function TaskDetail() {
       ]
     : [];
 
-  
   const known = request?.task;
   const place = item ? { nodeId: item.nodeId, path: item.nodePath } : known?.title ? { nodeId: known.nodeId ?? null, path: known.path ?? null } : null;
   const isSubtask = Boolean(item ? item.parentId : known?.parentId);
@@ -354,7 +327,6 @@ export function TaskDetail() {
       className="dialog task-detail"
       aria-labelledby={titleId}
       onKeyDownCapture={(event) => {
-        
         if (event.key === "Escape") popupOpen.current = Boolean(dialog.current?.querySelector("[data-popup-open]"));
       }}
       onCancel={(event) => {
@@ -455,7 +427,6 @@ export function TaskDetail() {
                 onEscape={close}
                 onToggle={() => {
                   if (!task) return;
-                  
                   const was = item.status;
                   const id = item.id;
                   setItem({ ...item, status: was === "done" ? "open" : "done" });
@@ -513,7 +484,6 @@ type BodyProps = {
   onRestored: (restored: Item) => void;
 };
 
-
 function TaskBody(props: BodyProps) {
   const { item, loaded, known, ids, body, status } = props;
   const { tree, version } = useWorkspace();
@@ -522,19 +492,15 @@ function TaskBody(props: BodyProps) {
   const tone = item.dueOn ? whenTone(item.dueOn) : undefined;
   const places: SelectOption[] = [{ value: "general", label: "General" }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
   const placeColor = colorOf(tree, item.nodeId);
-  
   const hours = item.dueTime ? dueTimeOptions(item.dueTime) : dueTimeOptions(null).filter((option) => option.value !== NO_TIME);
 
   return (
-    
     <div className={cx("task-detail-body", props.arriving && "fade-enter")} data-cascade>
       <div className="task-detail-title-row">
         <TaskCircle className="task-check" title={item.title} priority={item.priority} done={item.status === "done"} onToggle={props.onToggle} />
         <TitleField key={item.id} id={ids.title} title={item.title} headingRef={props.headingRef} onSave={props.onTitle} />
       </div>
-      {}
       <div className="task-props task-detail-side" role="group" aria-label="Attributes">
-        {}
         <span className="task-prop-pair">
           <Prop kind="date" empty={!item.dueOn} data-when={tone}>
             {item.dueOn ? <DateIcon className="task-prop-icon" /> : <AddIcon className="task-prop-icon" />}
@@ -574,22 +540,18 @@ function TaskBody(props: BodyProps) {
             <RichEditor key={item.id} id={ids.desc} label="Description" value={body} placeholder="Add a description…" onChange={props.onBody} onBlur={props.onBodyBlur} onEscape={props.onEscape} />
           </>
         ) : (
-          
           <div className="task-shape-desc" aria-hidden="true">
             <span className="skeleton" />
             {known?.description && <span className="skeleton" />}
           </div>
         )}
-        {}
         <p className="task-detail-status" role="status" data-shown={status || undefined}>
           {status && <span className="t-meta">{SAVE[status]}</span>}
         </p>
       </div>
-      {}
       <MailBox wait={wait} task={item} known={known} onLeave={props.onLeave} />
       {!isSubtask && <SubtaskSection key={`s-${item.id}`} task={item} version={version} expected={known?.subtasks?.total} />}
       <NoteSection key={`n-${item.id}`} task={item} version={version} expected={known?.notes} />
-      {}
       <Fold open={props.showVersions} id={`${ids.versions}-fold`} lazy follow>
         <Versions key={`v-${item.id}`} id={ids.versions} task={item} version={version} onRestored={props.onRestored} />
       </Fold>
@@ -606,7 +568,6 @@ function TaskBody(props: BodyProps) {
   );
 }
 
-
 function Prop({ kind, empty, children, ref, ...data }: { kind: string; empty?: boolean; children: ReactNode; ref?: Ref<HTMLSpanElement> } & { [key: `data-${string}`]: string | number | undefined }) {
   return (
     <span ref={ref} className="task-prop" data-prop={kind} data-empty={empty || undefined} {...data}>
@@ -615,10 +576,7 @@ function Prop({ kind, empty, children, ref, ...data }: { kind: string; empty?: b
   );
 }
 
-
-
 function DetailShape({ known, titleId, shapeRef, arriving }: { known: Known; titleId: string; shapeRef: RefObject<HTMLDivElement | null>; arriving: boolean }) {
-  
   useEffect(() => {
     const dialog = shapeRef.current?.closest("dialog") ?? null;
     if (focusIsFree(dialog)) shapeRef.current?.focus({ preventScroll: true });
@@ -657,7 +615,6 @@ function DetailShape({ known, titleId, shapeRef, arriving }: { known: Known; tit
   );
 }
 
-
 function ShapeRows({ count, mark = "circle" }: { count: number; mark?: "circle" | "sender" | "glyph" }) {
   return (
     <ul className="task-shape-rows" data-mark={mark} aria-hidden="true">
@@ -671,8 +628,6 @@ function ShapeRows({ count, mark = "circle" }: { count: number; mark?: "circle" 
   );
 }
 
-
-
 function Closing({ task, version }: { task: Item; version: number }) {
   const [decision, setDecision] = useState<{ at: string; note: Note | null } | null>(null);
   const at = task.status === "done" ? (task.completedAt ?? null) : null;
@@ -681,7 +636,6 @@ function Closing({ task, version }: { task: Item; version: number }) {
     let live = true;
     void tool<{ notes: Note[] }>("list_notes", { parent: task.id, decisionsOnly: true }).then((answer) => {
       if (!live || !answer.ok) return;
-      
       setDecision({ at, note: answer.notes.find((note) => Date.parse(note.createdAt) === Date.parse(at)) ?? null });
     });
     return () => {
@@ -706,28 +660,18 @@ function Closing({ task, version }: { task: Item; version: number }) {
   );
 }
 
-
-
-
-
-
 type TaskWait = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
 type MailMessageRow = LinkedMessage;
 type MailDetail = LinkedMail & { mail: TaskWait | null };
 type MailAccount = { id: string; email: string; nodeIds: string[] };
-
 type RepliesRead = { replies: MailMessageRow[]; next: Record<string, string>; failures: MailFailure[] };
 
 const WAIT_NONE = "none";
 const WAIT_PLACE = "place";
-
-
 const REPLIES = 20;
 
 const replyKey = (reply: { accountId: string; id: string }) => `${reply.accountId}:${reply.id}`;
 const newestFirst = (a: MailMessageRow, b: MailMessageRow) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0);
-
-
 
 function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: string; email: string }>, before: MailMessageRow[] = []): RepliesRead {
   const failures: MailFailure[] = [];
@@ -747,19 +691,14 @@ function joinReads(answers: Array<Answer<RepliesRead>>, accounts: Array<{ id: st
   return { replies: rows.sort(newestFirst), next, failures };
 }
 
-
 function useTaskMail(task: Item) {
   const { tree, notify, touch, saving, version } = useWorkspace();
-  
   const [detail, setDetail] = useState<{ id: string; read: MailDetail | null; error: string | null; reading: number } | null>(null);
   const [accounts, setAccounts] = useState<MailAccount[] | null>(null);
-  
   const [pending, setPending] = useState<{ id: string; account: string | null } | null>(null);
   const [words, setWords] = useState<{ id: string; value: string } | null>(null);
-  
   const [replies, setReplies] = useState<{ key: string; read: RepliesRead | null } | null>(null);
   const [readingMore, setReadingMore] = useState(false);
-  
   const [choosing, setChoosing] = useState<string | null>(null);
   const closeTask = useCompleteTask();
 
@@ -768,14 +707,12 @@ function useTaskMail(task: Item) {
     void Promise.all([tool<MailDetail & { mailToRead: string[] }>("get_item", { id: task.id }), get<{ accounts: MailAccount[] }>("/api/accounts")]).then(([answer, listed]) => {
       if (!live) return;
       if (listed.ok) setAccounts(listed.accounts);
-      
       if (!answer.ok) return setDetail((now) => ({ id: task.id, read: now?.id === task.id ? now.read : null, error: answer.message, reading: 0 }));
       setDetail((now) => {
         const shown = now?.id === task.id ? now.read : null;
         const first = { messages: answer.messages, mailFailures: answer.mailFailures };
         return { id: task.id, read: { mail: answer.mail, ...startRound(shown, first, answer.mailToRead) }, error: null, reading: answer.mailToRead.length };
       });
-      
       for (const account of answer.mailToRead) {
         const email = (listed.ok ? listed.accounts.find((entry) => entry.id === account)?.email : undefined) ?? "one account";
         void tool<ItemMail>("list_item_mail", { id: task.id, account }).then((mail) => {
@@ -794,11 +731,9 @@ function useTaskMail(task: Item) {
   const reading = detail?.id === task.id ? detail.reading : 0;
   const mail = read?.mail ?? null;
   const waitingHere = pending?.id === task.id ? pending : null;
-  
   const seen = new Set(accountsSeenFrom(tree, accounts ?? [], task.nodeId));
   const visible = (accounts ?? []).filter((account) => seen.has(account.id));
   const placeLabel = task.nodeId === null ? "All accounts" : "All accounts of its client or project";
-  
   const asking = Boolean(mail) || Boolean(waitingHere);
   const options: SelectOption[] = [
     ...(asking ? [{ value: WAIT_NONE, label: "Don’t wait for mail" }] : []),
@@ -807,11 +742,8 @@ function useTaskMail(task: Item) {
   ];
   const value = waitingHere ? (waitingHere.account ?? WAIT_PLACE) : mail ? (mail.accountId ?? WAIT_PLACE) : null;
   const wordsValue = words?.id === task.id ? words.value : (mail?.waitsFor ?? "");
-  
   const account = waitingHere ? waitingHere.account : mail ? mail.accountId : undefined;
   const where = account === undefined ? null : account === null ? placeLabel : (accounts?.find((entry) => entry.id === account)?.email ?? "An account");
-  
-  
   const lookIn = mail ? visible.filter((entry) => mail.accountId === null || entry.id === mail.accountId) : [];
   const unseen = mail !== null && accounts !== null && lookIn.length === 0;
   const repliesKey = mail && task.status === "open" && !unseen ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((entry) => entry.id).join(",")}` : null;
@@ -822,7 +754,6 @@ function useTaskMail(task: Item) {
     void Promise.all(lookIn.map((entry) => tool<RepliesRead>("list_task_replies", { task: task.id, account: entry.id, limit: REPLIES }))).then((answers) => {
       if (!live) return;
       setReplies((now) => {
-        
         const read = joinReads(answers, lookIn);
         const failed = new Set(read.failures.map((failure) => failure.accountEmail));
         const kept = now?.key === repliesKey && now.read ? now.read.replies.filter((reply) => failed.has(reply.accountEmail)) : [];
@@ -832,12 +763,10 @@ function useTaskMail(task: Item) {
     return () => {
       live = false;
     };
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repliesKey, version]);
   const shown = replies?.key === repliesKey ? replies.read : null;
 
-  
   async function readMore() {
     if (!shown || !repliesKey) return;
     const pages = Object.entries(shown.next);
@@ -856,7 +785,6 @@ function useTaskMail(task: Item) {
     setWords(null);
     touch();
     const previous = answer.previous;
-    
     notify({
       text,
       tone: "status",
@@ -879,7 +807,6 @@ function useTaskMail(task: Item) {
       return void save({ waiting: false }, `“${inlinePlain(task.title)}” waits for no mail now`);
     }
     const chosen = next === WAIT_PLACE ? null : next;
-    
     if (!mail) return setPending({ id: task.id, account: chosen });
     const there = chosen ? (visible.find((entry) => entry.id === chosen)?.email ?? "that account") : placeLabel.toLowerCase();
     void save({ account: chosen }, `“${inlinePlain(task.title)}” waits for its mail in ${there}`);
@@ -892,7 +819,6 @@ function useTaskMail(task: Item) {
       return void save({ account: waitingHere.account, words: next }, `“${inlinePlain(task.title)}” waits for mail with “${next}”`);
     }
     if (!mail) return;
-    
     if (!next) return setWords(null);
     if (next === mail.waitsFor) return;
     void save({ words: next }, `“${inlinePlain(task.title)}” waits for mail with “${next}”`);
@@ -902,7 +828,6 @@ function useTaskMail(task: Item) {
     if (await closeTask(task, reply, outcome)) setChoosing(null);
   }
 
-  
   function stopChoosing(trigger: string) {
     setChoosing(null);
     focusAfterClose(() => document.getElementById(trigger));
@@ -948,12 +873,9 @@ function useTaskMail(task: Item) {
 }
 type TaskMail = ReturnType<typeof useTaskMail>;
 
-
-
 function MailProp({ wait, onGo }: { wait: TaskMail; onGo: (href: string) => void }) {
   const waiting = wait.mail ? "waiting" : "none";
   if (!wait.read) {
-    
     if (wait.error) return null;
     return (
       <Prop kind="mail" data-task-mail={waiting}>
@@ -984,8 +906,6 @@ function MailProp({ wait, onGo }: { wait: TaskMail; onGo: (href: string) => void
   );
 }
 
-
-
 function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; known: Known; onLeave: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   const headId = useId();
   const wordsId = useId();
@@ -1002,7 +922,6 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
         </p>
       );
     }
-    
     if (!known?.mail) return null;
     return (
       <section className="task-wait" aria-busy="true" aria-label="Loading the mail it waits for">
@@ -1200,7 +1119,6 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
   );
 }
 
-
 function TitleField({ id, title, headingRef, onSave }: { id: string; title: string; headingRef: RefObject<HTMLDivElement | null>; onSave: (title: string) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
@@ -1219,8 +1137,6 @@ function TitleField({ id, title, headingRef, onSave }: { id: string; title: stri
     });
   }
 
-  
-  
   function finish(save: boolean, refocus = true) {
     if (done.current) return;
     done.current = true;
@@ -1270,7 +1186,6 @@ function TitleField({ id, title, headingRef, onSave }: { id: string; title: stri
     </div>
   );
 }
-
 
 function AddLine({ label, field, onAdd, onDone }: { label: string; field: string; onAdd: (text: string) => Promise<boolean>; onDone: () => void }) {
   const [value, setValue] = useState("");
@@ -1322,7 +1237,6 @@ function AddLine({ label, field, onAdd, onDone }: { label: string; field: string
   );
 }
 
-
 function SectionHead({ id, name, figure, children, tabIndex }: { id: string; name: string; figure?: string | null; children?: ReactNode; tabIndex?: number }) {
   return (
     <h3 id={id} className="task-section-head" tabIndex={tabIndex}>
@@ -1354,7 +1268,6 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
   }, [task.id, version]);
   const done = items?.filter((item) => item.status === "done").length ?? 0;
   const total = items?.length ?? 0;
-  
   const list = (items ?? []).map((item) => ({
     id: item.id,
     title: item.title,
@@ -1374,7 +1287,6 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
     <section className="task-section" data-section="subtasks" aria-labelledby={`sub-${task.id}`}>
       <SectionHead id={`sub-${task.id}`} name="Subtasks" figure={items && total > 0 ? `${done}/${total}` : null}>
         {items && total > 0 && (
-          
           <span className="task-progress" aria-hidden="true" data-complete={done === total || undefined}>
             <span className="task-progress-fill" style={{ inlineSize: `${(done / total) * 100}%` }} />
           </span>
@@ -1424,22 +1336,18 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
   );
 }
 
-
-
 function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (text: string) => Promise<boolean>; onDecision: () => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const done = useRef(false);
-  
   const text = note.body ? richTextToPlain(note.body).trim() || note.title : note.title;
 
   function start() {
     done.current = false;
     setValue(text);
     setEditing(true);
-    
     setTimeout(() => {
       const el = field.current;
       if (!el) return;
@@ -1448,7 +1356,6 @@ function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (
     }, 60);
   }
 
-  
   function finish(save: boolean, refocus = true) {
     if (done.current) return;
     done.current = true;
@@ -1525,7 +1432,6 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
   const [failed, setFailed] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const addButton = useRef<HTMLButtonElement>(null);
-  
   const [patched, setPatched] = useState<Record<string, Partial<Note>>>({});
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -1655,13 +1561,11 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
   );
 }
 
-
 function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElement> }) {
   const { saving } = useWorkspace();
   const [state, setState] = useState<EventLink | null>(null);
   const [events, setEvents] = useState<BrowsedEvent[] | null>(null);
   const [eventsFailed, setEventsFailed] = useState(false);
-  
   const [failures, setFailures] = useState<EventsFailure[]>([]);
   const reading = useRef(false);
 
@@ -1708,8 +1612,6 @@ function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElemen
 
   const linked = state?.link ? (state.event ? `${state.event.title}, ${eventWhen(state.event)}` : "A Google Calendar event") : null;
   const said = (words: string): MenuEntry => ({ kind: "action", label: words, disabled: true, onSelect: () => {} });
-  
-  
   const notRead = [...new Set(failures.map((failure) => failure.accountEmail || "the workspace's calendar"))].map((who) => said(`Not read: ${who}`));
   const entries: MenuEntry[] = [
     {
@@ -1731,7 +1633,6 @@ function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElemen
       ? [{ kind: "action", label: "Unlink calendar event", onSelect: () => void saving(tool("unlink_task_event", { task: task.id })).then((ok) => ok && read()) } as MenuEntry]
       : []),
   ];
-  
   return (
     <Prop kind="event" empty={!linked} ref={wrapRef}>
       {linked ? <EventIcon className="task-prop-icon" /> : <AddIcon className="task-prop-icon" />}
@@ -1743,9 +1644,6 @@ function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElemen
 function Versions({ id, task, version, onRestored }: { id: string; task: Item; version: number; onRestored: (restored: Item) => void }) {
   const { saving } = useWorkspace();
   const [revisions, setRevisions] = useState<Revision[] | null>(null);
-  
-  
-  
   useEffect(() => {
     let live = true;
     void get<{ revisions: Revision[] }>(`/api/items/${task.id}/revisions`).then((answer) => live && answer.ok && setRevisions(answer.revisions));
@@ -1753,7 +1651,6 @@ function Versions({ id, task, version, onRestored }: { id: string; task: Item; v
       live = false;
     };
   }, [task.id, version]);
-  
   async function restore(revisionId: string) {
     const answer = await post<{ item: Item }>(`/api/revisions/${revisionId}/restore`, {});
     if (!(await saving(Promise.resolve(answer))) || !answer.ok) return;
@@ -1763,7 +1660,6 @@ function Versions({ id, task, version, onRestored }: { id: string; task: Item; v
     <section className="task-section" data-section="versions" aria-labelledby={id}>
       <SectionHead id={id} name="Versions" figure={revisions && revisions.length > 0 ? String(revisions.length) : null} tabIndex={-1} />
       {revisions === null && <p className="t-help">Loading the versions…</p>}
-      {}
       {revisions !== null && (
         <Fold open={revisions.length === 0} id={`${id}-none`}>
           <p className="t-help">No earlier versions: every change from now on leaves one here.</p>

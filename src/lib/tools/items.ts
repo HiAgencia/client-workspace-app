@@ -41,15 +41,12 @@ export const richText = (what: string) =>
 
 export const itemOutput = z.object({ item: itemSchema });
 
-
 export function origin(ctx: ToolContext): { source: Source; agent_label: string | null } | null {
   if (ctx.source === "agent") {
     return ctx.agentLabel ? { source: "agent", agent_label: ctx.agentLabel } : null;
   }
   return { source: ctx.source, agent_label: null };
 }
-
-
 
 async function placeItem(
   ctx: ToolContext,
@@ -85,7 +82,6 @@ export async function insertItem(
   if (isError(placed)) return placed;
   const mark = origin(ctx);
   if (!mark) return fail("internal", "an agent write needs its token's label");
-  
   const note = fields.type === "note" && fields.body;
   const { data, error } = await ctx.db
     .from("items")
@@ -105,8 +101,6 @@ export async function insertItem(
   if (error) return dbFail("saving the item", error);
   return ok({ item: toItem(data, placed.scope) });
 }
-
-
 
 export async function reachableItem(ctx: ToolContext, id: string, withDeleted = false) {
   const loaded = await loadScope(ctx);
@@ -234,8 +228,6 @@ export const updateItem = defineTool({
     }
 
     const patch: ItemUpdate = {};
-    
-    
     const type = input.decision === undefined ? row.type : input.decision ? "decision" : "note";
     if (type !== row.type) {
       patch.type = type;
@@ -260,11 +252,9 @@ export const updateItem = defineTool({
       if (input.dueTime !== null && day === null) return fail("invalid_input", "an hour needs its due day (dueOn)");
       patch.due_time = input.dueTime;
     }
-    
     if (input.dueOn === null && row.due_time !== null) patch.due_time = null;
     if (input.status !== undefined && input.status !== row.status) {
       patch.status = input.status;
-      
       patch.completed_at = null;
     }
     const previous = {
@@ -296,7 +286,6 @@ export const updateItem = defineTool({
 
 const branchOutput = z.object({
   item: itemSchema,
-  
   branch: z.number(),
 });
 
@@ -322,13 +311,10 @@ export const deleteItem = defineTool({
     if (error) return dbFail("deleting the item", error);
     const rows = (data ?? []) as ItemRow[];
     const own = rows.find((row) => row.id === input.id);
-    
     if (!own) return ok({ item: toItem({ ...found.row, deleted_at: new Date().toISOString() }, found.scope), branch: 0 });
     return ok({ item: toItem(own, found.scope), branch: rows.length });
   },
 });
-
-
 
 export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolResult<z.infer<typeof branchOutput>>> {
   const found = await reachableItem(ctx, id, true);
@@ -336,8 +322,6 @@ export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolRes
   if (!found.row.deleted_at) return ok({ item: toItem(found.row, found.scope), branch: 0 });
   const mark = origin(ctx);
   if (!mark) return fail("internal", "an agent write needs its token's label");
-  
-  
   let top: ItemRow | null = null;
   for (let cursor = found.row.parent_item_id; cursor; ) {
     const { data: parent, error: parentError } = await ctx.db
@@ -364,7 +348,6 @@ export async function restoreItem(ctx: ToolContext, id: string): Promise<ToolRes
   const rows = (data ?? []) as ItemRow[];
   const own = rows.find((row) => row.id === id);
   if (own) return ok({ item: toItem(own, found.scope), branch: rows.length });
-  
   const again = await reachableItem(ctx, id);
   if (isError(again)) return fail("not_found", `item ${id} was restored or changed meanwhile`);
   return ok({ item: toItem(again.row, again.scope), branch: rows.length });
@@ -415,7 +398,6 @@ export const listItems = defineTool({
         let q = query.is("deleted_at", null);
         if (input.parent !== undefined) q = q.eq("parent_item_id", input.parent);
         if (input.type) q = q.eq("type", input.type);
-        
         if (input.status !== "all") q = q.eq("status", input.status);
         return q;
       },
@@ -428,7 +410,6 @@ export const listItems = defineTool({
     return ok({ node: { id: node?.id ?? null, path: node?.path ?? null }, items: [...tasks, ...rest] });
   },
 });
-
 
 function likePattern(text: string): string {
   return `%${text.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
@@ -480,9 +461,6 @@ export const searchItems = defineTool({
   },
 });
 
-
-
-
 const snapshotSchema = z.object({
   title: z.string(),
   body: z.string().nullable(),
@@ -502,7 +480,6 @@ export type Revision = {
   agentLabel: string | null;
   snapshot: z.infer<typeof snapshotSchema>;
 };
-
 
 export async function listRevisions(ctx: ToolContext, itemId: string): Promise<ToolResult<{ revisions: Revision[] }>> {
   const found = await reachableItem(ctx, itemId, true);
@@ -527,8 +504,6 @@ export async function listRevisions(ctx: ToolContext, itemId: string): Promise<T
   return ok({ revisions });
 }
 
-
-
 export async function restoreRevision(ctx: ToolContext, revisionId: string): Promise<ToolResult<z.infer<typeof itemOutput>>> {
   const { data: revision, error: readError } = await ctx.db
     .from("revisions")
@@ -544,13 +519,8 @@ export async function restoreRevision(ctx: ToolContext, revisionId: string): Pro
   const mark = origin(ctx);
   if (!mark) return fail("internal", "an agent write needs its token's label");
   const photo = snapshot.data;
-  
-  
-  
   const asNote = found.row.type === "note";
   const body = asNote && noteTitle(photo.body) !== photo.title ? `<p>${inlineToHtml(photo.title)}</p>${photo.body ?? ""}` : photo.body;
-  
-  
   let parentId = found.row.parent_item_id;
   if (photo.parent_item_id !== found.row.parent_item_id) {
     if (photo.parent_item_id === null) parentId = null;
@@ -589,7 +559,6 @@ export async function restoreRevision(ctx: ToolContext, revisionId: string): Pro
 
 export type TrashEntry = z.infer<typeof itemSchema> & { branch: number };
 
-
 export async function listTrash(ctx: ToolContext): Promise<ToolResult<{ items: TrashEntry[] }>> {
   const loaded = await loadScope(ctx);
   if (isError(loaded)) return loaded;
@@ -598,7 +567,6 @@ export async function listTrash(ctx: ToolContext): Promise<ToolResult<{ items: T
   const byId = new Map(read.rows.map((row) => [row.id, row]));
   const tops = new Map<string, { row: ItemRow; branch: number }>();
   for (const row of read.rows) {
-    
     let top = row;
     for (let parent = top.parent_item_id ? byId.get(top.parent_item_id) : undefined; parent && parent.deleted_at === top.deleted_at; ) {
       top = parent;

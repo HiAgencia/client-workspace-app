@@ -3,9 +3,6 @@ import { LAYOUT_COOKIE, layoutCookie, preferencesChange, readPreferences, savePr
 import { readInput } from "@/lib/route-input";
 import { requireUser, userClient } from "@/lib/supabase/server";
 
-
-
-
 export async function GET() {
   const db = await userClient();
   const who = await requireUser(db);
@@ -36,7 +33,6 @@ export async function POST(request: Request) {
     "Set-Cookie": `${LAYOUT_COOKIE}=${layoutCookie(saved.preferences, input.value.page, user.id)}; Path=/; Max-Age=31536000; SameSite=Lax; HttpOnly${secure}`,
   });
 }
-
 
 export async function DELETE(request: Request) {
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";

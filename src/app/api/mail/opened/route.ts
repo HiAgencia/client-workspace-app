@@ -3,8 +3,6 @@ import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { sessionContext } from "@/lib/session-context";
 
-
-
 const input = z.strictObject({ account: z.uuid(), id: z.string().min(1).max(200) });
 
 export async function POST(request: Request) {
@@ -16,7 +14,6 @@ export async function POST(request: Request) {
     .from("mail_opened")
     .upsert({ owner_id: session.user.id, account_id: body.value.account, message_id: body.value.id }, { onConflict: "account_id,message_id", ignoreDuplicates: true });
   if (error) {
-    
     console.error("mail opened:", error.message);
     return problem(422, "that message cannot be marked here");
   }

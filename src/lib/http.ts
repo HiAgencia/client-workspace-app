@@ -1,4 +1,3 @@
-
 export const SESSION_HEADERS = { "Cache-Control": "private, no-store", Vary: "Cookie" } as const;
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -9,7 +8,6 @@ export function problem(status: number, message: string): Response {
   return json({ ok: false, message }, status);
 }
 
-
 export function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin || origin === "null") return false;
@@ -19,16 +17,11 @@ export function sameOrigin(request: Request): boolean {
   } catch {
     return false;
   }
-  
-  
-  
   const url = new URL(request.url);
   const host = request.headers.get("host");
   if (host && parsed.host === host && parsed.protocol === url.protocol) return true;
   return origin === url.origin;
 }
-
-
 
 export function safeNext(value: string | null, origin: string): string {
   if (!value) return "/";

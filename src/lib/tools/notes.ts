@@ -5,20 +5,14 @@ import { isError, ok } from "./result";
 import { newestFirst, selectAllItems, toItem } from "./rows";
 import { describePlace, loadScope, reachOf, resolveReadPlace, type ReadPlace } from "./tree";
 
-
-
-
 export const noteRowSchema = z.object({
   id: z.string(),
-  
   title: z.string(),
   body: z.string().nullable(),
   decision: z.boolean(),
-  
   nodeId: z.string().nullable(),
   path: z.string().nullable(),
   color: z.string().nullable(),
-  
   parentId: z.string().nullable(),
   source: z.enum(["manual", "chat", "agent", "review"]),
   agentLabel: z.string().nullable(),
@@ -45,7 +39,6 @@ export const listNotes = defineTool({
   output: z.object({
     scope: z.object({ kind: z.enum(["all", "general", "node", "task"]), id: z.string().nullable(), path: z.string().nullable() }),
     notes: z.array(noteRowSchema),
-    
     total: z.number(),
   }),
   async run(ctx, input) {

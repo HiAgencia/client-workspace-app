@@ -40,15 +40,6 @@ import { cx } from "@/lib/utils";
 import { PathText, SenderMark } from "./app/item-parts";
 import { Scene, VisitorDay, VisitorWeek, type Frame, type SceneGlyphs } from "./landing-motion";
 
-
-
-
-
-
-
-
-
-
 const FRAMES: readonly Frame[] = [
   { set: ["back"], ms: 1600 },
   { set: ["arrived", "arriving"], ms: 1200 },
@@ -72,9 +63,7 @@ type Row = {
   notes?: number;
   waiting?: boolean;
   by?: { words: string; agent?: boolean };
-  
   link?: Mark;
-  
   live?: boolean;
   place: Place;
 };
@@ -82,14 +71,10 @@ type Row = {
 const OPERATIONS: Place = { path: "Operations" };
 const WEBSITE: Place = { path: "Larkspur Bakery / Website", color: "amber" };
 
-
-
 const OVERDUE: Row[] = [
   { title: WAITING, priority: 3, when: { label: "Yesterday", tone: "overdue" }, waiting: true, place: OPERATIONS, live: true },
   { title: "Send the October invoices", priority: 2, when: { label: "Yesterday", tone: "overdue" }, notes: 1, place: OPERATIONS },
 ];
-
-
 
 export const TODAY: Row[] = [
   { title: "Send the homepage draft for review", priority: 1, when: { label: "4:00 PM", tone: "today", hour: true }, subtasks: "1/3", place: WEBSITE },
@@ -122,8 +107,6 @@ const EVENTS = [
   { at: "5:00 PM", title: "Logo directions with Ana", where: "Studio Atlas", color: "violet" },
 ];
 
-
-
 function Swap({ children }: { children: ReactNode }) {
   return <span className="shot-swap">{children}</span>;
 }
@@ -135,7 +118,6 @@ function PlaceName({ place }: { place: Place }) {
     </span>
   );
 }
-
 
 function LinkTitle({ mark: Glyph, title }: { mark: Mark; title: string }) {
   const [first, ...rest] = title.split(" ");
@@ -149,7 +131,6 @@ function LinkTitle({ mark: Glyph, title }: { mark: Mark; title: string }) {
     </span>
   );
 }
-
 
 export function TaskRow({ row, show, className }: { row: Row; show?: string; className?: string }) {
   return (
@@ -329,8 +310,6 @@ function Sidebar({ due, unread }: { due: number; unread: number }) {
   );
 }
 
-
-
 function Strip() {
   return (
     <section className="reply-strip">
@@ -443,7 +422,6 @@ function TasksBox({ figures }: { figures: DemoOverview }) {
     </section>
   );
 }
-
 
 function MailBox({ unread }: { unread: number }) {
   return (
@@ -587,7 +565,6 @@ export function LandingShot({ figures, caption }: { figures: DemoOverview; capti
                   <VisitorDay />
                 </p>
               </div>
-              {}
               <div className="page-tools">
                 <div className="page-filters">
                   <div className="named filter">
@@ -624,7 +601,6 @@ export function LandingShot({ figures, caption }: { figures: DemoOverview; capti
             <div className="shot-boxes">
               <div className="shot-col">
                 <TasksBox figures={figures} />
-                {}
                 <div className="shot-foot">
                   <div className="notice shot-notice">
                     <span className="notice-mark" aria-hidden="true">

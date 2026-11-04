@@ -8,9 +8,6 @@ import { origin, reachableItem } from "./items";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 import { loadScope, reaches, resolveNode, resolveWritePlace, type Reach, type Scope } from "./tree";
 
-
-
-
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type EventUpdate = Database["public"]["Tables"]["events"]["Update"];
 
@@ -19,13 +16,11 @@ export const EVENT_COLUMNS =
 
 export const localEventSchema = z.object({
   id: z.string(),
-  
   nodeId: z.string().nullable(),
   nodePath: z.string().nullable(),
   title: z.string(),
   body: z.string().nullable(),
   allDay: z.boolean(),
-  
   startsOn: z.string().nullable(),
   endsOn: z.string().nullable(),
   startsAt: z.string().nullable(),
@@ -66,7 +61,6 @@ const when = {
 
 type When = { startsOn?: string; endsOn?: string; startsAt?: string; endsAt?: string };
 
-
 function moment(input: When): ToolResult<Pick<EventRow, "all_day" | "starts_on" | "ends_on" | "starts_at" | "ends_at">> {
   if (input.startsOn && input.startsAt) return fail("invalid_input", "an event is a whole day (startsOn) or timed (startsAt), not both");
   if (input.startsOn) {
@@ -82,7 +76,6 @@ function moment(input: When): ToolResult<Pick<EventRow, "all_day" | "starts_on" 
   }
   return fail("invalid_input", "say when: startsOn for a whole day, or startsAt for a timed event");
 }
-
 
 function times(at: { all_day: boolean; starts_on: string | null; ends_on: string | null; starts_at: string | null; ends_at: string | null }) {
   return { all_day: at.all_day, starts_on: at.starts_on, ends_on: at.ends_on, starts_at: at.starts_at, ends_at: at.ends_at };
@@ -218,7 +211,6 @@ export const deleteEvent = defineTool({
   },
 });
 
-
 export async function restoreEvent(ctx: ToolContext, id: string): Promise<ToolResult<z.infer<typeof eventOutput>>> {
   const found = await reachableEvent(ctx, id, true);
   if (isError(found)) return found;
@@ -235,8 +227,6 @@ export async function restoreEvent(ctx: ToolContext, id: string): Promise<ToolRe
   if (error) return dbFail("restoring the event", error);
   return ok({ event: toLocalEvent(data, found.scope) });
 }
-
-
 
 export async function localEventsIn(
   ctx: ToolContext,
@@ -258,17 +248,13 @@ export async function localEventsIn(
     .select(EVENT_COLUMNS)
     .eq("owner_id", ctx.ownerId)
     .is("deleted_at", null)
-
     .or(
       `and(or(${places.join(",")}),or(and(all_day.eq.true,starts_on.lte.${toDay},ends_on.gte.${fromDay}),and(all_day.eq.false,starts_at.lt.${range.to},ends_at.gt.${range.from})))`,
     )
     .limit(1000);
   if (error) return dbFail("reading the events", error);
-  
   return ok({ events: data.filter((row) => reaches(scope, ctx.ownerId, row) || linked.includes(row.id)).map((row) => toLocalEvent(row, scope)) });
 }
-
-
 
 export const taskEventSchema = z.object({
   itemId: z.string(),
@@ -295,7 +281,6 @@ export const linkTaskEvent = defineTool({
     .refine((v) => (v.event ? !v.account && !v.calendar && !v.googleEvent : Boolean(v.account && v.calendar && v.googleEvent)), {
       message: "give either event, or account with calendar and googleEvent",
     }),
-  
   output: z.object({ link: taskEventSchema, title: z.string() }),
   async run(ctx, input) {
     const found = await reachableItem(ctx, input.task);
@@ -303,7 +288,6 @@ export const linkTaskEvent = defineTool({
     if (found.row.type !== "task") return fail("invalid_input", `a ${found.row.type} does not live in an event: only a task does`);
     const target = await reachableTarget(ctx, input);
     if (target) return target;
-    
     const row = {
       item_id: input.task,
       event_id: input.event ?? null,
@@ -325,7 +309,6 @@ export const unlinkTaskEvent = defineTool({
   description: "Take a task out of the event it lives in.",
   readOnly: false,
   input: z.strictObject({ task: z.uuid() }),
-  
   output: z.object({ task: z.string(), title: z.string(), removed: z.boolean(), link: taskEventSchema.nullable() }),
   async run(ctx, input) {
     const found = await reachableItem(ctx, input.task, true);
@@ -344,7 +327,6 @@ export const unlinkTaskEvent = defineTool({
   },
 });
 
-
 async function reachableTarget(ctx: ToolContext, input: { event?: string; account?: string }) {
   if (input.event) {
     const event = await reachableEvent(ctx, input.event);
@@ -354,8 +336,6 @@ async function reachableTarget(ctx: ToolContext, input: { event?: string; accoun
   if (error) return dbFail("reading the account", error);
   return account ? null : fail("not_found", `no account with id ${input.account} is reachable here`);
 }
-
-
 
 export const nodeEventSchema = z.object({
   nodeId: z.string(),
@@ -402,7 +382,6 @@ export const linkNodeEvent = defineTool({
     };
     const link = { nodeId: row.node_id, eventId: row.event_id, accountId: row.account_id, calendarId: row.calendar_id, googleEventId: row.google_event_id };
     const { error } = await ctx.db.from("node_events").insert(row);
-    
     if (error?.code === "23505") return ok({ link, created: false });
     if (error) return dbFail("linking the node to the event", error);
     return ok({ link, created: true });
@@ -432,7 +411,6 @@ export const unlinkNodeEvent = defineTool({
   },
 });
 
-
 export async function nodeEventLinks(ctx: ToolContext, nodeIds: string[]) {
   if (nodeIds.length === 0) return ok({ links: [] as Array<z.infer<typeof nodeEventSchema>> });
   const { data, error } = await ctx.db
@@ -451,8 +429,6 @@ export async function nodeEventLinks(ctx: ToolContext, nodeIds: string[]) {
     })),
   });
 }
-
-
 
 export async function taskEventLinks(ctx: ToolContext, filter: { itemIds?: string[]; eventIds?: string[] }) {
   let query = ctx.db.from("item_events").select("item_id, event_id, account_id, calendar_id, google_event_id");

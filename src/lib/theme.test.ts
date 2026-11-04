@@ -2,8 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BROWSER_BAR, MANIFEST_BACKGROUND } from "./theme";
 
-
-
 describe("the browser's bar color", () => {
   const tokens = readFileSync(new URL("../app/styles/tokens.css", import.meta.url), "utf8");
   const card = (block: string) => block.match(/--card:\s*(#[0-9a-fA-F]{6})/)?.[1]?.toLowerCase();

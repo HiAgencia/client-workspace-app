@@ -4,8 +4,6 @@ import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useWorkspace } from "./workspace";
 
-
-
 const OUTCOMES: Record<string, { text: string; tone: "status" | "error" }> = {
   connected: { text: "The Google account is connected here.", tone: "status" },
   cancelled: { text: "Connecting the Google account was cancelled.", tone: "status" },
@@ -17,8 +15,6 @@ const OUTCOMES: Record<string, { text: string; tone: "status" | "error" }> = {
 export function googleOutcome(outcome: string | null) {
   return outcome ? (OUTCOMES[outcome] ?? null) : null;
 }
-
-
 
 export function useGoogleOutcome() {
   const outcome = useSearchParams().get("google");

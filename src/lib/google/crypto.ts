@@ -1,7 +1,3 @@
-
-
-
-
 const VERSION = "v1";
 
 function toBase64Url(bytes: Uint8Array): string {
@@ -30,7 +26,6 @@ export async function encrypt(key: CryptoKey, plaintext: string): Promise<string
   const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data));
   return `${VERSION}.${toBase64Url(iv)}.${toBase64Url(sealed)}`;
 }
-
 
 export async function decrypt(key: CryptoKey, ciphertext: string): Promise<string> {
   const [version, iv, sealed] = ciphertext.split(".");

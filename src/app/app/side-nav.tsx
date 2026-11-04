@@ -20,12 +20,6 @@ import { figureText } from "./mail-store";
 import { openQuickAdd } from "./quick-add-bus";
 import { useWorkspace } from "./workspace";
 
-
-
-
-
-
-
 export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: boolean; onLeave?: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
   const { taskCounts, mailFigure, openPalette, person } = useWorkspace();
@@ -38,7 +32,6 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
   usePiece(foot, '[aria-current="page"]');
   const here = (path: string) => (path === "/app" ? pathname === path : pathname === path || pathname.startsWith(`${path}/`)) ? "page" : undefined;
   const due = taskCounts ? taskCounts.overdue + taskCounts.today : 0;
-  
   const ids = inDrawer ? "drawer" : "side";
 
   return (
@@ -105,7 +98,6 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
               </Link>
             </li>
             <li>
-              {}
               <Link href="/app/mail" className="side-link side-view" aria-current={here("/app/mail")}>
                 <ViewName icon={MailIcon} name="Mail" detail="For your tasks, then unread" />
                 {mailNumber && <Count value={mailNumber.shown} spoken={mailNumber.spoken} />}
@@ -130,7 +122,6 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           <SettingsIcon className="side-icon" />
           <span className="side-link-name">Settings</span>
         </Link>
-        {}
         <div className="side-account" data-session={person ? (person.isAnonymous ? "anonymous" : "google") : undefined}>
           {person && !person.isAnonymous ? (
             <Link href="/app/profile" className="side-link side-profile" aria-current={here("/app/profile")} title={person.email ?? undefined} data-side-profile>
@@ -156,7 +147,6 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
   );
 }
 
-
 export function startTask(nodeId: string | null): void {
   openQuickAdd(nodeId ? { placeId: nodeId } : {});
 }
@@ -167,12 +157,9 @@ export function useCurrentNode(): string | null {
 
 const noSubscription = () => () => {};
 
-
 export function useMac(): boolean {
   return useSyncExternalStore(noSubscription, () => /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent), () => false);
 }
-
-
 
 function ViewName({ icon: Glyph, name, detail }: { icon: Icon; name: string; detail: string }) {
   return (
@@ -186,8 +173,6 @@ function ViewName({ icon: Glyph, name, detail }: { icon: Icon; name: string; det
   );
 }
 
-
-
 function Count({ value, unit, spoken }: { value: number | string; unit?: string; spoken: string }) {
   return (
     <span className="side-count">
@@ -199,8 +184,6 @@ function Count({ value, unit, spoken }: { value: number | string; unit?: string;
     </span>
   );
 }
-
-
 
 const OPEN_KEY = "client-workspace:side-open";
 const OPEN_EVENT = "client-workspace:side-open";
@@ -248,11 +231,8 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
   const roots = (tree ?? []).filter((node) => node.parentId === null && node.kind === kind);
   const words = GROUP[kind];
 
-  
-  
   const opened = useRef<string | null>(null);
   useEffect(() => {
-    
     if (!current) {
       opened.current = null;
       return;
@@ -264,7 +244,6 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
     opened.current = current;
     const root = Object.keys(chain).map((id) => tree.find((n) => n.id === id)!).find((n) => n.parentId === null);
     if (root?.kind !== kind) return;
-    
     const state = readOpen(localStorage.getItem(OPEN_KEY));
     const change = Object.fromEntries(Object.keys(chain).filter((id) => state[id] !== true).map((id) => [id, true]));
     if (state[key] === false) change[key] = true;
@@ -323,8 +302,6 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
 
 const CHILDREN: Record<TreeNode["kind"], string> = { client: "Projects", project: "Subprojects", subproject: "Subprojects" };
 
-
-
 function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: TreeNode; tree: TreeNode[]; openState: Record<string, boolean>; current: string | null; ids: string; depth?: number }) {
   const open = openState[node.id] ?? false;
   const children = tree.filter((child) => child.parentId === node.id);
@@ -347,7 +324,6 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
           href={`/app/node/${node.id}`}
           className="side-link"
           data-kind={node.kind}
-          
           data-depth={Math.min(depth, 3)}
           aria-current={node.id === current ? "page" : undefined}
           onClick={(event) => plainClick(event) && requestFocus({ kind: "node", nodeId: node.id })}
@@ -370,7 +346,6 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
   );
 }
 
-
 function sentence(reason: string): string {
   return /[.!?]$/.test(reason.trim()) ? reason.trim() : `${reason.trim()}.`;
 }
@@ -391,7 +366,6 @@ function TreeSkeleton({ failed }: { failed: string | null }) {
     </div>
   );
 }
-
 
 export function NewNode({ parent, kind, idPrefix = "new-node", onDone }: { parent?: TreeNode; kind?: "client" | "project"; idPrefix?: string; onDone: () => void }) {
   const { saving } = useWorkspace();
@@ -417,7 +391,6 @@ export function NewNode({ parent, kind, idPrefix = "new-node", onDone }: { paren
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") void create();
     if (event.key === "Escape") {
-      
       event.preventDefault();
       event.stopPropagation();
       settled.current = true;

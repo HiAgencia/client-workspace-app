@@ -1,10 +1,5 @@
 import { Parser } from "htmlparser2";
 
-
-
-
-
-
 export const TONES = ["red", "amber", "green", "blue", "violet"] as const;
 export type Tone = (typeof TONES)[number];
 
@@ -31,15 +26,12 @@ function toneOf(className: string | undefined): Tone | null {
   return match && (TONES as readonly string[]).includes(match[1]) ? (match[1] as Tone) : null;
 }
 
-
 function plainToHtml(text: string): string {
   return text
     .split(/\r?\n/)
     .map((line) => `<p>${escapeText(line)}</p>`)
     .join("");
 }
-
-
 
 const KNOWN_TAG = /<\/?(p|br|strong|b|em|i|ul|ol|li|a|span|div|h[1-4]|blockquote)(\s[^>]*)?\/?>/i;
 
@@ -51,9 +43,7 @@ export function sanitizeRichText(input: string | null | undefined): string | nul
   if (input == null) return null;
   if (!isRichHtml(input)) input = plainToHtml(input);
   let out = "";
-  
   const open: string[] = [];
-  
   const pending: Array<string | null> = [];
   let skipping = 0;
   let implicit = false;
@@ -85,7 +75,6 @@ export function sanitizeRichText(input: string | null | undefined): string | nul
           return;
         }
         if (BLOCKS.has(name)) {
-          
           if (name !== "li") closeImplicit();
           if (name === "p" && open.includes("p")) {
             while (open.length > 0 && open.at(-1) !== "li") {
@@ -161,18 +150,14 @@ export function sanitizeRichText(input: string | null | undefined): string | nul
   parser.write(input);
   parser.end();
   while (open.length > 0) out += `</${open.pop()!}>`;
-  
   const cleaned = out.replace(/<p>(\s|<br>)*<\/p>/g, "").trim();
   return cleaned === "" ? null : cleaned;
 }
-
-
 
 export function richTextToPlain(html: string | null | undefined, options: { links?: boolean } = {}): string {
   if (!html) return "";
   let text = "";
   let skipping = 0;
-  
   const links: Array<string | null> = [];
   const parser = new Parser(
     {
@@ -188,7 +173,6 @@ export function richTextToPlain(html: string | null | undefined, options: { link
       },
       ontext(chunk) {
         if (skipping > 0) return;
-        
         text += links.some(Boolean) ? chunk.replace(/\[/g, "(").replace(/\]/g, ")") : chunk;
       },
       onclosetag(name) {
@@ -210,13 +194,10 @@ export function richTextToPlain(html: string | null | undefined, options: { link
     .join("\n");
 }
 
-
 export function firstLine(html: string | null | undefined, max = 500): string {
   const line = richTextToPlain(html).split("\n")[0] ?? "";
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
-
-
 
 export function noteTitle(html: string | null | undefined, max = 500): string {
   const line = richTextToPlain(html, { links: true }).split("\n")[0] ?? "";

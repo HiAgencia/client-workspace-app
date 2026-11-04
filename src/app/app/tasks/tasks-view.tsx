@@ -20,8 +20,6 @@ const SORTS: Array<{ value: Sort; label: string }> = [
 
 const noSubscription = () => () => {};
 
-
-
 export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree, notify } = useWorkspace();
@@ -31,7 +29,6 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   const place = usePlaceParam(tree);
   const layoutParam = params.get("layout");
   const layout: PageLayout = layoutParam === "board" || layoutParam === "list" ? layoutParam : (savedLayout ?? "list");
-  
   const swap = useSwap(layout, layout);
   const sortParam = params.get("sort");
   const sort: Sort = sortParam === "priority" || sortParam === "manual" ? sortParam : "date";
@@ -40,7 +37,6 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   const read = useTasksRead(place, now, { sort, withCompleted: completed });
   const { data, error, stale, retry } = read;
 
-  
   useEffect(() => {
     if (!layoutParam && savedLayout) set({ layout: savedLayout });
   }, [layoutParam, savedLayout, set]);
@@ -53,8 +49,6 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   }
 
   const due = data ? data.groups.overdue.count + data.groups.today.count : null;
-  
-  
   const open = data ? data.groups.overdue.count + data.groups.today.count + data.groups.upcoming.count + data.groups.noDate.count : null;
   const placeId = place.kind === "node" ? place.id : null;
 
@@ -89,7 +83,6 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
           }
         />
         <section className="tasks-page" aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
-          {}
           <h2 id="tasks-page-title" className="sr-only">
             Every task
           </h2>

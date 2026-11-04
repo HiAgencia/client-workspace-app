@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readQuickAdd, type QuickAddPlace } from "./quick-add";
 
-
 const today = "2026-10-28";
 
 const website: QuickAddPlace = { id: "larkspur-website", name: "Website", path: "Larkspur Bakery / Website" };

@@ -2,9 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get, peekGet, peekTool, post, tool, toolKey } from "./client-api";
 import { FRESH_MS, forgetReads, isFresh, keep, KEPT_LIMIT, onRefreshes, peek, readsInFlight, refreshEnded, refreshesInFlight, refreshStarted, stamp, wrote } from "./read-cache";
 
-
-
-
 const fine = (value: unknown) => () => Response.json({ ok: true, value });
 
 function answers(...responses: Array<() => Response>) {
@@ -13,7 +10,6 @@ function answers(...responses: Array<() => Response>) {
   vi.stubGlobal("fetch", fetched);
   return fetched;
 }
-
 
 function held() {
   let answer: (response: Response) => void = () => {};
@@ -57,7 +53,6 @@ describe("what the cache keeps", () => {
 
   it("holds a bounded number of answers, the one longest without use leaving first", () => {
     for (let index = 0; index < KEPT_LIMIT; index++) keep(`k${index}`, index, stamp());
-    
     expect(peek("k0")?.value).toBe(0);
     keep("one more", "x", stamp());
     expect(peek("k0")?.value).toBe(0);
@@ -103,7 +98,6 @@ describe("the screens' reads and writes", () => {
   it("never paint a read that was on its way while a write started: it may not hold the change", async () => {
     const read = held();
     const answered = tool("get_tasks", { today: "2026-11-02" });
-    
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: true })));
     const writing = tool("update_item", { id: "t", status: "done" });
     read.answer(1);
@@ -141,7 +135,6 @@ describe("the screens' reads and writes", () => {
     await Promise.all([get("/api/accounts"), get("/api/accounts")]);
     expect(fetched).toHaveBeenCalledTimes(1);
     expect(peekGet("/api/accounts")?.value).toEqual({ ok: true, value: [] });
-    
     await Promise.all([get("/api/trash"), get("/api/trash")]);
     expect(fetched).toHaveBeenCalledTimes(3);
   });
@@ -162,7 +155,6 @@ describe("the screens' reads and writes", () => {
     const fetched = answers(fine("asked"));
     expect(await tool("list_tree", input)).toEqual({ ok: true, nodes: [] });
     expect(fetched).not.toHaveBeenCalled();
-    
     await tool("list_tree", input);
     expect(fetched).toHaveBeenCalledTimes(1);
 

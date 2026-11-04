@@ -19,32 +19,19 @@ import { callTool } from "@/lib/tools/registry";
 import { chatTurn } from "../support/chat-turn";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
-
-
 let user: DisposableUser | undefined;
 let deps: GoogleDeps;
 const ids = { client: "", other: "", mail: "", calendarOnly: "", revoked: "", late: "", gone: "" };
-
 const calls: string[] = [];
 const searches: string[] = [];
 const batchFormats: string[] = [];
-
 const trouble = {
-  
   ghost: false,
-  
   search: null as number | null,
   unreadSearch: null as number | null,
-  
   endlessUnread: false,
-  
   unreadCut: false,
-  
   leakSent: false,
-  
   flaky: new Map<string, number[]>(),
 };
 
@@ -83,7 +70,6 @@ const mailbox: Stored[] = [
     payload: { mimeType: "text/plain", headers: headers('"Ana Ruiz" <ana@studioatlas.example>', "=?UTF-8?B?Q2Fmw6k=?= meeting"), body: { data: encode("Can we move it to Friday?") } },
   },
   {
-    
     id: "m3",
     threadId: "t3",
     labelIds: ["CATEGORY_UPDATES"],
@@ -92,7 +78,6 @@ const mailbox: Stored[] = [
     payload: { mimeType: "text/html", headers: headers("Bank <alerts@bank.example>", "Transfer received"), body: { data: encode("<p>Transfer received</p>") } },
   },
   {
-    
     id: "m4",
     threadId: "t1",
     labelIds: ["SENT"],
@@ -101,7 +86,6 @@ const mailbox: Stored[] = [
     payload: { mimeType: "text/plain", headers: headers("studio@example.com", "Re: Your app review was approved"), body: { data: encode("Thanks!") } },
   },
   {
-    
     id: "m5",
     threadId: "t5",
     labelIds: ["INBOX", "UNREAD", "SENT"],
@@ -114,10 +98,7 @@ const mailbox: Stored[] = [
 const fromOf = (message: Stored) => (message.payload.headers ?? []).find((header) => header.name === "From")?.value ?? "";
 const subjectOf = (message: Stored) => (message.payload.headers ?? []).find((header) => header.name === "Subject")?.value ?? "";
 
-
 const WAIT_GROUP = /\(((?:from|subject):[^\s()]+(?: OR (?:from|subject):[^\s()]+)*)\)/g;
-
-
 
 function search(q: string): Stored[] {
   const after = /after:(\d+)/.exec(q);
@@ -148,7 +129,6 @@ function search(q: string): Stored[] {
     .sort((a, b) => Number(b.internalDate) - Number(a.internalDate));
 }
 
-
 function answer(id: string, query: URLSearchParams): Stored | null {
   const found = mailbox.find((message) => message.id === id);
   if (!found) return null;
@@ -156,7 +136,6 @@ function answer(id: string, query: URLSearchParams): Stored | null {
   const wanted = new Set(query.getAll("metadataHeaders").map((name) => name.toLowerCase()));
   return { ...found, payload: { mimeType: found.payload.mimeType, headers: (found.payload.headers ?? []).filter((header) => wanted.has(header.name.toLowerCase())) } };
 }
-
 
 const READERS = new Set(["token-mail", "token-late", "token-nocount"]);
 
@@ -170,8 +149,6 @@ const fakeGoogle: Fetch = async (input, init) => {
     return json(200, { access_token: `token-${refresh?.replace("refresh-", "")}`, expires_in: 3600 });
   }
   const token = (init?.headers as Record<string, string>).Authorization.replace("Bearer ", "");
-  
-  
   const dead = token === "token-dead";
   if (dead && url.pathname !== "/batch/gmail/v1") return json(401, { error: { code: 401, status: "UNAUTHENTICATED" } });
   if (!dead && !READERS.has(token)) return json(403, { error: { status: "PERMISSION_DENIED" } });
@@ -239,7 +216,6 @@ async function insertAccount(
       owner_id: (options.owner ?? user!).id,
       email,
       refresh_token: await encrypt(deps.key, refresh),
-      
       access_token: await encrypt(deps.key, options.access?.token ?? "stale"),
       access_token_expires_at: options.access?.until ?? "2020-01-01T00:00:00Z",
       scopes,
@@ -271,7 +247,6 @@ beforeAll(async () => {
   ids.mail = await insertAccount("studio@example.com", "refresh-mail", ALL);
   ids.calendarOnly = await insertAccount("calendar@example.com", "refresh-calendar", CALENDAR_ONLY);
   ids.revoked = await insertAccount("gone@example.com", "refresh-revoked", ALL);
-  
   ids.late = await insertAccount("late@example.com", "refresh-late", ALL, { node: ids.other, access: { token: "token-dead", until: "2099-01-01T00:00:00Z" } });
   ids.gone = await insertAccount("revoked-late@example.com", "refresh-revoked", ALL, { node: ids.other, access: { token: "token-dead", until: "2099-01-01T00:00:00Z" } });
 }, 60_000);
@@ -298,7 +273,6 @@ describe("the Gmail source", () => {
       receivedAt: "2026-10-29T14:58:00.000Z",
     });
     expect(messages[1]).toMatchObject({ subject: "Café meeting", unread: false, important: false });
-    
     expect(messages[0]).not.toHaveProperty("html");
     expect(failures).toEqual(
       expect.arrayContaining([
@@ -307,7 +281,6 @@ describe("the Gmail source", () => {
       ]),
     );
     expect(failures).toHaveLength(2);
-    
     expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(1);
     expect(calls.filter((call) => call.endsWith("/gmail/v1/users/me/messages"))).toHaveLength(1);
     expect(batchFormats).toEqual(["metadata"]);
@@ -321,7 +294,6 @@ describe("the Gmail source", () => {
     } finally {
       clearTrouble();
     }
-    
     const { messages, failures } = await gmailMailSource(deps).unread({ db: user!.client, ownerId: user!.id, accounts: [mailAccount()] });
     expect(failures).toEqual([]);
     expect(messages).toEqual([{ accountId: ids.mail, id: "m1" }]);
@@ -335,7 +307,6 @@ describe("the Gmail source", () => {
     expect(archived).toEqual({ messages: [expect.objectContaining({ id: "m3", subject: "Transfer received" })], failures: [], nextPageToken: null });
     expect(searches).toEqual([`-in:sent -in:draft -in:chats -in:spam -in:trash (from:transfer OR subject:transfer) after:${Date.parse(since) / 1000}`]);
     expect(batchFormats).toEqual(["metadata"]);
-    
     trouble.leakSent = true;
     try {
       expect((await candidates(["approved"])).messages.map((message) => message.id)).toEqual(["m1"]);
@@ -372,7 +343,6 @@ describe("the Gmail source", () => {
       const { messages, failures } = await gmailMailSource(deps).list({ db: user!.client, ownerId: user!.id, accounts: [mailAccount()], limit: 10 });
       expect(messages.map((message) => message.id)).toEqual(["m1", "m2"]);
       expect(failures).toEqual([]);
-      
       expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(2);
     } finally {
       clearTrouble();
@@ -383,12 +353,10 @@ describe("the Gmail source", () => {
       const { messages, failures } = await gmailMailSource(deps).list({ db: user!.client, ownerId: user!.id, accounts: [mailAccount()], limit: 10 });
       expect(messages.map((message) => message.id)).toEqual(["m1"]);
       expect(failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 2 messages could not be read", partial: true }]);
-      
       const logged = spy.mock.calls.flat().join(" ");
       expect(logged).toContain(`account ${ids.mail}`);
       expect(logged).toContain("500 × 1");
       expect(logged).not.toContain("studio@example.com");
-      
       trouble.flaky.set("m2", [500, 500]);
       const alone = await gmailMailSource(deps).many({ db: user!.client, ownerId: user!.id, account: mailAccount(), ids: ["m2"] });
       expect(alone.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: "1 of 1 message could not be read", partial: true }]);
@@ -481,7 +449,6 @@ describe("the tools over Gmail", () => {
     expect(listed.groups.unread.messages.map((message) => message.id)).toEqual(["m1"]);
     expect(listed.groups.earlier.messages.map((message) => message.id)).toEqual(["m2"]);
     expect(listed.failures).toEqual([]);
-    
     for (const [id, email] of [
       [ids.calendarOnly, "calendar@example.com"],
       [ids.revoked, "gone@example.com"],
@@ -527,9 +494,7 @@ describe("the tools over Gmail", () => {
       expect(onlyHtml.message.partial).toBe(true);
       expect(JSON.stringify(onlyHtml).length).toBeLessThanOrEqual(MAX_READ_ANSWER);
       expect(onlyHtml.message.html.length).toBeGreaterThan(0);
-      
       expect(onlyHtml.message.html.endsWith(">")).toBe(true);
-      
       const whole = (await callTool("get_mail", context(), { account: ids.mail, id: "big", whole: true })) as unknown as Opened;
       expect(whole.message).toMatchObject({ partial: false, text: longText });
       expect(JSON.stringify(whole).length).toBeGreaterThan(MAX_READ_ANSWER);
@@ -537,7 +502,6 @@ describe("the tools over Gmail", () => {
       const left: UIMessage = { id: "turn", role: "assistant", parts: [{ type: "tool-get_mail", toolCallId: "read", state: "input-available", input: {} }] };
       expect(continuedTurn(left, turn(read))!.parts[0]).toMatchObject({ state: "output-available" });
       expect(continuedTurn(left, turn(whole))!.parts[0]).toMatchObject({ state: "output-error" });
-      
       const small = (await callTool("get_mail", context(), { account: ids.mail, id: "m1" })) as unknown as Opened;
       expect(small.message).toMatchObject({ partial: false, text: "Your app review was approved." });
     } finally {
@@ -550,7 +514,6 @@ describe("the tools over Gmail", () => {
     try {
       const listed = (await callTool("list_mail", context(), { account: ids.mail })) as unknown as Listed;
       expect(listed.failures).toEqual([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringMatching(/^only the latest \d+ unread messages were counted$/), partial: true, atLimit: true }]);
-      
       expect(listed.unreadByAccount[ids.mail]).toBeGreaterThan(0);
     } finally {
       clearTrouble();
@@ -559,7 +522,6 @@ describe("the tools over Gmail", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const listed = (await callTool("list_mail", context(), { account: ids.mail })) as unknown as Listed;
-      
       expect(listed.groups.unread.messages.map((message) => message.id)).toEqual(["m1"]);
       expect(listed.failures).toEqual(expect.arrayContaining([{ accountId: ids.mail, accountEmail: "studio@example.com", reason: expect.stringContaining("HTTP 500") }]));
       expect(listed.unreadByAccount).not.toHaveProperty(ids.mail);
@@ -601,7 +563,6 @@ describe("the tools over Gmail", () => {
     expect(searches).toEqual(["in:inbox -in:sent -in:draft -in:chats (approved)"]);
     expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(1);
     expect(batchFormats).toEqual(["metadata"]);
-    
     forget();
     await callTool("search_mail", context(), { account: ids.mail, query: "approved) OR {in:anywhere" });
     expect(searches).toEqual(["in:inbox -in:sent -in:draft -in:chats (approved OR in:anywhere)"]);
@@ -642,17 +603,11 @@ describe("the tools over Gmail", () => {
     expect(one.messages.map((row) => [row.id, row.accountId])).toEqual([["m1", ids.mail]]);
     expect(one.toRead).toEqual([]);
     expect(calls.filter((call) => call.includes("/batch/gmail/v1"))).toHaveLength(1);
-    
     expect(await callTool("list_item_mail", context(), { id: task.id, account: "00000000-0000-4000-8000-000000000000" })).toMatchObject({ ok: false, code: "not_found" });
   });
 });
 
 describe("what a task waits for, over a busy inbox", () => {
-  
-  
-  
-  
-  
   const HOUR = 3_600_000;
   type Replies = { ok: boolean; replies: MailRow[]; more: string[]; failures: unknown[] };
   type Reply = { account: string; id: string };
@@ -685,7 +640,6 @@ describe("what a task waits for, over a busy inbox", () => {
     for (const each of planted) mailbox.splice(mailbox.indexOf(each), 1);
   });
 
-  
   async function waitingTask(): Promise<string> {
     const created = (await callTool("create_task", context(), { node: ids.client, title: "Wait for the transfer" })) as unknown as { ok: boolean; item: { id: string } };
     expect(created.ok).toBe(true);
@@ -706,7 +660,6 @@ describe("what a task waits for, over a busy inbox", () => {
     expect(String((failure as Error | null)?.message), `the twin fails «${phrase}»`).toContain(phrase);
   }
 
-  
   type List = (task: string) => Promise<Replies>;
 
   async function everyReplyOfTheSender(list: List) {
@@ -732,7 +685,6 @@ describe("what a task waits for, over a busy inbox", () => {
   it("shows every message of the sender since the wait began as a possible reply, under a busy inbox, and decides nothing", async () => {
     forget();
     await everyReplyOfTheSender(replies);
-    
     expect(searches.filter((q) => q.includes("(from:bayside OR subject:bayside) (from:bank OR subject:bank)") && q.includes("-in:spam"))).toHaveLength(1);
     await readingDecidesNothing(replies);
   });
@@ -751,7 +703,6 @@ describe("what a task waits for, over a busy inbox", () => {
     await failsWith(() => readingDecidesNothing(closesOnReply), "reading the possible replies decides nothing");
   });
 
-  
   async function onlySinceTheWait(source: MailSource) {
     const read = await replies(await waitingTask(), { ...context(), mail: source });
     expect(read.ok).toBe(true);
@@ -768,7 +719,6 @@ describe("what a task waits for, over a busy inbox", () => {
     await failsWith(() => onlySinceTheWait(fromAlways), "what arrived before the wait began is no possible reply");
   });
 
-  
   type Page = (task: string, pageToken?: string) => Promise<Replies & { next: Record<string, string> }>;
   const page: Page = (task, pageToken) =>
     callTool("list_task_replies", context(), { task, account: ids.mail, limit: 1, ...(pageToken ? { pageToken } : {}) }) as unknown as ReturnType<Page>;
@@ -777,7 +727,6 @@ describe("what a task waits for, over a busy inbox", () => {
     const task = await waitingTask();
     const read: string[] = [];
     let token: string | undefined;
-    
     for (let pages = 0; pages < 4; pages++) {
       const answer = await reader(task, token);
       read.push(...idsOf(answer));
@@ -797,7 +746,6 @@ describe("what a task waits for, over a busy inbox", () => {
     await failsWith(() => everyPageOnce((task) => page(task)), "page after page brings every possible reply, each once");
   });
 
-  
   type Rule = (task: string, id: string, dismissed: boolean) => Promise<unknown>;
   const rule: Rule = (task, id, dismissed) => callTool("dismiss_reply", context(), { task, account: ids.mail, id, dismissed });
 
@@ -835,14 +783,12 @@ describe("what a task waits for, over a busy inbox", () => {
     await failsWith(() => otherWordsStartOver(keepsRulings), "other words are another wait");
   });
 
-  
   type Wait = { accountId: string | null; waitsFor: string; since: string; dismissed: string[] };
   type Read = Replies & { task: { since: string } };
   type PutBack = (task: string, previous: Wait) => Promise<unknown>;
   const putBack: PutBack = (task, previous) =>
     callTool("set_task_mail", context(), { task, account: previous.accountId, words: previous.waitsFor, since: previous.since, dismissed: previous.dismissed });
 
-  
   const LET_GO = { waiting: false };
   const REWORDED = { words: "Bayside" };
 
@@ -860,7 +806,6 @@ describe("what a task waits for, over a busy inbox", () => {
     });
   }
 
-  
   const wordsOnly: PutBack = (task, previous) => callTool("set_task_mail", context(), { task, account: previous.accountId, words: previous.waitsFor });
 
   it("puts back a wait let go as it was: since when it waited and what it had ruled out", async () => {
@@ -889,9 +834,6 @@ describe("what a task waits for, over a busy inbox", () => {
     });
   });
 
-  
-  
-  
   function racingInserts(db: ToolContext["db"], parties: number): ToolContext["db"] {
     let arrived = 0;
     let release!: () => void;
@@ -951,7 +893,6 @@ describe("what a task waits for, over a busy inbox", () => {
       "two first waits at once both hold",
     ).toEqual([true, true]);
     expect(answers.filter((answer) => answer.previous !== null), "the one that wrote over the other says it replaced it, so its undo puts it back").toHaveLength(1);
-    
     const last = answers.findIndex((answer) => answer.previous !== null);
     const stored = await user!.client.from("task_mail").select("waits_for").eq("item_id", task).single();
     expect({ replaced: answers[last]?.previous?.waitsFor, kept: stored.data?.waits_for }, "what it replaced is the other's wait, and the wait keeps its words").toEqual({
@@ -971,7 +912,6 @@ describe("what a task waits for, over a busy inbox", () => {
     ).toHaveLength(1);
   });
 
-  
   it("reads a wait whose account was taken off its client for nobody, and says why instead of finding nothing", async () => {
     const node = await user!.client.from("nodes").insert({ owner_id: user!.id, kind: "client", name: "Gamma" }).select("id").single();
     expect(node.error).toBeNull();
@@ -988,20 +928,17 @@ describe("what a task waits for, over a busy inbox", () => {
         code: "not_found",
         message: expect.stringContaining("not connected where the task lives anymore"),
       });
-      
       const stopped = (await callTool("set_task_mail", context(), { task, waiting: false })) as unknown as { ok: boolean; previous: Wait };
       expect(stopped.ok).toBe(true);
       const back = (await putBack(task, stopped.previous)) as { ok: boolean; message?: string };
       expect({ ok: back.ok, namesAnId: back.message?.includes(ids.mail) }, "the refusal says the account is not connected there, without its id").toEqual({ ok: false, namesAnId: false });
       expect(back.message).toContain("not connected where the task lives");
     } finally {
-      
       const removed = await user!.client.from("nodes").delete().eq("id", node.data!.id);
       expect(removed.error, "the client this case made is deleted").toBeNull();
     }
   });
 
-  
   type Close = (task: string, outcome: string, reply: Reply) => Promise<unknown>;
   const close: Close = (task, outcome, reply) => callTool("complete_task", context(), { task, outcome, reply });
 
@@ -1052,23 +989,16 @@ describe("what a task waits for, over a busy inbox", () => {
 });
 
 describe("what reading the mail costs in requests of the Worker's own", () => {
-  
-  
-  
   const SIZES = [1, 3, 10];
   let owner: DisposableUser | undefined;
   let place = "";
   let waiting = "";
-  
   const readers: string[] = [];
   const ownerContext = (): ToolContext => ({ db: owner!.client, ownerId: owner!.id, source: "manual", mail: gmailMailSource(deps) });
   const today = () => new Date().toISOString().slice(0, 10);
 
   type Cost = { gmail: number; token: number; supabase: number; total: number };
 
-  
-  
-  
   async function costOf<T>(run: () => Promise<T>): Promise<{ cost: Cost; result: T }> {
     forget();
     const spy = vi.spyOn(globalThis, "fetch");
@@ -1090,7 +1020,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     if (error) throw new Error(error.message);
   }
 
-  
   async function withReaders(count: number) {
     while (readers.length < count) readers.push(await insertAccount(`reader-${readers.length + 1}@example.com`, "refresh-mail", ALL, { owner: owner!, node: place }));
     const extra = readers.splice(count);
@@ -1100,7 +1029,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     }
   }
 
-  
   async function acrossSizes(read: () => Promise<unknown>): Promise<Cost[]> {
     const measured: Cost[] = [];
     for (const size of SIZES) {
@@ -1114,7 +1042,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     return measured;
   }
 
-  
   const grew = (measured: Cost[]) => measured.some((cost) => cost.total !== measured[0].total);
 
   const oneAccount = (): Array<[string, () => Promise<unknown>]> => [
@@ -1130,7 +1057,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     const node = await owner.client.from("nodes").insert({ owner_id: owner.id, kind: "client", name: "Northwind" }).select("id").single();
     if (node.error) throw new Error(node.error.message);
     place = node.data.id;
-    
     const task = await owner.client.from("items").insert({ owner_id: owner.id, node_id: place, type: "task", title: "Wait for the signed contract" }).select("id").single();
     if (task.error) throw new Error(task.error.message);
     waiting = task.data.id;
@@ -1142,7 +1068,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     if (owner) await deleteDisposableUsers([owner]);
   }, 60_000);
 
-  
   async function linkReaders() {
     for (const id of readers) {
       const { error } = await owner!.client.from("mail_links").insert({ owner_id: owner!.id, account_id: id, message_id: "m1", item_id: waiting });
@@ -1156,7 +1081,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
     for (const [name, read] of oneAccount()) {
       const measured = await acrossSizes(read);
       expect({ name, measured }).toEqual({ name, measured: [measured[0], measured[0], measured[0]] });
-      
       expect(measured[0].gmail).toBeGreaterThan(0);
       expect(measured[0].token).toBe(1);
     }
@@ -1193,7 +1117,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
       seen.push(cost);
     }
     expect(grew(seen)).toBe(false);
-    
     const measured = await acrossSizes(async () => {
       await Promise.all(readers.map((id) => callTool("list_item_mail", ownerContext(), { id: waiting, account: id })));
       return { ok: true, failures: [] };
@@ -1225,7 +1148,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
   }, 120_000);
 
   it("a chat turn reads each account in a request of its own, and its own requests cost the same at any size", async () => {
-    
     const contract: Stored = {
       id: "contract",
       threadId: "contract",
@@ -1244,7 +1166,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
         ctx: { ...ownerContext(), source: "chat" },
         model: simulatedModel(),
         messages: [{ id: "asked", role: "user", parts: [{ type: "text", text: "Did anything arrive for my tasks?" }] }],
-        
         request: async (run) => {
           const { cost, result } = await costOf(async () => {
             await readSession(owner!.client);
@@ -1271,14 +1192,10 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
       expect(small.said).toContain("possible reply");
       expect(large.said).toContain("possible repl");
       for (const turn of [small, medium, large]) {
-        
         expect(turn.requests.map((cost) => cost.gmail + cost.token)).toEqual(turn.requests.map(() => 0));
-        
         expect(turn.reads.every((cost) => cost.token <= 1)).toBe(true);
       }
-      
       expect(large.requests.map((cost) => cost.total)).toEqual(medium.requests.map((cost) => cost.total));
-      
       expect(large.reads).toHaveLength(1 + 10);
       expect(medium.reads).toHaveLength(1 + 3);
       expect(small.reads).toHaveLength(1);
@@ -1289,7 +1206,6 @@ describe("what reading the mail costs in requests of the Worker's own", () => {
 });
 
 describe("what the screens read and say of the mail", () => {
-  
   let owner: DisposableUser | undefined;
   let place = "";
   let refs: MailAccountRef[] = [];
@@ -1354,7 +1270,6 @@ describe("what the screens read and say of the mail", () => {
       const cut = (await callTool("count_unread_mail", ownerContext(), { account: reads.id })) as unknown as { failures: Array<{ accountId: string; accountEmail: string; reason: string; partial?: boolean }> };
       expect(cut.failures).toHaveLength(1);
       expect(mailFailureText(cut.failures[0])).toMatch(/^In reads@example\.com, only the latest \d+ unread messages were counted\.$/);
-      
       expect(mailFailureText({ ...cut.failures[0], partial: false })).toMatch(/^The mail of reads@example\.com could not be loaded:/);
     } finally {
       clearTrouble();
@@ -1397,7 +1312,6 @@ describe("what the screens read and say of the mail", () => {
   it("an Overview load reads each account's count once: what the sidebar and two boxes show is one read", async () => {
     forget();
     const store = storeOf();
-    
     for (const ref of refs) store.list(ref);
     for (const ref of refs) store.list(ref);
     for (const ref of refs) store.count(ref);
@@ -1429,8 +1343,6 @@ describe("what the screens read and say of the mail", () => {
 });
 
 describe("which accounts the place of a task sees", () => {
-  
-  
   let owner: DisposableUser | undefined;
   const place = { client: "", project: "", subproject: "", other: "" };
   const account = { client: "", project: "", subproject: "", other: "" };
@@ -1464,7 +1376,6 @@ describe("which accounts the place of a task sees", () => {
     if (owner) await deleteDisposableUsers([owner]);
   }, 60_000);
 
-  
   async function answers(seen: typeof accountsSeenFrom) {
     const tree = (await callTool("list_tree", ownerContext(), { withMail: true })) as unknown as { nodes: Parameters<typeof accountsSeenFrom>[0]; mail: { accounts: Parameters<typeof accountsSeenFrom>[1] } };
     const out: Array<{ place: string; browser: string[]; server: string[] }> = [];
@@ -1479,7 +1390,6 @@ describe("which accounts the place of a task sees", () => {
   it("gives the same answer in the browser and on the server, for every place and General", async () => {
     const compared = await answers(accountsSeenFrom);
     expect(compared.map((entry) => entry.browser)).toEqual(compared.map((entry) => entry.server));
-    
     const of = (key: string) => compared.find((entry) => entry.place === key)!.server;
     expect(of("general")).toEqual(Object.values(account).sort());
     expect(of("client")).toEqual([account.client].sort());

@@ -29,11 +29,6 @@ const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "sh
 const stampDay = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric" });
 const by = (source: Revision["source"], label: string | null) => (source === "chat" ? ASSISTANT_NAME : source === "agent" ? `agent ${label}` : "you");
 
-
-
-
-
-
 export function ItemPanel({
   item,
   saving,
@@ -45,7 +40,6 @@ export function ItemPanel({
   saving: Saving;
   version: number;
   onClose: (id: string) => void;
-  
   onDelete: (item: Item) => void;
 }) {
   const { tree } = useWorkspace();
@@ -57,8 +51,6 @@ export function ItemPanel({
   const titleId = useId();
   const notesId = useId();
 
-  
-  
   const current = item && shown && shown.id === item.id ? shown : (item ?? shown);
   const id = useRef<string | null>(null);
   const latest = useRef("");
@@ -80,14 +72,12 @@ export function ItemPanel({
       setStatus("");
       setRevisions(null);
       if (!el.open) el.showModal();
-      
       requestAnimationFrame(() => el.querySelector<HTMLElement>(".rich-field")?.focus({ preventScroll: true }));
     } else if (!item && el.open) {
       el.close();
     }
   }, [item]);
 
-  
   const openId = item?.id ?? null;
   useEffect(() => {
     if (!openId) return;
@@ -108,7 +98,6 @@ export function ItemPanel({
     timer.current = setTimeout(() => void flush(), 700);
   }
 
-  
   function flush(): Promise<unknown> {
     clearTimeout(timer.current);
     const value = latest.current.trim();
@@ -128,7 +117,6 @@ export function ItemPanel({
     return queue.current;
   }
 
-  
   function close() {
     if (latest.current.trim() === confirmed.current) return void dialog.current?.close();
     void flush().then(() => {
@@ -136,7 +124,6 @@ export function ItemPanel({
     });
   }
 
-  
   async function restore(revisionId: string) {
     const answer = await post<{ item: Item }>(`/api/revisions/${revisionId}/restore`, {});
     if (!(await saving(Promise.resolve(answer))) || !answer.ok || answer.item.id !== id.current) return;
@@ -146,8 +133,6 @@ export function ItemPanel({
     setNotes(answer.item.body ?? "");
   }
 
-  
-  
   function markDecision(decision: boolean) {
     const itemId = id.current;
     if (!itemId) return;
@@ -177,7 +162,6 @@ export function ItemPanel({
       className="dialog panel"
       aria-labelledby={titleId}
       onCancel={(event) => {
-        
         event.preventDefault();
         close();
       }}
@@ -211,7 +195,6 @@ export function ItemPanel({
             <h2 id={titleId} className="panel-heading">
               {inlinePlain(current.title)}
             </h2>
-            {}
             <p className="panel-meta t-meta">
               {current.nodeId ? (
                 <Link className="link link-meta panel-path" href={`/app/node/${current.nodeId}`} data-panel-path>
@@ -228,7 +211,6 @@ export function ItemPanel({
               <span className="panel-added">{`Added ${stampDay(current.createdAt)}`}</span>
             </p>
             <div className="panel-field">
-              {}
               <label className={current.type === "decision" ? "t-meta panel-field-name" : "sr-only"} htmlFor={notesId}>
                 {fieldName}
               </label>
@@ -270,8 +252,6 @@ export function ItemPanel({
     </dialog>
   );
 }
-
-
 
 function Versions({ revisions, onRestore }: { revisions: Revision[] | null; onRestore: (id: string) => Promise<void> }) {
   return (

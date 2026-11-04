@@ -1,7 +1,5 @@
 import geometry from "./brand-geometry.json";
 
-
-
 export function BrandMark({ className }: { className?: string }) {
   const { size, tileRadius, bars } = geometry;
   return (

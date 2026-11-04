@@ -8,10 +8,6 @@ import type { TaskRow, TasksView } from "@/lib/tools/tasks";
 import { changeNode, changeNodeInput } from "@/lib/tools/tree-writes";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
-
 const TODAY = "2026-10-28";
 const day = (offset: number) => {
   const date = new Date(`${TODAY}T12:00:00Z`);
@@ -29,7 +25,6 @@ function me(extra: Partial<ToolContext> = {}): ToolContext {
   if (!owner) throw new Error("the test owner was not created");
   return { db: owner.client, ownerId: owner.id, source: "manual", ...extra };
 }
-
 
 function agent(scopeNodeId = ids.site): ToolContext {
   return { db: serviceClient(), ownerId: owner!.id, scopeNodeId, source: "agent", agentLabel: "laptop" };
@@ -81,7 +76,6 @@ afterAll(async () => {
 }, 60_000);
 
 describe("get_tasks", () => {
-  
   const made: Record<string, Item> = {};
 
   beforeAll(async () => {
@@ -94,7 +88,6 @@ describe("get_tasks", () => {
     made.later = await task({ node: ids.site, title: "Site in ten days", dueOn: day(10) });
     made.undatedA = await task({ title: "General without a date" });
     made.undatedB = await task({ node: ids.site, title: "Site without a date" });
-    
     made.hiddenSub = await task({ parent: made.undatedA.id, title: "Undated step" });
     made.datedSub = await task({ parent: made.undatedB.id, title: "Dated step", dueOn: TODAY });
     made.doneSub = await task({ parent: made.undatedB.id, title: "Finished step" });
@@ -120,7 +113,6 @@ describe("get_tasks", () => {
     ]);
     expect(view.groups.upcoming).toMatchObject({ count: 3, hidden: 0 });
     expect(titles(view.groups.noDate.tasks)).toEqual(["General without a date", "Site without a date"]);
-    
     const everywhere = [view.groups.overdue, view.groups.today, view.groups.noDate].flatMap((group) => titles(group.tasks));
     expect(everywhere).not.toContain("Undated step");
     expect(everywhere).not.toContain("Finished today");
@@ -162,13 +154,11 @@ describe("get_tasks", () => {
 
   it("brings the finished tasks when asked, and sorts by priority or by hand", async () => {
     const withDone = await run<TasksView>("get_tasks", me(), { today: TODAY, withCompleted: true });
-    
     expect(titles(withDone.completed!.tasks)).toEqual(["Finished today"]);
     expect(withDone.groups.today.count).toBe(4);
     const byPriority = await run<TasksView>("get_tasks", me(), { today: TODAY, sort: "priority" });
     expect(titles(byPriority.groups.today.tasks)).toEqual(["Own urgent", "General at half past nine", "Site at four", "Dated step"]);
     const byHand = await run<TasksView>("get_tasks", me(), { today: TODAY, sort: "manual" });
-    
     expect(titles(byHand.groups.today.tasks)).toEqual(["General at half past nine", "Site at four", "Own urgent", "Dated step"]);
   });
 
@@ -185,7 +175,6 @@ describe("get_tasks", () => {
     expect(seen).not.toContain("General at half past nine");
     expect(seen).not.toContain("General without a date");
     expect((await refuse("get_tasks", agent(), { node: null, today: TODAY })).code).toBe("not_found");
-    
     const unscoped = await run<TasksView>("get_tasks", { ...agent(), scopeNodeId: undefined }, { node: null, today: TODAY });
     expect(unscoped.groups.noDate.count).toBe(1);
   });
@@ -244,7 +233,6 @@ describe("move_item", () => {
     const { item: note } = await run<{ item: Item }>("add_note", me(), { node: ids.site, text: "A note" });
     expect((await refuse("move_item", me(), { id: top.id, parent: note.id })).code).toBe("invalid_input");
     expect((await refuse("move_item", me(), { id: below.id, node: ids.own, parent: top.id })).code).toBe("invalid_input");
-    
     const alone = await owner!.client.from("items").update({ node_id: ids.own }).eq("id", top.id);
     expect(alone.error?.code).toBe("23514");
   });
@@ -277,7 +265,6 @@ describe("reorder_items", () => {
     const view = await run<TasksView>("get_tasks", me(), { node: null, today: TODAY });
     const order = titles(view.groups.noDate.tasks).filter((title) => title.startsWith("Order"));
     expect(order).toEqual(["Order C", "Order A", "Order B"]);
-    
     await run("reorder_items", me(), { ids: [a.id, b.id, c.id] });
     const back = await owner!.client.from("items").select("id, position").in("id", [a.id, b.id, c.id]);
     for (const row of back.data!) expect(String(row.position)).toBe(String(was.get(row.id)!.position));
@@ -308,7 +295,6 @@ describe("reschedule_overdue", () => {
       expect(rest.changed.map((entry) => entry.id)).toEqual([general.id]);
       const view = await run<TasksView>("get_tasks", ctx, { today: TODAY });
       expect(view.groups.overdue.count).toBe(0);
-      
       const kept = await fresh.client.from("items").select("due_on, due_time").eq("id", inPlace.id).single();
       expect(kept.data).toEqual({ due_on: TODAY, due_time: "08:00:00" });
       const again = await run<{ count: number }>("reschedule_overdue", ctx, { today: TODAY, to: TODAY });
@@ -323,7 +309,6 @@ describe("notes", () => {
   it("a note lives in a node, under a task, or loose, and list_notes reads each place with its decision mark", async () => {
     const { item: loose } = await run<{ item: Item }>("add_note", me(), { node: null, text: "A loose thought" });
     expect(loose.nodeId).toBeNull();
-    
     const { item: inNode } = await run<{ item: Item & { body: string } }>("add_note", me(), { node: ids.checkout, text: "[The brief](https://brief.example/doc) for checkout" });
     expect(inNode.title).toBe("[The brief](https://brief.example/doc) for checkout");
     expect(inNode.body).toBe('<p><a href="https://brief.example/doc">The brief</a> for checkout</p>');
@@ -399,7 +384,6 @@ describe("request_review", () => {
     });
     const view = await run<TasksView>("get_tasks", me(), { node: ids.site, today: TODAY });
     expect(view.groups.today.tasks.find((row) => row.id === item.id)).toMatchObject({ source: "agent", agentLabel: "laptop" });
-    
     expect((await refuse("request_review", agent(), { title: "Look at the build" })).code).toBe("invalid_input");
   });
 });
@@ -415,7 +399,6 @@ describe("a general task with subtasks and notes", () => {
     expect(view.groups.noDate.tasks.find((row) => row.id === parent.id)).toMatchObject({ subtasks: { done: 0, total: 1 }, notes: 1, path: null });
     const children = await run<{ items: Item[] }>("list_items", me(), { parent: parent.id });
     expect(children.items.map((item) => item.id).sort()).toEqual([step.id, note.id].sort());
-    
     expect((await refuse("create_task", me(), { parent: parent.id, node: ids.own, title: "Elsewhere" })).code).toBe("invalid_input");
     const direct = await owner!.client.from("items").insert({ node_id: ids.own, parent_item_id: parent.id, type: "task", title: "Elsewhere" });
     expect(direct.error?.code).toBe("23514");
@@ -443,7 +426,6 @@ describe("a general task with subtasks and notes", () => {
     expect(found.items).toEqual([]);
     const updates = await run<{ created: Item[] }>("get_updates_since", ctx, { since: "2020-01-01T00:00:00Z" });
     expect(updates.created.map((item) => item.id)).not.toContain(general.id);
-    
     const reached = await run<{ item: Item }>("update_item", me(), { id: general.id, title: "Out of the agent's reach" });
     expect(reached.item.id).toBe(general.id);
   });
@@ -472,12 +454,10 @@ describe("events with no node and a node's events", () => {
     const fromParent = await run<Browsed>("browse_events", me(), { ...range, node: ids.client });
     expect(fromParent.events.some((entry) => entry.localId === event.id)).toBe(true);
 
-    
     const call = await task({ title: "Prepare the bank call" });
     await run("link_task_event", me(), { task: call.id, event: event.id });
     const withTask = await run<{ events: Array<{ localId: string | null; linkedTaskIds: string[] }> }>("browse_events", me(), range);
     expect(withTask.events.find((entry) => entry.localId === event.id)?.linkedTaskIds).toEqual([call.id]);
-    
     const fromAgent = await run<{ events: Array<{ localId: string | null; linkedTaskIds: string[] }> }>("browse_events", agent(ids.client), range);
     expect(fromAgent.events.flatMap((entry) => entry.linkedTaskIds)).not.toContain(call.id);
 
@@ -520,7 +500,6 @@ describe("list_tree", () => {
       expect((await run<Tree>("list_tree", ctx, {})).tasks).toBeNull();
       const below = await run<Tree>("list_tree", ctx, { node: project, today: TODAY });
       expect(below.tasks).toEqual({ overdue: 1, today: 1 });
-      
       expect((await changeNode(ctx, sub, { color: null })).ok).toBe(true);
       const cleared = await run<Tree>("list_tree", ctx, {});
       expect(cleared.nodes.find((entry) => entry.id === sub)).toMatchObject({ color: "violet", ownColor: null });

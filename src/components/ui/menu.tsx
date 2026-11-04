@@ -8,10 +8,6 @@ import { MoreIcon, type Icon } from "./icons";
 import { usePopupContainer } from "./popup-layer";
 import "@/app/styles/task.css";
 
-
-
-
-
 export type MenuEntry =
   | { kind: "action"; label: string; onSelect: () => void; disabled?: boolean; tone?: "danger"; detail?: string; id?: string; icon?: Icon }
   | { kind: "choice"; label: string; value: string | null; options: Array<{ value: string; label: string }>; onChoose: (value: string) => void; icon?: Icon }
@@ -20,24 +16,15 @@ export type MenuEntry =
   | { kind: "separator" };
 
 type MenuProps = {
-  
-  
-  
   label: string;
   about?: string;
-  
   name?: string;
   entries: MenuEntry[];
-  
   variant?: "quiet" | "control" | "primary";
   className?: string;
   onOpenChange?: (open: boolean) => void;
-  
   finalFocus?: () => HTMLElement | null | undefined;
 };
-
-
-
 
 export function Menu({ label, about, name, entries, variant = "quiet", className, onOpenChange, finalFocus }: MenuProps) {
   const container = usePopupContainer();

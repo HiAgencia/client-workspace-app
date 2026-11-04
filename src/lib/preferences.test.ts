@@ -45,7 +45,6 @@ describe("the layout cookie's owner", () => {
     expect(readLayoutCookie(value, ME).layouts).toEqual({ tasks: "board" });
     expect(readLayoutCookie(value, SOMEONE)).toEqual({ boards: {}, layouts: {} });
     expect(readLayoutCookie(value, null)).toEqual({ boards: {}, layouts: {} });
-    
     expect(readLayoutCookie(layoutCookie(preferences, "tasks"), ME)).toEqual({ boards: {}, layouts: {} });
   });
 

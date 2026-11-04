@@ -6,8 +6,6 @@ import { serverEnv } from "@/lib/env";
 import { SESSION_HEADERS } from "@/lib/http";
 import { readSession, userClient } from "@/lib/supabase/server";
 
-
-
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const back = (nodeId: string | null, outcome: string) => {
@@ -24,7 +22,6 @@ export async function GET(request: NextRequest) {
   const state = await verifyState(secret, url.searchParams.get("state") ?? "");
   if (!state || state.nonce !== request.cookies.get(NONCE_COOKIE)?.value) return back(null, "invalid-state");
   const session = await readSession(await userClient());
-  
   if (session.kind === "unavailable") return back(state.nodeId, "failed");
   if (session.kind === "none" || session.user.id !== state.userId) return back(null, "invalid-state");
   const { user } = session;
@@ -32,7 +29,6 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get("code");
   if (!code) return back(state.nodeId, "cancelled");
 
-  
   const node = await deps.service.from("nodes").select("id").eq("id", state.nodeId).eq("owner_id", user.id).maybeSingle();
   if (node.error || !node.data) return back(null, "invalid-state");
   try {

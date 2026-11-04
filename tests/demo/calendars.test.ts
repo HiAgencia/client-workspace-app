@@ -5,12 +5,8 @@ import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { createAnonymousUser, deleteDisposableUsers, type DisposableUser } from "../support/supabase";
 
-
-
-
 const TODAY = "2026-10-27";
 const WEEK = { from: "2026-10-26T00:00:00.000Z", to: "2026-11-03T00:00:00.000Z", fromDay: "2026-10-26", toDay: "2026-11-02" };
-
 const accountsOf = (node: Seed): SeedAccount[] => [...(node.accounts ?? []), ...(node.children ?? []).flatMap(accountsOf)];
 const MEETINGS: Record<string, string[]> = Object.fromEntries(
   demoSeedTree(TODAY)
@@ -53,7 +49,6 @@ describe("the demo's calendars", () => {
     const answer = (await callTool("browse_events", contextOf(user!), WEEK)) as unknown as Browsed & { toRead: string[] };
     expect(answer.ok).toBe(true);
     expect(answer.failures).toEqual([]);
-    
     expect(answer.toRead).toEqual([]);
     expect(titlesIn(answer)).toEqual(EVERY_MEETING);
     const meetings = meetingsIn(answer);
@@ -64,11 +59,9 @@ describe("the demo's calendars", () => {
   it("show a node what hangs from it and above it, and nothing else", async () => {
     const client = (await callTool("browse_events", contextOf(user!), { ...WEEK, node: nodeOf("Larkspur Bakery") })) as unknown as Browsed;
     expect(titlesIn(client)).toEqual([...MEETINGS["Larkspur Bakery"]].sort());
-    
     const inside = (await callTool("browse_events", contextOf(user!), { ...WEEK, node: nodeOf("Larkspur Bakery / Website") })) as unknown as Browsed;
     expect(titlesIn(inside)).toEqual([...MEETINGS["Larkspur Bakery"]].sort());
     expect(new Set(meetingsIn(inside).map((event) => event.fromNodeId))).toEqual(new Set([nodeOf("Larkspur Bakery")]));
-    
     const bare = (await callTool("browse_events", contextOf(user!), { ...WEEK, node: nodeOf("Lumen Dental") })) as unknown as Browsed;
     expect(meetingsIn(bare)).toEqual([]);
     expect(bare.failures).toEqual([]);
@@ -104,9 +97,7 @@ describe("the demo's calendars", () => {
     const answers = await read(WEEK.to);
     expect(samples.length).toBeGreaterThan(1);
     expect(asked).toBe(1);
-    
     expect(answers.flatMap((answer) => answer.events).map((event) => event.title).sort()).toEqual(EVERY_MEETING);
-    
     await read("2026-11-04T00:00:00.000Z");
     expect(asked).toBe(2);
   });

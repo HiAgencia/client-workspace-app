@@ -3,9 +3,6 @@
 import { READ_TOOLS } from "@/lib/tools/read-tools";
 import { forgetReads, keep, peek, readEnded, readStarted, stamp, wrote, type Kept } from "./read-cache";
 
-
-
-
 export type Failure = { ok: false; code?: string; message: string; candidates?: Array<{ id: string; path: string }> };
 export type Answer<T> = ({ ok: true } & T) | Failure;
 
@@ -21,12 +18,9 @@ async function ask(url: string, init: RequestInit): Promise<Response | Failure> 
   }
 }
 
-
 function wasCut(response: Response | Failure): boolean {
   return response instanceof Response && response.status >= 500 && !response.headers.get("content-type")?.includes("application/json");
 }
-
-
 
 export async function askOnceMoreIfCut(url: string, init: RequestInit): Promise<Response | Failure> {
   const first = await ask(url, init);
@@ -34,8 +28,6 @@ export async function askOnceMoreIfCut(url: string, init: RequestInit): Promise<
   await new Promise((resolve) => setTimeout(resolve, SECOND_READ_PAUSE_MS));
   return ask(url, init);
 }
-
-
 
 async function adopted(started: Promise<Response>, url: string, init: RequestInit): Promise<Response | Failure> {
   const first = await started.catch((): Failure => ({ ok: false, message: "No connection to the server." }));
@@ -51,13 +43,10 @@ function takeEarly(key: string): Promise<Response> | undefined {
   return started;
 }
 
-
 async function send<T>(url: string, init: RequestInit, kind: "read" | "write", early?: Promise<Response>): Promise<Answer<T>> {
   const response = early ? await adopted(early, url, init) : kind === "read" ? await askOnceMoreIfCut(url, init) : await ask(url, init);
   if (!(response instanceof Response)) return response;
   if (response.status === 401) {
-    
-    
     forgetReads();
     window.location.assign(new URL("/", window.location.origin));
     return { ok: false, message: "Your session ended. Sign in again." };
@@ -69,14 +58,12 @@ async function send<T>(url: string, init: RequestInit, kind: "read" | "write", e
   }
 }
 
-
 const KEPT_GETS = new Set(["/api/accounts"]);
 
 export function get<T>(url: string): Promise<Answer<T>> {
   if (!KEPT_GETS.has(url)) return send<T>(url, { method: "GET" }, "read");
   return shared(`GET ${url}`, () => send<T>(url, { method: "GET" }, "read"));
 }
-
 
 export function peekGet<T>(url: string): Kept<{ ok: true } & T> | null {
   return KEPT_GETS.has(url) ? peek(`GET ${url}`) : null;
@@ -90,17 +77,12 @@ export function post<T>(url: string, body: unknown, method = "POST"): Promise<An
   return written(url, () => postAs<T>("write", url, body, method));
 }
 
-
-
 export async function forgetLayout(): Promise<void> {
   const answer = await written("/api/preferences", () => send<Record<string, never>>("/api/preferences", { method: "DELETE" }, "write"));
   if (!answer.ok) console.error("The saved order of the boxes could not be forgotten on signing out:", answer.message);
 }
 
-
 const CHANGES_NO_READ = new Set(["/api/preferences"]);
-
-
 
 function written<T>(url: string, sending: () => Promise<Answer<T>>): Promise<Answer<T>> {
   readsOnTheirWay.clear();
@@ -108,8 +90,6 @@ function written<T>(url: string, sending: () => Promise<Answer<T>>): Promise<Ans
   wrote();
   return sending().finally(wrote);
 }
-
-
 
 const readsOnTheirWay = new Map<string, Promise<Answer<unknown>>>();
 
@@ -131,16 +111,13 @@ function shared<T>(key: string, asking: () => Promise<Answer<T>>, stored = false
   return read;
 }
 
-
 const STORED_TOOLS = new Set(["list_tree"]);
 
 const toolUrl = (name: string, scope?: string | null) => (scope ? `/api/tools/${name}?scope=${scope}` : `/api/tools/${name}`);
 
-
 export function toolKey(name: string, input: Record<string, unknown>, scope?: string | null): string {
   return `${toolUrl(name, scope)} ${JSON.stringify(input)}`;
 }
-
 
 export function tool<T>(name: string, input: Record<string, unknown>, scope?: string | null): Promise<Answer<T>> {
   const url = toolUrl(name, scope);
@@ -149,18 +126,14 @@ export function tool<T>(name: string, input: Record<string, unknown>, scope?: st
   return shared(key, () => postAs<T>("read", url, input, "POST", takeEarly(key)), STORED_TOOLS.has(name) && !scope);
 }
 
-
-
 export function peekTool<T>(name: string, input: Record<string, unknown>, stored = false): Kept<{ ok: true } & T> | null {
   return peek(toolKey(name, input), stored && STORED_TOOLS.has(name));
 }
 
 export type Item = {
   id: string;
-  
   nodeId: string | null;
   nodePath: string | null;
-  
   parentId: string | null;
   type: "task" | "note" | "decision";
   title: string;
@@ -172,14 +145,12 @@ export type Item = {
   position?: number;
   source: "manual" | "chat" | "agent" | "review";
   agentLabel: string | null;
-  
   changedSource?: "manual" | "chat" | "agent" | "review";
   changedAgentLabel?: string | null;
   completedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
   deletedAt?: string | null;
-  
   subtasks?: { open: number; done: number };
 };
 
@@ -190,7 +161,6 @@ export type TreeNode = {
   name: string;
   path: string;
   openTasks: number;
-  
   color: string | null;
   ownColor: string | null;
 };
@@ -206,7 +176,6 @@ export type CalendarEvent = {
   accountId: string;
   fromNodeId: string;
   link: string | null;
-  
   origin?: "google" | "local";
   localId?: string | null;
   nodeId?: string | null;

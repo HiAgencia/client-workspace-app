@@ -11,12 +11,9 @@ import { sessionContext } from "@/lib/session-context";
 import { serviceClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tools/tree";
 
-
 const MAX_BODY = 6 * 1024 * 1024;
-
 const SHOWN_MESSAGES = 100;
 const NOTHING_WAITING = "this turn has no read waiting for that answer: send the message again";
-
 
 const body = z.object({
   nodeId: z.uuid().nullable().default(null),
@@ -35,8 +32,6 @@ function validTimeZone(value: string): string {
   }
 }
 
-
-
 export async function GET(request: NextRequest) {
   const asked = request.nextUrl.searchParams.get("node");
   if (asked !== null && !isUuid(asked)) return problem(400, "no such node");
@@ -51,11 +46,6 @@ export async function GET(request: NextRequest) {
     return problem(500, "the conversation could not be loaded");
   }
 }
-
-
-
-
-
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
@@ -111,9 +101,6 @@ export async function POST(request: Request) {
   const stored = continuing ? history.at(-1) : undefined;
   const continued = continuing ? continuedTurn(stored, message) : null;
   if (continuing && !continued) return problem(409, NOTHING_WAITING);
-  
-  
-  
   if (stored && continued) {
     const taken = await service
       .from("chat_messages")
@@ -139,8 +126,6 @@ export async function POST(request: Request) {
     timeZone: validTimeZone(parsed.data.timeZone),
     abortSignal: request.signal,
     onEnd: async ({ responseMessage, isAborted }) => {
-      
-      
       const kept = isAborted ? whatWasDone(responseMessage) : responseMessage;
       if (isAborted && !stored && !kept.parts.some(isToolUIPart)) return;
       const saved = stored

@@ -4,10 +4,6 @@ import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { focusAfterClose } from "@/components/ui/use-exit";
 
-
-
-
-
 export function ConfirmButton({ children, confirm, label, onConfirm }: { children: ReactNode; confirm: string; label?: string; onConfirm: () => void }) {
   const [asking, setAsking] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);

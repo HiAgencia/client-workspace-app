@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import { addDays, addMonths, type Day } from "./dates";
 import { normalize } from "./fuzzy";
 
@@ -16,12 +10,9 @@ export type QuickAddPiece = { kind: PieceKind; start: number; end: number; text:
 export type QuickAddReading = {
   title: string;
   day: Day | null;
-  
   time: string | null;
   place: QuickAddPlace | null;
-  
   placeCandidates: QuickAddPlace[];
-  
   unknownPlace: string | null;
   priority: Priority | null;
   pieces: QuickAddPiece[];
@@ -29,19 +20,15 @@ export type QuickAddReading = {
 
 export type QuickAddOptions = {
   today: Day;
-  
   clock?: string;
   places: QuickAddPlace[];
-  
   dismissed?: Array<{ kind: PieceKind; text: string }>;
 };
 
 type Span = { start: number; end: number };
-
 type Found = Span & { day?: Day; time?: string; priority?: Priority; weak?: boolean };
 
 const START = "(?<![\\p{L}\\p{N}])";
-
 const END = "(?![\\p{L}\\p{N}'’])";
 const LEAD = "(?:(?:on|at|by)\\s+)?";
 
@@ -55,8 +42,6 @@ const WEEKDAYS: Array<[RegExp, number]> = [
   [/^(saturday|sat)$/, 6],
 ];
 const WEEKDAY_WORDS = "sunday|sun|monday|mon|tuesday|tues|tue|wednesday|wed|thursday|thurs|thur|thu|friday|fri|saturday|sat";
-
-
 const WORDLIKE_WEEKDAYS = new Set(["sun", "mon", "wed", "sat"]);
 
 const MONTHS: Array<[RegExp, number]> = [
@@ -95,8 +80,6 @@ function monthNumber(word: string): number {
   return MONTHS.find(([pattern]) => pattern.test(word.replace(/\.$/, "")))?.[1] ?? -1;
 }
 
-
-
 function weekdayAfter(today: Day, weekday: number, next: boolean): Day {
   const now = weekdayOf(today);
   let ahead = (weekday - now + 7) % 7;
@@ -107,7 +90,6 @@ function weekdayAfter(today: Day, weekday: number, next: boolean): Day {
   }
   return addDays(today, ahead);
 }
-
 
 function monthDay(today: Day, month: number, day: number): Day | null {
   let year = Number(today.slice(0, 4));
@@ -191,11 +173,9 @@ function times(text: string): Found[] {
 
 const overlaps = (a: Span, b: Span) => a.start < b.end && b.start < a.end;
 
-
 function linkSpans(text: string): Span[] {
   return [...text.matchAll(/\[[^\]\n]*\]\([^)\s]*\)/g)].map((m) => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length }));
 }
-
 
 function separate(found: Found[]): Found[] {
   const sorted = [...found].sort((a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start);
@@ -204,13 +184,10 @@ function separate(found: Found[]): Found[] {
   return kept.sort((a, b) => a.start - b.start);
 }
 
-
-
 function isDismissed(options: QuickAddOptions, kind: PieceKind, text: string): boolean {
   const typed = normalize(text.trim());
   return (options.dismissed ?? []).some((piece) => piece.kind === kind && normalize(piece.text.trim()).includes(typed));
 }
-
 
 function between(text: string, a: Span, b: Span): string | null {
   if (a.end <= b.start) return text.slice(a.end, b.start);
@@ -219,8 +196,6 @@ function between(text: string, a: Span, b: Span): string | null {
 }
 
 type PlaceHit = Span & { place: QuickAddPlace | null; candidates: QuickAddPlace[] };
-
-
 
 function places(text: string, options: QuickAddOptions, blocked: Span[]): { hits: PlaceHit[]; unknown: string | null } {
   const hits: PlaceHit[] = [];
@@ -268,7 +243,6 @@ export function readQuickAdd(text: string, options: QuickAddOptions): QuickAddRe
     .filter((hit) => !dayHits.some((day) => overlaps(day, hit)))
     .filter((hit) => !isDismissed(options, "date", text.slice(hit.start, hit.end)));
 
-  
   const groups: Array<Found> = [];
   const used = new Set<Found>();
   for (const day of dayHits) {
@@ -290,7 +264,6 @@ export function readQuickAdd(text: string, options: QuickAddOptions): QuickAddRe
     groups.push({ ...time, day: passed ? tomorrow : options.today });
   }
   groups.sort((a, b) => a.start - b.start);
-  
   const date = groups.at(-1) ?? null;
 
   const priorityHits = findAll(text, /(?<![\p{L}\p{N}])p([1-4])(?![\p{L}\p{N}])/giu, (m) => ({ priority: Number(m[1]) as Priority }))

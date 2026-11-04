@@ -7,8 +7,6 @@ import { authenticateAgent, type AgentAccess } from "./auth";
 
 type Dependencies = { service: Db; events?: EventsSource; calendar?: CalendarWriter; mail?: MailSource };
 
-
-
 const OPEN_WORLD = new Set([
   "list_events",
   "browse_events",
@@ -35,7 +33,6 @@ function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
     scopeNodeId: access.nodeId,
     source: "agent",
     agentLabel: access.label,
-    
     updatesSince: access.lastReadAt ?? "1970-01-01T00:00:00Z",
     events: deps.events,
     calendar: deps.calendar,
@@ -43,15 +40,10 @@ function contextFor(access: AgentAccess, deps: Dependencies): ToolContext {
   };
 }
 
-
-
 async function markRead(deps: Dependencies, access: AgentAccess, until: string): Promise<void> {
   const { error } = await deps.service.from("agent_tokens").update({ last_used_at: until }).eq("id", access.tokenId);
   if (error) console.error("mcp: moving the token's read mark failed", error.message);
 }
-
-
-
 
 function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
   const server = new McpServer({ name: "client-workspace", version: "1.0.0" });
@@ -64,11 +56,7 @@ function buildServer(access: AgentAccess, deps: Dependencies): McpServer {
         inputSchema: definition.input,
         annotations: {
           readOnlyHint: definition.readOnly,
-          
-          
           destructiveHint: definition.name === "delete_google_event",
-          
-          
           openWorldHint: OPEN_WORLD.has(definition.name),
         },
       },
@@ -94,8 +82,6 @@ export function mcpEndpoint(deps: Dependencies) {
     return buildServer(access, deps);
   });
 
-  
-  
   return async function serve(request: Request): Promise<Response> {
     const outcome = await authenticateAgent(request, deps.service);
     if (!outcome.ok) {

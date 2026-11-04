@@ -18,17 +18,13 @@ import { onOpenQuickAdd, type QuickAddStart } from "./quick-add-bus";
 import { pasteLinkOver, whenLabel, whenTone } from "./task-row";
 import { useWorkspace } from "./workspace";
 
-
-
 const LOW = 4;
 const clockNow = () => new Date().toTimeString().slice(0, 5);
 
 const KIND_NAMES: Record<PieceKind, string> = { date: "Date", place: "Client or project", priority: "Priority" };
 const GENERAL = "general";
 
-
 type Overrides = { date?: { day: Day | null; time: string | null }; place?: string | null; priority?: number | null };
-
 
 function placeQuery(text: string, caret: number): { start: number; query: string } | null {
   const before = text.slice(0, caret);
@@ -37,9 +33,6 @@ function placeQuery(text: string, caret: number): { start: number; query: string
   const start = before.length - match[1].length - 1;
   return { start, query: match[1] };
 }
-
-
-
 
 function QuickAddEditor({
   start,
@@ -65,36 +58,29 @@ function QuickAddEditor({
   const listId = useId();
   const fieldId = useId();
   const now = today();
-  
   const clock = clockNow();
 
   const places = useMemo<QuickAddPlace[]>(() => (tree ?? []).map((node) => ({ id: node.id, name: node.name, path: node.path })), [tree]);
   const prepared = useMemo(() => places.map((place) => ({ place, prepared: prepare(`${place.path} ${place.name}`) })), [places]);
   const reading = useMemo(() => readQuickAdd(text, { today: now, clock, places, dismissed }), [text, now, clock, places, dismissed]);
   const byId = (id: string | null | undefined) => (id ? places.find((place) => place.id === id) ?? null : null);
-  
   const colorOf = (id: string | null | undefined) => (id ? (tree?.find((node) => node.id === id)?.color ?? undefined) : undefined);
 
-  
   const day = overrides.date !== undefined ? overrides.date.day : (reading.day ?? start.day ?? null);
   const time = overrides.date !== undefined ? overrides.date.time : reading.day ? reading.time : null;
   const placeId = overrides.place !== undefined ? overrides.place : (reading.place?.id ?? (reading.placeCandidates.length ? undefined : (start.placeId ?? null)));
   const priority = overrides.priority !== undefined ? overrides.priority : reading.priority;
   const place = byId(placeId ?? null);
 
-  
   const query = closedAt === null || placeQuery(text, caret)?.start !== closedAt ? placeQuery(text, caret) : null;
   const placedPiece = query ? reading.pieces.find((piece) => piece.kind === "place" && piece.start === query.start) : undefined;
   const typedPiece = placedPiece && placedPiece.end >= caret ? placedPiece : undefined;
-  
   const suggestions =
     query && !(placedPiece && caret > placedPiece.end)
       ? (query.query.trim() ? rank(query.query, prepared, (entry) => entry.prepared).map((hit) => hit.entry.place) : places).slice(0, 6)
       : [];
   const listOpen = suggestions.length > 0;
   const highlighted = Math.min(active, Math.max(0, suggestions.length - 1));
-  
-  
   const [lastShown, setLastShown] = useState(suggestions);
   if (listOpen && (lastShown.length !== suggestions.length || lastShown.some((entry, index) => entry.id !== suggestions[index].id))) setLastShown(suggestions);
   const drawn = listOpen ? suggestions : lastShown;
@@ -113,7 +99,6 @@ function QuickAddEditor({
     }
   }
 
-  
   function pick(chosen: QuickAddPlace) {
     if (!query) return;
     const shared = places.filter((other) => other.name.toLowerCase() === chosen.name.toLowerCase()).length > 1;
@@ -125,7 +110,6 @@ function QuickAddEditor({
     setActive(0);
   }
 
-  
   function choose(kind: PieceKind, value: Overrides[keyof Overrides] | null, removing: boolean) {
     const piece = reading.pieces.find((entry) => entry.kind === kind);
     if (piece && removing) setDismissed((was) => [...was, { kind, text: piece.text }]);
@@ -203,7 +187,6 @@ function QuickAddEditor({
     }
   }
 
-  
   const marked: ReactNode[] = [];
   let at = 0;
   for (const piece of reading.pieces) {
@@ -238,8 +221,6 @@ function QuickAddEditor({
           className="qa-input"
           rows={1}
           autoFocus
-          
-          
           lang="en"
           aria-label="Task, with a date, #client or project and p1–p4 priority"
           placeholder="Call the printer tomorrow 4pm #Website p2"
@@ -284,7 +265,6 @@ function QuickAddEditor({
           ))}
         </ul>
       </div>
-      {}
       <div className="qa-chips" role="group" aria-label="What the task will be">
         <span
           className="qa-chip task-prop"
@@ -326,7 +306,6 @@ function QuickAddEditor({
           <Select
             look="chip"
             label={KIND_NAMES.priority}
-            
             value={String(priority ?? LOW)}
             options={PRIORITIES}
             onChange={(value) => choose("priority", Number(value), false)}
@@ -339,7 +318,6 @@ function QuickAddEditor({
         </p>
       )}
       <div className="qa-foot">
-        {}
         <p className="t-meta qa-hint">
           <kbd className="kbd">#</kbd> client or project · <kbd className="kbd">p1</kbd>–<kbd className="kbd">p4</kbd> priority · <span className="nowrap">a day like “tomorrow 4pm”</span>
         </p>
@@ -358,9 +336,6 @@ function QuickAddEditor({
     </div>
   );
 }
-
-
-
 
 export function QuickAddDialog() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -388,7 +363,6 @@ export function QuickAddDialog() {
       className="dialog qa-dialog"
       aria-label="Add task"
       onKeyDownCapture={(event) => {
-        
         if (event.key === "Escape") popupOpen.current = Boolean(dialog.current?.querySelector("[data-popup-open]"));
       }}
       onCancel={(event) => {
@@ -397,7 +371,6 @@ export function QuickAddDialog() {
         event.preventDefault();
       }}
       onClose={() => {
-        
         const element = dialog.current;
         afterExit(element, () => {
           if (!element?.open) setStart(null);
@@ -418,8 +391,6 @@ export function QuickAddDialog() {
     </dialog>
   );
 }
-
-
 
 export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }: { day?: Day | null; placeId?: string | null; parentId?: string | null; label?: string }) {
   const [open, setOpen] = useState(false);

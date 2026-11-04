@@ -3,9 +3,6 @@ import type { ToolContext } from "@/lib/tools/context";
 import { callTool, tools } from "@/lib/tools/registry";
 import { BROWSER_READS } from "./browser-reads";
 
-
-
-
 export function chatTools(ctx: ToolContext): ToolSet {
   return Object.fromEntries(
     tools.map((definition) => [
@@ -15,7 +12,6 @@ export function chatTools(ctx: ToolContext): ToolSet {
         : tool({
             description: definition.description,
             inputSchema: definition.input,
-            
             execute: async (input: unknown) => callTool(definition.name, ctx, input),
           }),
     ]),

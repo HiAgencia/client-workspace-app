@@ -1,9 +1,6 @@
 import type { UIMessage } from "ai";
 import type { Db } from "@/lib/db/client";
 
-
-
-
 export const HISTORY_MESSAGES = 30;
 
 type Row = { id: string; role: string; parts: unknown; seq: number };
@@ -18,8 +15,6 @@ export async function loadHistory(db: Db, nodeId: string | null, limit = HISTORY
     .reverse()
     .map((row) => ({ id: row.id, role: row.role as UIMessage["role"], parts: row.parts as UIMessage["parts"] }));
 }
-
-
 
 export function withoutEarlierFiles(messages: UIMessage[]): UIMessage[] {
   const turn = messages.map((message) => message.role).lastIndexOf("user");

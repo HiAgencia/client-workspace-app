@@ -7,9 +7,6 @@ import { GUIDE_KEY, GUIDE_VERSION } from "@/lib/guide-key";
 import { ASSISTANT_NAME } from "@/lib/product";
 import "../styles/guide.css";
 
-
-
-
 type Step = { targets: string[]; title: string; text: string };
 
 const STEPS: Step[] = [
@@ -45,13 +42,10 @@ const STEPS: Step[] = [
   },
 ];
 
-
-
 const LEAVE_MS = 130;
 const AFTER_ENTRY_MS = 700;
 const ENTRY_CAP_MS = 8000;
 const SCROLL_CAP_MS = 900;
-
 const RING_AIR = 4;
 const CARD_AIR = 14;
 
@@ -60,7 +54,6 @@ const remember = () => localStorage.setItem(GUIDE_KEY, GUIDE_VERSION);
 const targetOf = (step: Step) => step.targets.map((selector) => document.querySelector<HTMLElement>(selector)).find((element) => element?.checkVisibility()) ?? null;
 const docked = () => window.matchMedia("(width < 40rem)").matches;
 const between = (low: number, value: number, high: number) => Math.max(low, Math.min(value, high));
-
 
 function placeCard(card: HTMLElement, part: DOMRect) {
   if (docked()) return;
@@ -93,8 +86,6 @@ function placeRing(ring: HTMLElement, target: HTMLElement, part: DOMRect) {
   ring.style.setProperty("--guide-radius", `${radius + RING_AIR}px`);
 }
 
-
-
 function bringIntoView(target: HTMLElement): Promise<void> {
   const part = target.getBoundingClientRect();
   const fixed = target.closest(".sidebar, .topbar") !== null;
@@ -119,8 +110,6 @@ function bringIntoView(target: HTMLElement): Promise<void> {
     requestAnimationFrame(look);
   });
 }
-
-
 
 export function useGuide(offer = true): { start: () => void; layer: ReactNode } {
   const [phase, setPhase] = useState<"none" | "offer" | "steps">("none");
@@ -149,7 +138,6 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
     };
   }, []);
 
-  
   useEffect(() => {
     if (!offer || seen()) return;
     const started = performance.now();
@@ -171,7 +159,6 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
 
   const step = phase === "steps" ? steps[index] : null;
 
-  
   const place = useCallback(() => {
     if (!step || !card.current || !ring.current) return;
     const target = targetOf(step);
@@ -199,7 +186,6 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
     };
   }, [phase, place]);
 
-  
   const swap = useCallback(
     (change: () => Promise<void> | void) => {
       if (moving.current) return;
@@ -248,7 +234,6 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
     [steps, swap],
   );
 
-  
   useEffect(() => {
     if (phase === "none") return;
     const onKey = (event: KeyboardEvent) => {

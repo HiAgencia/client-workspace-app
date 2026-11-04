@@ -7,9 +7,6 @@ import { callTool, tools } from "@/lib/tools/registry";
 import type { ToolError } from "@/lib/tools/result";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
 type Tree = { acme: string; web: string; webLanding: string; mobile: string; mobileLanding: string };
 
 let a: DisposableUser | undefined;
@@ -33,12 +30,10 @@ function userCtx(user: DisposableUser | undefined, extra: Partial<ToolContext> =
   return { db: user.client, ownerId: user.id, source: "manual", ...extra };
 }
 
-
 function agentCtx(scopeNodeId: string, extra: Partial<ToolContext> = {}): ToolContext {
   if (!a) throw new Error("user A was not created");
   return { db: serviceClient(), ownerId: a.id, scopeNodeId, source: "agent", agentLabel: "laptop", ...extra };
 }
-
 
 async function accountOf(user: DisposableUser, nodeId: string) {
   const service = serviceClient();
@@ -203,7 +198,6 @@ describe("nodes by id or readable path", () => {
   it("without a node and without a scope, a task goes to General; a scoped access is asked which node it means", async () => {
     const general = await run<{ item: ItemOut }>("create_task", userCtx(a), { title: "Nowhere in particular" });
     expect(general.item).toMatchObject({ nodeId: null, nodePath: null });
-    
     const scoped = await run<{ item: ItemOut }>("create_task", agentCtx(treeA.web), { title: "In the token's node" });
     expect(scoped.item.nodeId).toBe(treeA.web);
     expect((await refuse("create_task", agentCtx(treeA.web), { node: null, title: "Into General" })).code).toBe("not_found");
@@ -324,8 +318,6 @@ describe("reads", () => {
   });
 
   it("get_overview gathers a node's pending work and its events", async () => {
-    
-    
     await run("create_task", userCtx(a), { node: treeA.web, title: "Draft the launch checklist" });
     await run("add_decision", userCtx(a), { node: treeA.web, decision: "Launch on a Tuesday" });
     const events: EventsSource = async ({ nodeId }) => ({
@@ -357,7 +349,6 @@ describe("reads", () => {
     expect(overview.openTasks.length).toBeGreaterThan(0);
     expect(overview.openTasks.every((i) => i.type === "task" && i.status === "open")).toBe(true);
     expect(overview.decisions.length).toBeGreaterThan(0);
-    
     expect(overview.links).toBeUndefined();
     expect(overview.toReview).toBeUndefined();
     expect(overview.children.map((c) => c.id)).toEqual([treeA.webLanding]);
@@ -386,7 +377,6 @@ describe("reads", () => {
     const changed = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "Old" });
     const completed = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "To finish" });
     const deleted = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "To drop" });
-    
     const since = new Date(Date.parse(deleted.item.updatedAt) + 1).toISOString();
     await new Promise((resolve) => setTimeout(resolve, 20));
     const created = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "Fresh" });
@@ -408,7 +398,6 @@ describe("reads", () => {
     const task = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobileLanding, title: "To finish late" });
     const since = new Date(Date.parse(task.item.updatedAt) + 1).toISOString();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    
     vi.useFakeTimers({ toFake: ["Date"], now: Date.now() - 60_000 });
     try {
       await run("update_item", userCtx(a), { id: task.item.id, status: "done" });
@@ -423,7 +412,6 @@ describe("reads", () => {
   it("get_updates_since takes the access's last use when no moment is given, and asks for one otherwise", async () => {
     expect((await refuse("get_updates_since", userCtx(a), {})).code).toBe("since_required");
     const updates = await run<{ since: string }>("get_updates_since", agentCtx(treeA.web, { updatesSince: "2020-01-01T00:00:00Z" }), {});
-    
     expect(updates.since).toBe("2020-01-01T00:00:00Z");
   });
 });
@@ -473,15 +461,12 @@ describe("a scoped agent", () => {
     expect((await refuse("create_task", ctx, { node: treeA.mobile, title: "Escape" })).code).toBe("not_found");
     expect((await refuse("create_task", ctx, { node: "Acme / Mobile", title: "Escape" })).code).toBe("not_found");
     expect((await refuse("get_overview", ctx, { node: treeA.acme })).code).toBe("not_found");
-    
     expect((await refuse("get_board", ctx, { node: treeA.mobile, today: "2026-10-28" })).code).toBe("not_found");
     const own = await run<{ scope: { id: string | null } }>("get_board", ctx, { today: "2026-10-28" });
     expect(own.scope.id).toBe(treeA.web);
     const sibling = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Sibling's" });
     expect((await refuse("update_item", ctx, { id: sibling.item.id, title: "Escape" })).code).toBe("not_found");
     expect((await refuse("delete_item", ctx, { id: sibling.item.id })).code).toBe("not_found");
-    
-    
     const unscoped = agentCtx(treeA.web, { scopeNodeId: undefined });
     const reached = await run<{ item: ItemOut }>("update_item", unscoped, { id: sibling.item.id, title: "Sibling's" });
     expect(reached.item.nodeId).toBe(treeA.mobile);
@@ -490,7 +475,6 @@ describe("a scoped agent", () => {
   it("the owner filter is what keeps the service client off another owner's rows", async () => {
     const asA: ToolContext = { db: serviceClient(), ownerId: a!.id, source: "manual" };
     expect((await refuse("update_item", asA, { id: bItem, title: "Hijacked" })).code).toBe("not_found");
-    
     const asB: ToolContext = { db: serviceClient(), ownerId: b!.id, source: "manual" };
     const reached = await run<{ item: ItemOut }>("update_item", asB, { id: bItem, title: "B secret task" });
     expect(reached.item.id).toBe(bItem);
@@ -506,7 +490,6 @@ describe("a scoped agent", () => {
     expect(found.items).toEqual([]);
   });
 });
-
 
 function counting(db: ToolContext["db"]) {
   const reads = new Map<string, number>();
@@ -532,7 +515,6 @@ describe("one read of the tree per context", () => {
     await run("create_task", ctx, { title: "First of the turn" });
     await run("create_task", ctx, { node: "Landing", title: "Second of the turn" });
     expect(reads.get("nodes")).toBe(1);
-    
     const fresh = counting(a!.client);
     for (const title of ["Fresh one", "Fresh two"]) {
       await run("create_task", { db: fresh.db, ownerId: a!.id, source: "chat", scopeNodeId: treeA.web }, { title });
@@ -589,16 +571,13 @@ describe("the board", () => {
       expect(byId.get(client)).toMatchObject({ open: 2, late: 1, dueToday: 1 });
       expect(byId.get(site)).toMatchObject({ open: 2, late: 1 });
       expect(byId.get(own)).toMatchObject({ open: 3, late: 0, dueInRange: 1, undated: 1 });
-      
       const week = await run<Board>("get_board", ctx, { today: "2026-10-28", from: "2026-10-26", through: "2026-11-01" });
       expect(week.figures.dueInRange).toBe(3);
       expect((await refuse("get_board", ctx, { today: "2026-10-28", from: "2026-11-01", through: "2026-10-26" })).code).toBe("invalid_input");
-      
       const scoped = await run<Board>("get_board", ctx, { node: own, today: "2026-10-28" });
       expect(scoped.figures).toMatchObject({ open: 3, dueInRange: 0, undated: 1 });
       expect(scoped.nodes.map((entry) => entry.id)).toEqual([own]);
 
-      
       const { item: parent } = await run<{ item: ItemOut }>("create_task", ctx, { node: site, title: "With steps" });
       await run("create_task", ctx, { parent: parent.id, title: "First step" });
       const { item: second } = await run<{ item: ItemOut }>("create_task", ctx, { parent: parent.id, title: "Second step" });
@@ -620,7 +599,6 @@ describe("strict input", () => {
     const item = await refuse("add_note", userCtx(a), { node: treeA.web, text: "With a stray field", item: "x" });
     expect(item.code).toBe("invalid_input");
     expect(item.message).toMatch(/item/);
-    
     const listed = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.web, status: "all" });
     expect(listed.items.some((i) => i.title === "With a parent")).toBe(false);
   });
@@ -638,14 +616,11 @@ describe("notes, subtasks, links, and branches", () => {
     expect(note.status).toBe("open");
     const listed = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { node: treeA.mobile, type: "note" });
     expect(listed.items.map((i) => i.id)).toEqual([note.id]);
-    
     expect((await refuse("update_item", userCtx(a), { id: note.id, status: "done" })).code).toBe("invalid_input");
     expect((await refuse("update_item", userCtx(a), { id: note.id, priority: 1 })).code).toBe("invalid_input");
-    
     const changed = await run<{ item: ItemOut }>("update_item", userCtx(a), { id: note.id, notes: "Second thoughts\nmore" });
     expect(changed.item.title).toBe("Second thoughts");
     expect(changed.item.body).toBe("<p>Second thoughts</p><p>more</p>");
-    
     const agent = agentCtx(treeA.acme);
     const read = await run<{ items: ItemOut[] }>("list_items", agent, { node: treeA.mobile, type: "note" });
     expect(read.items.some((i) => i.id === note.id)).toBe(true);
@@ -666,11 +641,9 @@ describe("notes, subtasks, links, and branches", () => {
     expect(link.parentId).toBe(task.id);
     const children = await run<{ items: ItemOut[] }>("list_items", userCtx(a), { parent: task.id, status: "all" });
     expect(children.items).toHaveLength(4);
-    
     expect((await refuse("create_task", userCtx(a), { parent: note.id, title: "Under a note" })).code).toBe("invalid_input");
     expect((await refuse("create_task", userCtx(a), { parent: task.id, node: treeA.web, title: "Elsewhere" })).code).toBe("invalid_input");
 
-    
     const { item: early } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: task.id, title: "Deleted before" });
     await run("delete_item", userCtx(a), { id: early.id });
 
@@ -705,7 +678,6 @@ describe("notes, subtasks, links, and branches", () => {
     const { nodes: before } = await run<{ nodes: Array<{ id: string; openTasks: number }> }>("list_tree", userCtx(a), {});
     const count = (nodes: typeof before, id: string) => nodes.find((n) => n.id === id)!;
     const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.webLanding, title: "Counted" });
-    
     await run("create_task", userCtx(a), { parent: task.id, title: "Not counted: undated child" });
     await run("create_task", userCtx(a), { parent: task.id, title: "Counted child", dueOn: "2026-11-02" });
     await run("add_note", userCtx(a), { node: treeA.webLanding, text: "Not counted: a note" });
@@ -714,7 +686,6 @@ describe("notes, subtasks, links, and branches", () => {
       expect(count(after, id).openTasks - count(before, id).openTasks).toBe(2);
     }
     expect(count(after, treeA.mobile).openTasks).toBe(count(before, treeA.mobile).openTasks);
-    
     const direct = await run<{ items: Array<ItemOut & { parentId: string | null }> }>("list_items", userCtx(a), { node: treeA.acme, includeSubprojects: true });
     expect(count(after, treeA.acme).openTasks).toBe(direct.items.filter((i) => i.type === "task" && (i.parentId === null || i.dueOn !== null)).length);
   });
@@ -732,7 +703,6 @@ describe("notes, subtasks, links, and branches", () => {
     expect(overview.notes.some((n) => n.id === note.id && n.nodePath === "Acme / Web / Landing")).toBe(true);
     expect(overview.decisions.some((d) => d.id === decision.id && d.nodePath === "Acme / Mobile")).toBe(true);
     expect(overview.notes.some((n) => n.id === onTask.id)).toBe(false);
-    
     expect(overview.totals.notes).toBeGreaterThanOrEqual(overview.notes.length);
     expect(overview.totals.decisions).toBeGreaterThanOrEqual(overview.decisions.length);
     const listed = await run<{ items: Array<ItemOut & { parentId: string | null }> }>("list_items", userCtx(a), { node: treeA.acme, type: "note", includeSubprojects: true });
@@ -762,7 +732,6 @@ describe("versions", () => {
     expect(restored.item).toMatchObject({ title: "Versioned", body: "<p>First</p>", priority: 2, status: "open", completedAt: null });
     const again = await listRevisions(userCtx(a), item.id);
     expect(again.ok && again.revisions).toHaveLength(3);
-    
     await run("update_item", userCtx(a), { id: item.id, title: "Versioned" });
     const same = await listRevisions(userCtx(a), item.id);
     expect(same.ok && same.revisions).toHaveLength(3);
@@ -781,7 +750,6 @@ describe("versions", () => {
     if (!restored.ok) throw new Error(restored.message);
     expect(restored.item).toMatchObject({ type: "note", title: "Use the shorter form", body: "<p>Use the shorter form</p><p>It reads faster</p>", status: "open", completedAt: null });
 
-    
     const { item: decision } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.mobile, decision: "Keep the mark", rationale: "<p>First reason</p>" });
     await run("update_item", userCtx(a), { id: decision.id, notes: "<p>Second reason</p>" });
     const versions = await listRevisions(userCtx(a), decision.id);
@@ -806,7 +774,6 @@ describe("versions", () => {
     const { item: parent } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Version parent" });
     const { item: child } = await run<{ item: ItemOut }>("create_task", userCtx(a), { parent: parent.id, title: "Version child" });
     await run("delete_item", userCtx(a), { id: parent.id });
-    
     const listed = await listRevisions(userCtx(a), parent.id);
     if (!listed.ok) throw new Error(listed.message);
     const live = listed.revisions.find((revision) => revision.snapshot.deleted_at === null)!;
@@ -846,7 +813,6 @@ describe("browsing", () => {
       const today = await run<Browse>("browse_items", ctx, { to: "2026-10-28", today: "2026-10-28", sort: "due" });
       expect(today.items.map((i) => i.title)).toEqual(["Late one", "Due today", "From the chat"]);
       expect(today.counts.date.overdue).toBe(1);
-      
       expect(today.items.some((i) => i.title === "No date at all")).toBe(false);
       const undated = await run<Browse>("browse_items", ctx, { undated: true, type: ["task"] });
       expect(undated.items.map((i) => i.title)).toEqual(["No date at all"]);
@@ -861,7 +827,6 @@ describe("browsing", () => {
       expect(all.counts.source).toMatchObject({ manual: 5, chat: 1 });
       expect(all.counts.date).toMatchObject({ dated: 4, undated: 2 });
 
-      
       const urgent = await run<Browse>("browse_items", ctx, { priority: [1] });
       expect(urgent.items.map((i) => i.title).sort()).toEqual(["Late one", "No date at all"]);
       expect(urgent.counts.priority).toMatchObject({ "1": 2, "2": 1, "3": 1, "4": 1 });
@@ -913,12 +878,10 @@ describe("events of the workspace's own", () => {
     expect(events.events.filter((e) => e.origin === "local").map((e) => e.localId)).toContain(event.id);
     const links = await a!.client.from("item_events").select("item_id, event_id").eq("event_id", event.id);
     expect(links.data).toEqual([{ item_id: task.id, event_id: event.id }]);
-    
     const { item: decision } = await run<{ item: ItemOut }>("add_decision", ctx, { node: treeA.web, decision: "Not in an event" });
     expect((await refuse("link_task_event", ctx, { task: decision.id, event: event.id })).code).toBe("invalid_input");
     const unlinked = await run<{ removed: boolean; link: { itemId: string; eventId: string | null } | null }>("unlink_task_event", ctx, { task: task.id });
     expect(unlinked.removed).toBe(true);
-    
     expect(unlinked.link).toMatchObject({ itemId: task.id, eventId: event.id });
     const again = await run<{ removed: boolean; link: unknown }>("unlink_task_event", ctx, { task: task.id });
     expect(again).toMatchObject({ removed: false, link: null });

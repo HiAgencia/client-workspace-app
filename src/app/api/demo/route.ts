@@ -7,11 +7,7 @@ import { sessionContext } from "@/lib/session-context";
 import { serviceClient } from "@/lib/supabase/server";
 import { validZone } from "@/lib/working-time";
 
-
-
-
 const input = z.strictObject({ today: z.iso.date(), zone: z.string().min(1).max(64).optional() });
-
 
 export async function POST(request: Request) {
   const body = await readInput(request, input);
@@ -26,8 +22,6 @@ export async function POST(request: Request) {
     console.error(error instanceof Error ? error.message : error);
     return problem(500, "the demo could not be prepared: reload to try again");
   }
-  
-  
   if (seeded.planted) {
     const owner = session.user.id;
     const zone = validZone(body.value.zone);
@@ -42,9 +36,6 @@ export async function POST(request: Request) {
   }
   return json({ ok: true, ...seeded });
 }
-
-
-
 
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return problem(403, "the request must come from this site");

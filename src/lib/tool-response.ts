@@ -2,8 +2,6 @@ import { secondsToNextDay } from "@/lib/chat/usage";
 import { json } from "@/lib/http";
 import type { ToolError, ToolResult } from "@/lib/tools/result";
 
-
-
 export function toolResponse(what: string, result: ToolResult<unknown> | ToolError): Response {
   if (result.ok) return json(result);
   if (result.code === "db_error" || result.code === "internal") {

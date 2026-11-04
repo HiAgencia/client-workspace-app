@@ -16,13 +16,7 @@ import { subjectOf } from "./subject";
 import { PlaceName } from "../task-row";
 import { useSwap } from "../use-swap";
 
-
-
 export type MailContent = MailRow & { html: string; text: string | null; remoteImages: number; language: string | null };
-
-
-
-
 
 const MODE_KEY = "client-workspace:mail-mode";
 const IMAGES_KEY = "client-workspace:mail-images";
@@ -53,35 +47,25 @@ function remember(key: string, value: string) {
   window.dispatchEvent(new Event(STORE_EVENT));
 }
 
-
 export function useMailMode(): { mode: Theme; setMode: (next: Theme) => void } {
   const productTheme = useSyncExternalStore(subscribeTheme, currentTheme, () => "light" as Theme);
   const chosen = useSyncExternalStore(subscribeStore, storedMode, () => null);
   return { mode: chosen ?? productTheme, setMode: (next) => remember(MODE_KEY, next) };
 }
 
-
 export const MAIL_PHONE = "(width < 40rem)";
-
-
 
 const fullTime = (iso: string) =>
   new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 
 type ViewerProps = {
-  
   row: MailRow;
-  
   onPrevious: (() => void) | null;
   onNext: (() => void) | null;
-  
   note?: ReactNode;
-  
   actions: ReactNode;
   below: ReactNode;
-  
   more: ReactNode;
-  
   onClose?: () => void;
 };
 
@@ -146,7 +130,6 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
         {moving}
         {acting}
       </div>
-      {}
       <header key={key} className="mail-head">
         <h2 id="mail-subject" className="t-title mail-head-subject" tabIndex={-1}>
           {subjectOf(row)}
@@ -183,7 +166,6 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
 
       {below}
 
-      {}
       {message && message.remoteImages > 0 && (
         <div className="mail-images" data-mail-images={imagesOn ? "shown" : "held"}>
           <ImageIcon className="mail-images-icon" />
@@ -209,7 +191,6 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
   );
 }
 
-
 function ModeSwitch({ value, onChange }: { value: Theme; onChange: (value: Theme) => void }) {
   const rail = useRef<HTMLDivElement>(null);
   usePiece(rail, '[aria-pressed="true"]');
@@ -225,9 +206,6 @@ function ModeSwitch({ value, onChange }: { value: Theme; onChange: (value: Theme
   );
 }
 
-
-
-
 function MailFrame({ message, messageKey, mode, images }: { message: MailContent | null; messageKey: string; mode: Theme; images: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -242,7 +220,6 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
     const box = host.current;
     const doc = element?.contentDocument;
     if (!element || !box || !doc?.documentElement) return;
-    
     const style = getComputedStyle(box);
     const available = Math.floor(box.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
     if (available <= 0) return;
@@ -252,13 +229,11 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
     element.style.width = `${width}px`;
     const height = Math.max(doc.documentElement.scrollHeight, doc.body?.scrollHeight ?? 0);
     setFit({ key: shownKey, width, height, scale: Math.min(1, available / width) });
-    
     if (!doc.documentElement.dataset.wheel) {
       doc.documentElement.dataset.wheel = "";
       doc.addEventListener(
         "wheel",
         (event) => {
-          
           const down = event.deltaY > 0;
           const moves = (box: HTMLElement) => box.scrollHeight > box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY) && (down ? box.scrollTop + box.clientHeight < box.scrollHeight - 1 : box.scrollTop > 0);
           let scroller: HTMLElement | null = element.parentElement;
@@ -274,7 +249,6 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
     }
   }, [shownKey]);
 
-  
   useLayoutEffect(() => {
     const box = host.current;
     if (!box) return;

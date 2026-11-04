@@ -1,11 +1,6 @@
 import { z } from "zod";
 import type { Db } from "@/lib/db/client";
 
-
-
-
-
-
 export const pageKey = z.string().regex(/^(overview|tasks|node:[0-9a-f-]{36})$/, "a page is overview, tasks, or node:<id>");
 
 const boxId = z.string().regex(/^[a-z][a-z_]{0,31}$/, "a box is named in lowercase letters and underscores");
@@ -24,8 +19,6 @@ export const preferencesSchema = z.object({
 
 export type Preferences = z.infer<typeof preferencesSchema>;
 
-
-
 export const preferencesChange = z
   .strictObject({
     page: pageKey,
@@ -35,7 +28,6 @@ export const preferencesChange = z
   .refine((value) => value.board !== undefined || value.layout !== undefined, { message: "nothing to change" });
 
 export const DEFAULT_PREFERENCES: Preferences = { boards: {}, layouts: {} };
-
 
 function readMap<T>(value: unknown, entry: z.ZodType<T>): Record<string, T> {
   const out: Record<string, T> = {};
@@ -62,15 +54,11 @@ export async function readPreferences(db: Db, ownerId: string): Promise<{ ok: tr
   return { ok: true, preferences: fromRow(data) };
 }
 
-
-
-
 export async function savePreferences(
   db: Db,
   _ownerId: string,
   change: z.infer<typeof preferencesChange>,
 ): Promise<{ ok: true; preferences: Preferences } | { ok: false; message: string }> {
-  
   const none = null as unknown as string;
   const { data, error } = await db
     .rpc("save_preferences", {
@@ -85,13 +73,8 @@ export async function savePreferences(
   return { ok: true, preferences: fromRow(data as Row) };
 }
 
-
-
-
-
 export const LAYOUT_COOKIE = "cw_layout";
 const COOKIE_BUDGET = 3500;
-
 const OWNER_KEY = "_o";
 
 export function layoutCookie(preferences: Preferences, first?: string, ownerId?: string): string {
@@ -108,8 +91,6 @@ export function layoutCookie(preferences: Preferences, first?: string, ownerId?:
 }
 
 const cookieEntry = z.object({ b: boardSchema.optional(), l: layoutSchema.optional() });
-
-
 
 export function readLayoutCookie(value: string | undefined, ownerId?: string | null): Pick<Preferences, "boards" | "layouts"> {
   const out: Pick<Preferences, "boards" | "layouts"> = { boards: {}, layouts: {} };

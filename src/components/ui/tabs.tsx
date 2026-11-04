@@ -14,10 +14,6 @@ type TabsProps<T extends string> = {
 
 type Fit = "row" | "tight" | "grid";
 
-
-
-
-
 export function Tabs<T extends string>({ value, onChange, options, label, className }: TabsProps<T>) {
   const rail = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<Fit>("row");
@@ -35,7 +31,6 @@ export function Tabs<T extends string>({ value, onChange, options, label, classN
     measure();
     const sizes = new ResizeObserver(measure);
     sizes.observe(room);
-    
     void document.fonts?.ready.then(measure);
     return () => {
       live = false;
@@ -85,8 +80,6 @@ function textWidth(text: string, font: string): number {
   return context.measureText(text).width;
 }
 
-
-
 function fitOf(rail: HTMLElement, room: HTMLElement, labels: string[]): Fit {
   const option = rail.querySelector<HTMLElement>(".seg-option");
   if (!option) return "row";
@@ -99,7 +92,6 @@ function fitOf(rail: HTMLElement, room: HTMLElement, labels: string[]): Fit {
   const chrome = parseFloat(railStyle.paddingLeft) + parseFloat(railStyle.paddingRight) + parseFloat(railStyle.borderLeftWidth) + parseFloat(railStyle.borderRightWidth);
   const gap = parseFloat(railStyle.columnGap) || 0;
   const width = room.clientWidth - parseFloat(roomStyle.paddingLeft) - parseFloat(roomStyle.paddingRight);
-  
   const widest = Math.max(...labels.map((text) => textWidth(text, font))) + 1;
   const row = (padding: number) => labels.length * (widest + padding) + (labels.length - 1) * gap + chrome;
   if (row(air("--seg-air-wide")) <= width) return "row";

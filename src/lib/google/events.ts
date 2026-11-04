@@ -4,11 +4,9 @@ import type { CalendarEvent } from "@/lib/tools/events-source";
 import { deleteEvent, GoogleError, insertEvent, listEvents, patchEvent, refreshAccessToken, type Fetch, type GoogleEvent, type OAuthClient } from "./api";
 import { decrypt, encrypt } from "./crypto";
 
-
 const RENEW_MARGIN_MS = 60_000;
 
 export type GoogleDeps = {
-  
   service: Db;
   key: CryptoKey;
   client: OAuthClient;
@@ -22,9 +20,6 @@ export type TokenRow = {
   access_token: string | null;
   access_token_expires_at: string | null;
 };
-
-
-
 
 export async function accessTokenFor(deps: GoogleDeps, account: TokenRow, now = Date.now(), renew = false): Promise<string> {
   const expires = account.access_token_expires_at ? Date.parse(account.access_token_expires_at) : 0;
@@ -53,10 +48,6 @@ export async function accessTokenFor(deps: GoogleDeps, account: TokenRow, now = 
   if (error) throw new Error(`storing the renewed token: ${error.message}`);
   return answer.access_token;
 }
-
-
-
-
 
 export async function withAccessToken<T>(deps: GoogleDeps, account: TokenRow, call: (token: string) => Promise<T>): Promise<T> {
   const token = await accessTokenFor(deps, account);
@@ -96,14 +87,10 @@ function toEvent(
 
 const REVOKED = "access was revoked: connect the account again";
 
-
-
-
 export function googleEventsSource(deps: GoogleDeps): EventsSource {
   return async ({ ownerId, account, nodeId, from, to }) => {
     if (account.isDemo) return { events: [], failures: [] };
     const failed = (reason: string) => ({ events: [], failures: [{ accountId: account.id, accountEmail: account.email, reason }] });
-    
     if (account.status === "revoked") return failed(REVOKED);
 
     const tokens = await deps.service
@@ -122,7 +109,6 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
     if (chosen.length === 0) return { events: [], failures: [] };
 
     try {
-      
       const events = await withAccessToken(deps, row, async (token) => {
         const found: CalendarEvent[] = [];
         for (const calendar of chosen) {
@@ -139,10 +125,6 @@ export function googleEventsSource(deps: GoogleDeps): EventsSource {
     }
   };
 }
-
-
-
-
 
 export function demoEventsSource(): EventsSource {
   const reads = new Map<string, ReturnType<typeof readDemoCalendars>>();
@@ -186,8 +168,6 @@ async function readDemoCalendars(db: Db, ownerId: string, from: string, to: stri
   return data;
 }
 
-
-
 export function googleCalendarWriter(deps: GoogleDeps): CalendarWriter {
   async function accountFor(ownerId: string, accountId: string) {
     const { data, error } = await deps.service
@@ -202,7 +182,6 @@ export function googleCalendarWriter(deps: GoogleDeps): CalendarWriter {
     if (data.status === "revoked") throw new GoogleError("access was revoked: connect the account again", 401, "invalid_grant");
     return data;
   }
-  
   return {
     async create({ ownerId, accountId, calendarId, event }) {
       return withAccessToken(deps, await accountFor(ownerId, accountId), (token) => insertEvent(deps.fetch, token, calendarId, event));

@@ -7,11 +7,6 @@ import { onReads, readsInFlight } from "./read-cache";
 import { warmReplies } from "./task-replies";
 import type { WaitingRead } from "./workspace";
 
-
-
-
-
-
 export type Warmth = {
   today: Day;
   weekStart: number;
@@ -21,9 +16,7 @@ export type Warmth = {
   mailStore: MailStore;
 };
 
-
 export const MAIN_PAGES = ["/app", "/app/tasks", "/app/calendar", "/app/mail"];
-
 
 const STRIP_REPLIES = 5;
 const MAIL_PAGE_REPLIES = 20;
@@ -36,13 +29,11 @@ function warmEvents(input: Record<string, unknown>, withAccounts = true) {
   if (!keptEvents(input, { withAccounts })) void readEvents(input, { withAccounts });
 }
 
-
 function weekInput(warmth: Warmth, node: string | null): Record<string, unknown> {
   const week = weekOf(warmth.today, warmth.weekStart);
   const instants = instantsOf(week.from, week.to);
   return { ...(node ? { node } : {}), from: instants.from, to: instants.to, fromDay: week.from, toDay: week.to };
 }
-
 
 function warmMail(warmth: Warmth, place: Place) {
   if (!warmth.accounts || place.kind === "general") return;
@@ -54,7 +45,6 @@ function warmRepliesOf(warmth: Warmth, place: Record<string, unknown>, perAccoun
   if (warmth.tree && warmth.accounts && warmth.waiting) warmReplies(place, warmth.tree, warmth.accounts, warmth.waiting, perAccount);
 }
 
-
 function warmBoxes(warmth: Warmth, place: Place) {
   const node = place.kind === "node" ? place.id : null;
   warmTool("get_tasks", { ...placeInput(place), today: warmth.today, upcomingDays: 3 });
@@ -65,7 +55,6 @@ function warmBoxes(warmth: Warmth, place: Place) {
   warmRepliesOf(warmth, placeInput(place), STRIP_REPLIES);
 }
 
-
 export function warmPage(href: string, warmth: Warmth): void {
   const here = "https://workspace.invalid";
   let url: URL;
@@ -74,7 +63,6 @@ export function warmPage(href: string, warmth: Warmth): void {
   } catch {
     return;
   }
-  
   if (url.origin !== here) return;
   const params = url.searchParams;
   const place = readPlace(params.get("place"), warmth.tree);
@@ -86,7 +74,6 @@ export function warmPage(href: string, warmth: Warmth): void {
     case "/app/tasks": {
       const sort = params.get("sort");
       warmTool("get_tasks", { ...placeInput(place), today: warmth.today, sort: sort === "priority" || sort === "manual" ? sort : "date", withCompleted: params.get("completed") === "1" });
-      
       return warmEvents(weekInput(warmth, null), false);
     }
     case "/app/calendar": {
@@ -97,7 +84,6 @@ export function warmPage(href: string, warmth: Warmth): void {
       if (!peekGet("/api/accounts")) void get("/api/accounts");
       return warmEvents({ from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to });
     }
-    
     case "/app/mail":
       warmMail(warmth, { kind: "all" });
       return warmRepliesOf(warmth, {}, MAIL_PAGE_REPLIES);
@@ -109,9 +95,7 @@ function monthRange(anchor: Day, weekStart: number): { from: Day; to: Day } {
   return { from: weeks[0][0], to: weeks.at(-1)!.at(-1)! };
 }
 
-
 const QUIET_MS = 600;
-
 
 export function whenSettled(then: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;

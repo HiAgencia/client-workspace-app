@@ -3,9 +3,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { currentTheme, setTheme, subscribeTheme } from "@/lib/theme";
 
-
-
-
 export function LandingNav({ children }: { children: ReactNode }) {
   const mark = useRef<HTMLSpanElement>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -25,10 +22,6 @@ export function LandingNav({ children }: { children: ReactNode }) {
     </>
   );
 }
-
-
-
-
 
 export function ThemeButton({ toDark, toLight }: { toDark: ReactNode; toLight: ReactNode }) {
   const theme = useSyncExternalStore(subscribeTheme, currentTheme, () => null);

@@ -8,8 +8,6 @@ import { safeHref, sanitizeRichText, TONES, type Tone } from "@/lib/rich-text";
 import { cx } from "@/lib/utils";
 import { BoldIcon, BulletsIcon, ItalicIcon, LinkIcon, NumbersIcon, type Icon } from "./icons";
 
-
-
 const ToneMark = Mark.create<{ tone: Tone | null }>({
   name: "tone",
   addAttributes() {
@@ -42,11 +40,8 @@ type RichEditorProps = {
   placeholder?: string;
   autoFocus?: boolean;
   id?: string;
-  
   onEscape?: () => void;
 };
-
-
 
 export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFocus = false, id, onEscape }: RichEditorProps) {
   const own = useId();
@@ -100,17 +95,12 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     onBlur: () => onBlur?.(),
   });
 
-  
-  
   useEffect(() => {
     if (!editor || value === emitted.current) return;
     emitted.current = value;
     editor.commands.setContent(value, { emitUpdate: false });
   }, [editor, value]);
 
-  
-  
-  
   const state = useEditorState({
     editor,
     selector: ({ editor: snapshot }) => {
@@ -141,7 +131,6 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     if (!href) return setLinkError(true);
     setLinkError(false);
     const chain = editor.chain().focus().extendMarkRange("link");
-    
     if (editor.state.selection.empty && !editor.isActive("link")) {
       chain.insertContent({ type: "text", text: href, marks: [{ type: "link", attrs: { href } }] }).run();
     } else chain.setLink({ href }).run();
@@ -162,7 +151,6 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     }
   }
 
-  
   const tool = (name: string, pressed: boolean | undefined, run: () => void, Glyph?: Icon) => (
     <button
       type="button"
@@ -201,7 +189,6 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
           LinkIcon,
         )}
         <span className="rich-sep" aria-hidden="true" />
-        {}
         <span className="rich-tones" role="group" aria-label={`Color of the selected text in ${label}`}>
           {TONES.map((tone) => (
             <button
@@ -248,7 +235,6 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     </div>
   );
 }
-
 
 export function RichText({ html, className }: { html: string | null; className?: string }) {
   const clean = sanitizeRichText(html);

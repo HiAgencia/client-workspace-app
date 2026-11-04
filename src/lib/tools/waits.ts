@@ -14,11 +14,6 @@ import type { ReadPlace, Scope } from "./tree";
 
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 
-
-
-
-
-
 const TASK_MAIL_COLUMNS = "item_id, account_id, waits_for, dismissed, created_at";
 
 type TaskMailRow = { item_id: string; account_id: string | null; waits_for: string; dismissed: string[]; created_at: string };
@@ -27,13 +22,9 @@ function toTaskMail(row: TaskMailRow): TaskMail {
   return { accountId: row.account_id, waitsFor: row.waits_for, since: row.created_at, dismissed: row.dismissed };
 }
 
-
 const IN_CHUNK = 200;
 
-
 const PAGE = 1000;
-
-
 
 export async function everyTaskMail(ctx: ToolContext): Promise<ToolResult<{ rows: TaskMailRow[] }>> {
   const rows: TaskMailRow[] = [];
@@ -45,14 +36,12 @@ export async function everyTaskMail(ctx: ToolContext): Promise<ToolResult<{ rows
   }
 }
 
-
 export function taskMailIn(rows: TaskMailRow[], itemIds: string[]): Map<string, TaskMail> {
   const ids = new Set(itemIds);
   const byTask = new Map<string, TaskMail>();
   for (const row of rows) if (ids.has(row.item_id)) byTask.set(row.item_id, toTaskMail(row));
   return byTask;
 }
-
 
 export async function taskMailOf(ctx: ToolContext, itemIds: string[]): Promise<ToolResult<{ byTask: Map<string, TaskMail> }>> {
   const byTask = new Map<string, TaskMail>();
@@ -70,11 +59,9 @@ export async function taskMailOf(ctx: ToolContext, itemIds: string[]): Promise<T
   return ok({ byTask });
 }
 
-
 function placeOf(scope: Scope, nodeId: string | null): ReadPlace {
   return nodeId ? { kind: "node", node: scope.all.get(nodeId)! } : { kind: "all" };
 }
-
 
 const replyKey = (accountId: string, messageId: string) => `${accountId}:${messageId}`;
 
@@ -132,13 +119,10 @@ export const setTaskMail = defineTool({
         return fail("not_found", "that account is not connected where the task lives: connect it there in Settings, or choose another");
       }
     }
-    
     if (input.since !== undefined && Date.parse(input.since) < Date.parse(found.row.created_at)) {
       return fail("invalid_input", "a wait cannot begin before its task existed");
     }
     const wanted = { account_id: input.account === undefined ? (previous?.accountId ?? null) : input.account, waits_for: words };
-    
-    
     const changed = previous !== null && (previous.accountId !== wanted.account_id || previous.waitsFor !== wanted.waits_for);
     const rulings = input.dismissed ? { dismissed: input.dismissed } : changed ? { dismissed: [] } : {};
     const update = () =>
@@ -156,8 +140,6 @@ export const setTaskMail = defineTool({
           .insert({ item_id: found.row.id, owner_id: ctx.ownerId, ...wanted, ...rulings, ...(input.since ? { created_at: input.since } : {}) })
           .select(TASK_MAIL_COLUMNS)
           .single();
-    
-    
     let replaced = previous;
     let written = first;
     if (!previous && first.error?.code === "23505") {
@@ -180,9 +162,6 @@ const waitingTaskSchema = z.object({
   waitsFor: z.string(),
   since: z.string(),
 });
-
-
-
 
 async function waitAccounts(ctx: ToolContext, scope: Scope, nodeId: string | null, wait: TaskMail, only?: string): Promise<ToolResult<{ accounts: ReachedAccount[] }>> {
   const reached = await accountsOf(ctx, scope, placeOf(scope, nodeId));
@@ -215,12 +194,9 @@ export const listTaskReplies = defineTool({
   }),
   output: z.object({
     task: waitingTaskSchema,
-    
     accounts: z.array(z.object({ id: z.string(), email: z.string() })),
-    
     toRead: z.array(z.string()),
     replies: z.array(mailRowSchema),
-    
     more: z.array(z.string()),
     next: z.record(z.string(), z.string()),
     failures: z.array(mailFailureSchema),
@@ -270,9 +246,7 @@ export const dismissReply = defineTool({
   output: z.object({
     task: z.string(),
     title: z.string(),
-    
     reply: z.object({ account: z.string(), id: z.string(), dismissed: z.boolean() }),
-    
     ruledOut: z.array(z.string()),
   }),
   async run(ctx, input) {
@@ -280,7 +254,6 @@ export const dismissReply = defineTool({
     if (isError(found)) return found;
     if (found.row.type !== "task") return fail("invalid_input", `a ${found.row.type} does not wait for mail: a task does`);
     if (!origin(ctx)) return fail("internal", "an agent write needs its token's label");
-    
     const { data, error } = await ctx.db.rpc("dismiss_task_reply", {
       p_owner: ctx.ownerId,
       p_item: found.row.id,
@@ -301,8 +274,6 @@ export const dismissReply = defineTool({
 function escaped(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-
-
 
 async function answeringMessage(ctx: ToolContext, scope: Scope, accountId: string, id: string): Promise<ToolResult<{ message: MailMessage }>> {
   const place: ReadPlace = scope.root ? { kind: "node", node: scope.root } : { kind: "all" };
@@ -346,7 +317,6 @@ export const completeTask = defineTool({
   output: z.object({
     item: itemSchema,
     decision: itemSchema,
-    
     link: z.object({ accountId: z.string(), messageId: z.string(), created: z.boolean() }).nullable(),
   }),
   async run(ctx, input) {
@@ -357,7 +327,6 @@ export const completeTask = defineTool({
     if (row.status === "done") return fail("invalid_input", "the task is already done: open it again to close it with another result");
     const mark = origin(ctx);
     if (!mark) return fail("internal", "an agent write needs its token's label");
-    
     let said = writtenBody(input.notes);
     if (input.reply) {
       const answer = await answeringMessage(ctx, scope, input.reply.account, input.reply.id);
@@ -365,8 +334,6 @@ export const completeTask = defineTool({
       const { message } = answer;
       said ??= `<p>${escaped(`From ${message.from.name ?? message.from.email}: ${message.subject || "(no subject)"} · ${message.receivedAt.slice(0, 10)}`)}</p>`;
     }
-    
-    
     const { data, error } = await ctx.db.rpc("complete_task", {
       p_owner: ctx.ownerId,
       p_item: row.id,
@@ -384,10 +351,6 @@ export const completeTask = defineTool({
     return ok({ item: toItem(closed.item, scope), decision: toItem(closed.decision, scope), link });
   },
 });
-
-
-
-
 
 async function leftByClosing(ctx: ToolContext, task: ItemRow): Promise<ToolResult<{ decision: { id: string; title: string; body: string | null } | null; link: { account_id: string; message_id: string } | null }>> {
   if (!task.completed_at) return ok({ decision: null, link: null });
@@ -418,7 +381,6 @@ export const reopenTask = defineTool({
   input: z.strictObject({ task: z.uuid() }),
   output: z.object({
     item: itemSchema,
-    
     closing: z.object({ outcome: z.string(), notes: z.string().nullable(), reply: z.object({ account: z.string(), id: z.string() }).nullable() }).nullable(),
   }),
   async run(ctx, input) {

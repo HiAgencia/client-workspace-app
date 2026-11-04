@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { lastNode } from "../last-node";
 
-
 export default function Resume() {
   const router = useRouter();
   useEffect(() => {

@@ -6,7 +6,6 @@ import { isError } from "@/lib/tools/result";
 import { selectAllItems, toItem } from "@/lib/tools/rows";
 import { loadScope, isUuid, reachOf } from "@/lib/tools/tree";
 
-
 export async function GET(_request: Request, { params }: RouteContext<"/api/events/[id]/tasks">) {
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such event");

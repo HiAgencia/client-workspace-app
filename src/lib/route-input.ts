@@ -3,7 +3,6 @@ import { problem, sameOrigin } from "@/lib/http";
 
 const MAX_BODY = 64 * 1024;
 
-
 export async function readInput<S extends z.ZodType>(
   request: Request,
   schema: S,

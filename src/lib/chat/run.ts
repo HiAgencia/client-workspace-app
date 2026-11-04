@@ -14,13 +14,9 @@ import { callTool } from "@/lib/tools/registry";
 import { stepsTaken, whatWasDone } from "./browser-reads";
 import { chatTools } from "./tools";
 
-
-
-
 export const MAX_STEPS = 6;
 
 type TreeRow = { id: string; path: string; openTasks: number };
-
 
 export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new Date()): Promise<string> {
   const tree = (await callTool("list_tree", ctx, {})) as { ok: boolean; nodes?: TreeRow[] };
@@ -58,7 +54,6 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
     .join("\n");
 }
 
-
 export function describeModelError(error: unknown): string {
   const status = typeof error === "object" && error && "statusCode" in error ? Number((error as { statusCode: unknown }).statusCode) : 0;
   console.error("chat model:", status || "", error instanceof Error ? error.message : error);
@@ -83,7 +78,6 @@ export async function runChat(options: {
     messages: await convertToModelMessages(options.messages.map(whatWasDone)),
     tools: chatTools(options.ctx),
     stopWhen: isStepCount(Math.max(1, MAX_STEPS - taken)),
-    
     prepareStep: ({ stepNumber }) => (taken + stepNumber >= MAX_STEPS - 1 ? { toolChoice: "none" as const } : undefined),
     providerOptions: options.providerOptions,
     abortSignal: options.abortSignal,

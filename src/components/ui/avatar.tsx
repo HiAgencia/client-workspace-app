@@ -4,10 +4,6 @@ import { useState } from "react";
 import { initialOf } from "@/lib/session-person";
 import { cx } from "@/lib/utils";
 
-
-
-
-
 export function Avatar({ src, name, email, className }: { src: string | null; name: string | null; email: string | null; className?: string }) {
   const [loaded, setLoaded] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);

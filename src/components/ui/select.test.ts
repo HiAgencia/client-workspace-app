@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 import { dueTimeOptions } from "@/app/app/due-times";
 import { Select } from "./select";
 
-
 function valueText(markup: string): string {
   const found = /class="picker-value"[^>]*>([^<]*)</.exec(markup);
   if (!found) throw new Error(`no value in the markup: ${markup}`);

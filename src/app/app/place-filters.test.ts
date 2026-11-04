@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import { count } from "@/lib/count";
 import { accountFromUrl, accountOptions, chosenAccounts, countsByAccount, EVENTS, MESSAGES, placeOptions, placesThatShow, TASKS, whatItBrings } from "./place-filters";
 
-
-
 describe("what a filter's option brings", () => {
   it("says one in the singular", () => {
     expect(whatItBrings(1, TASKS)).toBe("1 task");

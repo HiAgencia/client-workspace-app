@@ -4,9 +4,6 @@ import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { requireUser, userClient } from "@/lib/supabase/server";
 
-
-
-
 export async function GET() {
   const db = await userClient();
   const who = await requireUser(db);
@@ -24,7 +21,6 @@ export async function GET() {
   return json({
     ok: true,
     canConnect: missingGoogleConfig().length === 0 && !user.isAnonymous,
-    
     connectBlocked: user.isAnonymous ? "demo" : missingGoogleConfig().length > 0 ? "not_configured" : null,
     accounts: accounts.data.map((account) => ({
       id: account.id,
@@ -79,7 +75,6 @@ export async function POST(request: Request) {
       break;
   }
   if (result.error) {
-    
     console.error(`accounts ${value.action}:`, result.error.message);
     return problem(422, "that change is not possible here");
   }

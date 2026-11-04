@@ -1,5 +1,3 @@
-
-
 const PREFIX = "cwa_";
 const SHAPE = /^cwa_[A-Za-z0-9_-]{43}$/;
 
@@ -18,7 +16,6 @@ export async function hashAgentToken(token: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)));
   return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
-
 
 export const TOKEN_ENV = "CLIENT_WORKSPACE_TOKEN";
 

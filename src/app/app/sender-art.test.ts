@@ -4,11 +4,9 @@ import { describe, expect, it } from "vitest";
 import { demoSeedTree, type Seed } from "@/lib/demo-seed";
 import { demoSender, nameSeed, portraitOf } from "./sender-art";
 
-
 function senders(seeds: Seed[]): string[] {
   return seeds.flatMap((seed) => [...(seed.accounts ?? []).flatMap((account) => account.mail.map((message) => message.from.email)), ...senders(seed.children ?? [])]);
 }
-
 
 function plantedSenders(): string[] {
   const dir = join(process.cwd(), "supabase", "migrations");

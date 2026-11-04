@@ -14,14 +14,10 @@ import { subjectOf } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
 import { openTaskDetail } from "./task-row";
 
-
 function inOrder(tasks: TaskReplies[]): TaskReplies[] {
   const newest = (entry: TaskReplies) => entry.replies[0]?.receivedAt ?? "";
   return [...tasks].sort((a, b) => (newest(a) < newest(b) ? 1 : newest(a) > newest(b) ? -1 : 0));
 }
-
-
-
 
 export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[] }>; now: Day | null }) {
   const [open, setOpen] = useState(false);
@@ -29,8 +25,6 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
   const titleId = useId();
   const tasks = read.data ? inOrder(read.data.tasks) : null;
   const waiting = tasks?.filter((entry) => entry.replies.length === 0 && entry.failures.length === 0).length ?? 0;
-  
-  
   const noneArrived = tasks !== null && tasks.length > 0 && waiting === tasks.length;
   const folded = noneArrived ? tasks : (tasks?.slice(1) ?? []);
   return (
@@ -99,15 +93,11 @@ function Others({ open, id, tasks, now }: { open: boolean; id: string; tasks: Ta
   );
 }
 
-
-
 function ReplyEntry({ entry, now }: { entry: TaskReplies; now: Day | null }) {
   const newest = entry.replies[0];
   const failure = entry.failures[0];
   const unread = entry.replies.length === 0 && failure;
   const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? "Its mail could not be loaded" : "Nothing arrived yet";
-  
-  
   return (
     <button type="button" className="reply-entry" data-reply-task={entry.task.id} onClick={() => openTaskDetail({ id: entry.task.id })}>
       <span className="reply-entry-task">

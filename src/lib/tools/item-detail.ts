@@ -12,25 +12,15 @@ import { itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
 import { rowOf, taskRowSchema } from "./tasks";
 import { reaches } from "./tree";
 
-
-
-
 export const itemDetailOutput = z.object({
-  
   item: itemSchema.extend({ color: z.string().nullable() }),
-  
   parent: z.object({ id: z.string(), title: z.string(), status: z.enum(["open", "done"]) }).nullable(),
-  
   subtasks: z.array(taskRowSchema),
-  
   notes: z.array(noteRowSchema),
-  
   event: z.object({ link: taskEventSchema, event: localEventSchema.nullable() }).nullable(),
-  
   mail: taskMailSchema.nullable(),
   messages: z.array(mailRowSchema),
   mailFailures: z.array(mailFailureSchema),
-  
   mailToRead: z.array(z.string()),
 });
 
@@ -71,7 +61,6 @@ export const getItem = defineTool({
     const { row, scope } = found;
     const node = row.node_id === null ? null : scope.all.get(row.node_id);
 
-    
     const place = await selectAllItems(ctx, { nodeIds: row.node_id ? [row.node_id] : [], general: row.node_id === null }, (query) => query.is("deleted_at", null), "reading what hangs from the item");
     if (isError(place)) return place;
     const counts = new Map<string, { done: number; total: number; notes: number }>();

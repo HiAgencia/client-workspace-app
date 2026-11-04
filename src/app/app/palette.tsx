@@ -29,16 +29,10 @@ type Entry =
 
 const KIND_NAMES: Record<TreeNode["kind"], string> = { client: "Client", project: "Project", subproject: "Subproject" };
 const LIMIT = { node: 6, item: 8, mail: 8 };
-
 const MAIL_WAIT_MS = 400;
 const NAME = "Search clients, projects, tasks, mail, and actions";
-
 const SHORT_NAME = "Search everything";
 const NARROW = "(width < 36rem)";
-
-
-
-
 
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -48,8 +42,6 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     if (open && !el.open) el.showModal();
     if (!open && el.open) el.close();
   }, [open]);
-  
-  
   const shown = useExit(open, dialog);
   return (
     <dialog
@@ -61,7 +53,6 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
       }}
       onClick={(event) => {
-        
         if (event.target === dialog.current && dialog.current.dataset.downOutside !== undefined) onClose();
         if (dialog.current) delete dialog.current.dataset.downOutside;
       }}
@@ -82,15 +73,11 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
   const [itemsFailed, setItemsFailed] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
-  
   const inner = useRef<HTMLDivElement>(null);
   useAutoHeight(dialog, inner);
   const currentNode = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1] ?? null;
   const here = tree?.find((node) => node.id === currentNode);
 
-  
-  
-  
   const treeRead = tree !== null;
   const rootIds = (tree ?? [])
     .filter((node) => node.parentId === null)
@@ -98,7 +85,6 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     .join(",");
   useEffect(() => {
     if (!treeRead && treeError) void refreshTree();
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -115,8 +101,6 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     };
   }, [rootIds, treeRead]);
 
-  
-  
   const words = query.trim();
   const [mail, setMail] = useState<{ words: string; rows: MailRow[]; failures: MailFailureRow[]; waiting: number }>({ words: "", rows: [], failures: [], waiting: 0 });
   useEffect(() => {
@@ -153,7 +137,6 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
       { kind: "action", id: "go-mail", label: "Go to Mail", run: () => router.push("/app/mail") },
       { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
     ];
-    
     if (signedIn) {
       list.push({ kind: "action", id: "go-profile", label: "Go to Profile", run: () => router.push("/app/profile") });
       list.push({ kind: "action", id: "switch-account", label: "Switch account", run: () => void switchAccount() });
@@ -168,14 +151,11 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     return list;
   }, [here, router, signedIn, switchAccount]);
 
-  
-  
   function go(target: FocusTarget) {
     requestFocus(target);
     if (pathname !== `/app/node/${target.nodeId}`) router.push(`/app/node/${target.nodeId}`);
   }
 
-  
   const nodeIndex = useMemo(() => (tree ?? []).map((node) => ({ node, prepared: prepare(`${node.name} ${node.path}`) })), [tree]);
   const itemIndex = useMemo(() => (items ?? []).map((item) => ({ item, prepared: prepare(`${item.title} ${item.body ?? ""}`) })), [items]);
   const actionIndex = useMemo(() => actions.map((action) => ({ action, prepared: prepare(action.kind === "action" ? action.label : "") })), [actions]);
@@ -193,8 +173,6 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     ].filter((group) => group.entries.length > 0);
   }, [query, tree, nodeIndex, itemIndex, actionIndex, actions, mailRows]);
 
-  
-  
   const flat = groups.flatMap((group) => group.entries);
   const current = activeId === null ? flat[0] : (flat.find((entry) => entry.id === activeId) ?? null);
 
@@ -207,10 +185,8 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     onClose();
     if (entry.kind === "node") go({ kind: "node", nodeId: entry.node.id });
     else if (entry.kind === "item") {
-      
       if (entry.item.nodeId) go({ kind: "item", nodeId: entry.item.nodeId, itemId: entry.item.id, title: entry.item.title, type: entry.item.type, done: entry.item.status === "done" });
     } else if (entry.kind === "mail") router.push(`/app/mail?account=${encodeURIComponent(entry.row.accountId)}&message=${encodeURIComponent(entry.row.id)}`);
-
     else requestAnimationFrame(entry.run);
   }
 
@@ -228,12 +204,9 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
   }
 
   const searching = query.trim().length > 0;
-  
   const accountsSearching = !words ? 0 : mail.words === words ? mailNow.waiting : (mailAccounts?.length ?? 0);
   const treeFailed = !treeRead && treeError !== null;
   const nothing = flat.length === 0 && accountsSearching === 0;
-  
-  
   const note = treeFailed
     ? `Clients, projects, tasks and mail could not be loaded: ${treeError.replace(/\.+$/, "")}. Actions still work; open this again to retry.`
     : searching && (items === null || mailAccounts === null)
@@ -333,7 +306,6 @@ function EntryView({ entry }: { entry: Entry }) {
         <span className="pill">{KIND_NAMES[entry.node.kind]}</span>
         <span className="stack palette-text">
           <span className="t-name">{entry.node.name}</span>
-          {}
           {entry.node.path !== entry.node.name && <span className="t-meta">{entry.node.path.slice(0, entry.node.path.lastIndexOf(" / "))}</span>}
         </span>
       </>
@@ -350,7 +322,6 @@ function EntryView({ entry }: { entry: Entry }) {
           {item.status === "done" ? "Done" : TYPE_NAMES[item.type]}
         </span>
         <span className="stack palette-text">
-          {}
           <span className="t-value">{inlinePlain(item.title)}</span>
           <span className="t-meta">{item.nodePath}</span>
         </span>

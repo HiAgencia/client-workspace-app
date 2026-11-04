@@ -33,21 +33,11 @@ import { SCREEN_TITLES } from "./screen-titles";
 import { openTaskDetail } from "./task-row";
 import { SideNav, startTask, useCurrentNode } from "./side-nav";
 
-
-
 type Notice = { id: number; text: string; tone: "status" | "error"; undo?: () => void; focusAfter?: () => HTMLElement | null };
-
-
-
-
 
 const WARM_MAIN_PAGES = false;
 
-
 const noticeLife = (notice: Notice) => (notice.undo ? 6000 : 3000);
-
-
-
 
 type Chat = { scope: string | null | undefined; open: boolean; setOpen: (open: boolean) => void };
 
@@ -55,35 +45,22 @@ type Workspace = {
   config: PublicConfig;
   tree: TreeNode[] | null;
   treeError: string | null;
-  
   taskCounts: { overdue: number; today: number } | null;
-  
   generalTasks: number | null;
-  
   notePlaces: { nodes: string[]; general: boolean } | null;
-  
   mailAccounts: MailAccountRef[] | null;
   mailWaiting: WaitingRead[] | null;
-  
   mailStore: MailStore;
   mailFigure: MailFigure | null;
-  
-  
   person: Person | null;
   signOut: () => void;
-  
-  
   switchAccount: () => Promise<void>;
   refreshTree: () => Promise<void>;
-  
   version: number;
   touch: () => void;
   notify: (notice: Omit<Notice, "id">) => void;
-  
-  
   saving: (promise: Promise<{ ok: boolean; message?: string }>, options?: { reread?: boolean }) => Promise<boolean>;
   openPalette: () => void;
-  
   openItem: (item: Item) => void;
   chat: Chat;
   setChatScope: (scope: string | null | undefined) => void;
@@ -113,7 +90,6 @@ export function useWorkspace(): Workspace {
   return value;
 }
 
-
 export function useChatScope(scope: string | null): void {
   const { setChatScope } = useWorkspace();
   useEffect(() => {
@@ -134,8 +110,6 @@ function subscribeStorage(onChange: () => void) {
     window.removeEventListener(CHAT_OPEN_KEY, onChange);
   };
 }
-
-
 
 let treeOfLoad: { read: TreeRead | null } | undefined;
 function keptTreeOfLoad(): TreeRead | null {
@@ -165,14 +139,12 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const [notice, setNotice] = useState<Notice | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [status, setStatus] = useState("");
-  
   const [lastStatus, setLastStatus] = useState("");
   const [person, setPerson] = useState<Person | null>(null);
   const [detail, setDetail] = useState<Item | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [chatScope, setChatScope] = useState<string | null | undefined>(undefined);
-  
   const docked = useDocked();
   const storedOpen = useSyncExternalStore(subscribeStorage, () => localStorage.getItem(CHAT_OPEN_KEY) === "1", () => false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -196,7 +168,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const refreshTree = useCallback(
     () =>
       tool<TreeRead>("list_tree", treeInput(today())).then((answer) => {
-        
         if (answer.ok) {
           setTreeRead(answer);
           setTreeError(null);
@@ -206,14 +177,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     [],
   );
 
-  
-  
-  
-  
   const accountsKey = mailAccounts?.map((account) => account.id).join() ?? "";
   useEffect(() => {
     for (const account of mailAccounts ?? []) mailStore.count(account);
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountsKey, mailStore, version]);
 
@@ -224,15 +190,11 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     setVersion((v) => v + 1);
     void refreshTree();
   }, [refreshTree, mailStore]);
-  
-  
   const touch = useCallback(() => {
     wrote();
     readAgain();
   }, [readAgain]);
 
-  
-  
   useEffect(() => {
     lastRound.current = Date.now();
     return watchRounds(
@@ -245,9 +207,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     );
   }, [mailStore, readAgain]);
 
-  
-  
-  
   const [weekStart] = useState(() => (typeof window === "undefined" ? 1 : firstWeekday()));
   const warmth = useRef<Warmth | null>(null);
   useEffect(() => {
@@ -261,7 +220,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       if (!known) return;
       for (const page of MAIN_PAGES) if (page !== window.location.pathname) warmPage(page, known);
     });
-
   }, [treeKnown]);
   useEffect(() => {
     let last = "";
@@ -272,7 +230,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       last = href;
       warmPage(href, warmth.current);
     };
-    
     const stop = onReads(() => {
       last = "";
     });
@@ -285,7 +242,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     };
   }, []);
 
-  
   const shown = useRef<Notice | null>(null);
   const show = useCallback((next: Notice | null) => {
     shown.current = next;
@@ -297,7 +253,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const dismiss = useCallback(() => {
     clearTimeout(timer.current);
     if (!shown.current) return show(queued.current);
-    
     if (noticeBox.current?.contains(document.activeElement)) {
       const { focusAfter } = shown.current;
       const before = heldBefore.current;
@@ -310,7 +265,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     }
     setLeaving(true);
   }, [show]);
-  
   useEffect(() => {
     if (!leaving) return;
     return afterExit(noticeBox.current, () => {
@@ -323,15 +277,12 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   useEffect(() => {
     if (!notice || leaving) return;
-    
     if (notice.tone === "status") {
       clearTimeout(timer.current);
       timer.current = setTimeout(dismiss, noticeLife(notice));
     }
   }, [notice, leaving, dismiss]);
 
-  
-  
   useEffect(() => {
     pointerOnNotice.current = false;
     if (!notice) return;
@@ -360,7 +311,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       if (answer.ok) {
         setStatus("Saved");
         setLastStatus("Saved");
-        
         statusTimer.current = setTimeout(() => setStatus(""), 2000);
         if (reread) touch();
         return true;
@@ -374,8 +324,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   useEffect(() => {
     void refreshTree();
-    
-    
     const auth = browserClient(config).auth;
     void auth.getSession().then(({ data }) => {
       if (data.session) setPerson(personOf(data.session.user));
@@ -388,18 +336,13 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => subscription.unsubscribe();
   }, [refreshTree, config]);
 
-  
   useEffect(() => {
     const match = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/);
     if (match) rememberLastNode(match[1]);
   }, [pathname]);
 
-  
   useEffect(() => dropFocusRequestOutside(pathname), [pathname]);
 
-  
-  
-  
   const lastScreen = useRef(pathname);
   useEffect(() => {
     if (lastScreen.current === pathname) return;
@@ -411,31 +354,23 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
-  
-  
-  
   useEffect(() => {
     const id = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1];
     const name = id ? tree?.find((node) => node.id === id)?.name : SCREEN_TITLES[pathname];
     if (name) document.title = `${name} · ${PRODUCT_NAME}`;
   }, [pathname, tree]);
 
-  
-  
   useEffect(() => {
     if (!drawerOpen) return;
     return onFocusRequest(() => setDrawerOpen(false));
   }, [drawerOpen]);
 
-  
   const [placeSeen, setPlaceSeen] = useState(pathname);
   if (placeSeen !== pathname) {
     setPlaceSeen(pathname);
     setDrawerOpen(false);
   }
 
-  
-  
   const currentNode = useCurrentNode();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -455,7 +390,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     return () => window.removeEventListener("keydown", onKey);
   }, [currentNode]);
 
-  
   const forgetPerson = useCallback(async () => {
     await forgetLayout();
     forgetLastNode();
@@ -468,18 +402,14 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     router.replace("/");
   }, [config, router, forgetPerson]);
   const leave = useCallback(() => void signOut(), [signOut]);
-  
-  
   const switchAccount = useCallback(async () => {
     await forgetPerson();
     await browserClient(config).auth.signOut({ scope: "local" });
     const { error } = await signInWithGoogle(config);
-    
     if (error) router.replace("/?auth=failed");
   }, [config, router, forgetPerson]);
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
-  
   const openItem = useCallback((item: Item) => {
     if (item.type !== "task") return setDetail(item);
     openTaskDetail({
@@ -500,7 +430,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       },
     });
   }, []);
-  
   const closeItem = useCallback((id: string) => {
     setDetail(null);
     focusAfterClose(() => {
@@ -508,7 +437,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       return row?.querySelector<HTMLElement>("[data-detail]") ?? row?.querySelector<HTMLElement>("[data-item-title]");
     });
   }, []);
-  
   const deleteItem = useCallback(
     async (item: Item) => {
       const fold = document.querySelector(`[data-item="${item.id}"]`)?.closest(".row-fold");
@@ -524,7 +452,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
     },
     [notify, touch, saving],
   );
-  
   const [chatMotion, setChatMotion] = useState(false);
   useEffect(() => {
     let frame = requestAnimationFrame(() => (frame = requestAnimationFrame(() => setChatMotion(true))));
@@ -552,11 +479,9 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
             <span className="brand-name">{PRODUCT_NAME}</span>
           </Link>
         </header>
-        {}
         <div className="sidebar">
           <SideNav onSignOut={leave} />
         </div>
-        {}
         <span className="save-status t-meta" data-shown={status ? "" : undefined} aria-hidden="true" {...(status ? { "data-save-status": "" } : {})}>
           {lastStatus}
         </span>
@@ -565,7 +490,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
         </main>
         <ChatDock />
       </div>
-      {}
       <Button variant="primary" className="add-task-float" data-add-task-float onClick={() => startTask(currentNode)} aria-keyshortcuts="Q">
         <AddIcon />
         <span className="btn-label">Add task</span>
@@ -579,7 +503,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       <p className="sr-only" role="status" aria-live="polite">
         {status}
       </p>
-      {}
       {withHost(
         noticeHost,
         <div className="notices" popover="manual" ref={showLayer} aria-live="polite">
@@ -593,8 +516,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
               data-leaving={leaving ? "" : undefined}
               inert={leaving}
               data-notice
-              
-              
               onPointerMove={(event) => {
                 if (leaving || notice.tone !== "status" || pointerOnNotice.current || (!event.movementX && !event.movementY)) return;
                 pointerOnNotice.current = true;
@@ -606,7 +527,6 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                 if (!leaving && notice.tone === "status") timer.current = setTimeout(dismiss, noticeLife(notice));
               }}
             >
-              {}
               <span className="notice-mark" aria-hidden="true">
                 {notice.tone === "error" ? <AlertIcon /> : <CopiedIcon />}
               </span>
@@ -636,23 +556,15 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   );
 }
 
-
-
 function EarlyTree() {
   const fromServer = useSyncExternalStore(noSubscription, () => false, () => true);
   return fromServer ? <script dangerouslySetInnerHTML={{ __html: EARLY_TREE }} /> : null;
 }
 
-
-
-
 function ReadingLine() {
   const reading = useSyncExternalStore(onRefreshes, () => refreshesInFlight() > 0, () => false);
   return <div className="reading-line" data-reading={reading || undefined} aria-hidden="true" />;
 }
-
-
-
 
 function useModalHost(): HTMLElement | null {
   const [host, setHost] = useState<HTMLElement | null>(null);
@@ -672,11 +584,9 @@ function useModalHost(): HTMLElement | null {
 
 const withHost = (host: HTMLElement | null, layer: ReactNode) => (host ? createPortal(layer, host) : layer);
 
-
 function showLayer(element: HTMLElement | null) {
   if (element && !element.matches(":popover-open")) element.showPopover();
 }
-
 
 function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => void; onSignOut: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -692,7 +602,6 @@ function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => vo
       className="dialog drawer"
       aria-labelledby="drawer-title"
       onClose={onClose}
-      
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
       }}

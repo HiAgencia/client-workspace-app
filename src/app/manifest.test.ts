@@ -4,9 +4,6 @@ import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
 import { BROWSER_BAR, MANIFEST_BACKGROUND } from "@/lib/theme";
 import { webManifest } from "../../scripts/icons.mjs";
 
-
-
-
 describe("the web manifest", () => {
   const value: ReturnType<typeof webManifest> = JSON.parse(readFileSync(new URL("../../public/manifest.webmanifest", import.meta.url), "utf8"));
 
@@ -15,7 +12,6 @@ describe("the web manifest", () => {
   });
 
   it("names the site, where it starts, and the theme's colors", () => {
-    
     expect(PRODUCT_NAME).toBe("Client Workspace");
     expect(value.name).toBe(PRODUCT_NAME);
     expect(value.short_name).toBe(PRODUCT_NAME);

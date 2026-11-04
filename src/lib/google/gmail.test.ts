@@ -4,8 +4,6 @@ import { addressList, bodiesOf, candidatesSearch, decodeWords, parseAddress, sea
 
 const encode = (text: string, charset: BufferEncoding = "utf8") => Buffer.from(text, charset).toString("base64url");
 
-
-
 const SINCE = "2026-10-29T00:00:00Z";
 const AFTER = `after:${Date.parse(SINCE) / 1000}`;
 const ARRIVED = "-in:sent -in:draft -in:chats -in:spam -in:trash";
@@ -28,7 +26,6 @@ function noOperatorCapitals(search: typeof candidatesSearch) {
   expect(/\p{Lu}/u.test(values), "no capital of a word reaches Gmail, where it could read as an operator").toBe(false);
 }
 
-
 function failsWith(control: () => void, phrase: string) {
   let failure: unknown = null;
   try {
@@ -44,13 +41,10 @@ describe("reading a Gmail message", () => {
   it("decodes a header's encoded words, and leaves a plain one as it is", () => {
     expect(decodeWords("=?UTF-8?B?Q2Fmw6k=?= meeting")).toBe("Café meeting");
     expect(decodeWords("=?ISO-8859-1?Q?Caf=E9_con_leche?=")).toBe("Café con leche");
-    
     expect(decodeWords("=?UTF-8?Q?Ma?= =?UTF-8?Q?=C3=B1ana?=")).toBe("Mañana");
     expect(decodeWords("Already decoded: Café")).toBe("Already decoded: Café");
-    
     expect(decodeWords("=?UTF-8?Q?Ma=C3?= =?UTF-8?Q?=B1ana?=")).toBe("Mañana");
     expect(decodeWords(`=?UTF-8?B?${Buffer.from([0x43, 0x61, 0x66, 0xc3]).toString("base64")}?= =?UTF-8?B?${Buffer.from([0xa9]).toString("base64")}?=`)).toBe("Café");
-    
     expect(decodeWords("=?ISO-8859-1?Q?Caf=E9?= =?UTF-8?Q?_y_m=C3=A1s?=")).toBe("Café y más");
     expect(decodeWords("=?UTF-8?B?@@@?= ok")).toBe("=?UTF-8?B?@@@?= ok");
   });
@@ -61,7 +55,6 @@ describe("reading a Gmail message", () => {
     expect(parseAddress("noreply@developers.example")).toEqual({ name: null, email: "noreply@developers.example" });
     expect(parseAddress("=?UTF-8?B?Sm9zw6k=?= <jose@example.com>")).toEqual({ name: "José", email: "jose@example.com" });
     expect(parseAddress(null)).toEqual({ name: null, email: "" });
-    
     expect(addressList('A <a@x.example>, "B, Jr." <b@x.example>, c@x.example')).toEqual(["a@x.example", "b@x.example", "c@x.example"]);
   });
 
@@ -95,10 +88,8 @@ describe("reading a Gmail message", () => {
 
   it("looks for what a task waits for word by word, each in the sender or the subject, since the wait began", () => {
     expect(candidatesSearch(["Developer Platform"], SINCE)).toBe(`${ARRIVED} (from:developer OR subject:developer) (from:platform OR subject:platform) ${AFTER}`);
-    
     expect(candidatesSearch(["noreply@developers.example"], SINCE)).toBe(`${ARRIVED} (from:noreply@developers.example OR subject:noreply@developers.example) ${AFTER}`);
     expect(candidatesSearch(["Aprobación"], SINCE)).toBe(`${ARRIVED} (from:aprobación OR subject:aprobación OR from:aprobacion OR subject:aprobacion) ${AFTER}`);
-    
     expect(candidatesSearch(["() -- {}"], SINCE)).toBe("");
   });
 
@@ -112,7 +103,6 @@ describe("reading a Gmail message", () => {
     failsWith(() => everyWordInItsGroup(raw), "every word stays inside a group of its own");
     const capitals: typeof candidatesSearch = (words, since) =>
       searchFrom(`${ARRIVED} ${words.join(" ").replace(/[^\p{L}\p{N}@._\s-]/gu, "").split(/\s+/).filter(Boolean).map((word) => `(from:${word.replace(/^-+/, "")} OR subject:${word.replace(/^-+/, "")})`).join(" ")}`, since);
-    
     everyWordInItsGroup(capitals);
     failsWith(() => noOperatorCapitals(capitals), "no capital of a word reaches Gmail");
   });
@@ -120,18 +110,14 @@ describe("reading a Gmail message", () => {
   it("searches the words a person writes as one group, so none of them reaches past the inbox", () => {
     expect(wordsSearch("approved")).toBe("(approved)");
     expect(wordsSearch('"quarterly report" draft')).toBe('("quarterly report" draft)');
-    
     expect(wordsSearch("approved) OR {in:anywhere")).toBe("(approved OR in:anywhere)");
     expect(wordsSearch('"quote left open')).toBe("(quote left open)");
     expect(wordsSearch("( ) {}")).toBe("");
-    
     expect(wordsSearch('"" -')).toBe("");
     expect(wordsSearch('invoice "" - march')).toBe("(invoice march)");
     expect(wordsSearch('-"draft copy" report')).toBe('(-"draft copy" report)');
-    
     expect(wordsSearch('"a - b"')).toBe('("a - b")');
     expect(wordsSearch('"-" ". ."')).toBe("");
-    
     expect(wordsSearch("report -(draft)")).toBe("(report -(draft))");
     expect(wordsSearch("{invoice receipt} -(draft copy)")).toBe("({invoice receipt} -(draft copy))");
     expect(wordsSearch("report -() {}")).toBe("(report)");
@@ -154,7 +140,6 @@ describe("reading a Gmail message", () => {
       accountEmail: "me@example.com",
       from: { name: "Developer Platform", email: "noreply@developers.example" },
       to: ["me@example.com"],
-      
       subject: "",
       snippet: "Your app review was approved",
       receivedAt: "2026-10-29T14:58:00.000Z",

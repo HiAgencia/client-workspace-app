@@ -2,7 +2,6 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 
-
 export function useMedia(query: string, serverValue = false): boolean {
   const subscribe = useCallback(
     (onChange: () => void) => {

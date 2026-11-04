@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CHECK_MS, ROUND_AGE_MS, watchRounds } from "./read-again";
 
-
 function setUp({ hidden = false } = {}) {
   let lastRound = Date.now();
   let listener: (() => void) | null = null;

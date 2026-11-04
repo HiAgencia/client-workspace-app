@@ -2,8 +2,6 @@ import type { z } from "zod";
 import type { ToolContext } from "./context";
 import type { ToolResult } from "./result";
 
-
-
 export type Tool<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> = {
   name: string;
   description: string;

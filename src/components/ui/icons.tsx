@@ -64,13 +64,7 @@ import {
 } from "lucide-react";
 import { cx } from "@/lib/utils";
 
-
-
-
-
 export type Icon = (props: LucideProps) => React.ReactElement;
-
-
 
 type Motion = "forward" | "back" | "up" | "down" | "turn" | "turn-back";
 
@@ -82,10 +76,8 @@ function named(Glyph: LucideIcon, motion?: Motion): Icon {
   return ProductIcon;
 }
 
-
 export const OverviewIcon = named(House);
 export const TasksIcon = named(CircleCheck);
-
 export const TaskIcon = named(Circle);
 export const CalendarIcon = named(Calendar);
 export const MailIcon = named(Mail);
@@ -93,12 +85,10 @@ export const TrashIcon = named(Trash2);
 export const SettingsIcon = named(Settings);
 export const GeneralIcon = named(Inbox);
 export const PlaceIcon = named(Layers);
-
 export const ClientIcon = named(Handshake);
 export const OwnProjectIcon = named(Briefcase);
 export const AccountIcon = named(AtSign);
 export const NoDateIcon = named(CalendarOff);
-
 
 export const AddIcon = named(Plus, "turn");
 export const SearchIcon = named(Search);
@@ -109,14 +99,12 @@ export const DuplicateIcon = named(Copy);
 export const DeleteIcon = named(Trash2);
 export const CopiedIcon = named(Check);
 export const MoveIcon = named(ArrowRight, "forward");
-
 export const OpenIcon = named(ArrowRight, "forward");
 export const RepliesIcon = named(MailCheck);
 export const LinkIcon = named(LinkGlyph);
 export const UndoIcon = named(Undo2, "turn-back");
 export const RestoreIcon = named(RotateCcw, "turn-back");
 export const SignOutIcon = named(LogOut, "forward");
-
 export const SwitchAccountIcon = named(ArrowRightLeft);
 export const FilterIcon = named(SlidersHorizontal);
 export const MenuIcon = named(MenuGlyph);
@@ -131,36 +119,29 @@ export const NextIcon = named(ChevronRight, "forward");
 export const UpIcon = named(ChevronUp, "up");
 export const DownIcon = named(ChevronDown, "down");
 
-
 export const DateIcon = named(Calendar);
 export const TimeIcon = named(Clock);
 export const SubtasksIcon = named(ListChecks);
 export const PriorityIcon = named(Flag);
 export const NoteIcon = named(StickyNote);
 export const DecisionIcon = named(Scale);
-
 export const ByChatIcon = named(MessageSquareText);
 export const ByAgentIcon = named(SquareTerminal);
 export const ActivityIcon = named(Activity);
 export const VersionsIcon = named(History);
 export const ColorIcon = named(Palette);
 export const TokenIcon = named(KeyRound);
-
 export const GripIcon = named(GripVertical);
-
 
 export const BoldIcon = named(Bold);
 export const ItalicIcon = named(Italic);
 export const BulletsIcon = named(ListGlyph);
 export const NumbersIcon = named(ListOrdered);
 
-
 export const LightIcon = named(Sun);
 export const DarkIcon = named(Moon);
 export const AlertIcon = named(CircleAlert);
 
-
 export const EnterKeyIcon = named(CornerDownLeft);
-
 export const PauseIcon = named(Pause);
 export const PlayIcon = named(Play);

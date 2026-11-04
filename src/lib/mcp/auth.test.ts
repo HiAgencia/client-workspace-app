@@ -3,7 +3,6 @@ import type { Db } from "@/lib/db/client";
 import { newAgentToken } from "@/lib/agent-token";
 import { authenticateAgent } from "./auth";
 
-
 function serviceAnswering(answer: { data: unknown; error: { message: string } | null }): Db {
   const query = { select: () => query, eq: () => query, maybeSingle: async () => answer };
   return { from: () => query } as unknown as Db;

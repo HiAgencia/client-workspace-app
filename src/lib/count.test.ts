@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { count, plural } from "./count";
 
-
 describe("a count", () => {
   it("says one in the singular, and none and several in the plural", () => {
     expect(count(1, "message", "messages")).toBe("1 message");

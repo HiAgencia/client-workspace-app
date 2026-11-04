@@ -7,9 +7,6 @@ import { publicConfig, requireServerEnv } from "@/lib/env";
 import { problem } from "@/lib/http";
 import { sessionPerson } from "@/lib/session-person";
 
-
-
-
 export async function userClient(): Promise<Db> {
   const store = await cookies();
   const { supabaseUrl, supabaseKey } = publicConfig();
@@ -23,29 +20,21 @@ export async function userClient(): Promise<Db> {
   });
 }
 
-
 export function serviceClient(): Db {
   return createClient<Database>(publicConfig().supabaseUrl, requireServerEnv("SUPABASE_SECRET_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
 
-
-
 export type SessionUser = { id: string; email: string | null; isAnonymous: boolean; name: string | null; avatarUrl: string | null };
-
-
 
 export type SessionReading = { kind: "user"; user: SessionUser } | { kind: "none" } | { kind: "unavailable" };
 
-
 const RETRY_PAUSES_MS = [150, 400];
-
 
 function refused(status: number | undefined): boolean {
   return status !== undefined && status >= 400 && status < 500 && status !== 429;
 }
-
 
 export async function readSession(db: Db): Promise<SessionReading> {
   for (let attempt = 0; ; attempt++) {
@@ -55,7 +44,6 @@ export async function readSession(db: Db): Promise<SessionReading> {
       const { name, avatarUrl } = sessionPerson(data.user.user_metadata);
       return { kind: "user", user: { id: data.user.id, email: data.user.email ?? null, isAnonymous: data.user.is_anonymous ?? false, name, avatarUrl } };
     }
-    
     if (error.name === "AuthSessionMissingError") return { kind: "none" };
     console.error("auth: reading the user failed", error.status, error.name);
     if (refused(error.status)) return { kind: "none" };
@@ -63,8 +51,6 @@ export async function readSession(db: Db): Promise<SessionReading> {
     await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSES_MS[attempt]));
   }
 }
-
-
 
 export async function requireUser(db: Db): Promise<{ ok: true; user: SessionUser } | { ok: false; response: Response }> {
   const session = await readSession(db);

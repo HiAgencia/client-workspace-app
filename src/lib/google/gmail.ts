@@ -3,32 +3,19 @@ import { demoMailSource, folded, holdsEveryWord, MAIL_LIMIT, waitWords, type Mai
 import { GMAIL_READ_SCOPE, getMessage, getMessages, GoogleError, listMessageIds, type GmailFormat, type GmailMessage, type GmailPart } from "./api";
 import { withAccessToken, type GoogleDeps, type TokenRow } from "./events";
 
-
-
-
-
-
 const LIST_HEADERS = ["From", "To", "Subject"];
-
 const RECEIVED = "-in:sent -in:draft -in:chats";
 const NOT_RECEIVED = new Set(["SENT", "DRAFT", "CHAT"]);
-
-
 const INBOX = `in:inbox ${RECEIVED}`;
 const ARRIVED_ANYWHERE = `${RECEIVED} -in:spam -in:trash`;
 const UNREAD = `is:unread ${INBOX}`;
-
 const UNREAD_PAGE = 500;
 const UNREAD_PAGES = 4;
-
-
 const askAgain = (status: number) => status === 0 || status === 429 || status >= 500;
 const RATE_PAUSE_MS = 1000;
 
 const REVOKED = "access was revoked: connect the account again";
 const NOT_GRANTED = "reading mail was not granted: connect the account again and allow Gmail";
-
-
 
 export function headerOf(part: GmailPart | undefined, name: string): string | null {
   const wanted = name.toLowerCase();
@@ -42,7 +29,6 @@ export function base64Bytes(text: string): Uint8Array {
   for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
   return bytes;
 }
-
 
 export function decodeBytes(bytes: Uint8Array, charset: string | null): string {
   try {
@@ -67,10 +53,6 @@ function quotedBytes(text: string): Uint8Array {
 }
 
 const ENCODED_WORD = /=\?([^?\s]+)\?([BbQq])\?([^?\s]*)\?=/g;
-
-
-
-
 
 export function decodeWords(value: string): string {
   return value
@@ -102,7 +84,6 @@ export function decodeWords(value: string): string {
     });
 }
 
-
 export function parseAddress(value: string | null): { name: string | null; email: string } {
   if (!value) return { name: null, email: "" };
   const decoded = decodeWords(value).trim();
@@ -113,7 +94,6 @@ export function parseAddress(value: string | null): { name: string | null; email
   }
   return { name: null, email: decoded.replace(/^mailto:/i, "").trim().toLowerCase() };
 }
-
 
 export function addressList(value: string | null): string[] {
   if (!value) return [];
@@ -136,7 +116,6 @@ export function addressList(value: string | null): string[] {
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
-
 export function snippetText(snippet: string | undefined): string {
   return (snippet ?? "").replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
     if (code[0] !== "#") return ENTITIES[code.toLowerCase()] ?? whole;
@@ -152,8 +131,6 @@ export function snippetText(snippet: string | undefined): string {
 function charsetOf(part: GmailPart): string | null {
   return /charset="?([^";\s]+)"?/i.exec(headerOf(part, "Content-Type") ?? "")?.[1] ?? null;
 }
-
-
 
 export function bodiesOf(payload: GmailPart | undefined): { html: string | null; text: string | null } {
   let html: string | null = null;
@@ -171,15 +148,12 @@ export function bodiesOf(payload: GmailPart | undefined): { html: string | null;
   return { html, text };
 }
 
-
 function receivedAt(message: GmailMessage): string {
   const internal = Number(message.internalDate);
   if (Number.isFinite(internal) && internal > 0) return new Date(internal).toISOString();
   const dated = Date.parse(headerOf(message.payload, "Date") ?? "");
   return new Date(Number.isFinite(dated) ? dated : 0).toISOString();
 }
-
-
 
 export function toMailMessage(message: GmailMessage, account: { id: string; email: string }): MailMessage {
   const labels = new Set(message.labelIds ?? []);
@@ -206,18 +180,11 @@ export function arrived(message: GmailMessage): boolean {
   return !(message.labelIds ?? []).some((label) => NOT_RECEIVED.has(label));
 }
 
-
 export function searchFrom(base: string, since?: string): string {
   if (!since) return base;
   const seconds = Math.floor(Date.parse(since) / 1000);
   return Number.isFinite(seconds) ? `${base} after:${seconds}` : base;
 }
-
-
-
-
-
-
 
 export function candidatesSearch(words: string[], since: string): string {
   const groups = waitWords(words.join(" ")).map((word) => {
@@ -227,14 +194,8 @@ export function candidatesSearch(words: string[], since: string): string {
   return groups.length === 0 ? "" : searchFrom(`${ARRIVED_ANYWHERE} ${groups.join(" ")}`, since);
 }
 
-
-
-
-
-
 export function wordsSearch(words: string): string {
   const pieces = words.replace(/\u0000/g, " ").split('"');
-  
   const phrases: string[] = [];
   let text =
     pieces.length % 2 === 1
@@ -260,7 +221,6 @@ export function wordsSearch(words: string): string {
   return plain ? `(${plain})` : "";
 }
 
-
 function groupsNest(text: string): boolean {
   const open: string[] = [];
   for (const char of text) {
@@ -272,19 +232,15 @@ function groupsNest(text: string): boolean {
   return open.length === 0;
 }
 
-
-
 type Readable = TokenRow & { status: string };
 
 function failureOf(account: MailAccount, reason: string): MailFailure {
   return { accountId: account.id, accountEmail: account.email, reason };
 }
 
-
 function partOf(account: MailAccount, reason: string): MailFailure {
   return { ...failureOf(account, reason), partial: true };
 }
-
 
 function because(account: MailAccount, error: unknown): MailFailure {
   if (error instanceof GoogleError && error.revoked) return failureOf(account, REVOKED);
@@ -297,16 +253,11 @@ function newestFirst<T extends { receivedAt: string }>(messages: T[]): T[] {
   return messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
 }
 
-
-
 type BatchRead = { messages: GmailMessage[]; gone: number; lost: string[] };
 
 export function gmailMailSource(deps: GoogleDeps): MailSource {
   const demo = demoMailSource();
 
-  
-  
-  
   async function tokensFor(ownerId: string, accounts: MailAccount[]) {
     const failures: MailFailure[] = [];
     const ready: Array<{ account: MailAccount; row: Readable }> = [];
@@ -337,8 +288,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     return { ready, failures };
   }
 
-  
-  
   async function eachAccount<T>(ownerId: string, accounts: MailAccount[], read: (account: MailAccount, token: string) => Promise<T>) {
     const { ready, failures } = await tokensFor(ownerId, accounts);
     const answers = await Promise.all(
@@ -354,8 +303,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     return { answers: answers.flat(), failures };
   }
 
-  
-  
   async function readIds(token: string, ids: string[], format: GmailFormat): Promise<BatchRead> {
     const first = await getMessages(deps.fetch, token, ids, format, LIST_HEADERS);
     const again = ids.flatMap((id, index) => {
@@ -378,9 +325,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     return read;
   }
 
-  
-  
-  
   function fromBatch<T>(account: MailAccount, listed: number, read: BatchRead, to: (message: GmailMessage) => T, keep: (message: GmailMessage) => boolean) {
     const messages: T[] = [];
     const lost = [...read.lost];
@@ -404,7 +348,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
   const isReal = (account: MailAccount) => !account.isDemo;
   const nothing = { messages: [], failures: [] };
 
-  
   async function searched(ownerId: string, accounts: MailAccount[], q: string, limit: number) {
     const { answers, failures } = await eachAccount(ownerId, accounts, async (account, token) => {
       const page = await listMessageIds(deps.fetch, token, { q, maxResults: limit });
@@ -428,7 +371,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
     async candidates({ db, ownerId, account, since, words, limit, pageToken }) {
       if (account.isDemo) return demo.candidates({ db, ownerId, account, since, words, limit, pageToken });
       const q = candidatesSearch(words, since);
-      
       if (!q) return { messages: [], failures: [], nextPageToken: null };
       const { answers, failures } = await eachAccount(ownerId, [account], async (reached, token) => {
         const page = await listMessageIds(deps.fetch, token, { q, maxResults: limit, pageToken });
@@ -437,8 +379,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
       });
       const answer = answers[0]?.value;
       return {
-        
-        
         messages: newestFirst((answer?.messages ?? []).filter((message) => holdsEveryWord(message, words))),
         failures: [...failures, ...(answer?.failure ? [answer.failure] : [])],
         nextPageToken: answer?.next ?? null,
@@ -450,7 +390,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
       const group = wordsSearch(query);
       const [sample, real] = await Promise.all([
         accounts.some(isDemo) ? demo.search({ db, ownerId, accounts: accounts.filter(isDemo), words: query, limit }) : nothing,
-        
         group && accounts.some(isReal) ? searched(ownerId, accounts.filter(isReal), `${INBOX} ${group}`, limit) : nothing,
       ]);
       return { messages: newestFirst([...sample.messages, ...real.messages]), failures: [...sample.failures, ...real.failures] };
@@ -460,7 +399,6 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
       if (ids.length === 0) return { messages: [], failures: [] };
       const { answers, failures } = await eachAccount(ownerId, [account], async (reached, token) => {
         const read = await readIds(token, ids, "metadata");
-        
         return fromBatch(reached, ids.length, read, (message) => toMailMessage(message, reached), () => true);
       });
       return {
@@ -487,10 +425,8 @@ export function gmailMailSource(deps: GoogleDeps): MailSource {
               } while (next && pages < UNREAD_PAGES);
               return next;
             });
-            
             return { ids, failure: pageToken ? { ...partOf(account, `only the latest ${count(ids.length, "unread message", "unread messages")} were counted`), atLimit: true } : null };
           } catch (error) {
-            
             const failure = because(account, error);
             return { ids, failure: ids.length > 0 ? partOf(account, `only ${count(ids.length, "unread message", "unread messages")} could be counted before the read failed`) : failure };
           }

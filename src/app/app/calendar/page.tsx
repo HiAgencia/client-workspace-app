@@ -48,7 +48,6 @@ import { activates, useGridKeys } from "./grid-keys";
 import { useChatScope, useWorkspace } from "../workspace";
 import "../../styles/calendar.css";
 
-
 type CalEvent = {
   id: string;
   title: string;
@@ -74,15 +73,12 @@ type TasksAnswer = {
   groups: { overdue: { tasks: TaskData[] }; today: { tasks: TaskData[] }; upcoming: { days: Array<{ tasks: TaskData[] }> }; noDate: { tasks: TaskData[] } };
   completed: { tasks: TaskData[] } | null;
 };
-
 type Loaded = { key: string; view: View; anchor: Day; from: Day; to: Day; events: CalEvent[]; tasks: TaskData[]; failures: EventsFailure[]; waiting: number; accounts: Account[] };
-
 
 type EmptyDay = "nothing" | "reading" | "unread";
 const EMPTY_DAY: Record<EmptyDay, string> = { nothing: "Nothing this day.", reading: "Loading this day…", unread: "This day could not be loaded." };
 const EMPTY_MONTH_DAY: Record<EmptyDay, string> = { nothing: "nothing", reading: "still reading", unread: "not read" };
 type View = "week" | "month";
-
 type Draft = { day: Day; time: string | null };
 
 const VIEWS = [
@@ -90,8 +86,6 @@ const VIEWS = [
   { value: "month", label: "Month" },
 ];
 const OWN_CALENDAR = `${PRODUCT_NAME} calendar`;
-
-
 const BAND_PIECES = 2;
 const folds = (count: number) => count > BAND_PIECES + 1;
 
@@ -102,7 +96,6 @@ export default function CalendarPage() {
     </Suspense>
   );
 }
-
 
 function loadedOf(key: string, view: View, anchor: Day, range: { from: Day; to: Day }, events: EventsRead<CalEvent>, tasks: TasksAnswer, accounts: Answer<{ accounts: Account[] }>): Loaded {
   return {
@@ -119,8 +112,6 @@ function loadedOf(key: string, view: View, anchor: Day, range: { from: Day; to: 
   };
 }
 
-
-
 function keptLoaded(key: string, view: View, anchor: Day, range: { from: Day; to: Day }): Loaded | null {
   const instants = instantsOf(range.from, range.to);
   const events = keptEvents<CalEvent>({ from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to });
@@ -130,10 +121,7 @@ function keptLoaded(key: string, view: View, anchor: Day, range: { from: Day; to
 }
 
 const eventKey = (event: CalEvent) => `${event.origin}:${event.accountId}:${event.calendarId}:${event.id}`;
-
 const ofChosen = (event: CalEvent, some: Set<string> | null) => some === null || (event.origin === "google" && some.has(event.accountId));
-
-
 
 function daysOf(event: CalEvent): Day[] {
   const first = event.allDay ? event.start.slice(0, 10) : dayOf(new Date(event.start));
@@ -143,7 +131,6 @@ function daysOf(event: CalEvent): Day[] {
   return days.length ? days : [first];
 }
 
-
 const onHours = (event: CalEvent) => !event.allDay && daysOf(event).length === 1;
 const clock = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" });
 const minutesOf = (iso: string) => {
@@ -151,12 +138,10 @@ const minutesOf = (iso: string) => {
   return date.getHours() * 60 + date.getMinutes();
 };
 const DAY_MINUTES = 24 * 60;
-
 const endOf = (event: CalEvent) => {
   const minutes = minutesOf(event.end);
   return minutes === 0 && Date.parse(event.end) > Date.parse(event.start) ? DAY_MINUTES : minutes;
 };
-
 const pieceEnd = (start: number, end = start) => Math.min(DAY_MINUTES, Math.max(end, start + 30));
 const minutesOfDay = (time: string) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -181,9 +166,6 @@ function whenText(event: CalEvent): string {
     : `${shortDay(days[0])}, ${clock(event.start)} to ${clock(event.end)}`;
 }
 
-
-
-
 const NARROW_REM = 52;
 function useNarrow(card: RefObject<HTMLElement | null>, mounted: boolean): boolean {
   const [narrow, setNarrow] = useState(false);
@@ -200,7 +182,6 @@ function useNarrow(card: RefObject<HTMLElement | null>, mounted: boolean): boole
 }
 const noSubscription = () => () => {};
 
-
 const onFreeSpace = (event: MouseEvent<HTMLElement>) => !(event.target as Element).closest("button, a, [draggable='true'], [role='menu']");
 
 function Calendar() {
@@ -208,7 +189,6 @@ function Calendar() {
   const card = useRef<HTMLElement>(null);
   const narrow = useNarrow(card, mounted);
   const { version, tree, notify, touch, saving, mailAccounts } = useWorkspace();
-  
   const connectWay = useConnectWay();
   const noAccounts = mailAccounts !== null && mailAccounts.length === 0;
   useChatScope(null);
@@ -238,7 +218,6 @@ function Calendar() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [openEvent, setOpenEvent] = useState<string | null>(null);
   const [chosenDay, setChosenDay] = useState<Day | null>(null);
-  
   const [moved, setMoved] = useState<Map<string, Day>>(new Map());
   const [dragging, setDragging] = useState<string | null>(null);
   const [overDay, setOverDay] = useState<Day | null>(null);
@@ -264,12 +243,10 @@ function Calendar() {
       readEvents<CalEvent>(
         { from: instants.from, to: instants.to, fromDay: range.from, toDay: range.to },
         {
-          
           onArrived: (events) =>
             void beside.then(([tasks, accounts]) => {
               if (!live || !tasks.ok) return;
               setLoaded((now) => (now?.key === rangeKey && now.waiting === 0 ? now : made(events, tasks, accounts)));
-              
               setReadError(null);
             }),
         },
@@ -278,7 +255,6 @@ function Calendar() {
     ]).then(([events, [tasks, accounts]]) => {
       if (!live) return;
       if (!events.ok || !tasks.ok) {
-        
         setReadError(!events.ok ? events.message : !tasks.ok ? tasks.message : "");
         return;
       }
@@ -289,12 +265,9 @@ function Calendar() {
     return () => {
       live = false;
     };
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, rangeKey, version, round]);
 
-  
-  
   const byPlace = useMemo(() => {
     const accountsById = new Map((loaded?.accounts ?? []).map((account) => [account.id, account]));
     const branches = new Map((tree ?? []).map((node) => [node.id, branchOf(tree, node.id)]));
@@ -313,13 +286,11 @@ function Calendar() {
     return { taskIn, eventIn };
   }, [loaded, tree]);
 
-  
   const shownFrom = loaded?.from ?? range.from;
   const shownTo = loaded?.to ?? range.to;
   const inRange = (day: string | null) => Boolean(day && day >= shownFrom && day <= shownTo);
   const tasksAll = useMemo(() => (loaded?.tasks ?? []).map((task) => (moved.has(task.id) ? { ...task, dueOn: moved.get(task.id)! } : task)), [loaded, moved]);
   const placeEvents = useMemo(() => (loaded?.events ?? []).filter((event) => byPlace.eventIn(event, place)), [loaded, byPlace, place]);
-  
   const account = accountFromUrl(accountParam, loaded?.accounts ?? [], tree);
   const chosen = useMemo(() => chosenAccounts(account, loaded?.accounts ?? [], tree), [account, loaded, tree]);
   const events = useMemo(() => placeEvents.filter((event) => ofChosen(event, chosen)), [placeEvents, chosen]);
@@ -328,7 +299,6 @@ function Calendar() {
     [tasksAll, shownFrom, shownTo, byPlace, place],
   );
 
-  
   const placeCounts = useMemo(() => {
     const counts = new Map<string, number>();
     const eventsOfAccount = (loaded?.events ?? []).filter((event) => ofChosen(event, chosen));
@@ -337,7 +307,6 @@ function Calendar() {
       counts.set(where, eventsOfAccount.filter((event) => byPlace.eventIn(event, where)).length + rangeTasks.filter((task) => byPlace.taskIn(task, where)).length);
     }
     return counts;
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, tasksAll, tree, chosen, byPlace]);
   const accountCounts = countsByAccount(loaded?.accounts ?? [], tree, (some) => placeEvents.filter((event) => event.origin === "google" && ofChosen(event, some)).length);
@@ -353,7 +322,6 @@ function Calendar() {
     return map;
   }, [events, tasks]);
 
-  
   const model = useMemo(
     () => (loaded ? { byDay, view: loaded.view, anchor: loaded.anchor, from: loaded.from, to: loaded.to } : null),
     [byDay, loaded],
@@ -361,11 +329,8 @@ function Calendar() {
   const swap = useSwap(model, loaded?.key ?? "none");
   const shown = swap.shown;
   const stale = Boolean(loaded && loaded.key !== rangeKey);
-  
-  
   const unanswered = loaded?.waiting ?? 0;
   const reading = readError === null && unanswered > 0;
-  
   const emptyDay: EmptyDay = unanswered === 0 ? "nothing" : reading ? "reading" : "unread";
 
   const step = (direction: 1 | -1) => set({ date: view === "month" ? addMonths(anchor, direction) : addDays(anchor, 7 * direction) });
@@ -375,7 +340,6 @@ function Calendar() {
   const title = view === "month" ? monthTitle(anchor) : rangeLabel(range.from, range.to);
   const selectedEvent = openEvent ? ((loaded?.events ?? []).find((event) => eventKey(event) === openEvent) ?? null) : null;
 
-  
   async function moveTask(task: TaskData, day: Day, keepFocus = false) {
     if (task.dueOn === day) return;
     const from = task.dueOn;
@@ -395,7 +359,6 @@ function Calendar() {
       tone: "status",
       undo: () => void saving(tool("update_item", { id: task.id, dueOn: from })),
     });
-    
     if (keepFocus) focusTask(task.id);
   }
 
@@ -405,7 +368,6 @@ function Calendar() {
     );
   }
 
-  
   function onTaskKey(event: KeyboardEvent<HTMLElement>, task: TaskData) {
     if (!event.altKey || !task.dueOn) return;
     const offset = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[event.key];
@@ -413,7 +375,6 @@ function Calendar() {
     event.preventDefault();
     const day = addDays(task.dueOn, offset);
     void moveTask(task, day, true);
-    
     focusTask(task.id);
     if (day < range.from || day > range.to) step(offset > 0 ? 1 : -1);
   }
@@ -449,16 +410,13 @@ function Calendar() {
     list: tasks,
   };
 
-  
   function onGap(event: MouseEvent<HTMLElement>, day: Day, time: string | null) {
     if (onFreeSpace(event)) setDraft({ day, time });
   }
-  
   const addTask = (day: Day) => openQuickAdd(place === ALL ? { day } : { day, placeId: place === GENERAL ? null : place });
 
   if (!mounted) return null;
   const counted = `${count(events.length, "event", "events")} and ${count(tasks.length, "task", "tasks")}`;
-  
   const filteredBy = [place === ALL ? null : "client or project", account === ALL ? null : "account"].filter(Boolean);
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
@@ -515,7 +473,6 @@ function Calendar() {
               The calendar could not be loaded again: {readError}. Showing the last read.
             </p>
           )}
-          {}
           {loaded?.failures.filter((failure) => !loaded.accounts.some((entry) => entry.id === failure.accountId && entry.isDemo)).map((failure) => (
             <p key={failure.accountId || "accounts"} role="alert" className="inline-note" data-tone="alert">
               {failure.accountEmail ? `${failure.accountEmail}'s calendar could not be loaded: ${failure.reason}` : `Some calendars could not be loaded: ${failure.reason}`}
@@ -609,13 +566,10 @@ type ChipHandlers = {
 };
 type DropOn = (day: Day) => Record<string, unknown>;
 
-
-
 function nodeColor(tree: TreeNode[] | null, id: string | null | undefined): string | undefined {
   if (!id) return undefined;
   return tree?.find((node) => node.id === id)?.color ?? undefined;
 }
-
 
 function EventChip({ event, chips, style, timed, minutes, lead, flipKey }: { event: CalEvent; chips: ChipHandlers; style?: CSSProperties; timed?: boolean; minutes?: number; lead?: boolean; flipKey?: string }) {
   const { tree } = useWorkspace();
@@ -630,13 +584,11 @@ function EventChip({ event, chips, style, timed, minutes, lead, flipKey }: { eve
       data-short={timed && (minutes ?? 0) < 60 ? "" : undefined}
       data-origin={event.origin}
       style={style}
-      
       title={event.title}
       onClick={() => chips.onOpenEvent(event)}
       data-cal-event={event.id}
       data-flip-key={flipKey}
     >
-      {}
       {lead && moment}
       <span className="cal-event-title">{event.title}</span>
       {!lead && !event.allDay && moment}
@@ -666,7 +618,6 @@ function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: 
   }
   const hour = task.dueTime ? timeLabel(task.dueTime) : null;
   const plain = inlinePlain(task.title);
-  
   const hourShown = !timed && !lead && hour;
   return (
     <div
@@ -690,7 +641,6 @@ function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: 
       <button
         type="button"
         className="cal-task-open"
-        
         title={hour ? `${plain}, ${hour}` : plain}
         onClick={() => openTaskDetail({ id: task.id, task, list: chips.list })}
         onKeyDown={(event) => chips.onTaskKey(event, task)}
@@ -712,16 +662,9 @@ function subscribeFine(onChange: () => void) {
   return () => query.removeEventListener("change", onChange);
 }
 
-
-
-
-
 const HOUR_REM = 3;
-
 const LINE_MINUTES = Math.ceil((1.5 / HOUR_REM) * 60);
 const remOf = (minutes: number) => `${(minutes / 60) * HOUR_REM}rem`;
-
-
 
 function titleLines(minutes: number): number {
   const lines = Math.max(1, Math.floor(((minutes / 60) * HOUR_REM - 0.4) / 1.06));
@@ -740,13 +683,10 @@ function WeekGrid({
   byDay: Map<Day, { events: CalEvent[]; tasks: TaskData[] }>;
   chips: ChipHandlers;
   dropOn: DropOn;
-  
   onCreate: (day: Day, time: string | null) => void;
-  
   onAddTask: (day: Day) => void;
 }) {
   const now = today();
-  
   let first = 8;
   let last = 19;
   for (const day of days) {
@@ -765,10 +705,8 @@ function WeekGrid({
   }
   const hours = Array.from({ length: last - first + 1 }, (_, i) => first + i);
   const top = (minutes: number) => remOf(minutes - first * 60);
-  
   const withTasks = days.some((day) => byDay.get(day)?.tasks.some((task) => !task.dueTime));
   const firstHourRow = withTasks ? 2 : 1;
-  
   const grid = useGridKeys({ rows: hours.length + firstHourRow, cols: days.length }, { row: 0, col: Math.max(0, days.indexOf(now)) });
   const hint = useId();
 
@@ -830,7 +768,6 @@ function WeekGrid({
           const entry = byDay.get(day);
           const timed = [
             ...(entry?.events ?? []).filter(onHours).map((event) => ({ kind: "event" as const, key: eventKey(event), start: minutesOf(event.start), end: pieceEnd(minutesOf(event.start), endOf(event)), event })),
-            
             ...(entry?.tasks ?? []).filter((task) => task.dueTime).map((task) => {
               const start = minutesOfDay(task.dueTime!);
               return { kind: "task" as const, key: task.id, start, end: Math.min(DAY_MINUTES, start + LINE_MINUTES), above: true, task };
@@ -838,9 +775,7 @@ function WeekGrid({
           ];
           const placed = cascade(timed, LINE_MINUTES);
           return (
-            
             <FlipBox key={day} share="week" role="gridcell" className="cal-day-hours" data-day={day} data-today={day === now ? "" : undefined} {...dropOn(day)}>
-              {}
               {hours.map((hour, index) => (
                 <button
                   key={hour}
@@ -868,11 +803,9 @@ function WeekGrid({
                   ...(clip < 1 && { "--clip": clip }),
                 };
                 if (item.kind === "task") {
-                  
                   const style = { ...place, top: top(Math.min(item.start, DAY_MINUTES - LINE_MINUTES)) } as CSSProperties;
                   return <TaskChip key={item.key} task={item.task} chips={chips} style={style} timed />;
                 }
-                
                 const style = {
                   ...place,
                   top: top(item.start),
@@ -892,8 +825,6 @@ function WeekGrid({
     </div>
   );
 }
-
-
 
 function WeekBand({
   label,
@@ -926,8 +857,6 @@ function WeekBand({
       return next;
     });
   const all = days.map(pieces);
-  
-  
   const lines = all.map((list, index) => (!folds(list.length) ? list.length : (open.has(days[index]) ? list.length : BAND_PIECES) + 1));
   const tallest = Math.max(...lines);
   return (
@@ -989,19 +918,15 @@ function WeekBand({
   );
 }
 
-
 function NowLine({ first, last }: { first: number; last: number }) {
   const [minutes, setMinutes] = useState(() => minutesOf(new Date().toISOString()));
   useEffect(() => {
     const timer = setInterval(() => setMinutes(minutesOf(new Date().toISOString())), 60_000);
     return () => clearInterval(timer);
   }, []);
-  
   if (minutes < first * 60 || minutes >= (last + 1) * 60) return null;
   return <span className="cal-now" aria-hidden="true" style={{ top: remOf(minutes - first * 60) }} />;
 }
-
-
 
 function WeekList({
   days,
@@ -1025,8 +950,6 @@ function WeekList({
         const events = byDay.get(day)?.events ?? [];
         const tasks = byDay.get(day)?.tasks ?? [];
         const empty = events.length === 0 && tasks.length === 0;
-        
-        
         const onClock = [
           ...events.filter(onHours).map((event) => ({ at: minutesOf(event.start), piece: <EventChip key={eventKey(event)} event={event} chips={chips} lead /> })),
           ...tasks.filter((task) => task.dueTime).map((task) => ({ at: minutesOfDay(task.dueTime!), piece: <TaskChip key={task.id} task={task} chips={chips} lead /> })),
@@ -1055,8 +978,6 @@ function WeekList({
   );
 }
 
-
-
 const MONTH_SHOWN = 4;
 
 function MonthGrid({
@@ -1081,7 +1002,6 @@ function MonthGrid({
   chips: ChipHandlers;
   dropOn: DropOn;
   onGap: (event: MouseEvent<HTMLElement>, day: Day, time: string | null) => void;
-  
   onCreate: (day: Day) => void;
   narrow: boolean;
   chosen: Day | null;
@@ -1090,7 +1010,6 @@ function MonthGrid({
   emptyDay: EmptyDay;
 }) {
   const now = today();
-  
   const flat = weeks.flat();
   const entry = flat.includes(now) ? flat.indexOf(now) : Math.max(0, flat.findIndex((day) => day.slice(0, 7) === month));
   const grid = useGridKeys({ rows: weeks.length, cols: 7 }, { row: Math.floor(entry / 7), col: entry % 7 });
@@ -1135,7 +1054,6 @@ function MonthGrid({
                     onClick={() => onChoose(day)}
                     {...grid.cell(row, column)}
                   >
-                    {}
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
                     <span className="sr-only">, {fullDay(day)}: </span>
                     <span className="cal-month-count">{total > 0 ? total : null}</span>
@@ -1184,10 +1102,7 @@ function MonthGrid({
   );
 }
 
-
 const WAITING_EVENTS = [2, 1, 3, 1, 2, 0, 1];
-
-
 
 function CalendarSkeleton({ view }: { view: View }) {
   return (
@@ -1210,8 +1125,6 @@ function CalendarSkeleton({ view }: { view: View }) {
     </div>
   );
 }
-
-
 
 function useDialog<T>(value: T | null, onClose: () => void) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -1236,8 +1149,6 @@ function useDialog<T>(value: T | null, onClose: () => void) {
   };
   return { ref, kept, props };
 }
-
-
 
 const TIMES = [{ value: "all", label: "All day" }, ...Array.from({ length: 48 }, (_, i) => ({ value: hhmm(i * 30), label: timeLabel(hhmm(i * 30)) }))];
 
@@ -1265,7 +1176,6 @@ function EventComposer({
   const [where, setWhere] = useState<string>(place === ALL ? GENERAL : place);
   const [busy, setBusy] = useState(false);
   const [seen, setSeen] = useState<Draft | null>(null);
-  
   if (draft && draft !== seen) {
     setSeen(draft);
     setTitle("");
@@ -1274,7 +1184,6 @@ function EventComposer({
     setCalendar("own");
     setWhere(place === ALL ? GENERAL : place);
   }
-  
   const calendars = [
     { value: "own", label: OWN_CALENDAR, mark: BrandMark },
     ...accounts.flatMap((account) =>
@@ -1377,8 +1286,6 @@ function EventComposer({
     </dialog>
   );
 }
-
-
 
 function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent | null; sample: boolean; tree: TreeNode[] | null; tasks: TaskData[]; onClose: () => void }) {
   const { notify, touch, saving } = useWorkspace();

@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-
 export const errorCodes = [
   "invalid_input",
   "not_found",
@@ -9,7 +8,6 @@ export const errorCodes = [
   "since_required",
   "db_error",
   "internal",
-  
   "cap",
 ] as const;
 
@@ -40,7 +38,6 @@ export function fail(code: ErrorCode, message: string, extra?: Pick<ToolError, "
 export function isError<T>(result: ToolResult<T> | ToolError): result is ToolError {
   return result.ok === false;
 }
-
 
 export function dbFail(what: string, error: { message: string }): ToolError {
   return fail("db_error", `${what}: ${error.message}`);

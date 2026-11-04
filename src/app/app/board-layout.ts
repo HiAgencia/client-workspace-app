@@ -1,18 +1,11 @@
-
-
-
-
-
 export const SPLIT = "split";
 export const FOOT = "foot";
 
 export type BoardLayout = { order: string[]; hidden: string[] };
 
-
 export type Zone = 0 | 1 | 2;
 
 export const isMark = (id: string) => id === SPLIT || id === FOOT;
-
 
 function endOf(order: string[], zone: Zone): number {
   return zone === 0 ? order.indexOf(SPLIT) : zone === 1 ? order.indexOf(FOOT) : order.length;
@@ -22,8 +15,6 @@ function zoneIn(order: string[], id: string): Zone {
   const at = order.indexOf(id);
   return at < order.indexOf(SPLIT) ? 0 : at < order.indexOf(FOOT) ? 1 : 2;
 }
-
-
 
 export function settleLayout(saved: BoardLayout | null, defaults: string[]): BoardLayout {
   if (!saved) return { order: defaults, hidden: [] };
@@ -44,8 +35,6 @@ export function columnsOf(layout: BoardLayout): [string[], string[], string[]] {
   return [layout.order.slice(0, split), layout.order.slice(split + 1, foot), layout.order.slice(foot + 1)];
 }
 
-
-
 export function steppedOrder(order: string[], inView: string[], id: string, by: -1 | 1, apart: boolean): string[] | null {
   const steps = apart ? inView : inView.filter((entry) => !isMark(entry));
   const target = steps[steps.indexOf(id) + by];
@@ -57,13 +46,11 @@ export function steppedOrder(order: string[], inView: string[], id: string, by: 
   return next;
 }
 
-
 export function orderMovedTo(order: string[], id: string, zone: Zone): string[] {
   const next = order.filter((entry) => entry !== id);
   next.splice(endOf(next, zone), 0, id);
   return next;
 }
-
 
 export function orderDropped(order: string[], id: string, before: string | null, zone: Zone): string[] {
   if (!before) return orderMovedTo(order, id, zone);

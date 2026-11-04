@@ -9,9 +9,6 @@ import {
   type DisposableUser,
 } from "../support/supabase";
 
-
-
-
 type Tree = { root: string; project: string; subproject: string; item: string; account: string; leafAccount: string };
 
 let a: DisposableUser | undefined;
@@ -48,7 +45,6 @@ async function buildTree(user: DisposableUser, prefix: string): Promise<Tree> {
       .single(),
     "insert item",
   ).id;
-  
   const account = must(
     await admin
       .from("google_accounts")
@@ -105,7 +101,6 @@ describe("nodes", () => {
     const { error } = await userA()
       .from("nodes")
       .insert({ owner_id: a!.id, kind: "project", name: "Intruder", parent_id: treeB.root });
-    
     expect(error?.code).toBe("23503");
   });
 
@@ -121,7 +116,6 @@ describe("nodes", () => {
   });
 
   it("the tree rules hold: a root is a client or a project, a client's child is a project, no move under its own subtree", async () => {
-    
     const rootProject = await userA().from("nodes").insert({ owner_id: a!.id, kind: "project", name: "Own project" }).select("id").single();
     expect(rootProject.error).toBeNull();
     const below = await userA()
@@ -140,8 +134,6 @@ describe("nodes", () => {
       .from("nodes")
       .insert({ owner_id: a!.id, kind: "subproject", name: "Wrong", parent_id: treeA.root });
     expect(wrongChild.error?.code).toBe("23514");
-    
-    
     const flipped = await userA().from("nodes").update({ kind: "client" }).eq("id", rootProject.data!.id);
     expect(flipped.error?.code).toBe("23514");
     expect(flipped.error?.message).toContain("keeps its kind");
@@ -150,7 +142,6 @@ describe("nodes", () => {
     const renamed = await userA().from("nodes").update({ name: "Own project, renamed" }).eq("id", rootProject.data!.id).select("name, kind").single();
     expect(renamed.error).toBeNull();
     expect(renamed.data).toEqual({ name: "Own project, renamed", kind: "project" });
-    
     const deeper = must(
       await userA().from("nodes").insert({ owner_id: a!.id, kind: "subproject", name: "Deeper", parent_id: below.data!.id }).select("id").single(),
       "insert deeper",
@@ -200,10 +191,8 @@ describe("items", () => {
     expect(review.error?.message).toContain("items_live_types");
     const hour = await userA().from("items").insert({ node_id: treeA.project, type: "task", title: "At an hour", due_time: "10:00" });
     expect(hour.error?.code).toBe("23514");
-    
     const turned = await userA().from("items").update({ type: "review" }).eq("id", treeA.item);
     expect(turned.error?.code).toBe("23514");
-    
     const live = await userA().from("items").insert({ node_id: treeA.project, type: "note", title: "A note" }).select("id").single();
     expect(live.error).toBeNull();
   });
@@ -233,7 +222,6 @@ describe("what lives in no node", () => {
     const own = must(await userA().from("items").insert({ node_id: null, type: "task", title: "Mine" }).select("id").single(), "A's task");
     const taken = await userA().from("items").update({ owner_id: b!.id }).eq("id", own.id);
     expect(taken.error?.code).toBe("42501");
-    
     const moved = await userA().from("items").update({ node_id: treeB.project }).eq("id", own.id);
     expect(moved.error?.code).toBe("42501");
   });
@@ -313,7 +301,6 @@ describe("accounts and tokens", () => {
     expect(read.data?.map((entry) => entry.id)).toEqual([own.id]);
     expect((await publicClient().from("chat_messages").select("id").in("id", [own.id, theirs.id])).error?.code).toBe("42501");
 
-    
     expect((await userA().from("chat_messages").insert({ node_id: null, role: "assistant", parts: [] })).error?.code).toBe("42501");
     expect((await userA().from("chat_messages").insert({ node_id: treeA.project, role: "user", parts: [] })).error?.code).toBe("42501");
     expect((await userA().from("chat_messages").insert({ owner_id: b!.id, node_id: null, role: "user", parts: [] })).error?.code).toBe("42501");
@@ -365,7 +352,6 @@ describe("events, the task inside an event, versions, a node's events, and prefe
     expect(deleted.data).toEqual([]);
     const still = must(await serviceClient().from("events").select("title").eq("id", foreign).single(), "read B event");
     expect(still.title).toBe("B meeting");
-    
     const mixed = await userA().from("events").insert({ node_id: treeA.project, title: "Mixed", all_day: true, starts_at: "2026-11-02T10:00:00Z", ends_at: "2026-11-02T11:00:00Z" });
     expect(mixed.error?.code).toBe("23514");
   });
@@ -430,7 +416,6 @@ describe("events, the task inside an event, versions, a node's events, and prefe
     expect(deleted.data).toEqual([]);
     const still = await serviceClient().from("node_events").select("id").eq("id", theirs.id);
     expect(still.data).toHaveLength(1);
-    
     const changed = await userA().from("node_events").update({ node_id: treeA.project }).eq("id", linked.data!.id);
     expect(changed.error?.code).toBe("42501");
   });
@@ -451,7 +436,6 @@ describe("events, the task inside an event, versions, a node's events, and prefe
     expect(deleted.data).toEqual([]);
     const still = must(await serviceClient().from("preferences").select("layouts").eq("owner_id", b!.id).single(), "read B's preferences");
     expect(still.layouts).toEqual({ tasks: "board" });
-    
     const shape = await userA().from("preferences").update({ layouts: [] }).eq("owner_id", a!.id);
     expect(shape.error?.code).toBe("23514");
   });
@@ -529,7 +513,6 @@ describe("the mail tables", () => {
     const changed = await userA().from("task_mail").update({ waits_for: "Forged" }).eq("item_id", treeB.item).select("item_id");
     expect(changed.error).toBeNull();
     expect(changed.data).toEqual([]);
-    
     const ruled = await userA().rpc("dismiss_task_reply", { p_owner: b!.id, p_item: treeB.item, p_reply: `${treeB.account}:m-b`, p_dismissed: true });
     expect(ruled.error).toBeNull();
     expect(ruled.data).toBeNull();
@@ -539,7 +522,6 @@ describe("the mail tables", () => {
   });
 
   it("the demo's sample accounts are planted only for a demo session, on its own nodes", async () => {
-    
     expect((await userA().rpc("plant_demo_accounts", { p_accounts: [{ email: "sample@demo.example", node_id: treeA.root }] })).error?.code).toBe("42501");
     expect((await userA().rpc("plant_demo_mail", { p_messages: [] })).error?.code).toBe("42501");
     const demo = await createAnonymousUser("rls-demo");

@@ -1,11 +1,6 @@
 import { useCallback, useState, type FocusEvent, type KeyboardEvent } from "react";
 
-
-
-
-
 export type GridSpot = { row: number; col: number };
-
 
 export function gridMove(key: string, from: GridSpot, size: { rows: number; cols: number }, ctrl = false, page = 4): GridSpot | null {
   const clamp = (spot: GridSpot): GridSpot => ({ row: Math.max(0, Math.min(size.rows - 1, spot.row)), col: Math.max(0, Math.min(size.cols - 1, spot.col)) });
@@ -31,15 +26,12 @@ export function gridMove(key: string, from: GridSpot, size: { rows: number; cols
   }
 }
 
-
 export const activates = (key: string) => key === "Enter" || key === " ";
 
 const spotOf = (element: Element | null): GridSpot | null => {
   const cell = element?.closest<HTMLElement>("[data-grid-row][data-grid-col]");
   return cell ? { row: Number(cell.dataset.gridRow), col: Number(cell.dataset.gridCol) } : null;
 };
-
-
 
 export function useGridKeys(size: { rows: number; cols: number }, initial: GridSpot) {
   const [moved, setMoved] = useState<GridSpot | null>(null);
@@ -49,7 +41,6 @@ export function useGridKeys(size: { rows: number; cols: number }, initial: GridS
     [spot.row, spot.col],
   );
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    
     const target = event.target as HTMLElement;
     if (!target.matches("[data-grid-row][data-grid-col]") || event.altKey || event.shiftKey || event.metaKey) return;
     const from = spotOf(target);
@@ -60,7 +51,6 @@ export function useGridKeys(size: { rows: number; cols: number }, initial: GridS
     setMoved(next);
     event.currentTarget.querySelector<HTMLElement>(`[data-grid-row="${next.row}"][data-grid-col="${next.col}"]`)?.focus();
   };
-  
   const onFocus = (event: FocusEvent<HTMLElement>) => {
     const at = spotOf(event.target as HTMLElement);
     if (at && (event.target as HTMLElement).matches("[data-grid-row][data-grid-col]") && (at.row !== spot.row || at.col !== spot.col)) setMoved(at);

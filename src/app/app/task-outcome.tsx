@@ -8,18 +8,12 @@ import { tool } from "./client-api";
 import { useWorkspace } from "./workspace";
 import "../styles/mail.css";
 
-
-
-
-
-
 const OUTCOMES = ["Approved", "Rejected"] as const;
 
 export function TaskOutcome({ question, title, onClose, onCancel }: { question: string; title: string; onClose: (outcome: string) => Promise<unknown>; onCancel: () => void }) {
   const [other, setOther] = useState("");
   const otherId = useId();
   const written = other.trim();
-  
   const closing = useRef(false);
   async function close(outcome: string) {
     if (closing.current) return;
@@ -36,7 +30,6 @@ export function TaskOutcome({ question, title, onClose, onCancel }: { question: 
       role="group"
       aria-label={`How “${inlinePlain(title)}” ended`}
       onKeyDown={(event) => {
-        
         if (event.key !== "Escape") return;
         event.preventDefault();
         event.stopPropagation();
@@ -54,7 +47,6 @@ export function TaskOutcome({ question, title, onClose, onCancel }: { question: 
       <label className="t-meta task-outcome-label" htmlFor={otherId}>
         Or in your words
       </label>
-      {}
       <div className="task-outcome-own">
         <input
           id={otherId}
@@ -79,8 +71,6 @@ export function TaskOutcome({ question, title, onClose, onCancel }: { question: 
     </div>
   );
 }
-
-
 
 export function useCompleteTask() {
   const { notify, touch, saving } = useWorkspace();

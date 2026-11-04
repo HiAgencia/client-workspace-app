@@ -18,12 +18,8 @@ type Entry = Item & { branch: number; deletedAt: string };
 
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-
 const FOLD_MS = 220;
-
 const RESTORES = "Brings back everything deleted with it";
-
-
 
 export default function TrashPage() {
   const { saving, version } = useWorkspace();
@@ -47,7 +43,6 @@ export default function TrashPage() {
     };
   }, [version, round]);
 
-  
   async function restore(item: Entry) {
     setLeaving(item.id);
     await new Promise((resolve) => setTimeout(resolve, FOLD_MS));

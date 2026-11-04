@@ -18,8 +18,6 @@ import { WRITES, type WriteOutput } from "./chat-cards";
 import { useWorkspace } from "./workspace";
 import "../styles/chat.css";
 
-
-
 const DOCK_QUERY = "(width >= 80rem)";
 
 function subscribeDock(onChange: () => void) {
@@ -28,13 +26,9 @@ function subscribeDock(onChange: () => void) {
   return () => query.removeEventListener("change", onChange);
 }
 
-
 export function useDocked(): boolean {
   return useSyncExternalStore(subscribeDock, () => window.matchMedia(DOCK_QUERY).matches, () => true);
 }
-
-
-
 
 export function ChatDock() {
   const { chat } = useWorkspace();
@@ -70,8 +64,6 @@ function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTML
     if (open && !el.open) el.showModal();
     if (!open && el.open) el.close();
   }, [dialog, open]);
-  
-  
   useEffect(() => (open ? onFocusRequest(onClose) : undefined), [open, onClose]);
   return (
     <dialog
@@ -84,7 +76,6 @@ function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTML
         if (event.target === event.currentTarget) event.currentTarget.dataset.downOutside = "";
       }}
       onClick={(event) => {
-        
         const sheet = event.currentTarget;
         if (event.target === sheet && sheet.dataset.downOutside !== undefined) onClose();
         delete sheet.dataset.downOutside;
@@ -97,16 +88,12 @@ function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTML
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 
-
-
-
 export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
   const [initial, setInitial] = useState<{ messages: UIMessage[]; off: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
   const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
-  
   const reach = nodeId === null ? "All clients and projects" : node ? <><PathText path={node.path} />{below}</> : "This page's client or project";
 
   useEffect(() => {
@@ -126,7 +113,6 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
           <h2 id="chat-title" className="t-title">
             {ASSISTANT_NAME}
           </h2>
-          {}
           <p className="t-meta chat-models">{ASSISTANT_MODELS}</p>
           <p className="t-value chat-reach">{reach}</p>
         </div>
@@ -156,7 +142,6 @@ export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose:
   );
 }
 
-
 function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial: UIMessage[]; off: string | null }) {
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
@@ -164,35 +149,28 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
   const [notice, setNotice] = useState<string | null>(null);
   const log = useRef<HTMLOListElement>(null);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  
   const [reading, setReading] = useState(0);
   const { messages, sendMessage, addToolOutput, status, error, clearError } = useChat({
     id: nodeId ?? "workspace",
     messages: initial,
-    
     transport: new DefaultChatTransport({
       api: "/api/chat",
       prepareSendMessagesRequest: ({ messages }) => ({ body: { nodeId, timeZone, message: messages.at(-1) } }),
     }),
-    
-    
     onToolCall: ({ toolCall }) => {
       if (!BROWSER_READS.has(toolCall.toolName)) return;
       setReading((now) => now + 1);
-      
       void tool(toolCall.toolName, toolCall.input as Record<string, unknown>, nodeId)
         .then((output) => addToolOutput({ tool: toolCall.toolName, toolCallId: toolCall.toolCallId, output }))
         .finally(() => setReading((now) => now - 1));
     },
     sendAutomaticallyWhen: turnGoesOn,
-    
     onFinish: ({ message }) => {
       if (!message.parts.some((part) => isToolUIPart(part) && part.state === "input-available")) touch();
     },
   });
   const busy = status === "submitted" || status === "streaming" || reading > 0;
 
-  
   useLayoutEffect(() => {
     const el = log.current;
     if (!el) return;
@@ -210,7 +188,6 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
   }
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
-    
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       send();
@@ -263,7 +240,6 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
               }
               return null;
             })}
-            {}
             {!busy && leftUnfinished(message) && (
               <p className="inline-note" data-chat-unfinished>
                 This answer was left unfinished. Ask again to finish it.
@@ -271,7 +247,6 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
             )}
           </li>
         ))}
-        {}
         {(busy || messages.length > 0) && (
           <li className="msg msg-working" data-working={busy || undefined} aria-busy={busy || undefined} aria-hidden={!busy || undefined}>
             <span className="t-meta">{ASSISTANT_NAME}</span>
@@ -324,7 +299,6 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
             </Button>
           </div>
           <div className="compose-actions">
-            {}
             <label className={`${buttonClass({ size: "sm", variant: "quiet" })} file-button`}>
               <AttachImageIcon />
               <span className="btn-label">Attach an image</span>
@@ -338,7 +312,6 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
   );
 }
 
-
 function readable(message: string): string {
   try {
     const parsed = JSON.parse(message) as { message?: string };
@@ -347,9 +320,6 @@ function readable(message: string): string {
     return message;
   }
 }
-
-
-
 
 function ActionCard({ toolName, output }: { toolName: string; output: WriteOutput }) {
   const { saving } = useWorkspace();
@@ -388,8 +358,6 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
     </div>
   );
 }
-
-
 
 
 function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNotice: (text: string) => void }) {
@@ -446,7 +414,6 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
 
   if (!available) return null;
   return (
-    
     <Button size="sm" variant="quiet" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())}>
       <MicIcon />
       <span className="btn-label">{working ? "Transcribing…" : recording ? "Stop and transcribe" : "Dictate"}</span>

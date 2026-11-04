@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "./button";
 
-
-
 export function CopyButton({ text, target, label = "Copy", onSelecting }: { text: string; target: string; label?: string; onSelecting?: () => void }) {
   const [state, setState] = useState<"idle" | "copied" | "selected">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -16,7 +14,6 @@ export function CopyButton({ text, target, label = "Copy", onSelecting }: { text
       await navigator.clipboard.writeText(text);
       setState("copied");
     } catch {
-      
       onSelecting?.();
       const block = document.getElementById(target);
       if (block) {

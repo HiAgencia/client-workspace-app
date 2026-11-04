@@ -12,15 +12,11 @@ import type { SessionUser } from "@/lib/supabase/server";
 import { askOnceMoreIfCut, forgetLayout } from "./app/client-api";
 
 type Session = { kind: "loading" } | { kind: "out" } | { kind: "in"; user: SessionUser };
-
-
 type Spot = "nav" | "hero" | "end";
 type Way = { session: Session; busy: { what: "google" | "demo" | "out"; at: Spot } | null; error: { text: string; at: Spot } | null };
 
 const START: Way = { session: { kind: "loading" }, busy: null, error: null };
 const NO_ANSWER = "The server did not answer. Reload the page.";
-
-
 
 let way: Way = START;
 let round = 0;
@@ -37,8 +33,6 @@ function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
-
-
 
 async function readSession(config: PublicConfig, of: number) {
   try {
@@ -84,23 +78,17 @@ async function tryDemo(config: PublicConfig, at: Spot, enter: () => void) {
   const of = round;
   const fail = (text: string) => put({ busy: null, error: { text, at } }, of);
   put({ busy: { what: "demo", at }, error: null }, of);
-  
-  
   const { data: existing } = await browserClient(config).auth.getSession();
   if (!existing.session?.user.is_anonymous) {
     const { error } = await browserClient(config).auth.signInAnonymously();
     if (error) return fail(`The demo could not start: ${error.message}`);
   }
-  
-  
   const seeded = await askOnceMoreIfCut("/api/demo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ today: dayOf(new Date()), zone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   });
   if (!(seeded instanceof Response) || !seeded.ok) return fail("The demo workspace could not be prepared. Reload to try again.");
-  
-  
   enter();
 }
 
@@ -112,12 +100,9 @@ async function signOut(config: PublicConfig) {
   put({ busy: null, session: { kind: "out" } }, of);
 }
 
-
 function progress(busy: Way["busy"]): string | null {
   return busy?.what === "demo" ? "Preparing a demo workspace of your own…" : busy?.what === "google" ? "Opening Google…" : null;
 }
-
-
 
 export function SignInPlaceholder() {
   return (
@@ -130,18 +115,14 @@ export function SignInPlaceholder() {
   );
 }
 
-
-
 export function SignIn({ config, failed, go }: { config: PublicConfig; failed: boolean; go?: ReactNode }) {
   const { session, busy, error } = useWay(config);
   const router = useRouter();
 
-  
   useEffect(() => {
     if (failed) put({ error: { text: "Signing in did not finish. Try again.", at: "hero" } }, round);
   }, [failed]);
 
-  
   const said = busy && busy.at !== "end" ? progress(busy) : null;
   return (
     <section className="stack" aria-live="polite">
@@ -194,8 +175,6 @@ export function SignIn({ config, failed, go }: { config: PublicConfig; failed: b
   );
 }
 
-
-
 export function NavSignInPlaceholder() {
   return (
     <span className="landing-nav-session" aria-hidden="true">
@@ -209,13 +188,9 @@ export function NavSignInPlaceholder() {
   );
 }
 
-
-
 export function NavSignIn({ config }: { config: PublicConfig }) {
   const { session, busy, error } = useWay(config);
   const router = useRouter();
-  
-  
   if (session.kind === "loading") return <NavSignInPlaceholder />;
   if (session.kind === "in") {
     return (
@@ -252,8 +227,6 @@ export function NavSignIn({ config }: { config: PublicConfig }) {
   );
 }
 
-
-
 export function EndSignInPlaceholder() {
   return (
     <span className="inline" aria-hidden="true">
@@ -262,7 +235,6 @@ export function EndSignInPlaceholder() {
     </span>
   );
 }
-
 
 export function EndSignIn({ config, go }: { config: PublicConfig; go?: ReactNode }) {
   const { session, busy, error } = useWay(config);
@@ -296,7 +268,6 @@ export function EndSignIn({ config, go }: { config: PublicConfig; go?: ReactNode
           </a>
         </div>
       )}
-      {}
       <p className="t-meta landing-end-status" role="status">
         {busy?.at === "end" ? progress(busy) : null}
       </p>

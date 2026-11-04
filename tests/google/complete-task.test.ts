@@ -8,17 +8,12 @@ import { reachableMessage } from "@/lib/tools/mail";
 import { callTool } from "@/lib/tools/registry";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
-
 let user: DisposableUser | undefined;
 let other: DisposableUser | undefined;
 let deps: GoogleDeps;
 let client = "";
 let account = "";
 let foreignAccount = "";
-
 const reads: string[] = [];
 
 const stored = {
@@ -61,7 +56,6 @@ const fakeGoogle: Fetch = async (input, init) => {
 
 const context = (db: ToolContext["db"] = user!.client): ToolContext => ({ db, ownerId: user!.id, source: "manual", mail: gmailMailSource(deps) });
 
-
 function changingCall(name: string, change: (args: Record<string, unknown>) => Record<string, unknown>): ToolContext["db"] {
   const real = user!.client;
   return new Proxy(real, {
@@ -84,7 +78,6 @@ async function newTask(title = "Wait for the transfer") {
 type Closed = { ok: boolean; message?: string; item: { status: string; completedAt: string | null }; decision: { id: string; title: string; body: string | null }; link: { created: boolean } | null };
 const close = (task: string, db?: ToolContext["db"], outcome = "approved", reply = { account, id: stored.id }) =>
   callTool("complete_task", context(db), { task, outcome, reply }) as unknown as Promise<Closed>;
-
 
 async function stateOf(task: string) {
   const item = await user!.client.from("items").select("status, completed_at").eq("id", task).single();
@@ -179,7 +172,6 @@ describe("closing a task with its result", () => {
 
   it("the link failing leaves the task open and without a result", async () => {
     const task = await newTask();
-    
     const db = changingCall("complete_task", (args) => ({ ...args, p_account: foreignAccount }));
     const closed = await close(task, db);
     expect(closed.ok, "the failure is said").toBe(false);
@@ -199,7 +191,6 @@ describe("closing a task with its result", () => {
   it("a task closed meanwhile writes nothing more", async () => {
     const task = await newTask();
     await close(task);
-    
     const again = await user!.client.rpc("complete_task", {
       p_owner: user!.id,
       p_item: task,

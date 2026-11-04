@@ -7,8 +7,6 @@ export type ToolSource = "manual" | "chat" | "agent";
 
 export type EventsAccount = { id: string; email: string; isDemo: boolean; status: string };
 
-
-
 export type EventsSource = (args: {
   db: Db;
   ownerId: string;
@@ -18,15 +16,11 @@ export type EventsSource = (args: {
   to: string;
 }) => Promise<{ events: CalendarEvent[]; failures: EventsFailure[] }>;
 
-
 export type CalendarWriter = {
   create(args: { ownerId: string; accountId: string; calendarId: string; event: GoogleEventInput }): Promise<GoogleEvent>;
   update(args: { ownerId: string; accountId: string; calendarId: string; eventId: string; event: GoogleEventInput }): Promise<GoogleEvent>;
   remove(args: { ownerId: string; accountId: string; calendarId: string; eventId: string }): Promise<void>;
 };
-
-
-
 
 export type ToolContext = {
   db: Db;
@@ -34,10 +28,8 @@ export type ToolContext = {
   scopeNodeId?: string;
   source: ToolSource;
   agentLabel?: string;
-  
   updatesSince?: string;
   events?: EventsSource;
   calendar?: CalendarWriter;
-  
   mail?: MailSource;
 };

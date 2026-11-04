@@ -6,12 +6,7 @@ import { cx } from "@/lib/utils";
 import { usePopupContainer } from "./popup-layer";
 
 type Tone = "neutral" | "accent" | "alert" | "warn" | "muted";
-
 export type SelectGroup = { key: string; label: string; color?: string | null };
-
-
-
-
 export type SelectOption = {
   value: string;
   label: string;
@@ -21,7 +16,6 @@ export type SelectOption = {
   group?: SelectGroup;
   mark?: (props: { className?: string }) => ReactElement;
 };
-
 
 export function optionRuns(options: SelectOption[]): Array<{ group: SelectGroup | null; options: SelectOption[] }> {
   const runs: Array<{ group: SelectGroup | null; options: SelectOption[] }> = [];
@@ -38,15 +32,11 @@ type SelectProps = {
   value: string | null;
   onChange: (value: string) => void;
   options: SelectOption[];
-  
   label: string;
   placeholder?: string;
-  
   look?: "field" | "chip";
-  
   id?: string;
 };
-
 
 const item = (option: SelectOption, marked: boolean) => (
   <Base.Item key={option.value} value={option.value} className="option" data-empty={option.empty || undefined}>
@@ -55,10 +45,6 @@ const item = (option: SelectOption, marked: boolean) => (
     {option.detail && <span className="option-detail">{option.detail}</span>}
   </Base.Item>
 );
-
-
-
-
 
 export function Select({ value, onChange, options, label, placeholder = "Chooseâ€¦", look = "field", id }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
@@ -75,7 +61,6 @@ export function Select({ value, onChange, options, label, placeholder = "Chooseâ
     >
       <Base.Trigger
         id={id}
-        
         aria-label={`${label}: ${chosen?.label ?? placeholder}`}
         className={cx("picker", look === "field" ? "field" : "chip-picker")}
         data-tone={look === "chip" ? chosen?.tone : undefined}

@@ -3,14 +3,10 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-
-
-
 const SRC = fileURLToPath(new URL(".", import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
 const TRACE =
   /\b(?:ReviewJudge|reviewJudge|judgeFor|metaJudge|simulatedJudge|run_daily_review|dailyReview|daily_reviews?|daily_review_instruction|review_actions|review_write_mail_status|review_complete_task|expect_from|decided_account_id|decided_message_id|checked_at)\b|lib\/review\//;
-
 const FOLDER = /^lib\/review\//;
 
 type File = { path: string; text: string };
@@ -37,7 +33,6 @@ describe("the daily review", () => {
     noTraceOfTheReview(filesUnder(SRC));
   });
 
-  
   const failsWith = (planted: File) => {
     let failure: unknown = null;
     try {

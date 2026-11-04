@@ -12,9 +12,7 @@ export type { Db };
 
 export type DisposableUser = { id: string; email: string; client: Db; pooled?: string };
 
-
 const runFile = () => inject("testUsersFile");
-
 
 export function requireEnv(name: string): string {
   const value = process.env[name];
@@ -24,8 +22,6 @@ export function requireEnv(name: string): string {
 
 const options = {
   auth: { persistSession: false, autoRefreshToken: false },
-  
-  
   global: {
     fetch: (input: RequestInfo | URL, init?: RequestInit) =>
       fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(30_000) }),
@@ -40,7 +36,6 @@ export function serviceClient(): Db {
   );
 }
 
-
 export function publicClient(): Db {
   return createClient<Database>(
     requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
@@ -48,7 +43,6 @@ export function publicClient(): Db {
     options,
   );
 }
-
 
 export async function createDisposableUser(label: string): Promise<DisposableUser> {
   const admin = serviceClient();
@@ -58,7 +52,6 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
   if (created.error || !created.data.user) {
     throw new Error(`could not create the test user ${label}: ${created.error?.message ?? "no user returned"}`);
   }
-  
   track(runFile(), created.data.user.id);
   const client = publicClient();
   const signedIn = await client.auth.signInWithPassword({ email, password });
@@ -66,20 +59,12 @@ export async function createDisposableUser(label: string): Promise<DisposableUse
   return { id: created.data.user.id, email, client };
 }
 
-
-
-
-
-
-
 const POOL_FILE = join(suiteDir(), "cw-demo-pool.json");
 const POOL_LOCK = join(suiteDir(), "cw-demo-pool.lock");
 
 type Pool = Record<string, { id: string; refreshToken: string }>;
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
-
-
 
 async function withPoolLock<T>(fn: () => T): Promise<T> {
   for (let attempt = 0; ; attempt++) {
@@ -90,7 +75,6 @@ async function withPoolLock<T>(fn: () => T): Promise<T> {
       try {
         if (Date.now() - statSync(POOL_LOCK).mtimeMs > 20_000) rmSync(POOL_LOCK, { recursive: true, force: true });
       } catch {
-        
       }
       if (attempt > 1200) throw new Error("the demo pool's lock was never released");
       await wait(50);
@@ -130,17 +114,12 @@ async function forget(label: string): Promise<void> {
   });
 }
 
-
-
-
 export async function createAnonymousUser(label: string): Promise<DisposableUser> {
   const client = publicClient();
   const kept = await withPoolLock(() => readPool()[label]);
   let id: string | undefined;
   let refreshToken: string | undefined;
   if (kept) {
-    
-    
     const renewed = await client.auth.refreshSession({ refresh_token: kept.refreshToken });
     if (!renewed.error && renewed.data.session) {
       id = renewed.data.user?.id ?? kept.id;
@@ -157,19 +136,15 @@ export async function createAnonymousUser(label: string): Promise<DisposableUser
     }
     id = opened.data.user.id;
     refreshToken = opened.data.session.refresh_token;
-    
     track(runFile(), id);
     await remember(label, { id, refreshToken });
     untrack(runFile(), id);
   } else await remember(label, { id, refreshToken });
   await resetDemo(client);
-  
   const refilled = await serviceClient().rpc("reset_demo_usage", { p_owner: id });
   if (refilled.error) throw new Error(`could not refill the usage of the demo session ${label}: ${refilled.error.message}`);
   return { id, email: `demo session ${label}`, client, pooled: label };
 }
-
-
 
 export async function deleteDisposableUsers(users: Array<DisposableUser | undefined>): Promise<void> {
   const admin = serviceClient();

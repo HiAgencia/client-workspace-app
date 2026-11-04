@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activates, gridMove } from "./grid-keys";
 
-
 const MONTH = { rows: 5, cols: 7 };
 
 describe("walking a calendar grid with the keys", () => {
@@ -23,7 +22,6 @@ describe("walking a calendar grid with the keys", () => {
   });
 
   it("jumps by rows with Page Up and Page Down, inside the grid", () => {
-    
     const week = { rows: 12, cols: 7 };
     expect(gridMove("PageDown", { row: 1, col: 2 }, week)).toEqual({ row: 5, col: 2 });
     expect(gridMove("PageDown", { row: 10, col: 2 }, week)).toEqual({ row: 11, col: 2 });

@@ -1,8 +1,3 @@
-
-
-
-
-
 export const NONCE_COOKIE = "google_connect_nonce";
 
 export type ConnectState ={ nodeId: string; userId: string; nonce: string; expiresAt: number };
@@ -37,7 +32,6 @@ export async function signState(secret: string, value: Omit<ConnectState, "expir
   const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(secret), payload));
   return `${b64url(payload)}.${b64url(signature)}`;
 }
-
 
 export async function verifyState(secret: string, state: string, now = Date.now()): Promise<ConnectState | null> {
   const [payload, signature] = state.split(".");

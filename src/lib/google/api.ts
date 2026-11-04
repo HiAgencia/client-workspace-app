@@ -1,5 +1,3 @@
-
-
 export type Fetch = typeof fetch;
 
 export const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -7,17 +5,12 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
-
-
 const GMAIL_BATCH_URL = "https://www.googleapis.com/batch/gmail/v1";
-
-
 
 export const EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 export const CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 export const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 export const CONNECT_SCOPES = ["openid", "email", EVENTS_SCOPE, CALENDAR_LIST_SCOPE, GMAIL_READ_SCOPE];
-
 
 const TIMEOUT_MS = 10_000;
 
@@ -29,7 +22,6 @@ export class GoogleError extends Error {
   ) {
     super(message);
   }
-  
   get revoked(): boolean {
     return this.reason === "invalid_grant";
   }
@@ -179,7 +171,6 @@ export async function listEvents(
   return events;
 }
 
-
 export type GoogleEventInput = {
   summary?: string;
   description?: string | null;
@@ -215,8 +206,6 @@ export async function deleteEvent(fetcher: Fetch, accessToken: string, calendarI
 
 export type GmailHeader = { name: string; value: string };
 
-
-
 export type GmailPart = {
   partId?: string;
   mimeType?: string;
@@ -231,7 +220,6 @@ export type GmailMessage = {
   threadId: string;
   labelIds?: string[];
   snippet?: string;
-  
   internalDate?: string;
   payload?: GmailPart;
 };
@@ -243,7 +231,6 @@ function messageQuery(format: GmailFormat, headers: string[]): string {
   if (format === "metadata") for (const name of headers) query.append("metadataHeaders", name);
   return query.toString();
 }
-
 
 export async function listMessageIds(
   fetcher: Fetch,
@@ -272,9 +259,7 @@ export function getMessage(fetcher: Fetch, accessToken: string, id: string, form
   );
 }
 
-
 export const BATCH_SIZE = 50;
-
 
 export async function getMessages(
   fetcher: Fetch,
@@ -323,12 +308,9 @@ async function batchOnce(
     throw new GoogleError(`reading the messages: HTTP ${response.status}`, response.status, errorReason(text));
   }
   const parts = splitBatch(text, response.headers.get("Content-Type"));
-  
-  
   if (ids.every((_, index) => parts.get(`item${index}`)?.status === 401)) {
     throw new GoogleError("reading the messages: HTTP 401", 401, errorReason(parts.get("item0")!.body));
   }
-  
   return ids.map((_, index) => {
     const part = parts.get(`item${index}`);
     if (!part) return new GoogleError("reading the message: the batch answer left it out", 0, null);
@@ -351,7 +333,6 @@ function errorReason(text: string): string | null {
     return null;
   }
 }
-
 
 export function splitBatch(text: string, contentType: string | null): Map<string, { status: number; body: string }> {
   const answers = new Map<string, { status: number; body: string }>();

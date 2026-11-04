@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { forgetLastNode, lastNode, rememberLastNode } from "./last-node";
 
-
 const store = new Map<string, string>();
 let cookie = "";
 function signedInAs(id: string | null) {

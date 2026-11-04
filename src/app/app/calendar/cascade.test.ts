@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cascade, KEEP, type Placed } from "./cascade";
 
-
 const at = (hour: number, minute = 0) => hour * 60 + minute;
 const LINE = 30;
 const event = (name: string, start: number, end: number) => ({ name, start, end });

@@ -16,7 +16,6 @@ import { getTasks, moveItem, reorderItems, requestReview, rescheduleOverdue } fr
 import { getUpdatesSince } from "./updates";
 import { completeTask, dismissReply, listTaskReplies, reopenTask, setTaskMail } from "./waits";
 
-
 export const tools: Tool[] = [
   listTree,
   getTasks,
@@ -67,7 +66,6 @@ export const tools: Tool[] = [
 export function findTool(name: string): Tool | undefined {
   return tools.find((tool) => tool.name === name);
 }
-
 
 export async function callTool(name: string, ctx: ToolContext, input: unknown): Promise<ToolResult<unknown> | ToolError> {
   const tool = findTool(name);

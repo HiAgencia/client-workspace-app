@@ -1,7 +1,3 @@
-
-
-
-
 export function normalize(text: string): string {
   return text
     .toLowerCase()
@@ -17,13 +13,11 @@ function words(text: string): string[] {
     .filter(Boolean);
 }
 
-
 export type Prepared = { words: string[]; text: string };
 
 export function prepare(text: string): Prepared {
   return { words: words(text), text: normalize(text) };
 }
-
 
 export function editDistance(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
@@ -43,13 +37,11 @@ export function editDistance(a: string, b: string, max: number): number {
   return rows[a.length][b.length];
 }
 
-
 function allowedTypos(word: string): number {
   if (word.length <= 3) return 0;
   if (word.length <= 6) return 1;
   return 2;
 }
-
 
 function wordScore(typed: string, word: string): number {
   if (word === typed) return 1;
@@ -57,14 +49,11 @@ function wordScore(typed: string, word: string): number {
   if (typed.length >= 3 && word.includes(typed)) return 0.75;
   const allowed = allowedTypos(typed);
   if (allowed === 0) return 0;
-  
   const whole = editDistance(typed, word, allowed);
   const start = word.length > typed.length ? editDistance(typed, word.slice(0, typed.length), allowed) : whole;
   const distance = Math.min(whole, start);
   return distance <= allowed ? 0.65 - 0.12 * distance : 0;
 }
-
-
 
 function score(query: Prepared, target: Prepared): number {
   if (query.words.length === 0 || target.words.length === 0) return 0;

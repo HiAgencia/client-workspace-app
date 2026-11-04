@@ -2,11 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { safeNext, SESSION_HEADERS } from "@/lib/http";
 import { userClient } from "@/lib/supabase/server";
 
-
-
 const AFTER_SIGN_IN = "/app/resume";
-
-
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;

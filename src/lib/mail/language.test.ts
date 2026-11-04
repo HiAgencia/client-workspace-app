@@ -17,7 +17,6 @@ describe("the language a message declares", () => {
     expect(messageLanguage({ html: "<p>Hello</p>" })).toBeNull();
     expect(messageLanguage({ html: null })).toBeNull();
     expect(messageLanguage({ contentLanguage: "not a language!", html: '<html lang="">x</html>' })).toBeNull();
-    
     expect(messageLanguage({ html: '<html><body><p lang="ja">こんにちは</p></body></html>' })).toBeNull();
   });
 });

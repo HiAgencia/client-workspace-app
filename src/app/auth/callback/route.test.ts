@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
-
 vi.mock("@/lib/supabase/server", () => ({
   userClient: async () => ({ auth: { exchangeCodeForSession: async () => ({ error: null }) } }),
 }));

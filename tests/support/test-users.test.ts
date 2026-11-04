@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/lib/db/client";
 import { keepInRun, openRun, readRun, sweepDeadRuns } from "./test-users";
 
-
 let dir: string;
 let records: string;
 beforeEach(() => {
@@ -30,10 +29,8 @@ describe("a run's record", () => {
   });
 });
 
-
 describe.skipIf(process.platform !== "win32")("the sweep of the runs that died", () => {
   it("keeps the record of a dead run that had this process's id, sweeps it, and leaves the live run's own", async () => {
-    
     const dead = join(records, `run-${process.pid}.txt`);
     writeFileSync(dead, `run ${process.pid} ${Date.now() - 86_400_000}\n+user-left-behind\n`);
     const own = openRun();

@@ -15,13 +15,9 @@ export type TreeNode = {
   createdAt: string;
   path: string;
   segments: string[];
-  
   ownColor: NodeColor | null;
   color: NodeColor | null;
 };
-
-
-
 
 export type Scope = {
   all: Map<string, TreeNode>;
@@ -38,7 +34,6 @@ export function isUuid(value: string): boolean {
   return uuidPattern.test(value);
 }
 
-
 export function normalizeName(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -50,8 +45,6 @@ function splitPath(path: string): string[] {
     .filter((segment) => segment.length > 0);
 }
 
-
-
 const scopes = new WeakMap<ToolContext, Promise<ToolResult<{ scope: Scope }>>>();
 
 export function loadScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>> {
@@ -59,7 +52,6 @@ export function loadScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }
   if (!pending) {
     pending = readScope(ctx);
     scopes.set(ctx, pending);
-    
     pending.then(
       (result) => {
         if (!result.ok) scopes.delete(ctx);
@@ -99,13 +91,10 @@ async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>
       color: null,
     });
   }
-  
-  
   for (const node of [...all.values()]) {
     const names: string[] = [];
     let cursor: TreeNode | undefined = node;
     let rooted = false;
-    
     for (let depth = 0; cursor && depth < 64; depth++) {
       names.unshift(cursor.name);
       node.color ??= cursor.ownColor;
@@ -154,8 +143,6 @@ export function describeNode(node: TreeNode) {
   return { id: node.id, path: node.path, kind: node.kind };
 }
 
-
-
 export function resolveNode(scope: Scope, ref: string | undefined): ToolResult<{ node: TreeNode }> {
   if (ref === undefined || ref.trim() === "") {
     if (scope.root) return ok({ node: scope.root });
@@ -188,8 +175,6 @@ export function resolveNode(scope: Scope, ref: string | undefined): ToolResult<{
   });
 }
 
-
-
 export function resolveWritePlace(scope: Scope, ref: string | null | undefined): ToolResult<{ node: TreeNode | null }> {
   if (ref === null || (ref === undefined && !scope.root)) {
     if (!scope.general) return fail("not_found", "this access reaches only its own node and what is below it, not General");
@@ -197,8 +182,6 @@ export function resolveWritePlace(scope: Scope, ref: string | null | undefined):
   }
   return resolveNode(scope, ref);
 }
-
-
 
 export type ReadPlace = { kind: "all" } | { kind: "general" } | { kind: "node"; node: TreeNode };
 
@@ -213,7 +196,6 @@ export function resolveReadPlace(scope: Scope, ref: string | null | undefined): 
   return ok({ place: { kind: "node", node: resolved.node } });
 }
 
-
 export type Reach = { nodeIds: string[]; general: boolean };
 
 export function reachOf(scope: Scope, place: ReadPlace, withSubtree = true): Reach {
@@ -222,7 +204,6 @@ export function reachOf(scope: Scope, place: ReadPlace, withSubtree = true): Rea
   if (!withSubtree) return { nodeIds: [place.node.id], general: false };
   return { nodeIds: [...subtree(scope.all, place.node.id)].filter((id) => scope.reachable.has(id)), general: false };
 }
-
 
 export function reaches(scope: Scope, ownerId: string, row: { node_id: string | null; owner_id: string }): boolean {
   if (row.node_id === null) return scope.general && row.owner_id === ownerId;

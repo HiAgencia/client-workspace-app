@@ -6,7 +6,6 @@ import { toolResponse } from "@/lib/tool-response";
 import { restoreItem } from "@/lib/tools/items";
 import { isUuid } from "@/lib/tools/tree";
 
-
 export async function POST(request: Request, { params }: RouteContext<"/api/items/[id]/restore">) {
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such item");

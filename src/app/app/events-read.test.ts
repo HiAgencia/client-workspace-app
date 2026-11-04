@@ -13,7 +13,6 @@ const ACCOUNTS = [
   { id: "b", email: "b@example.com" },
 ];
 
-
 function server(first: Record<string, unknown>, byAccount: Record<string, Answer<{ events: Event[]; failures: unknown[] }>>) {
   const asked: Array<Record<string, unknown>> = [];
   const ask = async (name: string, input: Record<string, unknown>) => {
@@ -66,7 +65,6 @@ describe("reading the events account by account", () => {
     if (!read.ok) throw new Error(read.message);
     expect(read.waiting).toBe(0);
     expect(read.events.map((event) => event.id)).toEqual(["quick", "mine", "slow"]);
-    
     expect(heard).toHaveLength(2);
   });
 
@@ -127,7 +125,6 @@ describe("reading the events account by account", () => {
 });
 
 describe("the events put together from what each request last brought", () => {
-  
   function kept(entries: Record<string, { value: unknown; at: number }>) {
     return (name: string, input: Record<string, unknown>) => {
       expect(name).toBe("browse_events");
@@ -154,7 +151,6 @@ describe("the events put together from what each request last brought", () => {
       [JSON.stringify({ ...INPUT, account: "a" })]: { value: { ok: true, events: [], failures: [] }, at: 200 },
     });
     expect(keptEvents<Event>(INPUT, { peek })).toBeNull();
-    
     expect(keptEvents<Event>(INPUT, { peek, withAccounts: false })?.value.events.map((event) => event.id)).toEqual(["mine"]);
   });
 });

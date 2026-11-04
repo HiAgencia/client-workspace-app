@@ -1,17 +1,9 @@
 import { z } from "zod";
 import type { Db } from "@/lib/db/client";
 
-
-
-
-
-
-
 export const mailAddressSchema = z.object({ name: z.string().nullable(), email: z.string() });
 
-
 export const mailMessageSchema = z.object({
-  
   id: z.string(),
   threadId: z.string(),
   accountId: z.string(),
@@ -21,36 +13,23 @@ export const mailMessageSchema = z.object({
   subject: z.string(),
   snippet: z.string(),
   receivedAt: z.string(),
-  
   unread: z.boolean(),
   important: z.boolean(),
 });
 
 export type MailMessage = z.infer<typeof mailMessageSchema>;
 
-
-
 export type MailContent = MailMessage & { html: string | null; text: string | null; contentLanguage?: string | null };
 
 export type MailAccount = { id: string; email: string; isDemo: boolean; status: string; scopes: string[] };
-
-
-
 
 export const mailFailureSchema = z.object({ accountId: z.string(), accountEmail: z.string(), reason: z.string(), partial: z.boolean().optional(), atLimit: z.boolean().optional() });
 export type MailFailure = z.infer<typeof mailFailureSchema>;
 
 export type MailSource = {
-  
-  
   list(args: { db: Db; ownerId: string; accounts: MailAccount[]; since?: string; limit?: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
-  
   get(args: { db: Db; ownerId: string; account: MailAccount; id: string }): Promise<MailContent | null>;
-  
   many(args: { db: Db; ownerId: string; account: MailAccount; ids: string[] }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
-  
-  
-  
   candidates(args: {
     db: Db;
     ownerId: string;
@@ -60,21 +39,12 @@ export type MailSource = {
     limit: number;
     pageToken?: string;
   }): Promise<{ messages: MailMessage[]; failures: MailFailure[]; nextPageToken: string | null }>;
-  
   search(args: { db: Db; ownerId: string; accounts: MailAccount[]; words: string; limit: number }): Promise<{ messages: MailMessage[]; failures: MailFailure[] }>;
-  
-  
   unread(args: { db: Db; ownerId: string; accounts: MailAccount[] }): Promise<{ messages: Array<{ accountId: string; id: string }>; failures: MailFailure[] }>;
 };
 
-
-
 const OPTIONAL_MARKS = /([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}])\p{M}+/gu;
-
-
 const OWN_LETTERS = new Set(["ñ", "Ñ", "й", "Й", "ў", "Ў", "ї", "Ї"]);
-
-
 
 export function folded(text: string): string {
   return text
@@ -84,8 +54,6 @@ export function folded(text: string): string {
     .toLowerCase();
 }
 
-
-
 export function waitWords(text: string): string[] {
   return text
     .split(/\s+/)
@@ -93,26 +61,18 @@ export function waitWords(text: string): string[] {
     .filter((word) => /[\p{L}\p{N}]/u.test(word));
 }
 
-
-
-
-
 export function holdsEveryWord(message: Pick<MailMessage, "from" | "subject">, words: string[]): boolean {
   if (words.length === 0) return false;
   const fields = folded([message.from.name ?? "", message.from.email, message.subject].join("\n"));
   return words.every((word) => holdsWhole(fields, folded(word)));
 }
 
-
 const LETTER_OR_FIGURE = /[\p{L}\p{M}\p{N}]/u;
-
-
 const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 
 function holdsWhole(text: string, word: string): boolean {
   if (UNSPACED.test(word)) return text.includes(word);
   for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
-    
     const before = Array.from(text.slice(Math.max(0, at - 2), at)).pop() ?? "";
     const next = text.codePointAt(at + word.length);
     const after = next === undefined ? "" : String.fromCodePoint(next);
@@ -120,7 +80,6 @@ function holdsWhole(text: string, word: string): boolean {
   }
   return false;
 }
-
 
 export function holdsWords(message: Pick<MailMessage, "from" | "subject" | "snippet">, words: string): boolean {
   const wanted = words.trim().toLowerCase();
@@ -163,18 +122,14 @@ function fromDemo(row: DemoRow, email: string): MailContent {
   };
 }
 
-
 export function withoutBody(message: MailContent): MailMessage {
   const { id, threadId, accountId, accountEmail, from, to, subject, snippet, receivedAt, unread, important } = message;
   return { id, threadId, accountId, accountEmail, from, to, subject, snippet, receivedAt, unread, important };
 }
 
-
-
 export const MAIL_LIMIT = 50;
 
 const notConnected = (account: MailAccount): MailFailure => ({ accountId: account.id, accountEmail: account.email, reason: "reading Gmail is not configured on this server" });
-
 
 function unreadable(account: MailAccount, cause: string): MailFailure {
   console.error(`mail: account ${account.id}: ${cause}`);
@@ -183,9 +138,6 @@ function unreadable(account: MailAccount, cause: string): MailFailure {
 
 const newestFirst = <T extends { receivedAt: string }>(messages: T[]) =>
   messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
-
-
-
 
 export function demoMailSource(): MailSource {
   type Read = { since?: string; limit: number; whole: boolean; keep?: (message: MailContent) => boolean };
@@ -202,7 +154,6 @@ export function demoMailSource(): MailSource {
             .eq("account_id", account.id);
           if (since) query = query.gte("received_at", since);
           query = query.order("received_at", { ascending: false });
-          
           const { data, error } = await (keep ? query : query.limit(limit + 1));
           if (error) return { messages: [] as MailContent[], failure: unreadable(account, error.message), more: null };
           const all = (data as unknown as DemoRow[])
@@ -226,7 +177,6 @@ export function demoMailSource(): MailSource {
       if (!account.isDemo) return { messages: [], failures: [notConnected(account)], nextPageToken: null };
       if (words.length === 0) return { messages: [], failures: [], nextPageToken: null };
       const { messages, failures } = await rows(db, ownerId, [account], { since, limit: Number.MAX_SAFE_INTEGER, whole: false, keep: (message) => holdsEveryWord(message, words) });
-      
       const start = Math.max(0, Math.trunc(Number(pageToken ?? 0)) || 0);
       return {
         messages: messages.slice(start, start + limit).map(withoutBody),

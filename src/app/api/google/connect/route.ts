@@ -7,9 +7,6 @@ import { problem, SESSION_HEADERS } from "@/lib/http";
 import { requireUser, userClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tools/tree";
 
-
-
-
 export async function GET(request: NextRequest) {
   const nodeId = request.nextUrl.searchParams.get("node") ?? "";
   const asSession = request.nextUrl.searchParams.get("as") === "session";

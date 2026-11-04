@@ -14,42 +14,28 @@ export type Crumb = { label: string; href?: string };
 export type PageLayout = "list" | "board";
 
 type PageHeaderProps = {
-  
   title: ReactNode;
   mark?: ReactNode;
-  
   count?: ReactNode;
-  
   trail?: Crumb[];
-  
   filters?: ReactNode;
-  
   filtersSet?: number;
   layout?: { value: PageLayout; onChange: (value: PageLayout) => void };
-  
   views?: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void };
-  
   chat?: boolean;
-  
   more?: ReactNode;
-  
   titleProps?: Record<`data-${string}`, string>;
   className?: string;
 };
-
-
 
 export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
   const hasTools = Boolean(filters || layout || views || chat || more);
   const heading = useRef<HTMLHeadingElement>(null);
   const sheeted = useSyncExternalStore(subscribeSheeted, () => window.matchMedia(SHEETED_QUERY).matches, () => false);
-  
-  
   useEffect(() => {
     const el = heading.current;
     if (!el) return;
     const name = () => {
-      
       if (!el.isConnected) return;
       const shown = el.textContent?.replace(/\s+/g, " ").trim();
       const wanted = shown ? `${shown} · ${PRODUCT_NAME}` : "";
@@ -58,8 +44,6 @@ export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0,
     name();
     const watchHeading = new MutationObserver(name);
     watchHeading.observe(el, { childList: true, characterData: true, subtree: true });
-    
-    
     const watchTitle = new MutationObserver(name);
     watchTitle.observe(document.head, { childList: true, subtree: true, characterData: true });
     return () => {
@@ -109,8 +93,6 @@ export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0,
   );
 }
 
-
-
 const SHEETED_QUERY = "(width < 40rem)";
 
 function subscribeSheeted(onChange: () => void) {
@@ -119,15 +101,11 @@ function subscribeSheeted(onChange: () => void) {
   return () => query.removeEventListener("change", onChange);
 }
 
-
-
-
 function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  
   const shown = open && sheeted;
   useEffect(() => {
     const el = dialog.current;
@@ -162,7 +140,6 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
         aria-labelledby={titleId}
         data-filter-sheet
         onClose={() => setOpen(false)}
-        
         onPointerDown={(event) => {
           if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
         }}
@@ -195,9 +172,6 @@ const LAYOUTS: Array<{ value: PageLayout; label: string }> = [
   { value: "board", label: "Board" },
 ];
 
-
-
-
 function ViewSwitch({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
   const rail = useRef<HTMLDivElement>(null);
   usePiece(rail, '[aria-pressed="true"]');
@@ -216,7 +190,6 @@ function ViewSwitch({ label, value, options, onChange }: { label: string; value:
     </div>
   );
 }
-
 
 function ChatButton() {
   const { chat } = useWorkspace();

@@ -22,8 +22,6 @@ describe("a message's HTML for the viewer", () => {
     expect(clean.html).toContain('<img src="https://cdn.example/logo.png" alt="Logo">');
     expect(clean.html).toContain('<a href="https://shop.example/offer" target="_blank" rel="noopener noreferrer">Offer</a>');
     expect(clean.removed.handlers).toBe(2);
-    
-    
     expect(clean.removed.elements).toBe(6);
     expect(clean.remoteImages).toBe(1);
   });
@@ -37,7 +35,6 @@ describe("a message's HTML for the viewer", () => {
     expect(clean.html).not.toContain("track.example");
     expect(clean.html).not.toContain("expression");
     expect(clean.html).toContain('<p class="a" style="color: blue">Text</p>');
-    
     expect(sanitizeMailHtml("<style>p { color: red }</style ><script>x()</script>").html).not.toContain("<script");
   });
 

@@ -6,13 +6,6 @@ import { useEffect, useRef } from "react";
 import "lenis/dist/lenis.css";
 import { pageHeld, setSmoothScroll } from "./page-scroll";
 
-
-
-
-
-
-
-
 const SMOOTH = "(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 const OWN_SCROLL = "dialog[open], .positioner, .popup, [role='menu'], [role='listbox'], [data-lenis-prevent]";
 
@@ -46,7 +39,6 @@ export function SmoothScroll() {
       setSmoothScroll(null);
     };
     const follow = () => (wanted.matches ? start() : stop());
-    
     const layers = new MutationObserver(hold);
     layers.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "data-open"] });
     follow();
@@ -58,8 +50,6 @@ export function SmoothScroll() {
     };
   }, []);
 
-  
-  
   useEffect(() => {
     const current = lenis.current;
     if (!current) return;

@@ -2,10 +2,6 @@
 
 import { useLayoutEffect, type RefObject } from "react";
 
-
-
-
-
 export function usePiece(host: RefObject<HTMLElement | null>, selector: string): void {
   useLayoutEffect(() => {
     const el = host.current;

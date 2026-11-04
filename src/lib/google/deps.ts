@@ -3,8 +3,6 @@ import { serviceClient } from "@/lib/supabase/server";
 import type { GoogleDeps } from "./events";
 import { importKey } from "./crypto";
 
-
-
 export function missingGoogleConfig(): string[] {
   return ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TOKEN_ENCRYPTION_KEY"].filter((name) => !serverEnv(name));
 }

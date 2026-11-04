@@ -9,9 +9,6 @@ import { dbFail, fail, isError, ok } from "./result";
 import { byPriorityThenDue, itemSchema, itemTypes, newestFirst, selectAllItems, toItem, type Item } from "./rows";
 import { describePlace, loadScope, reachOf, reaches, resolveReadPlace, type ReadPlace, type Scope, type TreeNode } from "./tree";
 
-
-
-
 const sources = ["manual", "chat", "agent", "review"] as const;
 const day = z.iso.date();
 
@@ -40,8 +37,6 @@ type Filters = {
 
 type Facet = "type" | "status" | "priority" | "source" | "date";
 
-
-
 function passes(item: Item, filters: Filters, plain: string, skip?: Facet): boolean {
   if (skip !== "type" && filters.type && !filters.type.includes(item.type)) return false;
   if (skip !== "status" && filters.status !== "all" && item.status !== filters.status) return false;
@@ -49,7 +44,6 @@ function passes(item: Item, filters: Filters, plain: string, skip?: Facet): bool
   if (skip !== "source" && filters.source && !filters.source.includes(item.source)) return false;
   if (skip !== "date") {
     if (filters.undated && item.dueOn !== null) return false;
-    
     if ((filters.from || filters.to) && item.dueOn === null) return false;
     if (filters.from && item.dueOn! < filters.from) return false;
     if (filters.to && item.dueOn! > filters.to) return false;
@@ -114,7 +108,6 @@ export const browseItems = defineTool({
   }),
   output: z.object({
     scope: z.object({ kind: z.enum(["all", "general", "node"]), id: z.string().nullable(), path: z.string().nullable() }),
-    
     items: z.array(itemSchema.extend({ subtasks: z.object({ open: z.number(), done: z.number() }).optional() })),
     total: z.number(),
     counts: facetCounts,
@@ -140,7 +133,6 @@ export const browseItems = defineTool({
         : input.sort === "due"
           ? matched.sort((a, b) => (a.dueOn ?? "9999") < (b.dueOn ?? "9999") ? -1 : (a.dueOn ?? "9999") > (b.dueOn ?? "9999") ? 1 : byPriorityThenDue(a, b))
           : [...matched.filter((i) => i.type === "task").sort(byPriorityThenDue), ...matched.filter((i) => i.type !== "task").sort(newestFirst)];
-    
     const subtasks = new Map<string, { open: number; done: number }>();
     for (const row of read.rows) {
       if (row.type !== "task" || !row.parent_item_id) continue;
@@ -157,8 +149,6 @@ export const browseItems = defineTool({
   },
 });
 
-
-
 async function tasksInEvents(ctx: ToolContext, scope: Scope, events: BrowsedEvent[]) {
   const byEvent = new Map<string, string[]>();
   const own = events.flatMap((event) => (event.localId ? [event.localId] : []));
@@ -172,7 +162,6 @@ async function tasksInEvents(ctx: ToolContext, scope: Scope, events: BrowsedEven
   if (byGoogle.error) return dbFail("reading the tasks in the events", byGoogle.error);
   const links = [...(byOwn.data ?? []), ...(byGoogle.data ?? [])];
   if (links.length === 0) return ok({ byEvent });
-  
   const { data: items, error } = await ctx.db
     .from("items")
     .select("id, node_id, owner_id")
@@ -212,7 +201,6 @@ export const browseEvents = defineTool({
   }),
   output: z.object({
     accounts: z.array(accountRowSchema),
-    
     toRead: z.array(z.string()),
     events: z.array(browsedEventSchema),
     failures: z.array(eventsFailureSchema),
@@ -232,12 +220,9 @@ export const browseEvents = defineTool({
     const place: ReadPlace = node ? { kind: "node", node } : { kind: "all" };
     const reach = reachOf(scope, place);
     const range = { from: input.from, to: input.to };
-    
-    
     const [{ linked, local }, google] = await Promise.all([
       nodeEventLinks(ctx, reach.nodeIds).then(async (linked) => ({
         linked,
-        
         local:
           isError(linked) || input.account
             ? ok({ events: [] as LocalEvent[] })

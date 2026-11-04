@@ -1,9 +1,5 @@
 import type { Answer } from "./client-api";
 
-
-
-
-
 export type LinkedMessage = { id: string; accountId: string; accountEmail: string; from: { name: string | null; email: string }; subject: string; receivedAt: string };
 export type MailFailure = { accountId?: string; accountEmail: string; reason: string };
 export type LinkedMail = { messages: LinkedMessage[]; mailFailures: MailFailure[] };
@@ -11,14 +7,10 @@ export type ItemMail = { messages: LinkedMessage[]; failures: MailFailure[] };
 
 const newestFirst = (a: LinkedMessage, b: LinkedMessage) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0);
 
-
-
-
 const notBrought = (brought: LinkedMessage[]) => {
   const ids = new Set(brought.map((message) => message.id));
   return (message: LinkedMessage) => !ids.has(message.id);
 };
-
 
 export function startRound(shown: LinkedMail | null, first: LinkedMail, toRead: string[]): LinkedMail {
   const pending = new Set(toRead);
@@ -29,8 +21,6 @@ export function startRound(shown: LinkedMail | null, first: LinkedMail, toRead: 
     mailFailures: [...first.mailFailures, ...(shown?.mailFailures ?? []).filter((failure) => failure.accountId !== undefined && pending.has(failure.accountId))],
   };
 }
-
-
 
 export function withAccountMail(shown: LinkedMail, account: { id: string; email: string }, answer: Answer<ItemMail>): LinkedMail {
   const otherFailures = shown.mailFailures.filter((failure) => failure.accountId !== account.id);

@@ -9,36 +9,26 @@ type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 export const ITEM_COLUMNS =
   "id, owner_id, node_id, parent_item_id, type, title, body, status, priority, due_on, due_time, position, source, agent_label, changed_source, changed_agent_label, created_at, updated_at, completed_at, deleted_at";
 
-
-
 export const itemTypes = ["task", "note", "decision"] as const;
 export type ItemType = (typeof itemTypes)[number];
-
-
 
 const sources = ["manual", "chat", "agent", "review"] as const;
 
 export const itemSchema = z.object({
   id: z.string(),
-  
   nodeId: z.string().nullable(),
   nodePath: z.string().nullable(),
-  
   parentId: z.string().nullable(),
   type: z.enum(itemTypes),
-  
   title: z.string(),
   body: z.string().nullable(),
   status: z.enum(["open", "done"]),
   priority: z.number().nullable(),
   dueOn: z.string().nullable(),
-  
   dueTime: z.string().nullable(),
-  
   position: z.number(),
   source: z.enum(sources),
   agentLabel: z.string().nullable(),
-  
   changedSource: z.enum(sources),
   changedAgentLabel: z.string().nullable(),
   createdAt: z.string(),
@@ -48,7 +38,6 @@ export const itemSchema = z.object({
 });
 
 export type Item = z.infer<typeof itemSchema>;
-
 
 export function hourOf(value: string | null): string | null {
   return value === null ? null : value.slice(0, 5);
@@ -79,12 +68,7 @@ export function toItem(row: ItemRow, scope: Scope): Item {
   };
 }
 
-
-
-
 const PAGE = 1000;
-
-
 
 export async function selectAllItems(
   ctx: ToolContext,
@@ -92,8 +76,6 @@ export async function selectAllItems(
   narrow: (query: ItemQuery) => ItemQuery,
   what: string,
 ): Promise<ToolResult<{ rows: ItemRow[] }>> {
-  
-  
   const parts: Array<(query: ItemQuery) => ItemQuery> = [];
   if (reach.nodeIds.length > 0) parts.push((query) => query.in("node_id", reach.nodeIds));
   if (reach.general) parts.push((query) => query.is("node_id", null));
@@ -122,9 +104,6 @@ function baseQuery(ctx: ToolContext) {
 
 export type ItemQuery = ReturnType<typeof baseQuery>;
 
-
-
-
 export function countInSubtrees<K extends string>(
   rows: ItemRow[],
   scope: Scope,
@@ -146,7 +125,6 @@ export function countInSubtrees<K extends string>(
   return { total, perNode };
 }
 
-
 export function byPriorityThenDue(a: Item, b: Item): number {
   const pa = a.priority ?? 9;
   const pb = b.priority ?? 9;
@@ -155,7 +133,6 @@ export function byPriorityThenDue(a: Item, b: Item): number {
   const db = b.dueOn ?? "9999-12-31";
   if (da !== db) return da < db ? -1 : 1;
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
-  
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 

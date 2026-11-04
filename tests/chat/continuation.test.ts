@@ -8,10 +8,6 @@ import type { Json } from "@/lib/db/types";
 import type { ToolContext } from "@/lib/tools/context";
 import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
-
 let user: DisposableUser | undefined;
 let stranger: DisposableUser | undefined;
 const calls: LanguageModelV4CallOptions[] = [];
@@ -27,7 +23,6 @@ const answering: LanguageModelV4StreamPart[] = [
   { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
 ];
 let script = answering;
-
 let steps: LanguageModelV4StreamPart[][] | null = null;
 let pace: number | null = null;
 
@@ -56,7 +51,6 @@ const READ = { type: "tool-list_mail", toolCallId: "read-1", input: {} };
 const WRITTEN = { type: "tool-create_task", toolCallId: "write-1", state: "output-available", input: { title: "Call the bank" }, output: { ok: true, item: { id: "x" } } };
 const openTurn = (steps = 1) => [...Array.from({ length: steps - 1 }, () => ({ type: "step-start" })), { type: "step-start" }, { ...READ, state: "input-available" }];
 
-
 async function leaveOpen(taken = 1, before: Json[] = []) {
   const service = serviceClient();
   const gone = await service.from("chat_messages").delete().eq("owner_id", user!.id);
@@ -65,13 +59,11 @@ async function leaveOpen(taken = 1, before: Json[] = []) {
     { owner_id: user!.id, node_id: null, role: "user", parts: [{ type: "text", text: "Read my mail" }] },
     { owner_id: user!.id, node_id: null, role: "assistant", parts: [...before, ...openTurn(taken)] },
   ];
-  
   for (const row of rows) {
     const saved = await service.from("chat_messages").insert(row);
     if (saved.error) throw new Error(saved.error.message);
   }
 }
-
 
 const writesThenTalks = (): LanguageModelV4StreamPart[][] => [
   [
@@ -80,7 +72,6 @@ const writesThenTalks = (): LanguageModelV4StreamPart[][] => [
   ],
   answering,
 ];
-
 
 async function cutOnceWritten(answer: Response, cut: AbortController): Promise<boolean> {
   const reader = answer.body!.getReader();
@@ -149,7 +140,6 @@ describe("going on with a turn", () => {
     await leaveOpen(1, [{ type: "step-start" }, WRITTEN]);
     const { POST } = await import("@/app/api/chat/route");
     const cut = new AbortController();
-    
     pace = 300;
     let aborted = false;
     try {
@@ -173,7 +163,6 @@ describe("going on with a turn", () => {
     const tools = rows[1].parts.filter(isToolUIPart);
     expect(tools.find((part) => part.toolCallId === WRITTEN.toolCallId)).toMatchObject({ state: "output-available", output: WRITTEN.output });
     expect(tools.find((part) => part.toolCallId === READ.toolCallId)).toMatchObject({ state: "output-available" });
-    
     expect(leftUnfinished(rows[1])).toBe(true);
   }, 60_000);
 
@@ -185,7 +174,6 @@ describe("going on with a turn", () => {
     const { POST } = await import("@/app/api/chat/route");
     expect((await POST(goesOn({ ok: true }))).status).toBe(409);
 
-    
     await leaveOpen();
     const stored = (await history())[1];
     expect((await POST(goesOn({ ok: true }))).status).toBe(200);
@@ -193,7 +181,6 @@ describe("going on with a turn", () => {
     expect((await POST(goesOn({ ok: true }))).status).toBe(409);
     expect(calls).toHaveLength(1);
 
-    
     const demo = await createAnonymousUser("continuation-demo");
     try {
       expect((await demo.client.from("chat_messages").insert({ node_id: null, role: "assistant", parts })).error?.code).toBe("42501");

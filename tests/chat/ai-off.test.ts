@@ -4,10 +4,6 @@ import { callTool } from "@/lib/tools/registry";
 import type { ToolContext } from "@/lib/tools/context";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
-
 let user: DisposableUser | undefined;
 
 vi.mock("@/lib/session-context", () => ({
@@ -118,7 +114,6 @@ describe.each([
     expect(listed.items.map((item) => item.title)).toContain("Call the bank");
   });
 });
-
 
 describe("its twins, the AI on", () => {
   it("the simulated chat answers the same request", async () => {

@@ -9,13 +9,7 @@ import { useWorkspace, type WaitingRead } from "./workspace";
 
 export { accountsSeenFrom };
 
-
-
-
-
-
 export type WaitingTask = Omit<WaitingRead, "accountId">;
-
 export type TaskReplies = { task: WaitingTask; replies: MailRow[]; more: string[]; failures: MailFailureRow[] };
 
 type RepliesAnswer = Answer<{ replies: MailRow[]; more: string[]; failures: MailFailureRow[] }>;
@@ -24,17 +18,12 @@ type Asked = { row: WaitingRead; account: string };
 
 const newestFirst = (a: MailRow, b: MailRow) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0);
 
-
-
 function waitingIn(waiting: WaitingRead[], tree: TreeNode[], place: Record<string, unknown>): WaitingRead[] {
   if (!("node" in place)) return waiting;
   if (place.node === null) return waiting.filter((row) => row.nodeId === null);
   const branch = branchOf(tree, place.node as string);
   return waiting.filter((row) => row.nodeId !== null && branch.has(row.nodeId));
 }
-
-
-
 
 function readsOf(known: Known): Asked[] {
   return known.waiting.flatMap((row) => {
@@ -44,7 +33,6 @@ function readsOf(known: Known): Asked[] {
 }
 
 const inputOf = ({ row, account }: Asked, perAccount: number) => ({ task: row.id, account, limit: perAccount });
-
 
 function repliesOf(known: Known, reads: Asked[], answers: RepliesAnswer[]): TaskReplies[] {
   const emails = new Map(known.accounts.map((account) => [account.id, account.email]));
@@ -65,13 +53,11 @@ function repliesOf(known: Known, reads: Asked[], answers: RepliesAnswer[]): Task
   return [...byTask.values()];
 }
 
-
 async function readReplies(known: Known, perAccount: number): Promise<{ ok: true; tasks: TaskReplies[] }> {
   const reads = readsOf(known);
   const answers = await Promise.all(reads.map((asked) => tool<{ replies: MailRow[]; more: string[]; failures: MailFailureRow[] }>("list_task_replies", inputOf(asked, perAccount))));
   return { ok: true as const, tasks: repliesOf(known, reads, answers) };
 }
-
 
 function keptReplies(known: Known, perAccount: number): Kept<{ ok: true; tasks: TaskReplies[] }> | null {
   const reads = readsOf(known);
@@ -81,8 +67,6 @@ function keptReplies(known: Known, perAccount: number): Kept<{ ok: true; tasks: 
   return { value: { ok: true as const, tasks: repliesOf(known, reads, parts.map((part) => part!.value)) }, at };
 }
 
-
-
 export function warmReplies(place: Record<string, unknown>, tree: TreeNode[], accounts: MailAccountRef[], waiting: WaitingRead[], perAccount: number): void {
   const known: Known = { tree, accounts, waiting: waitingIn(waiting, tree, place) };
   for (const asked of readsOf(known)) {
@@ -91,14 +75,11 @@ export function warmReplies(place: Record<string, unknown>, tree: TreeNode[], ac
   }
 }
 
-
-
 export function useTaskReplies(place: Record<string, unknown>, today: Day | null, tree: TreeNode[] | null, perAccount: number): BoxRead<{ tasks: TaskReplies[] }> {
   const { mailAccounts, mailWaiting, treeError, refreshTree } = useWorkspace();
   const known: Known | null = tree && today && mailAccounts && mailWaiting ? { tree, accounts: mailAccounts, waiting: waitingIn(mailWaiting, tree, place) } : null;
   const reads = known ? readsOf(known) : [];
   const key = `task-replies:${perAccount}:${known ? JSON.stringify([known.waiting.map((row) => [row.id, row.waitsFor]), reads.map((read) => read.account)]) : "off"}`;
   const read = useBoxRead<{ tasks: TaskReplies[] }>(known ? () => readReplies(known, perAccount) : null, key, () => (known ? keptReplies(known, perAccount) : null));
-  
   return !known && treeError ? { ...read, error: treeError, retry: () => void refreshTree() } : read;
 }

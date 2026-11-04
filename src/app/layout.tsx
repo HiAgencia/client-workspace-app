@@ -5,13 +5,7 @@ import { SmoothScroll } from "@/components/smooth-scroll";
 import { BROWSER_BAR, THEME_KEY } from "@/lib/theme";
 import "./globals.css";
 
-
-
-
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap", axes: ["opsz"] });
-
-
-
 
 export const metadata: Metadata = {
   title: { default: PRODUCT_NAME, template: `%s · ${PRODUCT_NAME}` },
@@ -26,15 +20,11 @@ export const metadata: Metadata = {
   },
 };
 
-
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   colorScheme: "light dark",
 };
-
-
-
 
 const BEFORE_PAINT = `(function(){var d=document.documentElement,k=${JSON.stringify(THEME_KEY)},b=${JSON.stringify(
   BROWSER_BAR,

@@ -1,8 +1,5 @@
 import { documentCookies, sessionOwner } from "@/lib/supabase/session-owner";
 
-
-
-
 const KEY = "client-workspace:last-node";
 
 const owner = () => sessionOwner(documentCookies());
@@ -16,7 +13,6 @@ export function lastNode(): string | null {
     const kept = JSON.parse(localStorage.getItem(KEY) ?? "null") as { node?: unknown; owner?: unknown } | null;
     return kept && typeof kept.node === "string" && kept.owner === owner() ? kept.node : null;
   } catch {
-    
     return null;
   }
 }

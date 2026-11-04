@@ -4,12 +4,6 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 
 type Follow = { drawn: boolean; height: number; running: Animation | null };
 
-
-
-
-
-
-
 export function useAutoHeight(box: RefObject<HTMLElement | null>, content: RefObject<HTMLElement | null>, { ready = true, trigger }: { ready?: boolean; trigger?: unknown } = {}): void {
   const state = useRef<Follow | null>(null);
   useLayoutEffect(() => {
@@ -36,7 +30,6 @@ function measure(outer: HTMLElement): { drawn: boolean; height: number } {
   return { drawn, height: drawn ? outer.offsetHeight : 0 };
 }
 
-
 function travel(outer: HTMLElement, follow: Follow): void {
   const wasDrawn = follow.drawn;
   const moving = follow.running !== null && follow.running.playState === "running";
@@ -58,7 +51,6 @@ function travel(outer: HTMLElement, follow: Follow): void {
   };
   follow.running = animation;
 }
-
 
 function milliseconds(value: string): number {
   const amount = parseFloat(value);

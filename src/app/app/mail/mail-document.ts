@@ -2,14 +2,7 @@ import { LOCALE } from "@/lib/dates";
 import type { Theme } from "@/lib/theme";
 import type { MailContent } from "./mail-viewer";
 
-
-
-
-
-
-
 const ownDark = (html: string) => /prefers-color-scheme\s*:\s*dark/i.test(html);
-
 
 function forMode(html: string, mode: Theme): string {
   const always = "(min-width: 0px)";
@@ -19,7 +12,6 @@ function forMode(html: string, mode: Theme): string {
     .replace(/\(\s*prefers-color-scheme\s*:\s*light\s*\)/gi, mode === "light" ? always : never);
 }
 
-
 const ownGround = /^(?:\s|<!--[\s\S]*?-->)*<(?:table|div|center)\b[^>]*(?:\bbgcolor\s*=|\bbackground(?:-color)?\s*:)/i;
 
 const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -27,19 +19,13 @@ const escapeAttr = (text: string) => escapeText(text).replace(/"/g, "&quot;");
 
 export function documentFor(message: MailContent, mode: Theme, images: boolean): { doc: string; adapts: boolean } {
   const html = message.html.trim();
-  
   const adapts = html === "" || ownDark(html);
   const scheme = adapts ? mode : "light";
-  
-  
   const turned = !adapts && mode === "dark";
   const turn = turned
     ? `body{background:Canvas;min-height:100vh;filter:invert(.92) hue-rotate(180deg)}
 img,video,[background],[style*="background-image"]{filter:invert(1) hue-rotate(180deg)}`
     : "";
-  
-  
-  
   const held = (markup: string) =>
     images
       ? markup
@@ -58,8 +44,6 @@ img,video,[background],[style*="background-image"]{filter:invert(1) hue-rotate(1
     "form-action 'none'",
     "base-uri 'none'",
   ].join("; ");
-  
-  
   const lang = message.language ?? LOCALE.split("-")[0];
   const doc = `<!doctype html><html lang="${escapeAttr(lang)}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><base target="_blank"><style>
 :root{color-scheme:${scheme};background:Canvas;color:CanvasText}

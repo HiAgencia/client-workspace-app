@@ -1,25 +1,13 @@
 import { documentCookies, sessionOwner } from "@/lib/supabase/session-owner";
 
-
-
-
-
-
-
 export type Stamp = { seq: number; epoch: number; at: number };
 export type Kept<T> = { value: T; at: number };
 
 type Entry = { value: unknown; seq: number; at: number };
 
-
-
 export const KEPT_LIMIT = 120;
 
-
-
 export const FRESH_MS = 10_000;
-
-
 
 const STORED_PREFIX = "client-workspace:read:";
 
@@ -29,11 +17,9 @@ const kept = new Map<string, Entry>();
 const listeners = new Set<() => void>();
 let inFlight = 0;
 
-
 export function stamp(): Stamp {
   return { seq: ++seq, epoch, at: Date.now() };
 }
-
 
 export function keep(key: string, value: unknown, stamped: Stamp, stored = false): void {
   if (stamped.epoch !== epoch) return;
@@ -45,18 +31,15 @@ export function keep(key: string, value: unknown, stamped: Stamp, stored = false
   if (stored) store(key, value);
 }
 
-
 export function peek<T>(key: string, stored = false): Kept<T> | null {
   const entry = kept.get(key);
   if (entry) {
-    
     kept.delete(key);
     kept.set(key, entry);
     return { value: entry.value as T, at: entry.at };
   }
   if (!stored) return null;
   const value = restore(key);
-  
   return value === undefined ? null : { value: value as T, at: 0 };
 }
 
@@ -64,21 +47,15 @@ export function isFresh(entry: Kept<unknown>, now = Date.now()): boolean {
   return entry.at > 0 && now - entry.at < FRESH_MS;
 }
 
-
-
 export function wrote(): void {
   epoch++;
   kept.clear();
   dropStored();
 }
 
-
 export function forgetReads(): void {
   wrote();
 }
-
-
-
 
 export function readStarted(): void {
   inFlight++;
@@ -101,7 +78,6 @@ export function onReads(listener: () => void): () => void {
 
 let refreshing = 0;
 const refreshListeners = new Set<() => void>();
-
 
 export function refreshStarted(): void {
   refreshing++;
@@ -126,8 +102,6 @@ function notify(to: Set<() => void>) {
   for (const listener of to) listener();
 }
 
-
-
 function owner(): string | null {
   return sessionOwner(documentCookies());
 }
@@ -146,7 +120,6 @@ function store(key: string, value: unknown) {
   try {
     storage()?.setItem(STORED_PREFIX + key, JSON.stringify({ owner: who, value }));
   } catch {
-    
   }
 }
 
@@ -157,7 +130,6 @@ function restore(key: string): unknown {
     const raw = storage()?.getItem(STORED_PREFIX + key);
     if (!raw) return undefined;
     const saved = JSON.parse(raw) as { owner?: unknown; value?: unknown };
-    
     if (saved.owner !== who) {
       storage()?.removeItem(STORED_PREFIX + key);
       return undefined;
@@ -177,6 +149,5 @@ function dropStored() {
       if (name?.startsWith(STORED_PREFIX)) tab.removeItem(name);
     }
   } catch {
-    
   }
 }

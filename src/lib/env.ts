@@ -1,10 +1,7 @@
-
-
 export function serverEnv(name: string): string | undefined {
   const value = process.env[name];
   return value === undefined || value === "" ? undefined : value;
 }
-
 
 export function requireServerEnv(name: string): string {
   const value = serverEnv(name);
@@ -13,7 +10,6 @@ export function requireServerEnv(name: string): string {
 }
 
 export type PublicConfig = { supabaseUrl: string; supabaseKey: string };
-
 
 export function publicConfig(): PublicConfig {
   return {

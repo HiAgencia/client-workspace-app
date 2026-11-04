@@ -16,9 +16,6 @@ import "./styles/task.css";
 import "./styles/mail.css";
 import "./styles/landing.css";
 
-
-
-
 async function SessionControls({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   await connection();
   const { auth } = await searchParams;
@@ -35,14 +32,12 @@ async function EndSessionControls() {
   return <EndSignIn config={publicConfig()} go={<OpenIcon />} />;
 }
 
-
 async function mcpEndpoint(): Promise<string> {
   const list = await headers();
   const host = list.get("x-forwarded-host") ?? list.get("host") ?? "localhost";
   const scheme = list.get("x-forwarded-proto") ?? (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https");
   return `${scheme}://${host}/api/mcp`;
 }
-
 
 function WorksWith() {
   const services = [
@@ -73,14 +68,12 @@ function WorksWith() {
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const shape = demoShape();
-  
   const figures = demoOverview("2026-01-01");
   const endpoint = await mcpEndpoint();
   return (
     <div className="landing">
       <LandingNav>
         <div className="landing-wrap landing-nav-in enter">
-          {}
           <span className="brand landing-brand">
             <BrandMark className="brand-mark" />
             <span className="brand-name">{PRODUCT_NAME}</span>

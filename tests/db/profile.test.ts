@@ -2,11 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readSession } from "@/lib/supabase/server";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
-
-
 const GOOGLE = {
   full_name: "Alex Rivera",
   name: "Alex Rivera",
@@ -44,7 +39,6 @@ describe("the name a person goes by", () => {
     expect(chosen.error).toBeNull();
     expect((await named()).name).toBe("Alex R.");
 
-    
     const again = await serviceClient().auth.admin.updateUserById(user!.id, { user_metadata: { ...GOOGLE, full_name: "Alexandra Rivera", name: "Alexandra Rivera" } });
     expect(again.error).toBeNull();
     expect(await named()).toMatchObject({ name: "Alex R.", avatarUrl: GOOGLE.avatar_url });

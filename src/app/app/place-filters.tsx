@@ -7,15 +7,8 @@ import { Select, type SelectOption } from "@/components/ui/select";
 import { count } from "@/lib/count";
 import type { TreeNode } from "./client-api";
 
-
-
-
-
-
-
 export const ALL = "all";
 export const GENERAL = "general";
-
 
 export function branchOf(tree: TreeNode[] | null, nodeId: string): Set<string> {
   const branch = new Set([nodeId]);
@@ -32,7 +25,6 @@ export function branchOf(tree: TreeNode[] | null, nodeId: string): Set<string> {
   return branch;
 }
 
-
 export function lineOf(tree: TreeNode[] | null, nodeId: string): Set<string> {
   const byId = new Map((tree ?? []).map((node) => [node.id, node]));
   const line = new Set<string>();
@@ -40,11 +32,7 @@ export function lineOf(tree: TreeNode[] | null, nodeId: string): Set<string> {
   return line;
 }
 
-
 export type ShownEvent = { origin: "google" | "local"; nodeId: string | null; linkedNodeIds: string[]; fromNodeId: string };
-
-
-
 
 export function placesThatShow(tree: TreeNode[] | null, accounts: Array<{ nodeIds: string[] }>, notes: { nodes: string[]; general: boolean } | null, events: ShownEvent[]): Set<string> {
   const shows = new Set<string>(notes?.nodes ?? []);
@@ -68,16 +56,12 @@ export function placesThatShow(tree: TreeNode[] | null, accounts: Array<{ nodeId
   return shows;
 }
 
-
 export function placeFromUrl(value: string | null, tree: TreeNode[] | null): string {
   if (!value || value === ALL) return ALL;
   if (value === GENERAL) return GENERAL;
   if (!tree) return value;
   return tree.some((node) => node.id === value) ? value : ALL;
 }
-
-
-
 
 export type FilterUnit = { one: string; many: string };
 export const TASKS: FilterUnit = { one: "task", many: "tasks" };
@@ -90,17 +74,11 @@ export const whatItBrings = (n: number, unit: FilterUnit) => count(n, unit.one, 
 type PlaceOptions = {
   value: string;
   tree: TreeNode[] | null;
-  
   counts: Map<string, number> | null;
-  
   unit: FilterUnit;
-  
   noGeneral?: boolean;
-  
-  
   shows?: Set<string>;
 };
-
 
 export function placeOptions({ value, tree, counts, unit, noGeneral = false, shows }: PlaceOptions): SelectOption[] {
   const brings = (id: string) => counts?.get(id) ?? 0;
@@ -111,9 +89,6 @@ export function placeOptions({ value, tree, counts, unit, noGeneral = false, sho
     ...(tree ?? []).filter((node) => brings(node.id) > 0 || shows?.has(node.id) || node.id === value).map((node) => option(node.id, node.path)),
   ];
 }
-
-
-
 
 function NamedFilter({ name, icon: Glyph, children }: { name: string; icon: Icon; children: ReactNode }) {
   return (
@@ -135,14 +110,9 @@ export function PlaceFilter({ onChange, ...read }: PlaceOptions & { onChange: (v
   );
 }
 
-
-
-
 export type FilterAccount = { id: string; email: string; nodeIds: string[] };
 
-
 export const ACCOUNTS_OF = "of:";
-
 
 function clientOf(byId: Map<string, TreeNode>, nodeId: string): { client: TreeNode; depth: number } | null {
   let node = byId.get(nodeId);
@@ -151,12 +121,8 @@ function clientOf(byId: Map<string, TreeNode>, nodeId: string): { client: TreeNo
   return node ? { client: node, depth } : null;
 }
 
-
-
-
 export function accountGroups<A extends FilterAccount>(accounts: A[], tree: TreeNode[] | null): Array<{ client: TreeNode | null; accounts: A[] }> {
   const byId = new Map((tree ?? []).map((node) => [node.id, node]));
-  
   const tops = (tree ?? []).filter((node) => node.parentId === null);
   const order = new Map([...tops.filter((node) => node.kind === "client"), ...tops.filter((node) => node.kind !== "client")].map((node, index) => [node.id, index]));
   const rank = (client: TreeNode | null) => (client ? (order.get(client.id) ?? order.size) : order.size + 1);
@@ -171,8 +137,6 @@ export function accountGroups<A extends FilterAccount>(accounts: A[], tree: Tree
   return [...groups.values()].sort((a, b) => rank(a.client) - rank(b.client));
 }
 
-
-
 export function chosenAccounts(value: string | null, accounts: FilterAccount[], tree: TreeNode[] | null): Set<string> | null {
   if (!value || value === ALL) return null;
   if (!value.startsWith(ACCOUNTS_OF)) return new Set([value]);
@@ -180,15 +144,12 @@ export function chosenAccounts(value: string | null, accounts: FilterAccount[], 
   return new Set(accounts.filter((account) => account.nodeIds.some((id) => branch.has(id))).map((account) => account.id));
 }
 
-
-
 export function accountFromUrl(value: string | null, accounts: FilterAccount[], tree: TreeNode[] | null): string {
   if (!value || value === ALL) return ALL;
   if (!value.startsWith(ACCOUNTS_OF)) return accounts.some((account) => account.id === value) ? value : ALL;
   const client = value.slice(ACCOUNTS_OF.length);
   return (tree ?? []).some((node) => node.id === client && node.parentId === null) && (chosenAccounts(value, accounts, tree)?.size ?? 0) > 0 ? value : ALL;
 }
-
 
 export function countsByAccount(accounts: FilterAccount[], tree: TreeNode[] | null, brings: (chosen: Set<string> | null) => number): Map<string, number> {
   const counts = new Map<string, number>([[ALL, brings(null)]]);
@@ -203,14 +164,9 @@ type AccountOptions = {
   value: string;
   accounts: FilterAccount[];
   tree: TreeNode[] | null;
-  
   counts: Map<string, number> | null;
   unit: FilterUnit;
 };
-
-
-
-
 
 export function accountOptions({ value, accounts, tree, counts, unit }: AccountOptions): SelectOption[] {
   if (accounts.length === 0) return [];
@@ -230,9 +186,6 @@ export function accountOptions({ value, accounts, tree, counts, unit }: AccountO
     }),
   ];
 }
-
-
-
 
 export function AccountFilter({ onChange, pending, known, ...read }: AccountOptions & { onChange: (value: string) => void; pending?: boolean; known?: FilterAccount[] | null }) {
   const options = pending ? waitingOptions(read.value, known ?? []) : accountOptions(read);

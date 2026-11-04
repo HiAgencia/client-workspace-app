@@ -3,9 +3,6 @@ import type { Item } from "./client-api";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { demoSender, nameSeed, OrgMark, Portrait } from "./sender-art";
 
-
-
-
 export const PRIORITIES: SelectOption[] = [
   { value: "1", label: "Urgent", tone: "alert" },
   { value: "2", label: "High", tone: "warn" },
@@ -14,10 +11,6 @@ export const PRIORITIES: SelectOption[] = [
 ];
 
 export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "Note", decision: "Decision" };
-
-
-
-
 
 export function PathText({ path }: { path: string }) {
   const places = path.split(" / ");
@@ -33,15 +26,12 @@ export function PathText({ path }: { path: string }) {
   );
 }
 
-
-
 export function sourceName(source: Item["source"], agentLabel: string | null): string {
   if (source === "manual") return "By you";
   if (source === "chat") return `By ${ASSISTANT_NAME}`;
   if (source === "review") return "Automatically";
   return agentLabel ? `By ${agentLabel}` : "By a coding agent";
 }
-
 
 export function Origin({ item }: { item: Item }) {
   if (item.source === "manual") return null;
@@ -51,9 +41,6 @@ export function Origin({ item }: { item: Item }) {
     </span>
   );
 }
-
-
-
 
 const SENDER_COLORS = ["blue", "violet", "teal", "amber", "pink", "indigo", "green", "orange"] as const;
 

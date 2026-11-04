@@ -3,8 +3,6 @@
 import { useSyncExternalStore } from "react";
 import { currentTheme, setTheme, subscribeTheme } from "@/lib/theme";
 
-
-
 export function ThemeSwitch() {
   const dark = useSyncExternalStore(subscribeTheme, () => currentTheme() === "dark", () => false);
   return (

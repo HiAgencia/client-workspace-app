@@ -29,17 +29,13 @@ describe("the initial capital", () => {
     expect(withInitialCapital("macOS build notes")).toBe("macOS build notes");
     expect(withInitialCapital("[iOS build](https://code.example/ios)")).toBe("[iOS build](https://code.example/ios)");
     expect(withInitialCapitalHtml("<p>iOS release notes</p>")).toBe("<p>iOS release notes</p>");
-    
     expect(withInitialCapital("e-Bay store for the client")).toBe("e-Bay store for the client");
     expect(withInitialCapital("x86Pro benchmark")).toBe("x86Pro benchmark");
     expect(withInitialCapital("a/B test plan")).toBe("a/B test plan");
-    
     expect(withInitialCapital("npm run dev fails")).toBe("Npm run dev fails");
     expect(withInitialCapital("follow-up with Ana")).toBe("Follow-up with Ana");
-    
     expect(withInitialCapitalHtml("<p>met</p><p>Notes</p>")).toBe("<p>Met</p><p>Notes</p>");
     expect(withInitialCapitalHtml("<p>met&nbsp;Ana</p>")).toBe("<p>Met&nbsp;Ana</p>");
-    
     expect(withInitialCapital("[docs](https://example.com/Guide)")).toBe("[Docs](https://example.com/Guide)");
     expect(withInitialCapital("[spec](https://code.example/PR)")).toBe("[Spec](https://code.example/PR)");
   });

@@ -3,10 +3,8 @@ import { isWorkingTime, validZone, workingMinutesBefore, workingMinutesBetween }
 
 const NY = "America/New_York";
 
-
 describe("working time", () => {
   it("counts only weekdays: a weekend adds nothing", () => {
-    
     expect(workingMinutesBetween("2026-10-23T21:00:00Z", "2026-10-26T14:00:00Z", NY)).toBe(120);
     expect(workingMinutesBetween("2026-10-24T14:00:00Z", "2026-10-25T20:00:00Z", NY)).toBe(0);
     expect(isWorkingTime("2026-10-24T15:00:00Z", NY)).toBe(false);
@@ -14,13 +12,11 @@ describe("working time", () => {
 
   it("counts nothing at night", () => {
     expect(workingMinutesBetween("2026-10-28T00:00:00Z", "2026-10-28T12:00:00Z", NY)).toBe(0);
-    
     expect(workingMinutesBetween("2026-10-27T21:30:00Z", "2026-10-28T13:30:00Z", NY)).toBe(60);
     expect(isWorkingTime("2026-10-28T05:30:00Z", NY)).toBe(false);
   });
 
   it("follows the zone across a DST change", () => {
-    
     expect(workingMinutesBetween("2026-10-30T21:00:00Z", "2026-11-02T15:00:00Z", NY)).toBe(120);
     expect(workingMinutesBetween("2026-03-06T22:00:00Z", "2026-03-09T14:00:00Z", NY)).toBe(120);
     expect(isWorkingTime("2026-11-02T14:30:00Z", NY)).toBe(true);
@@ -34,10 +30,8 @@ describe("working time", () => {
     expect(isWorkingTime("2026-10-27T12:59:00Z", NY)).toBe(false);
     expect(isWorkingTime("2026-10-27T22:00:00Z", NY)).toBe(true);
     expect(isWorkingTime("2026-10-27T22:01:00Z", NY)).toBe(false);
-    
     expect(workingMinutesBefore("2026-10-27T14:00:00Z", 60, NY).toISOString()).toBe("2026-10-27T13:00:00.000Z");
     expect(workingMinutesBefore("2026-10-27T14:00:00Z", 61, NY).toISOString()).toBe("2026-10-26T21:59:00.000Z");
-    
     expect(workingMinutesBefore("2026-10-24T16:00:00Z", 0, NY).toISOString()).toBe("2026-10-23T22:00:00.000Z");
     expect(workingMinutesBefore("2026-10-26T12:00:00Z", 30, NY).toISOString()).toBe("2026-10-23T21:30:00.000Z");
     expect(workingMinutesBefore("2026-10-27T23:15:00Z", 15, NY).toISOString()).toBe("2026-10-27T21:45:00.000Z");

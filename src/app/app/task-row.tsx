@@ -30,10 +30,7 @@ import { PathText, PRIORITIES, sourceName } from "./item-parts";
 import { useWorkspace } from "./workspace";
 import "../styles/task.css";
 
-
 export type TaskData = Omit<TaskRow, "mail"> & { mail?: TaskRow["mail"] };
-
-
 
 export type WhenTone = "overdue" | "today" | "tomorrow" | "week" | "later";
 
@@ -42,13 +39,10 @@ const dateOf = (day: Day) => {
   return new Date(y, m - 1, d);
 };
 
-
 export function timeLabel(time: string): string {
   const [h, m] = time.split(":").map(Number);
   return new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(new Date(2000, 0, 1, h, m));
 }
-
-
 
 export function dayName(day: Day, now: Day = today()): string {
   if (day === now) return "Today";
@@ -60,7 +54,6 @@ export function dayName(day: Day, now: Day = today()): string {
   const sameYear = day.slice(0, 4) === now.slice(0, 4);
   return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
 }
-
 
 export function dayHeading(day: Day, now: Day = today()): string {
   const date = dateOf(day);
@@ -79,13 +72,10 @@ export function whenTone(day: Day, now: Day = today()): WhenTone {
   return "later";
 }
 
-
 export function whenLabel(day: Day | null, time: string | null, now: Day = today()): string {
   if (!day) return "No date";
   return time ? `${dayName(day, now)}, ${timeLabel(time)}` : dayName(day, now);
 }
-
-
 
 function rowWhen(task: TaskData, dayShown: Day | null | undefined, now: Day): string | null {
   if (!task.dueOn) return null;
@@ -97,13 +87,9 @@ export function priorityName(priority: number | null): string {
   return PRIORITIES.find((option) => option.value === String(priority ?? 4))?.label ?? "Low";
 }
 
-
-
-
 export function mailState(mail: unknown): "waiting" | null {
   return mail && typeof mail === "object" ? "waiting" : null;
 }
-
 
 export function InlineText({ text }: { text: string }) {
   return (
@@ -121,9 +107,6 @@ export function InlineText({ text }: { text: string }) {
   );
 }
 
-
-
-
 export function LinkedWords({ href, text }: { href: string; text: string }) {
   const [, first = text, rest = ""] = /^(\S*)([\s\S]*)$/.exec(text) ?? [];
   return (
@@ -137,7 +120,6 @@ export function LinkedWords({ href, text }: { href: string; text: string }) {
   );
 }
 
-
 export function PlaceName({ path, color }: { path: string | null; color: string | null }) {
   return (
     <span className="task-place-name" data-color={color ?? undefined}>
@@ -145,8 +127,6 @@ export function PlaceName({ path, color }: { path: string | null; color: string 
     </span>
   );
 }
-
-
 
 export function placeOnPage(
   task: Pick<TaskData, "nodeId" | "path">,
@@ -162,15 +142,10 @@ export function placeOnPage(
   return { shown: true, path: task.path };
 }
 
-
-
 export type TaskDetailRequest = {
   id: string;
-  
   task?: Partial<TaskData> & { id: string };
-  
   list?: Array<Partial<TaskData> & { id: string }>;
-  
   focus?: "event";
 };
 
@@ -186,20 +161,12 @@ export function onOpenTaskDetail(handler: (request: TaskDetailRequest) => void):
   return () => window.removeEventListener(DETAIL_EVENT, listener);
 }
 
-
-
 export async function readTaskItem(id: string): Promise<Item | null> {
   const answer = await tool<{ item: Item }>("get_item", { id });
   return answer.ok ? answer.item : null;
 }
 
-
-
-
-
 type Op =
-  
-  
   | { kind: "hide"; id: string; task?: TaskData; place?: RowPlace | null; completed: boolean; folding: boolean; gone: boolean; settled: boolean }
   | { kind: "move"; id: string; to: string; task: TaskData; at?: number; settled: boolean }
   | { kind: "patch"; id: string; patch: Partial<TaskData>; settled: boolean }
@@ -228,13 +195,11 @@ function settleOp(kind: Op["kind"], id: string) {
   const op = ops.get(`${kind}:${id}`);
   if (op) op.settled = true;
 }
-
 function forgetSettled() {
   let changed = false;
   for (const [key, op] of ops) if (op.settled && !(op.kind === "hide" && !op.gone)) changed = ops.delete(key) || changed;
   if (changed) emit();
 }
-
 
 export function useTaskLanding(group: string): boolean {
   return useSyncExternalStore(
@@ -245,11 +210,7 @@ export function useTaskLanding(group: string): boolean {
 }
 
 const LEAVE_MS = 260;
-
-
 const DONE_HOLD_MS = 650;
-
-
 
 function hideRow(id: string, hold = 0, row?: { task: TaskData; place: RowPlace | null }) {
   const op: Op = { kind: "hide", id, ...row, completed: hold > 0, folding: hold === 0, gone: false, settled: false };
@@ -273,9 +234,6 @@ function hideRow(id: string, hold = 0, row?: { task: TaskData; place: RowPlace |
   }, hold);
 }
 
-
-
-
 function holdPointer() {
   if (typeof window === "undefined" || !window.matchMedia("(hover: hover)").matches) return;
   const root = document.documentElement;
@@ -290,9 +248,6 @@ function holdPointer() {
   };
   window.addEventListener("pointermove", onMove, { passive: true });
 }
-
-
-
 
 function focusAfterRow(id: string): (() => HTMLElement | null) | undefined {
   const row = document.querySelector<HTMLElement>(`[data-item="${id}"]`);
@@ -311,12 +266,9 @@ function focusAfterRow(id: string): (() => HTMLElement | null) | undefined {
   };
 }
 
-
 function refocusSoon(target: () => HTMLElement | null) {
   requestAnimationFrame(() => requestAnimationFrame(() => target()?.focus({ preventScroll: true })));
 }
-
-
 
 let returning: string | null = null;
 function focusWhenBack(id: string) {
@@ -328,8 +280,6 @@ function focusWhenBack(id: string) {
   window.addEventListener("pointerdown", movedOn, { capture: true, once: true });
 }
 
-
-
 type GroupEntry = { group: string; label: string; dropDay: Day | null | undefined; element: HTMLElement };
 const groups = new Map<string, GroupEntry>();
 
@@ -339,7 +289,6 @@ function groupsInOrder(): GroupEntry[] {
     .sort((a, b) => (a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
 }
 
-
 type RowPlace = { group: string; at: number };
 function placeOfRow(id: string): RowPlace | null {
   const row = document.querySelector<HTMLElement>(`[data-key="${id}"]`);
@@ -348,11 +297,8 @@ function placeOfRow(id: string): RowPlace | null {
   return { group: entry.group, at: [...entry.element.querySelectorAll(":scope > [data-key]")].indexOf(row) };
 }
 
-
-
 export type TaskActions = ReturnType<typeof useTaskActions>;
 type Actions = TaskActions;
-
 
 export function taskFromItem(item: Item, extra: Partial<TaskData> = {}): TaskData {
   return {
@@ -378,7 +324,6 @@ export function taskFromItem(item: Item, extra: Partial<TaskData> = {}): TaskDat
   };
 }
 
-
 export function pasteLinkOver(field: HTMLInputElement | HTMLTextAreaElement, pasted: string): string | null {
   const address = pasted.trim();
   if (!/^(https?:\/\/|mailto:)\S+$/i.test(address)) return null;
@@ -393,8 +338,6 @@ export function pasteLinkOver(field: HTMLInputElement | HTMLTextAreaElement, pas
 export function useTaskActions() {
   const { notify, touch, saving } = useWorkspace();
 
-  
-  
   async function bringBack(task: TaskData, place: RowPlace | null, takesFocus: boolean, write: Promise<{ ok: boolean; message?: string }>) {
     if (takesFocus) focusWhenBack(task.id);
     if (place) putOp({ kind: "move", id: task.id, to: place.group, task, at: place.at, settled: false });
@@ -403,8 +346,6 @@ export function useTaskActions() {
     else dropOp("move", task.id);
   }
 
-  
-  
   async function complete(task: TaskData): Promise<boolean> {
     const reopening = task.status === "done";
     const was = task.status;
@@ -467,8 +408,6 @@ export function useTaskActions() {
   const setPriority = (task: TaskData, priority: number) =>
     patch(task, { priority }, { priority }, `The priority of “${inlinePlain(task.title)}” could not be changed`);
 
-  
-  
   async function moveToDay(task: TaskData, day: Day | null, group: string | null, label: string, at?: number) {
     if (task.dueOn === day) return;
     const moved = { ...task, dueOn: day, dueTime: day ? task.dueTime : null };
@@ -542,7 +481,6 @@ export function useTaskActions() {
   return { complete, remove, setPriority, moveToDay, moveToPlace, reorder, duplicate };
 }
 
-
 function dayTargets(now: Day): Array<{ label: string; day: Day | null }> {
   const weekday = dateOf(now).getDay();
   const nextMonday = addDays(now, ((8 - weekday) % 7) || 7);
@@ -560,7 +498,6 @@ function groupOfDay(day: Day | null, now: Day): string {
   if (day === now) return "today";
   return day;
 }
-
 
 export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode[] | null, list?: TaskData[]): MenuEntry[] {
   const now = today();
@@ -612,16 +549,12 @@ export function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode
   ];
 }
 
-
-
 export function TaskCircle({ title, priority, done, onToggle, className }: { title: string; priority: number | null; done: boolean; onToggle: () => void; className?: string }) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={done}
-      
-      
       aria-label={`${done ? `Reopen “${inlinePlain(title)}”` : `Complete “${inlinePlain(title)}”`}, ${priorityName(priority)} priority`}
       className={cx("task-circle", className)}
       data-priority={priority ?? 4}
@@ -633,21 +566,13 @@ export function TaskCircle({ title, priority, done, onToggle, className }: { tit
   );
 }
 
-
-
 type RowProps = {
   task: TaskData;
   layout?: "list" | "board";
-  
   showPlace?: boolean;
-  
-  
   pageNode?: string | null;
-  
   dayShown?: Day | null;
-  
   list?: TaskData[];
-  
   onKeyMove?: (event: KeyboardEvent<HTMLElement>) => void;
   draggable?: boolean;
   onDragStart?: (event: DragEvent<HTMLElement>) => void;
@@ -732,7 +657,6 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
               {task.subtasks.done}/{task.subtasks.total}
             </button>
           )}
-          {}
           {task.priority === 1 && (
             <span className="task-priority" data-priority={task.priority}>
               <PriorityIcon />
@@ -775,7 +699,6 @@ export function TaskRowView({ task, layout = "list", showPlace = true, pageNode,
     </div>
   );
 }
-
 
 function Subtasks({ parent }: { parent: TaskData }) {
   const { saving, version } = useWorkspace();
@@ -823,26 +746,18 @@ function Subtasks({ parent }: { parent: TaskData }) {
   );
 }
 
-
-
 type ListProps = {
-  
   group: string;
   label: string;
   tasks: TaskData[];
   layout?: "list" | "board";
   showPlace?: boolean;
-  
   pageNode?: string | null;
   dayShown?: Day | null;
-  
   dropDay?: Day | null;
-  
   reorderable?: boolean;
-  
   empty?: ReactNode;
 };
-
 
 type Drag = { id: string; group: string; task: TaskData; height: number };
 let dragState: Drag | null = null;
@@ -850,15 +765,9 @@ const setDragging = (value: Drag | null) => {
   dragState = value;
 };
 const currentDrag = () => dragState;
-
 const GRAB = { x: 24, y: 20 };
 
-
-
-
-
 type HeadDrop = { over: (event: DragEvent<HTMLElement>) => void; drop: (event: DragEvent<HTMLElement>) => void; leave: () => void };
-
 type LendHead = (handlers: HeadDrop) => () => void;
 const DropHead = createContext<LendHead | null>(null);
 
@@ -873,7 +782,6 @@ export function useDropHead() {
   const head = {
     onDragOver: (event: DragEvent<HTMLElement>) => lent.current?.over(event),
     onDrop: (event: DragEvent<HTMLElement>) => lent.current?.drop(event),
-    
     onDragLeave: (event: DragEvent<HTMLElement>) => {
       if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) lent.current?.leave();
     },
@@ -887,7 +795,6 @@ export function DropHeadScope({ lend, children }: { lend: LendHead | null; child
 
 export function TaskList({ group, label, tasks, layout = "list", showPlace = true, pageNode, dayShown, dropDay, reorderable = false, empty }: ListProps) {
   const actions = useTaskActions();
-  
   useSyncExternalStore(subscribe, () => snapshot, () => 0);
   const list = useRef<HTMLUListElement>(null);
   const seen = useRef(tasks);
@@ -903,14 +810,12 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     () => false,
   );
 
-  
   useEffect(() => {
     if (seen.current === tasks) return;
     seen.current = tasks;
     forgetSettled();
   }, [tasks]);
 
-  
   const order = ops.get(`order:${group}`) as Extract<Op, { kind: "order" }> | undefined;
   let shown: Array<{ task: TaskData; leaving: boolean; folding: boolean; completed?: boolean }> = [];
   for (const task of tasks) {
@@ -926,7 +831,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     const hide = ops.get(`hide:${op.id}`) as Extract<Op, { kind: "hide" }> | undefined;
     if (!hide?.gone) shown.splice(op.at ?? shown.length, 0, { task: op.task, leaving: Boolean(hide), folding: Boolean(hide?.folding), completed: hide?.completed });
   }
-  
   for (const op of ops.values()) {
     if (op.kind !== "hide" || op.gone || !op.task || op.place?.group !== group || shown.some((entry) => entry.task.id === op.id)) continue;
     shown.splice(Math.min(op.place.at, shown.length), 0, { task: op.task, leaving: true, folding: op.folding, completed: op.completed });
@@ -936,7 +840,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     shown = [...shown].sort((a, b) => (at.get(a.task.id) ?? 1e9) - (at.get(b.task.id) ?? 1e9));
   }
 
-  
   useEffect(() => {
     const element = list.current;
     if (!element) return;
@@ -946,9 +849,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     };
   }, [group, label, dropDay]);
 
-  
-  
-  
   useFlip(list, { items: ":scope > li", share: "tasks", arrangement: layout });
 
   const visible = shown.filter((entry) => !entry.leaving).map((entry) => entry.task);
@@ -966,7 +866,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     return true;
   }
 
-  
   function onKeyMove(task: TaskData) {
     return (event: KeyboardEvent<HTMLElement>) => {
       if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
@@ -994,7 +893,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     };
   }
 
-  
   function refocus(id: string) {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-item="${id}"] .task-open`)?.focus({ preventScroll: true })),
@@ -1027,12 +925,9 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     setDropAt(null);
     if (!drag || !accepts(drag.group)) return;
     event.preventDefault();
-    
-    
     landFrom(drag.id, { x: event.clientX - GRAB.x, y: event.clientY - GRAB.y, w: 0, h: drag.height });
     list.current?.querySelector<HTMLElement>(":scope > .task-drop-mark")?.setAttribute("data-flip-exit", "none");
     if (drag.group === group) {
-      
       const carried = list.current?.querySelector<HTMLElement>(`:scope > [data-key="${CSS.escape(drag.id)}"]`);
       if (carried) {
         carried.setAttribute("data-dropped", "");
@@ -1048,12 +943,9 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
     setDragging(null);
   }
 
-  
   const lendHead = useContext(DropHead);
   useEffect(() => lendHead?.({ over: onDragOver, drop: onDrop, leave: () => setDropAt(null) }));
 
-  
-  
   const carried = currentDrag();
   const mark = (
     <li key="drop-mark" data-flip-key="drop-mark" className="task-drop-mark" aria-hidden="true" style={{ "--drop-room": `${carried?.height ?? 0}px` } as CSSProperties} />
@@ -1066,7 +958,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
 
   const rows = shown.flatMap(({ task, leaving, folding, completed }) => [
     ...(markBefore === task.id ? [mark] : []),
-    
     <li key={task.id} data-key={task.id} className="task-item" data-leaving={folding || undefined} data-completing={(leaving && completed) || undefined}>
       <TaskRowView
         task={task}
@@ -1084,8 +975,6 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
           setDragging({ id: task.id, group, task, height: item?.offsetHeight ?? 0 });
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", inlinePlain(task.title));
-          
-          
           row?.setAttribute("data-lifted", "");
           if (row) event.dataTransfer.setDragImage(row, GRAB.x, GRAB.y);
           requestAnimationFrame(() => {

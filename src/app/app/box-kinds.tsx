@@ -35,20 +35,13 @@ import { useQuickAddInline } from "./quick-add";
 import { dayHeading, dayName, DropHeadScope, InlineText, pasteLinkOver, PlaceName, placeOnPage, TaskList, timeLabel, useDropHead, useTaskActions, useTaskLanding, type TaskData } from "./task-row";
 import { useWorkspace } from "./workspace";
 
-
-
-
-
-
 export type Place = { kind: "all" } | { kind: "general" } | { kind: "node"; id: string };
-
 
 export function placeInput(place: Place): Record<string, unknown> {
   if (place.kind === "all") return {};
   if (place.kind === "general") return { node: null };
   return { node: place.id };
 }
-
 
 export function readPlace(value: string | null, tree: TreeNode[] | null): Place {
   if (value === "general") return { kind: "general" };
@@ -60,7 +53,6 @@ export function placeValue(place: Place): string | null {
   return place.kind === "all" ? null : place.kind === "general" ? "general" : place.id;
 }
 
-
 export function HeadLink({ href, name, children }: { href: string; name: string; children: string }) {
   return (
     <Link className={buttonClass({ variant: "quiet", size: "sm", className: "head-action head-link" })} href={href} aria-label={name}>
@@ -70,25 +62,18 @@ export function HeadLink({ href, name, children }: { href: string; name: string;
   );
 }
 
-
-
 export type Sort = "date" | "priority" | "manual";
 
 type GroupsProps = {
   view: TasksView;
   now: Day;
-  
   mode: "box" | "page";
   layout: "list" | "board";
-  
   placeId: string | null;
-  
   place: Place;
   showPlace: boolean;
-  
   pageNode?: string | null;
   sort?: Sort;
-  
   allHref?: string;
 };
 
@@ -100,18 +85,14 @@ type Group = {
   count: number;
   dropDay: Day | null | undefined;
   dayShown?: Day | null;
-  
   add?: Day | null;
   empty: string;
-  
   days?: Group[];
   action?: ReactNode;
 };
 
 export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace, pageNode, sort = "date", allHref }: GroupsProps) {
   const manual = sort === "manual";
-  
-  
   const folded = mode === "box" && layout === "list";
   const upcomingDays: Group[] = view.groups.upcoming.days.map((entry) => ({
     key: entry.day,
@@ -132,7 +113,6 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       tasks: view.groups.overdue.tasks,
       count: view.groups.overdue.count,
       dropDay: undefined,
-      
       empty: "Nothing is overdue.",
       action: view.groups.overdue.count > 0 ? <Reschedule count={view.groups.overdue.count} place={place} now={now} /> : undefined,
     },
@@ -172,7 +152,6 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
             count: view.groups.noDate.count,
             dropDay: null,
             add: null,
-            
             empty: view.groups.overdue.count + view.groups.today.count + view.groups.upcoming.count > 0 ? "Every open task has a date." : "No tasks without a date.",
           } satisfies Group,
         ]
@@ -190,8 +169,6 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
         ]
       : []),
   ];
-  
-  
   const shown = groups.filter((group) => group.key !== "overdue" || group.count > 0);
   const host = useRef<HTMLDivElement>(null);
   useFlip(host, { items: ".group", layout: layout === "board" ? "grid" : "list", arrangement: layout });
@@ -248,21 +225,14 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
   );
 }
 
-
-
 const ZONES = ["now", "ahead", "rest"] as const;
 const zoneOf = (group: string) => (group === "overdue" || group === "today" ? "now" : group === "upcoming" ? "ahead" : "rest");
-
 
 function GroupSection({ group, layout, placeId, children }: { group: Group; layout: "list" | "board"; placeId: string | null; children: ReactNode }) {
   const add = useQuickAddInline({ day: group.add ?? null, placeId });
   const adds = group.add !== undefined;
-  
-  
   const section = useRef<HTMLElement>(null);
   useFlip(section, { items: ":scope > .group-day", arrangement: layout });
-  
-  
   const drop = useDropHead();
   return (
     <DropHeadScope lend={group.days ? null : drop.lend}>
@@ -288,7 +258,6 @@ function GroupSection({ group, layout, placeId, children }: { group: Group; layo
   );
 }
 
-
 function DaySection({ day, placeId, children }: { day: Group; placeId: string | null; children: ReactNode }) {
   const add = useQuickAddInline({ day: day.add ?? null, placeId });
   const adds = day.add !== undefined;
@@ -310,8 +279,6 @@ function DaySection({ day, placeId, children }: { day: Group; placeId: string | 
     </DropHeadScope>
   );
 }
-
-
 
 function UpcomingDay({ day, tasks, now, children }: { day: Group; tasks: TaskData[]; now: Day; children: ReactNode }) {
   const actions = useTaskActions();
@@ -364,12 +331,10 @@ function UpcomingDay({ day, tasks, now, children }: { day: Group; tasks: TaskDat
   );
 }
 
-
 export function allTasks(view: TasksView | null): TaskData[] {
   if (!view) return [];
   return [...view.groups.overdue.tasks, ...view.groups.today.tasks, ...view.groups.upcoming.days.flatMap((day) => day.tasks), ...view.groups.noDate.tasks];
 }
-
 
 function Reschedule({ count: overdue, place, now }: { count: number; place: Place; now: Day }) {
   const { notify, touch, saving } = useWorkspace();
@@ -388,11 +353,9 @@ function Reschedule({ count: overdue, place, now }: { count: number; place: Plac
   return <DatePicker look="chip" className="reschedule head-action" icon={RescheduleIcon} label={`Reschedule the ${count(overdue, "overdue task", "overdue tasks")}`} value={null} display="Reschedule" onChange={(day) => void move(day)} />;
 }
 
-
 export function useTasksRead(place: Place, now: Day | null, extra: Record<string, unknown> = {}): BoxRead<TasksView> {
   return useToolRead<TasksView>("get_tasks", now ? { ...placeInput(place), today: now, ...extra } : null);
 }
-
 
 export function TasksBoxContent({ read, now, place, placeId, showPlace, pageNode, layout, allHref }: { read: BoxRead<TasksView>; now: Day; place: Place; placeId: string | null; showPlace: boolean; pageNode?: string | null; layout: "list" | "board"; allHref: string }) {
   const { data, error, stale, retry } = read;
@@ -406,14 +369,10 @@ export function TasksBoxContent({ read, now, place, placeId, showPlace, pageNode
   );
 }
 
-
-
 export function tasksCountLabel(view: TasksView | null): string | undefined {
   const due = view ? view.groups.overdue.count + view.groups.today.count : 0;
   return due > 0 ? `${due} due` : undefined;
 }
-
-
 
 export function noDateCount(view: TasksView | null): ReactNode {
   const tasks = view?.groups.noDate.count ?? 0;
@@ -424,7 +383,6 @@ export function notesCount(total: number | undefined): ReactNode {
   return total ? <Figure n={total} one="note" many="notes" /> : undefined;
 }
 
-
 export function Figure({ n, one, many, className }: { n: number; one: string; many: string; className?: string }) {
   return (
     <span className={className}>
@@ -434,12 +392,7 @@ export function Figure({ n, one, many, className }: { n: number; one: string; ma
   );
 }
 
-
-
-
 const FIRST_SHOWN = 5;
-
-
 
 export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<TasksView>; showPlace: boolean; pageNode?: string | null }) {
   const { data, error, stale, retry } = read;
@@ -467,13 +420,10 @@ export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<
   );
 }
 
-
-
 type Event = CalendarEvent & { origin: "google" | "local"; localId: string | null; nodeId: string | null; nodePath: string | null; linkedNodeIds: string[] };
 
 function onDay(event: Event, day: Day): boolean {
   if (event.allDay) {
-    
     const last = event.origin === "google" ? addDays(event.end.slice(0, 10), -1) : event.end.slice(0, 10);
     return event.start.slice(0, 10) <= day && day <= last;
   }
@@ -483,14 +433,12 @@ function onDay(event: Event, day: Day): boolean {
   return start < dayEnd && (Date.parse(event.end) > dayStart || start >= dayStart);
 }
 
-
 let draggedTask: string | null = null;
 if (typeof window !== "undefined") {
   window.addEventListener("dragstart", (event) => {
     const row = (event.target as Element | null)?.closest?.("[data-item]");
     draggedTask = row instanceof HTMLElement ? (row.dataset.item ?? null) : null;
   });
-  
   for (const end of ["dragend", "drop"]) {
     window.addEventListener(end, () => {
       draggedTask = null;
@@ -503,7 +451,6 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   const actions = useTaskActions();
   const week = weekOf(now, weekStart);
   const instants = instantsOf(week.from, week.to);
-  
   const read = useEventsRead<Event>(
     {
       ...(place.kind === "node" ? { node: place.id } : {}),
@@ -516,12 +463,9 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   );
   const [chosen, setChosen] = useState<Day>(now);
   const days = Array.from({ length: 7 }, (_, index) => addDays(week.from, index));
-  
   const events = (read.data?.events ?? []).filter((event) => place.kind !== "general" || (event.origin === "local" && event.nodeId === null));
   const ofDay = (day: Day) => events.filter((event) => onDay(event, day));
   const names = new Map((tree ?? []).map((node) => [node.id, node.path]));
-  
-  
   const colors = new Map((tree ?? []).map((node) => [node.id, node.color]));
   const colorOf = (event: { nodeId?: string | null; linkedNodeIds: string[]; fromNodeId: string }) =>
     [event.nodeId, ...event.linkedNodeIds, event.fromNodeId].map((id) => (id ? colors.get(id) : null)).find(Boolean) ?? undefined;
@@ -538,14 +482,11 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
   if (!read.data && read.error) return <BoxFailed what="The calendar" message={read.error} kept={false} onRetry={read.retry} />;
   if (!read.data) return <BoxWait what="Loading this week's events…" shape="week" rows={3} />;
   const chosenEvents = ofDay(chosen);
-  
-  
   const unanswered = read.data.waiting;
   const reading = !read.error && unanswered > 0;
   return (
     <div className="box-read" data-stale={read.stale || undefined} aria-busy={read.stale || reading || undefined}>
       {read.error && <BoxFailed what="The calendar" message={read.error} kept onRetry={read.retry} />}
-      {}
       {[...new Set(read.data.failures.map((failure) => failure.reason))].map((reason) => {
         const who = read.data!.failures.filter((failure) => failure.reason === reason).map((failure) => failure.accountEmail || "The workspace's calendar");
         return (
@@ -560,7 +501,6 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         <h3 className="group-title" data-when={chosen === now ? "today" : undefined}>
           {chosen === now ? "Today" : dayHeading(chosen, now)}
         </h3>
-        {}
         {chosenEvents.length === 0 && reading ? (
           <BoxWait what="Loading this week's events…" shape="events" rows={2} />
         ) : chosenEvents.length === 0 && unanswered > 0 ? (
@@ -574,10 +514,7 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
         ) : (
           <ul className="event-list">
             {chosenEvents.map((event) => {
-              
-              
               const where = event.nodePath ?? (event.linkedNodeIds.map((id) => names.get(id)).filter(Boolean).join(", ") || names.get(event.fromNodeId) || "");
-              
               const own = place.kind === "node" && where === names.get(place.id);
               return (
                 <li key={`${event.origin}:${event.accountId}:${event.id}`} className="event-row" data-color={colorOf(event)}>
@@ -596,8 +533,6 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
     </div>
   );
 }
-
-
 
 function WeekStrip({
   label,
@@ -624,7 +559,6 @@ function WeekStrip({
       {days.map((day) => {
         const many = eventsOn(day);
         const date = new Date(`${day}T00:00:00`);
-        
         const shown = `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`;
         return (
           <button
@@ -658,12 +592,7 @@ function WeekStrip({
   );
 }
 
-
-
 export type { MailList };
-
-
-
 
 export function useMailRead(place: Place, account: string | null): BoxRead<MailList> {
   const { tree, treeError, refreshTree, mailAccounts, mailStore, version } = useWorkspace();
@@ -679,7 +608,6 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
   const key = inPlace?.map((entry) => entry.id).join() ?? "";
   useEffect(() => {
     for (const entry of inPlace ?? []) mailStore.list(entry);
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version, round, mailStore]);
   const picked = chosenAccounts(account, inPlace ?? [], tree);
@@ -689,9 +617,7 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
     data,
     error: chosen ? null : treeError,
     stale: false,
-    
     settled: data ? data.accounts.length === 0 || data.waiting < data.accounts.length : treeError !== null,
-    
     retry: () => {
       mailStore.forget();
       setRound((value) => value + 1);
@@ -701,20 +627,15 @@ export function useMailRead(place: Place, account: string | null): BoxRead<MailL
 }
 
 const noRevision = () => 0;
-
 const MAIL_ROWS = 3;
-
 
 export function useMailCount(read: BoxRead<MailList>): string | undefined {
   const { mailStore } = useWorkspace();
   if (!read.data || read.data.accounts.length === 0) return undefined;
   const figure = mailStore.figure(read.data.accounts);
-  
   if (figure && !figure.partial && figure.unread === 0) return undefined;
   return figureWords(figure) ?? undefined;
 }
-
-
 
 export function mailWhen(iso: string, now: Day): string {
   const date = new Date(iso);
@@ -726,17 +647,12 @@ export function mailWhen(iso: string, now: Day): string {
 
 const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
 
-
-
-
-
 export function mailBoxRows(mail: MailList, replies: TaskReplies[], accounts: Set<string> | null): Array<{ message: MailRow; label: string | null }> {
   const inAccount = (message: MailRow) => accounts === null || accounts.has(message.accountId);
   const seen = new Set<string>();
   const rows: Array<{ message: MailRow; label: string | null }> = [];
   for (const entry of replies) {
     const own = entry.replies.filter(inAccount);
-    
     const shown = own.find((message) => !seen.has(mailKey(message)));
     if (!shown) continue;
     seen.add(mailKey(shown));
@@ -764,13 +680,10 @@ export function MailBoxContent({
 }: {
   read: BoxRead<MailList>;
   replies: BoxRead<{ tasks: TaskReplies[] }>;
-  
   account: string | null;
   now: Day;
   place: Place;
   connectHref: string;
-  
-  
   connect?: ReactNode;
   connectText?: string;
 }) {
@@ -783,7 +696,6 @@ export function MailBoxContent({
   const failures = [...data.failures, ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures).filter((failure) => chosen === null || chosen.has(failure.accountId))].filter(
     (failure, index, all) => all.findIndex((other) => other.accountId === failure.accountId) === index,
   );
-  
   const reading = data.waiting > 0;
   const body = () => {
     if (data.accounts.length === 0) {
@@ -818,7 +730,6 @@ export function MailBoxContent({
       <FlipList className="mail-list">
         {rows.map(({ message, label }) => {
           const line = taskLine(message);
-          
           const where = message.place ? placeOnPage(message.place, true, place.kind === "node" ? place.id : null, tree) : null;
           return (
             <li key={mailKey(message)} data-flip-key={mailKey(message)}>
@@ -866,12 +777,9 @@ export function MailBoxContent({
   );
 }
 
-
-
 type Notes = { notes: NoteRow[]; total: number };
 
 export function useNotesRead(place: Place): BoxRead<Notes> {
-  
   return useToolRead<Notes>("list_notes", { node: place.kind === "node" ? place.id : null, limit: 12 });
 }
 
@@ -908,7 +816,6 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
       ) : (
         <FlipList className="note-list">
           {data.notes.map((note) => {
-            
             const where = placeOnPage({ nodeId: note.nodeId, path: note.path }, note.path !== null, node, tree);
             return (
               <li key={note.id} className="note-row" data-item={note.id}>
@@ -931,8 +838,6 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
     </div>
   );
 }
-
-
 
 export function useAddNote(node: string | null) {
   const { saving, notify } = useWorkspace();
@@ -1021,34 +926,26 @@ export function useAddNote(node: string | null) {
   return { trigger, editor };
 }
 
-
-
 type Updates = { created: Item[]; changed: Item[]; completed: Item[]; deleted: Item[] };
-
 type Snapshot = { title: string; body: string | null; status: "open" | "done"; priority: number | null; due_on: string | null; due_time: string | null; parent_item_id: string | null };
 type Revision = { id: string; createdAt: string; source: Item["source"]; agentLabel: string | null; snapshot: Snapshot };
 
 type Entry = {
   key: string;
   at: string;
-  
   by: "chat" | "agent";
   what: string;
   title: string;
   undo: () => Promise<{ ok: boolean; message?: string }>;
-  
   open?: () => void;
 };
 
 const ACTIVITY_DAYS = 7;
 
-
-
 export function activitySince(now = Date.now()): string {
   const hour = 3_600_000;
   return new Date(Math.floor((now - ACTIVITY_DAYS * 86_400_000) / hour) * hour).toISOString();
 }
-
 
 function ago(at: string, now: number): string {
   const minutes = Math.max(0, Math.round((now - Date.parse(at)) / 60_000));
@@ -1085,12 +982,10 @@ export function ActivityBoxContent({ place }: { place: Place }) {
       ] as const;
       for (const [kind, verb] of kinds) {
         for (const item of updates.data[kind]) {
-          
           const changedByOther = kind === "created" && item.source === "manual" && (item.changedSource === "chat" || item.changedSource === "agent");
           const as = changedByOther ? "changed" : kind;
           const who = as === "created" ? item.source : (item.changedSource ?? item.source);
           const label = as === "created" ? item.agentLabel : (item.changedAgentLabel ?? null);
-          
           if (who !== "chat" && who !== "agent") continue;
           if (place.kind === "general" && item.nodeId !== null) continue;
           list.push({
@@ -1125,7 +1020,6 @@ export function ActivityBoxContent({ place }: { place: Place }) {
         </BoxEmpty>
       ) : (
         <>
-          {}
           <FlipList ordered className="activity-list" id="activity-entries" data-open={all || entries.length <= FIRST_SHOWN}>
             {entries.map((entry) => (
               <li key={entry.key} className="activity-row" data-flip-key={entry.key} data-activity={entry.key.split(":")[0]} data-by={entry.by}>
@@ -1165,9 +1059,6 @@ export function ActivityBoxContent({ place }: { place: Place }) {
   );
 }
 
-
-
-
 async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], label: string | null): Promise<{ ok: boolean; message?: string }> {
   if (kind === "completed") return item.type === "task" ? tool("reopen_task", { task: item.id }) : tool("update_item", { id: item.id, status: "open" });
   if (kind === "deleted") return post(`/api/items/${item.id}/restore`, {});
@@ -1176,11 +1067,9 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const name = `“${inlinePlain(item.title)}”`;
   const byOther = (revision: Revision) => revision.source !== who || (who === "agent" && revision.agentLabel !== label);
   if (kind === "created") {
-    
     if (versions.revisions.some(byOther)) return { ok: false, message: `${name} was changed after it was added, so it stays. To remove it, delete it from its “More”.` };
     return tool("delete_item", { id: item.id });
   }
-  
   const at = versions.revisions.findIndex((revision) => !byOther(revision));
   if (at < 0) return { ok: false, message: `${name} has no earlier version to go back to.` };
   const before = versions.revisions[at].snapshot;
@@ -1196,7 +1085,6 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
     due_time: current.item.dueTime ?? null,
     parent_item_id: current.item.parentId,
   };
-  
   const after = later.at(-1)?.snapshot ?? now;
   const hour = (value: string | null) => value?.slice(0, 5) ?? null;
   const same = (field: keyof Snapshot, a: Snapshot, b: Snapshot) => (field === "due_time" ? hour(a[field]) === hour(b[field]) : a[field] === b[field]);

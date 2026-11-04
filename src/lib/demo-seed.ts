@@ -2,50 +2,23 @@ import type { Db } from "@/lib/db/client";
 import { inlineLink } from "@/lib/inline-links";
 import { workingMinutesBefore } from "@/lib/working-time";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 export type SeedSource = { source: "chat" } | { source: "agent"; agentLabel: string };
-
-
 
 export type SeedChat = { ask: string; answer: string; workspace?: true };
 
 export type SeedItem = {
   tool: "create_task" | "add_note" | "add_decision" | "request_review";
   input: Record<string, unknown>;
-  
   children?: SeedItem[];
-  
   was?: string;
-  
-  
   ago: number;
   doneAgo?: number;
-  
   deletedAgo?: number;
-  
   by?: SeedSource;
   chat?: SeedChat;
-  
   rank?: number;
-  
-  
   waitsFor?: { account: string; words: string };
 };
-
 
 export type SeedMail = {
   from: { name: string; email: string };
@@ -55,35 +28,23 @@ export type SeedMail = {
   ago: number;
   unread: boolean;
   important: boolean;
-  
   linkedTo?: string;
 };
 
-
 export type SeedMeeting = { title: string; day: string; at: string; until: string; location: string | null };
 
-
-
 export type SeedAccount = { email: string; mail: SeedMail[]; calendar?: { name: string; meetings: SeedMeeting[] } };
-
-
 
 export type SeedEvent = { title: string; day: string; at?: string; until?: string; linkedTo?: string[] };
 
 export type Seed = {
   name: string;
-  
-  
   kind?: "client" | "project";
-  
   color?: string;
   children?: Seed[];
   items?: SeedItem[];
   events?: SeedEvent[];
-  
-  
   tokens?: SeedToken[];
-  
   accounts?: SeedAccount[];
 };
 
@@ -96,7 +57,6 @@ const CHAT = { source: "chat" } as const;
 const task = (input: Record<string, unknown>, extra: Omit<SeedItem, "tool" | "input">): SeedItem => ({ tool: "create_task", input, ...extra });
 const note = (text: string, ago: number): SeedItem => ({ tool: "add_note", input: { text }, ago });
 const decision = (title: string, rationale: string, ago: number): SeedItem => ({ tool: "add_decision", input: { decision: title, rationale }, ago });
-
 const linkNote = (url: string, words: string, ago: number): SeedItem => note(`<p><a href="${url}">${words}</a></p>`, ago);
 
 function dayCounter(today: string) {
@@ -107,15 +67,11 @@ function dayCounter(today: string) {
   };
 }
 
-
-
 function workdayCounter(today: string) {
   const day = dayCounter(today);
   const sinceMonday = (new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7;
   return (week: number, weekday: number): string => day(week * 7 + weekday - sinceMonday);
 }
-
-
 
 export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEvent[] } {
   const day = dayCounter(today);
@@ -146,7 +102,6 @@ export function demoGeneral(today: string): { items: SeedItem[]; events: SeedEve
     events: [{ title: "Call with Studio Atlas", day: day(1), at: "15:30", until: "16:00", linkedTo: ["Studio Atlas / Brand refresh"] }],
   };
 }
-
 
 export function demoSeedTree(today: string): Seed[] {
   const day = dayCounter(today);
@@ -238,8 +193,6 @@ export function demoSeedTree(today: string): Seed[] {
           children: [
             {
               name: "Ordering flow",
-              
-              
               accounts: [
                 {
                   email: "orders@larkspur.example",
@@ -267,7 +220,6 @@ export function demoSeedTree(today: string): Seed[] {
               ],
               items: [
                 task({ title: "Map the pickup time slots", priority: 3, dueOn: day(2) }, { ago: 1534 }),
-                
                 {
                   tool: "request_review",
                   input: { title: "Review the checkout pull request", url: "https://github.com/larkspur-bakery/website/pull/48" },
@@ -332,7 +284,6 @@ export function demoSeedTree(today: string): Seed[] {
     {
       name: "Lumen Dental",
       kind: "client",
-      
       accounts: [{ email: "lumen@harborline.example", mail: [] }],
       children: [
         {
@@ -457,8 +408,6 @@ export function demoSeedTree(today: string): Seed[] {
           { title: inlineLink("Review the new contract template", "https://docs.google.com/document/d/1Zp4HwQe8TnB2xLv-Ka7RcM5yGs3Df9Uj0Nb6Wt_EoXi/edit"), priority: 3 },
           { ago: 437, rank: 2 },
         ),
-        
-        
         task({ title: "Wait for the app review approval", priority: 3 }, { ago: 2880, rank: 6, waitsFor: { account: "ops@harborline.example", words: "Developer Platform" } }),
         task({ title: "Wait for the bank transfer", priority: 3, dueOn: day(0) }, { ago: 1490, waitsFor: { account: "ops@harborline.example", words: "Bayside Bank" } }),
         task({ title: "Order new business cards", priority: 3 }, { ago: 3560, deletedAgo: 512 }),
@@ -480,15 +429,10 @@ export function demoSeedTree(today: string): Seed[] {
   ];
 }
 
-
 export function demoShape(): { clients: number; ownProjects: number } {
   const roots = demoSeedTree("2026-01-01");
   return { clients: roots.filter((node) => node.kind === "client").length, ownProjects: roots.filter((node) => node.kind === "project").length };
 }
-
-
-
-
 
 export type DemoOverview = { overdue: number; today: number; unread: number };
 
@@ -513,26 +457,17 @@ export function demoOverview(today: string): DemoOverview {
   return figures;
 }
 
-
-
-
 export async function seedDemo(db: Db, today: string, zone?: string): Promise<{ planted: boolean }> {
   const { data, error } = await db.rpc("seed_demo", zone ? { p_today: today, p_zone: zone } : { p_today: today });
   if (error) throw new Error(`demo seed: ${error.message}`);
   return { planted: data === true };
 }
 
-
-
-
 export async function resetDemo(db: Db): Promise<{ reset: boolean }> {
   const { data, error } = await db.rpc("reset_demo");
   if (error) throw new Error(`demo reset: ${error.message}`);
   return { reset: data === true };
 }
-
-
-
 
 export async function settleDemoTokens(
   service: Db,
@@ -558,7 +493,6 @@ export async function settleDemoTokens(
     }
   };
   walk(demoSeedTree(now.toISOString().slice(0, 10)), "");
-  
   const written = await Promise.all(
     declared.map(async ({ path, token }): Promise<{ count: number; reason: string | null }> => {
       const nodeId = byPath.get(path);

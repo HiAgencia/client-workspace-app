@@ -13,15 +13,10 @@ import { post } from "./client-api";
 import { requestFocus } from "./focus-request";
 import { useWorkspace, type Person } from "./workspace";
 
-
-
-
-
 export function Welcome({ person }: { person: Person }) {
   const first = firstName(person.name);
   return (
     <section className="welcome" aria-labelledby="welcome-title" data-welcome>
-      {}
       <div className="welcome-head" data-cascade style={{ "--cascade-from": "calc(var(--enter-step) * 2)" } as CSSProperties}>
         <Avatar className="welcome-avatar" src={person.avatarUrl} name={person.name} email={person.email} />
         <h2 id="welcome-title" className="t-h1 welcome-title">
@@ -57,8 +52,6 @@ export function Welcome({ person }: { person: Person }) {
 
 type PathProps = { kind: "project" | "client"; order: number; icon: Icon; title: string; text: string; add: string; field: string; submit: string };
 
-
-
 function WelcomePath({ kind, order, icon: Glyph, title, text, add, field, submit }: PathProps) {
   const { saving } = useWorkspace();
   const router = useRouter();
@@ -89,7 +82,6 @@ function WelcomePath({ kind, order, icon: Glyph, title, text, add, field, submit
   }
 
   return (
-    
     <section className="welcome-path" aria-labelledby={`${id}title`} data-welcome-path={kind} data-open={adding || undefined} style={{ "--enter-delay": `calc(var(--enter-step) * ${6 + order})` } as CSSProperties}>
       <span className="welcome-icon" aria-hidden="true">
         <Glyph />

@@ -2,9 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DEFAULT_PREFERENCES, readPreferences, savePreferences } from "@/lib/preferences";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
 let user: DisposableUser | undefined;
 
 beforeAll(async () => {

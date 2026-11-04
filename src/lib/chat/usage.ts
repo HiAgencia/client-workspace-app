@@ -4,9 +4,6 @@ import { serverEnv } from "@/lib/env";
 
 export type UsageKind = "chat_message" | "transcription";
 
-
-
-
 const DEFAULTS = {
   person: { chat_message: 60, transcription: 20 },
   demoSession: { chat_message: 20, transcription: 5 },
@@ -24,7 +21,6 @@ export function dailyCap(scope: keyof typeof DEFAULTS, kind: UsageKind): number 
   return Number.isInteger(configured) && configured > 0 ? configured : DEFAULTS[scope][kind];
 }
 
-
 export function usageDay(now = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
@@ -37,7 +33,6 @@ export function secondsToNextDay(now = new Date()): number {
 
 type TakeResult = { allowed: true; count: number } | { allowed: false; reason: "cap" | "demo_cap" | "error" };
 
-
 export async function takeUsage(service: Db, ownerId: string, kind: UsageKind, cap: number, now = new Date()): Promise<TakeResult> {
   const { data, error } = await service.rpc("take_usage", { p_owner: ownerId, p_kind: kind, p_day: usageDay(now), p_cap: cap });
   if (error) {
@@ -46,7 +41,6 @@ export async function takeUsage(service: Db, ownerId: string, kind: UsageKind, c
   }
   return typeof data === "number" ? { allowed: true, count: data } : { allowed: false, reason: "cap" };
 }
-
 
 export async function takeUsageFor(
   service: Db,
@@ -63,8 +57,6 @@ export async function takeUsageFor(
   if (Number(data) >= dailyCap("demoTotal", kind)) return { allowed: false, reason: "demo_cap" };
   return takeUsage(service, user.id, kind, dailyCap("demoSession", kind), now);
 }
-
-
 
 export function capMessage(reason: "cap" | "demo_cap", kind: UsageKind, seconds = secondsToNextDay()): string {
   const what = kind === "chat_message" ? "chat messages" : "dictations";

@@ -30,8 +30,6 @@ function sessionCookie() {
 
 type Answer = number | "no answer" | { status: number; code: string };
 
-
-
 function clientAgainst(answers: Answer[], cookies = [sessionCookie()], user: object = USER) {
   const calls: string[] = [];
   const fetchFake = async (input: RequestInfo | URL) => {

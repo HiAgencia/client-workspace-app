@@ -5,8 +5,6 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/db/types";
 import "./env";
 
-
-
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
@@ -16,13 +14,9 @@ function serviceClient() {
 
 declare module "vitest" {
   export interface ProvidedContext {
-    
     testUsersFile: string;
   }
 }
-
-
-
 
 export default async function setup(project: TestProject) {
   const admin = serviceClient();
@@ -43,8 +37,6 @@ export default async function setup(project: TestProject) {
       const error = await deleteTestUser(admin, id);
       if (error) failed.push({ id, error });
     }
-    
-    
     if (run) keepInRun(run, failed.map((failure) => failure.id));
     else rmSync(file, { force: true });
     const after = await countUsers(admin);

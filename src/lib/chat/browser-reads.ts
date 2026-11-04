@@ -1,12 +1,6 @@
 import { isToolUIPart, type UIMessage } from "ai";
 
-
-
-
-
-
 export const BROWSER_READS: ReadonlySet<string> = new Set(["list_mail", "count_unread_mail", "search_mail", "get_mail", "list_task_replies", "list_item_mail", "list_events", "browse_events"]);
-
 
 export const MAX_READ_ANSWER = 256 * 1024;
 const MAX_READ_ERROR = 500;
@@ -17,13 +11,10 @@ const toolNameOf = (part: AnyPart) => part.type.replace(/^tool-/, "");
 const isBrowserRead = (part: AnyPart) => isToolUIPart(part) && BROWSER_READS.has(toolNameOf(part));
 const isAnswered = (part: AnyPart) => isToolUIPart(part) && (part.state === "output-available" || part.state === "output-error");
 
-
 function lastStep(message: UIMessage): AnyPart[] {
   const start = message.parts.reduce((last, part, index) => (part.type === "step-start" ? index : last), -1);
   return message.parts.slice(start + 1);
 }
-
-
 
 export function turnGoesOn({ messages }: { messages: UIMessage[] }): boolean {
   const last = messages.at(-1);
@@ -32,17 +23,12 @@ export function turnGoesOn({ messages }: { messages: UIMessage[] }): boolean {
   return calls.some(isBrowserRead) && calls.every(isAnswered);
 }
 
-
-
-
 export function leftUnfinished(message: UIMessage): boolean {
   if (message.role !== "assistant") return false;
   const step = lastStep(message);
   const words = step.filter((part) => part.type === "text");
   return step.some(isToolUIPart) || words.length === 0 || words.some((part) => part.state === "streaming");
 }
-
-
 
 export function whatWasDone(message: UIMessage): UIMessage {
   if (message.role !== "assistant") return message;
@@ -58,22 +44,16 @@ export function whatWasDone(message: UIMessage): UIMessage {
   return { ...message, parts };
 }
 
-
 export function openCall(stored: UIMessage): { toolCallId: string; state: string } {
   const open = stored.parts.find((part) => isToolUIPart(part) && !isAnswered(part));
   if (!open || !isToolUIPart(open)) throw new Error("this turn left no read open");
   return { toolCallId: open.toolCallId, state: open.state };
 }
 
-
 export function stepsTaken(messages: UIMessage[]): number {
   const last = messages.at(-1);
   return last?.role === "assistant" ? last.parts.filter((part) => part.type === "step-start").length : 0;
 }
-
-
-
-
 
 export function continuedTurn(stored: UIMessage | undefined, sent: UIMessage): UIMessage | null {
   if (stored?.role !== "assistant") return null;
@@ -90,6 +70,5 @@ export function continuedTurn(stored: UIMessage | undefined, sent: UIMessage): U
     if (JSON.stringify(answer.output ?? null).length > MAX_READ_ANSWER) return failed(part, "the read brought too much: ask for less of it");
     return { ...part, state: "output-available", output: answer.output } as AnyPart;
   });
-  
   return { id: sent.id, role: "assistant", parts };
 }

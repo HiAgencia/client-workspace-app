@@ -3,12 +3,6 @@ import { linkedApp, type LinkedApp } from "@/lib/linked-apps";
 import { cx } from "@/lib/utils";
 import { LinkIcon, MailIcon } from "./icons";
 
-
-
-
-
-
-
 export type Mark = (props: { className?: string }) => ReactElement;
 
 function Logo({ name, viewBox, className, children }: { name: string; viewBox: string; className?: string; children: ReactNode }) {
@@ -18,9 +12,6 @@ function Logo({ name, viewBox, className, children }: { name: string; viewBox: s
     </svg>
   );
 }
-
-
-
 
 export function GoogleMark({ className }: { className?: string }) {
   return (
@@ -75,7 +66,6 @@ export function GoogleCalendarMark({ className }: { className?: string }) {
     </Logo>
   );
 }
-
 
 const PAGE = "M58,88H6c-3.3,0-6-2.7-6-6V6c0-3.3,2.7-6,6-6h36l22,22v60C64,85.3,61.3,88,58,88z";
 const FOLD = "M42,0l22,22H42V0z";
@@ -152,8 +142,6 @@ export function GoogleAnalyticsMark({ className }: { className?: string }) {
   );
 }
 
-
-
 export function GitHubMark({ className }: { className?: string }) {
   return (
     <Logo name="github" viewBox="0 0 16 16" className={className}>
@@ -176,7 +164,6 @@ export function FigmaMark({ className }: { className?: string }) {
     </Logo>
   );
 }
-
 
 export function NotionMark({ className }: { className?: string }) {
   return (
@@ -246,17 +233,11 @@ const LINKED: Record<LinkedApp, Mark> = {
   youtube: YouTubeMark,
 };
 
-
-
 export function LinkMark({ href, className }: { href: string; className?: string }) {
   const app = linkedApp(href);
   const Glyph: Mark = app ? LINKED[app] : href.startsWith("mailto:") ? MailIcon : LinkIcon;
   return <Glyph className={cx("link-mark", className)} />;
 }
-
-
-
-
 
 export function MetaMark({ className }: { className?: string }) {
   const id = useId().replace(/[^\w-]/g, "");
@@ -291,7 +272,6 @@ export function MetaMark({ className }: { className?: string }) {
     </Logo>
   );
 }
-
 
 export function McpMark({ className }: { className?: string }) {
   return (

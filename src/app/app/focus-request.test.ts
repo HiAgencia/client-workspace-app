@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { land } from "./focus-request";
 
-
-
-
 const TITLE = '[data-item="task-1"] [data-item-title]';
 const CONTROL = '[aria-controls="fold-1"]';
 const CLOSED_FOLD = '.fold[data-open="false"]';
@@ -30,7 +27,6 @@ function page({ opensAfter = 1, folded = true, controlled = true, behindShowMore
       if (selector === "[data-item]") return row;
       return null;
     },
-    
     checkVisibility: () => seen || fold.dataset.open === "true",
     focus: () => {
       log.push("focus");
@@ -46,7 +42,6 @@ function page({ opensAfter = 1, folded = true, controlled = true, behindShowMore
       pressed = true;
     },
   };
-  
   const frame = (done: () => void) => {
     if (pressed && ++frames >= opensAfter) fold.dataset.open = "true";
     queueMicrotask(done);

@@ -3,8 +3,6 @@ import { safeNext, sameOrigin } from "./http";
 
 const origin = "http://localhost:8787";
 
-
-
 const pedido = (url: string, headers: Record<string, string>) => ({ url, headers: new Headers(headers) }) as unknown as Request;
 
 describe("the site a write comes from", () => {

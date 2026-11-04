@@ -6,9 +6,7 @@ import { serverEnv } from "@/lib/env";
 import { json, problem, sameOrigin } from "@/lib/http";
 import { requireUser, serviceClient, userClient } from "@/lib/supabase/server";
 
-
 const MAX_AUDIO = 4 * 1024 * 1024;
-
 
 export async function GET() {
   const who = await requireUser(await userClient());
@@ -17,8 +15,6 @@ export async function GET() {
   const available = provider === "simulated" || (provider === "meta" && Boolean(serverEnv("MODEL_API_KEY")));
   return json({ ok: true, available });
 }
-
-
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");

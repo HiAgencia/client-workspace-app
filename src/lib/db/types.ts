@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  
-  
   __InternalSupabase: {
     PostgrestVersion: "14.18"
   }

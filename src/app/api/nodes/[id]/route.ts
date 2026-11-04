@@ -5,7 +5,6 @@ import { toolResponse } from "@/lib/tool-response";
 import { isUuid } from "@/lib/tools/tree";
 import { changeNode, changeNodeInput } from "@/lib/tools/tree-writes";
 
-
 export async function PATCH(request: Request, { params }: RouteContext<"/api/nodes/[id]">) {
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such node");

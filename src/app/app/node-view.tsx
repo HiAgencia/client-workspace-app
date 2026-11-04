@@ -50,8 +50,6 @@ import { NewNode } from "./side-nav";
 import { useTaskReplies } from "./task-replies";
 import { useChatScope, useWorkspace } from "./workspace";
 
-
-
 export const NODE_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
 type Account = { id: string; email: string; status: string; nodeIds: string[]; calendars: Array<{ selected: boolean }> };
@@ -78,8 +76,6 @@ function chainOf(tree: TreeNode[], id: string): TreeNode[] {
 
 const noSubscription = () => () => {};
 
-
-
 export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved: BoardLayout | null; savedLayout: PageLayout | null }) {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree, notify, saving, refreshTree, person } = useWorkspace();
@@ -104,7 +100,6 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const noDateAdd = useQuickAddInline({ day: null, placeId: nodeId });
   const noteAdd = useAddNote(nodeId);
   const [adding, setAdding] = useState(false);
-  
   const [addRound, setAddRound] = useState(0);
   const [renaming, setRenaming] = useState(false);
 
@@ -113,8 +108,6 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const children = (tree ?? []).filter((entry) => entry.parentId === nodeId);
   const ready = Boolean(node) && tasks.settled;
 
-  
-  
   useEffect(() => {
     if (!ready) return;
     const apply = () => {
@@ -138,7 +131,6 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   if (!node || !now) return <BoardShell />;
 
   const root = chain[0];
-  
   const sessionEmail = root.kind === "project" && person && !person.isAnonymous ? person.email : null;
   const blocked = accounts.data && !accounts.data.canConnect ? (accounts.data.connectBlocked === "demo" ? "Connecting needs a Google sign-in" : "Connecting Google accounts is not set up on this server") : null;
   const trail = [{ label: root.kind === "client" ? "Clients" : "Projects" }, ...chain.slice(0, -1).map((entry) => ({ label: entry.name, href: `/app/node/${entry.id}` }))];
@@ -148,7 +140,6 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   const one = node.kind === "client" ? "project" : "subproject";
   const childName = node.kind === "client" ? "Projects" : "Subprojects";
   const names: Record<string, string> = { tasks: "Tasks", no_date: "No date", calendar: "Calendar", mail: "Mail", notes: "Notes", activity: "Activity" };
-  
   const view = tasks.data;
   const tasksRead = tasks;
 
@@ -318,7 +309,6 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   );
 }
 
-
 function NodeMark({ node }: { node: TreeNode }) {
   return (
     <span className="page-mark" data-color={node.color ?? undefined} aria-hidden="true">
@@ -327,17 +317,13 @@ function NodeMark({ node }: { node: TreeNode }) {
   );
 }
 
-
 function accountFacts(figure: MailFigure | null, calendars: number | null): string {
-  
   const unread = figure && !figure.partial && figure.unread === 0 ? "nothing unread" : figureWords(figure);
   const shown = calendars === null ? null : calendars === 0 ? "no calendars" : count(calendars, "calendar", "calendars");
   const words = [unread, shown].filter(Boolean).join(", ");
   return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : READING;
 }
 const READING = "Reading…";
-
-
 
 function NodeStrip({
   node,
@@ -358,7 +344,6 @@ function NodeStrip({
   name: string;
   one: string;
   connectHref: string;
-  
   sessionEmail: string | null;
   blocked: string | null;
   calendars: Account[] | null;
@@ -373,7 +358,6 @@ function NodeStrip({
   const id = useId();
   const seen = new Set(accountsSeenFrom(tree, mailAccounts ?? [], node.id));
   const address = sessionEmail?.toLowerCase() ?? null;
-  
   const accounts = (mailAccounts ?? []).filter((account) => seen.has(account.id)).sort((a, b) => Number(b.email === address) - Number(a.email === address));
   const offerOwn = sessionEmail !== null && mailAccounts !== null && !accounts.some((account) => account.email === address);
   return (
@@ -409,7 +393,6 @@ function NodeStrip({
                   idPrefix="strip-new"
                   onDone={() => {
                     onAddDone();
-                    
                     requestAnimationFrame(() => {
                       const held = document.activeElement;
                       if (held === document.body || fold.current?.contains(held)) addButton.current?.focus({ preventScroll: true });
@@ -434,7 +417,6 @@ function NodeStrip({
           {accounts.map((account) => {
             const known = calendars?.find((entry) => entry.id === account.id);
             const lost = account.status !== "active" && !account.isDemo;
-            
             const own = account.email === address;
             const facts = accountFacts(mailStore.figure([account]), known ? known.calendars.filter((calendar) => calendar.selected).length : null);
             return (
@@ -466,7 +448,6 @@ function NodeStrip({
           })}
           {mailAccounts && accounts.length === 0 && !offerOwn && (
             <li data-flip-key="connect">
-              {}
               <LinkOrAnchor className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
                 <span className="node-chip-name">
                   <GoogleMark className="node-chip-mark" />
@@ -483,8 +464,6 @@ function NodeStrip({
     </div>
   );
 }
-
-
 
 function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: string; nodeId: string; onClose: () => void }) {
   const { saving } = useWorkspace();

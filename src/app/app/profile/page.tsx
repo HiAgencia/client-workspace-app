@@ -14,10 +14,7 @@ import { PageHeader } from "../page-header";
 import { useWorkspace, type Person } from "../workspace";
 import "../../styles/settings.css";
 
-
 const SAVE_AFTER_MS = 700;
-
-
 
 export default function ProfilePage() {
   const { person } = useWorkspace();
@@ -44,12 +41,9 @@ export default function ProfilePage() {
 function ProfileBox({ person }: { person: Person }) {
   const { config, saving, signOut, switchAccount } = useWorkspace();
   const [draft, setDraft] = useState<string | null>(null);
-  
   const [switching, setSwitching] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  
   const shown = draft ?? person.name ?? "";
-  
   const kept = person.name !== person.googleName ? person.name : null;
 
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -104,7 +98,6 @@ function ProfileBox({ person }: { person: Person }) {
                 event.preventDefault();
                 void save(shown);
               }
-              
               if (event.key === "Escape") {
                 event.preventDefault();
                 clearTimeout(timer.current);
@@ -117,7 +110,6 @@ function ProfileBox({ person }: { person: Person }) {
             {person.googleName ? "How the workspace names you. Leave it empty to use the name on your Google account." : "How the workspace names you."}
           </p>
         </div>
-        {}
         <div className="settings-line profile-session">
           <p className="t-help profile-signed">
             <GoogleMark />
@@ -146,8 +138,6 @@ function ProfileBox({ person }: { person: Person }) {
     </section>
   );
 }
-
-
 
 function DemoProfile() {
   const { config, signOut } = useWorkspace();

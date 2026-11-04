@@ -4,24 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Db } from "@/lib/db/client";
 
-
-
-
-
-
-
-
-
-
 export function suiteDir(): string {
   return process.env.DEMO_POOL_DIR || tmpdir();
 }
 
 const registryDir = () => join(suiteDir(), "cw-test-users");
-
 const RUN_FILE = /^run-\d+(?:-\d+)?\.txt$/;
-
-
 
 export function startOf(pid: number): number | null {
   if (process.platform !== "win32") return null;
@@ -38,13 +26,10 @@ export function startOf(pid: number): number | null {
   }
 }
 
-
-
 export function runAlive(pid: number, start: number | null): boolean {
   try {
     process.kill(pid, 0);
   } catch (error) {
-    
     if ((error as NodeJS.ErrnoException).code !== "EPERM") return false;
   }
   if (start === null) return true;
@@ -71,7 +56,6 @@ export function readRun(file: string): RunRecord | null {
   return { file, pid: Number(pid), start: start ? Number(start) : null, users: [...live].filter(Boolean) };
 }
 
-
 export function openRun(pid = process.pid): string {
   mkdirSync(registryDir(), { recursive: true });
   const file = join(registryDir(), `run-${pid}-${Date.now()}.txt`);
@@ -87,22 +71,16 @@ export function untrack(file: string, id: string): void {
   appendFileSync(file, `-${id}\n`);
 }
 
-
 export async function deleteTestUser(admin: Db, id: string): Promise<string | null> {
   const { error } = await admin.auth.admin.deleteUser(id);
   if (!error || error.status === 404 || /not found/i.test(error.message)) return null;
   return error.message;
 }
 
-
-
 export function keepInRun(run: RunRecord, ids: string[]): void {
   if (ids.length === 0) rmSync(run.file, { force: true });
   else writeFileSync(run.file, `run ${run.pid} ${run.start ?? ""}\n${ids.map((id) => `+${id}\n`).join("")}`);
 }
-
-
-
 
 export async function sweepDeadRuns(admin: Db): Promise<{ runs: number; deleted: number; failed: string[] }> {
   let names: string[] = [];
@@ -132,7 +110,6 @@ export async function sweepDeadRuns(admin: Db): Promise<{ runs: number; deleted:
   return { runs, deleted, failed };
 }
 
-
 export async function stillThere(admin: Db, ids: string[]): Promise<string[]> {
   const there: string[] = [];
   for (const id of ids) {
@@ -142,7 +119,6 @@ export async function stillThere(admin: Db, ids: string[]): Promise<string[]> {
   }
   return there;
 }
-
 
 export async function countUsers(admin: Db): Promise<{ total: number; suite: number }> {
   let total = 0;

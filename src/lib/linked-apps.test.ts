@@ -22,7 +22,6 @@ describe("the app a link opens", () => {
     expect(linkedApp("https://docs.google.com/document/d/1Kx9/edit")).toBe("docs");
     expect(linkedApp("https://docs.google.com/spreadsheets/d/1Kx9/edit")).toBe("sheets");
     expect(linkedApp("https://docs.google.com/presentation/d/1Kx9/edit")).toBe("slides");
-    
     expect(linkedApp("https://docs.google.com/forms/d/1Kx9/viewform")).toBeNull();
   });
 

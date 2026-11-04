@@ -1,5 +1,3 @@
-
-
 export const READ_TOOLS: ReadonlySet<string> = new Set([
   "list_tree",
   "get_tasks",

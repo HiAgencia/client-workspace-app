@@ -23,9 +23,7 @@ const treeNodeSchema = z.object({
   kind: z.enum(["client", "project", "subproject"]),
   name: z.string(),
   path: z.string(),
-  
   openTasks: z.number(),
-  
   color: z.enum(NODE_COLORS).nullable(),
   ownColor: z.enum(NODE_COLORS).nullable(),
 });
@@ -35,7 +33,6 @@ const reachedAccountSchema = z.object({
   email: z.string(),
   isDemo: z.boolean(),
   status: z.string(),
-  
   nodeId: z.string().nullable(),
   nodeIds: z.array(z.string()),
 });
@@ -50,7 +47,6 @@ const waitingTaskSchema = z.object({
   waitsFor: z.string(),
 });
 
-
 async function mailSourcesOf(ctx: ToolContext, scope: Scope) {
   const [mapped, waited] = await Promise.all([accountMap(ctx, scope), ctx.db.from("task_mail").select("item_id, account_id, waits_for").eq("owner_id", ctx.ownerId)]);
   if (isError(mapped)) return mapped;
@@ -60,18 +56,15 @@ async function mailSourcesOf(ctx: ToolContext, scope: Scope) {
 
 type MailSources = { map: AccountMap; waits: Array<Pick<TaskMailRow, "item_id" | "account_id" | "waits_for">> };
 
-
 function mailIndexOf(sources: MailSources, scope: Scope, place: ReadPlace, open: ItemRow[]) {
   const { map } = sources;
   const seen = place.kind === "node" ? map.seenFrom(place.node.id) : null;
   const accounts = [...map.accounts.values()]
     .filter((account) => !seen || seen.has(account.id))
-
     .map(({ id, email, isDemo, status, nodeId }) => ({ id, email, isDemo, status, nodeId: nodeId && scope.reachable.has(nodeId) ? nodeId : null, nodeIds: (map.hangsFrom.get(id) ?? []).filter((node) => scope.reachable.has(node)) }));
   const waits = new Map(sources.waits.map((row) => [row.item_id, row]));
   const waiting = open
     .filter((row) => waits.has(row.id) && shownAsRow(row))
-
     .sort((a, b) => (a.due_on ?? "9999") < (b.due_on ?? "9999") ? -1 : (a.due_on ?? "9999") > (b.due_on ?? "9999") ? 1 : 0)
     .map((row) => {
       const node = row.node_id ? scope.all.get(row.node_id) : undefined;
@@ -80,7 +73,6 @@ function mailIndexOf(sources: MailSources, scope: Scope, place: ReadPlace, open:
     });
   return { accounts, waiting };
 }
-
 
 async function notePlacesOf(ctx: ToolContext, scope: Scope, place: ReadPlace) {
   const { data, error } = await ctx.db.from("items").select("node_id, owner_id").eq("owner_id", ctx.ownerId).eq("type", "note").is("deleted_at", null);
@@ -115,14 +107,9 @@ export const listTree = defineTool({
   }),
   output: z.object({
     nodes: z.array(treeNodeSchema),
-    
     tasks: z.object({ overdue: z.number(), today: z.number() }).nullable(),
-    
     generalTasks: z.number(),
-    
-    
     mail: z.object({ accounts: z.array(reachedAccountSchema), waiting: z.array(waitingTaskSchema) }).nullable().optional(),
-    
     notes: z.object({ nodes: z.array(z.string()), general: z.boolean() }).nullable().optional(),
   }),
   async run(ctx, input) {
@@ -136,16 +123,12 @@ export const listTree = defineTool({
       place = { kind: "node", node: resolved.node };
     }
     const reach = reachOf(scope, place);
-    
-    
     const [read, mailSources, notes] = await Promise.all([
       selectAllItems(ctx, reach, (query) => query.is("deleted_at", null).eq("status", "open").eq("type", "task"), "counting open tasks"),
       input.withMail ? mailSourcesOf(ctx, scope) : null,
       input.withNotes ? notePlacesOf(ctx, scope, place) : null,
     ]);
     if (isError(read)) return read;
-    
-    
     const { perNode: counts } = countInSubtrees(read.rows, scope, new Set(reach.nodeIds), ["tasks"], (row) => (shownAsRow(row) ? ["tasks"] : []));
     const nodes = reach.nodeIds
       .map((id) => scope.all.get(id)!)
@@ -206,14 +189,10 @@ export const getOverview = defineTool({
     openTasks: z.array(itemSchema),
     notes: z.array(itemSchema),
     decisions: z.array(itemSchema),
-    
     totals: z.object({ notes: z.number(), decisions: z.number() }),
     events: z.array(browsedEventSchema),
-    
     eventsToRead: z.array(z.string()),
     eventFailures: z.array(eventsFailureSchema),
-    
-    
     below: z.record(z.string(), z.object({ count: z.number(), busiest: z.object({ id: z.string(), path: z.string() }).nullable() })),
   }),
   async run(ctx, input) {
@@ -223,12 +202,9 @@ export const getOverview = defineTool({
     const resolved = resolveNode(scope, input.node);
     if (isError(resolved)) return resolved;
     const node = resolved.node;
-    
-    
     const below = [...subtree(scope.all, node.id)].filter((id) => scope.reachable.has(id));
     const subtreeRead = await selectAllItems(ctx, { nodeIds: below, general: false }, (query) => query.is("deleted_at", null), "reading the node and what is below");
     if (isError(subtreeRead)) return subtreeRead;
-    
     const kept = (row: { type: string; parent_item_id: string | null }, type: "task" | "note" | "decision") =>
       row.type === type && (type !== "note" || row.parent_item_id === null);
     const items = subtreeRead.rows.filter((row) => row.node_id === node.id).map((row) => toItem(row, scope));
@@ -237,15 +213,12 @@ export const getOverview = defineTool({
     const summary = (type: "task" | "decision" | "note", open: boolean) => {
       const rows = deeper.filter((row) => kept(row, type) && (!open || row.status === "open"));
       const where = new Map<string, number>();
-      
       for (const row of rows) where.set(row.node_id!, (where.get(row.node_id!) ?? 0) + 1);
       const top = [...where.entries()].sort((a, b) => b[1] - a[1])[0];
       return { count: rows.length, busiest: top ? { id: top[0], path: scope.all.get(top[0])?.path ?? "" } : null };
     };
     const now = new Date();
     const until = new Date(now.getTime() + 7 * DAY_MS);
-    
-    
     const range = { from: now.toISOString(), to: until.toISOString() };
     const { fromDay, toDay } = daysOfRange(now, until);
     const [google, local] = input.withEvents

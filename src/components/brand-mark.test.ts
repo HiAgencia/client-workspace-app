@@ -2,8 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { iconFiles, manifestIconFiles } from "../../scripts/icons.mjs";
 
-
-
 describe("the site's icons", () => {
   const drawn = iconFiles();
 

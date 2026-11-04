@@ -4,10 +4,6 @@ import { sessionCookieUser } from "@/lib/supabase/session-owner";
 import type { BoardLayout } from "./board-layout";
 import { STARTED_COOKIE, startedFor } from "./started";
 
-
-
-
-
 export async function savedLayout(page: string): Promise<{ board: BoardLayout | null; layout: "list" | "board" | null; settled: boolean }> {
   const jar = await cookies();
   const session = sessionCookieUser(jar.getAll());

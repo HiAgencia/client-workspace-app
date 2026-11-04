@@ -9,7 +9,6 @@ const listOf = (id: string, unread: number, messages: AccountMail["groups"]["unr
   ({ ok: true, groups: { forTasks: empty, unread: { count: messages.length, messages }, earlier: empty }, unread, unreadByAccount: { [id]: unread }, failures: [], countFailures: [] }) as Answer<AccountMail>;
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-
 function asked() {
   const pending: Array<{ name: string; account: string; answer: (value: unknown) => void }> = [];
   const ask = vi.fn((name: string, input: Record<string, unknown>) => new Promise<Answer<unknown>>((resolve) => pending.push({ name, account: String(input.account), answer: resolve as (value: unknown) => void })));
@@ -31,7 +30,6 @@ describe("the mail the screens hold", () => {
     await flush();
     const whole = store.mailOf([a, b]);
     expect(whole).toMatchObject({ waiting: 0, unreadByAccount: { a: 1, b: 2 } });
-    
     expect(whole.groups.unread.messages.map((message) => message.id)).toEqual(["new", "old"]);
   });
 
@@ -73,7 +71,6 @@ describe("the mail the screens hold", () => {
     const store = createMailStore(ask);
     const a = ref("a");
     store.list(a);
-    
     for (let writes = 0; writes < 3; writes++) {
       store.forget();
       store.list(a);
@@ -149,7 +146,6 @@ describe("the mail the screens hold", () => {
     store.count(a);
     store.count(b);
     expect(ask).toHaveBeenCalledTimes(4);
-    
     expect(store.figure([a, b])).toMatchObject({ unread: 504, partial: true });
   });
 

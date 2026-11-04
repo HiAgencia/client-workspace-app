@@ -3,19 +3,13 @@ import { mailFailureText } from "@/lib/mail/failure-text";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import type { Answer, TreeNode } from "./client-api";
 
-
-
-
-
 export type MailAccountRef = { id: string; email: string; isDemo: boolean; status: string; nodeId: string | null; nodeIds: string[] };
 export type MailFailureRow = { accountId: string; accountEmail: string; reason: string; partial?: boolean; atLimit?: boolean };
 
 type Group = { count: number; messages: MailRow[] };
 export type MailGroups = Record<"forTasks" | "unread" | "earlier", Group>;
 
-
 export type AccountMail = { groups: MailGroups; unread: number | null; unreadByAccount: Record<string, number>; failures: MailFailureRow[]; countFailures: MailFailureRow[] };
-
 
 export type MailList = {
   accounts: MailAccountRef[];
@@ -25,32 +19,25 @@ export type MailList = {
   waiting: number;
 };
 
-
-
-
 export type MailFigure = { unread: number; partial: boolean; why: string | null; note: string | null };
 
 type Ask = (name: string, input: Record<string, unknown>) => Promise<Answer<unknown>>;
 type Counted = { unread: number | null; failures: MailFailureRow[] };
 type Entry = {
   listedIn: number;
-  
   listing: boolean;
   listAgain: MailAccountRef | null;
   list: AccountMail | null;
   listError: string | null;
   counted: Counted | null;
   counting: boolean;
-  
   countOld: boolean;
-  
   lastAsked: number;
 };
 
 export type MailStore = ReturnType<typeof createMailStore>;
 
 export function createMailStore(ask: Ask) {
-  
   let round = 1;
   let revision = 0;
   const entries = new Map<string, Entry>();
@@ -75,17 +62,13 @@ export function createMailStore(ask: Ask) {
       return () => void listeners.delete(listener);
     },
     revision: () => revision,
-    
     forget() {
       round++;
     },
-    
     aged() {
       round++;
       for (const entry of entries.values()) entry.countOld = true;
     },
-    
-    
     list(account: MailAccountRef) {
       const entry = entryOf(account.id);
       if (entry.listedIn === round) return;
@@ -110,22 +93,18 @@ export function createMailStore(ask: Ask) {
           if (latest) entry.counted = { unread: read.unreadByAccount[account.id] ?? null, failures: read.countFailures };
         } else {
           entry.listError = answer.message;
-          
           if (latest) entry.counted ??= { unread: null, failures: [failureOf(account, answer.message)] };
         }
         changed();
         if (again) store.list(again);
       });
     },
-    
-    
     count(account: MailAccountRef) {
       const entry = entryOf(account.id);
       if (entry.listedIn === round || entry.counting) return;
       const stands = entry.counted !== null && !entry.countOld && entry.counted.failures.every((failure) => failure.atLimit);
       if (!stands) store.recount(account);
     },
-    
     recount(account: MailAccountRef) {
       const entry = entryOf(account.id);
       entry.counting = true;
@@ -138,7 +117,6 @@ export function createMailStore(ask: Ask) {
         changed();
       });
     },
-    
     mailOf(accounts: MailAccountRef[]): MailList {
       const merged: MailList = {
         accounts,
@@ -162,7 +140,6 @@ export function createMailStore(ask: Ask) {
       for (const group of Object.values(merged.groups)) group.messages.sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : a.receivedAt > b.receivedAt ? -1 : 0));
       return merged;
     },
-    
     figure(accounts: MailAccountRef[]): MailFigure | null {
       const counts = accounts.map((account) => entryOf(account.id).counted);
       if (counts.some((counted) => counted === null)) return null;
@@ -182,7 +159,6 @@ export function figureOf(counts: Counted[]): MailFigure {
   };
 }
 
-
 export function figureText(figure: MailFigure): { shown: string; spoken: string } | null {
   if (!figure.partial) return figure.unread > 0 ? { shown: String(figure.unread), spoken: `${figure.unread} unread` } : null;
   return figure.unread > 0
@@ -190,16 +166,13 @@ export function figureText(figure: MailFigure): { shown: string; spoken: string 
     : { shown: "Not counted", spoken: `the unread could not be counted. ${figure.why}` };
 }
 
-
 export const lostWords = (status: string) => (status === "revoked" ? "Access revoked: connect it again" : "Connection failed: connect it again");
-
 
 export function figureWords(figure: MailFigure | null): string | null {
   if (!figure) return null;
   if (!figure.partial) return `${figure.unread} unread`;
   return figure.unread > 0 ? `At least ${figure.unread} unread` : "Unread not counted";
 }
-
 
 export function accountsSeenFrom(tree: TreeNode[] | null, accounts: Array<{ id: string; nodeIds: string[] }>, nodeId: string | null): string[] {
   if (nodeId === null) return accounts.map((account) => account.id);

@@ -1,12 +1,4 @@
-
-
-
-
-
-
 const ADDRESS = /^(?:[a-z][a-z0-9+.-]*:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+)/i;
-
-
 const FIRST_WORD = /^[^\s<&[\]()]*/u;
 
 function capitalAt(text: string, index: number): string {
@@ -15,11 +7,9 @@ function capitalAt(text: string, index: number): string {
   const letter = String.fromCodePoint(text.codePointAt(index)!);
   if (/\p{Lu}/u.test(FIRST_WORD.exec(rest)![0].slice(letter.length))) return text;
   const capital = letter.toUpperCase();
-  
   if (capital === letter || [...capital].length !== 1) return text;
   return text.slice(0, index) + capital + text.slice(index + letter.length);
 }
-
 
 export function withInitialCapital(text: string): string {
   for (let index = 0; index < text.length; ) {
@@ -30,8 +20,6 @@ export function withInitialCapital(text: string): string {
   }
   return text;
 }
-
-
 
 export function withInitialCapitalHtml(html: string): string {
   for (let index = 0; index < html.length; ) {

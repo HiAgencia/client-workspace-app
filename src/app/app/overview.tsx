@@ -40,28 +40,20 @@ import { settledInBrowser } from "./started";
 import { Welcome } from "./welcome";
 import { useChatScope, useWorkspace, type Person } from "./workspace";
 
-
-
 export const OVERVIEW_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
 const NAMES: Record<string, string> = { tasks: "Tasks", calendar: "Calendar", mail: "Mail", no_date: "No date", activity: "Activity", notes: "Notes" };
 
 const noSubscription = () => () => {};
 
-
-
-
 export function Overview({ saved, settled = false }: { saved: BoardLayout | null; settled?: boolean }) {
   const { tree, generalTasks, notePlaces, person } = useWorkspace();
   useGoogleOutcome();
   const empty = isFirstUse({ tree, generalTasks, notePlaces });
-  
   if (empty && person === null) return <BoardShell />;
   if (empty && person && !person.isAnonymous) return <FirstUse person={person} />;
   return <OverviewBoard saved={saved} settled={settled} />;
 }
-
-
 
 function FirstUse({ person }: { person: Person }) {
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
@@ -75,19 +67,14 @@ function FirstUse({ person }: { person: Person }) {
   );
 }
 
-
-
 function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | null; settled: boolean }) {
-  
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree } = useWorkspace();
-  
   const settled = useSyncExternalStore(noSubscription, settledInBrowser, () => fromServer);
   const deciding = tree === null && !settled;
   useChatScope(null);
   const board = useBoardLayout("overview", OVERVIEW_BOXES, saved);
   const connectWay = useConnectWay();
-  
   const guide = useGuide(tree !== null && tree.length > 0);
   const { set } = useAddress();
   const router = useRouter();
@@ -98,13 +85,9 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
 
   const tasks = useTasksRead(place, now, { upcomingDays: 3 });
   const notes = useNotesRead(place);
-  
-  
   const mail = useMailRead(place, account);
   const mailCount = useMailCount(mail);
   const mailOfPlace = useMailRead(place, null);
-  
-  
   const replies = useTaskReplies(placeInput(place), now, tree, 5);
   const placeId = place.kind === "node" ? place.id : null;
   const noDateAdd = useQuickAddInline({ day: null, placeId });
@@ -195,7 +178,6 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
 
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
-      {}
       <div className="page page-boxes" data-overview data-today={now ?? undefined} data-deciding={deciding || undefined}>
         <PageHeader
           title="Overview"
@@ -217,7 +199,6 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
     </ViewTransition>
   );
 }
-
 
 export function BoardShell() {
   return (

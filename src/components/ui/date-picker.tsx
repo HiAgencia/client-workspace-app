@@ -25,14 +25,9 @@ type DatePickerProps = {
   label: string;
   look?: "field" | "chip";
   className?: string;
-  
   display?: string;
-  
   icon?: Icon;
 };
-
-
-
 
 export function DatePicker({ value, onChange, label, look = "field", className, display, icon: Glyph }: DatePickerProps) {
   const [open, setOpen] = useState(false);
@@ -42,7 +37,6 @@ export function DatePicker({ value, onChange, label, look = "field", className, 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
-        
         aria-label={`${label}: ${shown}`}
         aria-description={value ? longDay(value) : undefined}
         className={cx("picker", look === "field" ? "field" : "chip-picker", className)}
@@ -56,7 +50,6 @@ export function DatePicker({ value, onChange, label, look = "field", className, 
           <Popover.Popup
             className="popup calendar"
             aria-label={label}
-            
             initialFocus={() => document.querySelector<HTMLElement>('.calendar .cal-day[tabindex="0"]')}
           >
             {open && (
@@ -83,11 +76,8 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
   const weeks = monthGrid(active, weekStart);
   const month = active.slice(0, 7);
   const grid = useRef<HTMLTableElement>(null);
-  
   const [from, setFrom] = useState<"next" | "previous" | null>(null);
 
-  
-  
   const focusDay = useRef<Day | null>(null);
   useLayoutEffect(() => {
     const day = focusDay.current;

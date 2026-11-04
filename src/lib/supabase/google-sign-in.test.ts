@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { googleSignInOptions } from "./google-sign-in";
 
-
 function memoryClient() {
   const kept = new Map<string, string>();
   const storage = { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value), removeItem: (key: string) => void kept.delete(key) };

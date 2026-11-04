@@ -6,7 +6,6 @@ import { TasksView } from "./tasks-view";
 
 export const metadata: Metadata = { title: SCREEN_TITLES["/app/tasks"] };
 
-
 export default async function TasksPage() {
   const saved = await savedLayout("tasks");
   return (

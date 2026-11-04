@@ -13,9 +13,6 @@ import { callTool } from "@/lib/tools/registry";
 import { chatTurn } from "../support/chat-turn";
 import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
 let user: DisposableUser | undefined;
 let clientId: string;
 let nodeId: string;
@@ -126,7 +123,6 @@ describe("the workspace's own chat, with no node open", () => {
   });
 
   it("«Did anything arrive for my tasks?» reads the possible replies of the tasks that wait for mail, and closes none", async () => {
-    
     const key = await importKey(newKeyBase64());
     const service = serviceClient();
     const account = await service
@@ -169,7 +165,6 @@ describe("the workspace's own chat, with no node open", () => {
     expect(read?.output).toMatchObject({ ok: true, replies: [{ id: "transfer" }] });
     const answer = message.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
     expect(answer).toContain('"Wait for the transfer": 1 possible reply, the latest "Transfer received" from Bayside Bank.');
-    
     const after = await user!.client.from("items").select("status").eq("id", task.item.id).single();
     expect(after.data?.status).toBe("open");
   });
@@ -180,7 +175,6 @@ describe("the workspace's own chat, with no node open", () => {
     expect(named.ok && other.ok).toBe(true);
     const status = async (id: string) => (await user!.client.from("items").select("status").eq("id", id).single()).data?.status;
 
-    
     await drain(await runChat({ ctx: ctx(), model: simulatedModel(), messages: ask('Close "Wait for the signed lease" as approved'), timeZone: "UTC" }));
     expect([await status(named.item.id), await status(other.item.id)]).toEqual(["open", "open"]);
 
@@ -247,7 +241,6 @@ describe("the conversation the model reads", () => {
     ]);
     expect(messages[0].parts[0]).toEqual({ type: "text", text: "[an attachment was sent here: shot.png]" });
     expect(messages[1].parts[0]).toEqual(image);
-    
     const goingOn = withoutEarlierFiles([
       { id: "1", role: "user", parts: [image, { type: "text", text: "now" }] },
       { id: "2", role: "assistant", parts: [{ type: "text", text: "reading" }] },
@@ -260,7 +253,6 @@ describe("the daily cap", () => {
   it("a demo session has its own small cap, and all demo sessions share the day's total", async () => {
     const service = serviceClient();
     const day = new Date("2026-02-20T12:00:00Z");
-    
     const demoUser = await createAnonymousUser("chat-cap");
     try {
       const results = [];

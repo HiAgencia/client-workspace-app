@@ -4,22 +4,11 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { addDays, firstWeekday, LOCALE, longDay, today, weekdayNames, weekOf } from "@/lib/dates";
 import { cx } from "@/lib/utils";
 
-
-
-
-
-
-
-
-
 export type Frame = { set: readonly string[]; ms: number };
-
 
 export type SceneGlyphs = { pause: ReactNode; play: ReactNode };
 
-
 const PAUSE_KEY = "landing-scene-paused";
-
 const SEEN_SHARE = 0.35;
 const REDUCED = "(prefers-reduced-motion: reduce)";
 
@@ -40,7 +29,6 @@ function pausedNow(): boolean {
 
 function subscribePause(listener: () => void): () => void {
   pauseListeners.add(listener);
-  
   const onStorage = (event: StorageEvent) => {
     if (event.key !== PAUSE_KEY) return;
     pauseChosen = null;
@@ -59,7 +47,6 @@ function choosePause(paused: boolean) {
     if (paused) window.localStorage.setItem(PAUSE_KEY, "1");
     else window.localStorage.removeItem(PAUSE_KEY);
   } catch {
-    
   }
   pauseListeners.forEach((listener) => listener());
 }
@@ -76,7 +63,6 @@ const noSubscription = () => () => {};
 export function Scene({ frames, still, label, glyphs, className, children }: { frames: readonly Frame[]; still: number; label: string; glyphs: SceneGlyphs; className?: string; children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const art = useRef<HTMLDivElement>(null);
-  
   const reduced = useSyncExternalStore(subscribeMotion, reducedNow, () => true);
   const paused = useSyncExternalStore(subscribePause, pausedNow, () => false);
   const [seen, setSeen] = useState(false);
@@ -85,7 +71,6 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
   const left = useRef<number | null>(null);
   const running = !reduced && !paused && seen && !hidden;
 
-  
   useEffect(() => {
     const node = root.current;
     if (reduced || !node) return;
@@ -107,7 +92,6 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
     };
   }, [reduced]);
 
-  
   useEffect(() => {
     if (!running) return;
     const wait = left.current ?? frames[step].ms;
@@ -124,8 +108,6 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
     };
   }, [running, step, frames]);
 
-  
-  
   useEffect(() => {
     const node = art.current;
     if (!paused || !node) return;
@@ -148,7 +130,6 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
         {children}
       </div>
       <p className="sr-only">{label}</p>
-      {}
       <button type="button" className="btn btn-icon scene-pause" data-ready={reduced ? undefined : ""} onClick={() => choosePause(!paused)} title={action}>
         {paused ? glyphs.play : glyphs.pause}
         <span className="sr-only">{action}</span>
@@ -157,22 +138,13 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
   );
 }
 
-
-
-
 const REVEAL_MARGIN = "100000px 0px -12% 0px";
-
-
-
-
 
 export function RevealColumn({ className, children }: { className?: string; children: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = root.current;
     if (!node || window.matchMedia(REDUCED).matches) return;
-    
-    
     const waiting = [...node.children].filter((part) => part.getBoundingClientRect().top >= window.innerHeight);
     if (waiting.length === 0) return;
     for (const part of node.children) if (!waiting.includes(part)) part.setAttribute("data-entered", "");
@@ -197,21 +169,16 @@ export function RevealColumn({ className, children }: { className?: string; chil
   );
 }
 
-
 export function VisitorDay() {
   const now = useSyncExternalStore(noSubscription, today, () => null);
   return <>{now ? longDay(now) : "\u00a0"}</>;
 }
-
 
 export function VisitorStamp({ offset }: { offset: number }) {
   const now = useSyncExternalStore(noSubscription, today, () => null);
   if (!now) return <>{"\u00a0"}</>;
   return <>{new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric" }).format(new Date(`${addDays(now, offset)}T12:00:00`))}</>;
 }
-
-
-
 
 export function VisitorWeek() {
   const now = useSyncExternalStore(noSubscription, today, () => null);

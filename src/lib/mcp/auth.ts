@@ -6,20 +6,15 @@ export type AgentAccess = {
   nodeId: string;
   ownerId: string;
   label: string;
-  
   lastReadAt: string | null;
 };
 
 export type AuthOutcome = { ok: true; access: AgentAccess } | { ok: false; status: 401 | 403 | 503; message: string };
 
-
-
 export function originAllowed(request: Request): boolean {
   const origin = request.headers.get("origin");
   return origin === null || origin === new URL(request.url).origin;
 }
-
-
 
 export async function authenticateAgent(request: Request, service: Db): Promise<AuthOutcome> {
   if (!originAllowed(request)) return { ok: false, status: 403, message: "requests from other sites are not accepted" };
@@ -31,7 +26,6 @@ export async function authenticateAgent(request: Request, service: Db): Promise<
     .select("id, node_id, label, last_used_at, revoked_at, nodes!inner(owner_id, archived_at)")
     .eq("token_hash", await hashAgentToken(token))
     .maybeSingle();
-  
   if (error) {
     console.error("mcp auth:", error.message);
     return { ok: false, status: 503, message: "the token could not be checked: try again" };

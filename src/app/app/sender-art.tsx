@@ -1,14 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 
-
-
-
-
-
 export type OrgSign = "platform" | "pos" | "mill" | "hub";
 export type DemoSender = OrgSign | "person";
-
-
 
 const DEMO_SENDERS = new Map<string, DemoSender>([
   ["noreply@developers.example", "platform"],
@@ -24,18 +17,11 @@ export function demoSender(email: string | null | undefined): DemoSender | null 
   return address.endsWith(".example") ? (DEMO_SENDERS.get(address) ?? null) : null;
 }
 
-
-
 export function nameSeed(name: string): number {
   let hash = 0;
   for (const char of name.toLowerCase()) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) | 0;
   return Math.abs(hash);
 }
-
-
-
-
-
 
 const SIGNS: Record<OrgSign, ReactElement> = {
   platform: (
@@ -91,10 +77,6 @@ export function OrgMark({ sign }: { sign: OrgSign }) {
   );
 }
 
-
-
-
-
 const HAIR: Array<{ back?: string; front?: string }> = [
   { front: "M10.3 13.4c-.6-5.2 2.3-8.2 5.9-8.2 3.9 0 6.5 2.8 5.6 8.1-.9-2.6-3-3.9-5.8-3.9-2.6 0-4.8 1.3-5.7 4z" },
   {
@@ -113,8 +95,6 @@ const HAIR: Array<{ back?: string; front?: string }> = [
     back: "M8.7 13.2a3 3 0 0 1 1.4-4.6 3 3 0 0 1 3.6-3.6 3 3 0 0 1 4.6 0 3 3 0 0 1 3.6 3.6 3 3 0 0 1 1.4 4.6 3 3 0 0 1-1.6 3.9c-.7-3.7-3.2-5.6-5.7-5.6s-5 1.9-5.7 5.6a3 3 0 0 1-1.6-3.9z",
   },
 ];
-
-
 
 export function portraitOf(seed: number): { skin: number; hair: number; style: number } {
   return { skin: 1 + (Math.floor(seed / 8) % 5), hair: 1 + (Math.floor(seed / 40) % 5), style: Math.floor(seed / 200) % HAIR.length };

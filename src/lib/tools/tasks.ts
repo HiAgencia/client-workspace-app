@@ -15,9 +15,6 @@ import { describePlace, loadScope, reachOf, resolveReadPlace, resolveWritePlace,
 
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
 
-
-
-
 const day = z.iso.date();
 
 const placeRef = z
@@ -27,22 +24,17 @@ const placeRef = z
   .optional()
   .describe("A node's id or path, or null for General (no client or project). Omit it for everything in reach.");
 
-
 export const taskRowSchema = z.object({
   id: z.string(),
-  
   title: z.string(),
-  
   description: z.string().nullable(),
   status: z.enum(["open", "done"]),
   priority: z.number().nullable(),
   dueOn: z.string().nullable(),
   dueTime: z.string().nullable(),
-  
   nodeId: z.string().nullable(),
   path: z.string().nullable(),
   color: z.string().nullable(),
-  
   parentId: z.string().nullable(),
   subtasks: z.object({ done: z.number(), total: z.number() }),
   notes: z.number(),
@@ -51,7 +43,6 @@ export const taskRowSchema = z.object({
   position: z.number(),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
-  
   mail: taskMailSchema.nullable(),
 });
 
@@ -61,28 +52,22 @@ const groupSchema = z.object({ count: z.number(), tasks: z.array(taskRowSchema) 
 
 export const tasksOutput = z.object({
   scope: z.object({ kind: z.enum(["all", "general", "node"]), id: z.string().nullable(), path: z.string().nullable() }),
-  
   day: z.string(),
   groups: z.object({
     overdue: groupSchema,
     today: groupSchema,
     upcoming: z.object({
-      
       count: z.number(),
       days: z.array(z.object({ day: z.string(), count: z.number(), tasks: z.array(taskRowSchema) })),
-      
       hidden: z.number(),
     }),
     noDate: groupSchema,
   }),
-  
   completed: groupSchema.nullable(),
 });
 
 export type TasksView = z.infer<typeof tasksOutput>;
 export type TaskGroup = "overdue" | "today" | "upcoming" | "noDate";
-
-
 
 export function groupOf(row: { due_on: string | null; parent_item_id: string | null }, today: string): TaskGroup | null {
   if (row.due_on === null) return row.parent_item_id === null ? "noDate" : null;
@@ -90,7 +75,6 @@ export function groupOf(row: { due_on: string | null; parent_item_id: string | n
   if (row.due_on === today) return "today";
   return "upcoming";
 }
-
 
 export function shownAsRow(row: { due_on: string | null; parent_item_id: string | null }): boolean {
   return row.due_on !== null || row.parent_item_id === null;
@@ -101,7 +85,6 @@ type Sort = "date" | "priority" | "manual";
 const byPosition = (a: TaskRow, b: TaskRow) =>
   a.position - b.position || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const byPriority = (a: TaskRow, b: TaskRow) => (a.priority ?? 9) - (b.priority ?? 9);
-
 const byWhen = (a: TaskRow, b: TaskRow) => {
   if (a.dueOn !== b.dueOn) return (a.dueOn ?? "9999-12-31") < (b.dueOn ?? "9999-12-31") ? -1 : 1;
   if (a.dueTime !== b.dueTime) return (a.dueTime ?? "99:99") < (b.dueTime ?? "99:99") ? -1 : 1;
@@ -117,7 +100,6 @@ function order(rows: TaskRow[], sort: Sort, group: TaskGroup): TaskRow[] {
         : (a: TaskRow, b: TaskRow) => byWhen(a, b) || byPriority(a, b) || byPosition(a, b);
   return [...rows].sort(compare);
 }
-
 
 export function rowOf(row: ItemRow, scope: Scope, counts: Map<string, { done: number; total: number; notes: number }>, mail: Map<string, TaskMail>): TaskRow {
   const node = row.node_id === null ? null : scope.all.get(row.node_id);
@@ -167,8 +149,6 @@ export const getTasks = defineTool({
     const { scope } = loaded;
     const resolved = resolveReadPlace(scope, input.node);
     if (isError(resolved)) return resolved;
-    
-    
     const [read, waited] = await Promise.all([
       selectAllItems(
         ctx,
@@ -192,7 +172,6 @@ export const getTasks = defineTool({
       } else count.notes++;
       counts.set(row.parent_item_id, count);
     }
-    
     const taskIds = read.rows.filter((row) => row.type === "task").map((row) => row.id);
     if (taskIds.length > 0 && isError(waited)) return waited;
     const waits = { byTask: isError(waited) ? new Map<string, TaskMail>() : taskMailIn(waited.rows, taskIds) };
@@ -206,7 +185,6 @@ export const getTasks = defineTool({
       else if (input.withCompleted) completed.push(rowOf(row, scope, counts, waits.byTask));
     }
     const sorted = (group: TaskGroup) => order(groups[group], input.sort, group);
-    
     const byDay = new Map<string, TaskRow[]>();
     for (const task of sorted("upcoming")) byDay.set(task.dueOn!, [...(byDay.get(task.dueOn!) ?? []), task]);
     const days = [...byDay.entries()]
@@ -264,7 +242,6 @@ export const moveItem = defineTool({
       const place = resolveWritePlace(scope, input.node);
       if (isError(place)) return place;
       nodeId = place.node?.id ?? null;
-      
       if (input.parent === undefined && nodeId !== row.node_id) parentId = null;
     }
     if (input.parent) {
@@ -275,7 +252,6 @@ export const moveItem = defineTool({
         return fail("invalid_input", "the parent task lives in another place: omit the node or name the task's own");
       }
       nodeId = parent.row.node_id;
-      
       for (let cursor: string | null = parent.row.id; cursor; ) {
         if (cursor === row.id) return fail("invalid_input", "an item cannot move under itself or its own subtasks");
         const step: { data: { parent_item_id: string | null } | null; error: { message: string } | null } = await ctx.db
@@ -306,9 +282,6 @@ export const moveItem = defineTool({
     return ok({ item: toItem(own, scope), previous, branch: rows.length });
   },
 });
-
-
-
 
 async function keepWaitsInSight(ctx: Parameters<typeof taskMailOf>[0], scope: Scope, rows: ItemRow[]) {
   const tasks = rows.filter((entry) => entry.type === "task");
@@ -355,8 +328,6 @@ export const reorderItems = defineTool({
       return !row || !(row.node_id === null ? loaded.scope.general : loaded.scope.reachable.has(row.node_id));
     });
     if (missing) return fail("not_found", `no item with id ${missing} is reachable here`);
-    
-    
     const { data: written, error: writeError } = await ctx.db.rpc("reorder_item_positions", { p_items: input.ids });
     if (writeError) return dbFail("ordering the items", writeError);
     const after = new Map(((written ?? []) as ItemRow[]).map((row) => [row.id, Number(row.position)]));

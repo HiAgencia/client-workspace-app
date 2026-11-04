@@ -2,15 +2,12 @@ import { CALENDAR_LIST_SCOPE, CONNECT_SCOPES, EVENTS_SCOPE, exchangeCode, GMAIL_
 import { encrypt } from "./crypto";
 import type { GoogleDeps } from "./events";
 
-
-
 export function authorizationUrl(clientId: string, redirectUri: string, state: string, loginHint?: string): string {
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", CONNECT_SCOPES.join(" "));
-  
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", loginHint ? "consent" : "consent select_account");
   url.searchParams.set("include_granted_scopes", "true");
@@ -21,8 +18,6 @@ export function authorizationUrl(clientId: string, redirectUri: string, state: s
 
 export type ConnectedAccount = { accountId: string; email: string; calendars: number };
 
-
-
 export async function connectAccount(
   deps: GoogleDeps,
   target: { ownerId: string; nodeId: string },
@@ -32,8 +27,6 @@ export async function connectAccount(
   const tokens = await exchangeCode(deps.fetch, deps.client, code, redirectUri);
   if (!tokens.refresh_token) throw new Error("Google returned no refresh token: connect the account again");
   const scopes = (tokens.scope ?? "").split(" ").filter(Boolean);
-  
-  
   if (!scopes.includes(EVENTS_SCOPE) || !scopes.includes(CALENDAR_LIST_SCOPE)) {
     throw new Error("calendar access was not granted: tick both calendar permissions when connecting");
   }
@@ -75,7 +68,6 @@ export async function connectAccount(
       color: calendar.backgroundColor ?? null,
       selected: calendar.primary === true || calendar.selected === true,
     }));
-    
     const existing = await deps.service.from("account_calendars").select("calendar_id").eq("account_id", account.id);
     if (existing.error) throw new Error(`reading the calendars: ${existing.error.message}`);
     const known = new Set(existing.data.map((row) => row.calendar_id));

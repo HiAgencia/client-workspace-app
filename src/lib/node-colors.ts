@@ -1,5 +1,3 @@
-
-
 export const NODE_COLORS = ["red", "orange", "amber", "green", "teal", "blue", "indigo", "violet", "pink", "gray"] as const;
 
 export type NodeColor = (typeof NODE_COLORS)[number];

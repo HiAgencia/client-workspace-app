@@ -9,14 +9,11 @@ import { loadScope, reachOf, resolveNode, type ReadPlace, type Scope } from "./t
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-
 export const browsedEventSchema = calendarEventSchema.extend({
   origin: z.enum(["google", "local"]),
-  
   localId: z.string().nullable(),
   nodeId: z.string().nullable(),
   nodePath: z.string().nullable(),
-  
   linkedNodeIds: z.array(z.string()),
   linkedTaskIds: z.array(z.string()),
 });
@@ -55,16 +52,11 @@ const startOf = (event: BrowsedEvent) => (event.allDay ? Date.parse(`${event.sta
 
 export const inTimeOrder = (events: BrowsedEvent[]) => events.sort((a, b) => startOf(a) - startOf(b));
 
-
-
 export const daysOfRange = (from: Date, to: Date) => ({ fromDay: new Date(from.getTime() - 14 * 3_600_000).toISOString().slice(0, 10), toDay: to.toISOString().slice(0, 10) });
 
 const BARE_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const AT_MIDNIGHT = /T00:00(:00(\.0+)?)?(Z|[+-])/;
 const daysAfter = (day: string, days: number) => new Date(Date.parse(day) + days * DAY_MS).toISOString().slice(0, 10);
-
-
-
 
 function daysAsked(asked: { from?: string; to?: string }, from: Date, to: Date) {
   const margin = daysOfRange(from, to);
@@ -76,18 +68,11 @@ function daysAsked(asked: { from?: string; to?: string }, from: Date, to: Date) 
   return { fromDay: asked.from ? asked.from.slice(0, 10) : margin.fromDay, toDay: lastDay() };
 }
 
-
 export const accountRowSchema = z.object({ id: z.string(), email: z.string(), isDemo: z.boolean(), status: z.string(), nodeId: z.string().nullable() });
 
 type AccountRow = z.infer<typeof accountRowSchema>;
 
 export type CalendarsRead = { accounts: AccountRow[]; toRead: string[]; events: CalendarEvent[]; failures: EventsFailure[] };
-
-
-
-
-
-
 
 export async function readCalendars(ctx: ToolContext, scope: Scope, place: ReadPlace, range: { from: string; to: string }, account?: string): Promise<ToolResult<CalendarsRead>> {
   const reached = await accountsOf(ctx, scope, place);
@@ -109,7 +94,6 @@ export async function readCalendars(ctx: ToolContext, scope: Scope, place: ReadP
       try {
         return await source({ db: ctx.db, ownerId: ctx.ownerId, account: entry, nodeId: entry.nodeId, from: range.from, to: range.to });
       } catch (error) {
-        
         console.error(`events of account ${entry.id}:`, error instanceof Error ? error.message : error);
         return { events: [], failures: [{ accountId: entry.id, accountEmail: entry.email, reason: "the calendars could not be read" }] };
       }
@@ -129,7 +113,6 @@ export const eventsOutput = z.object({
   from: z.string(),
   to: z.string(),
   accounts: z.array(accountRowSchema),
-  
   toRead: z.array(z.string()),
   events: z.array(browsedEventSchema),
   failures: z.array(eventsFailureSchema),
@@ -161,7 +144,6 @@ export const listEvents = defineTool({
     const resolved = resolveNode(scope, input.node);
     if (isError(resolved)) return resolved;
     const from = new Date(input.from ?? Date.now());
-    
     const to = input.to
       ? new Date(Date.parse(input.to) + (BARE_DAY.test(input.to) ? DAY_MS : 0))
       : new Date(from.getTime() + 7 * DAY_MS);

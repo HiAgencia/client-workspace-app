@@ -1,8 +1,3 @@
-
-
-
-
-
 const START_MINUTE = 9 * 60;
 const END_MINUTE = 18 * 60;
 const MINUTE = 60_000;
@@ -10,7 +5,6 @@ const MINUTE = 60_000;
 type Wall = { year: number; month: number; day: number; hour: number; minute: number; second: number; weekday: number };
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
-
 
 export function validZone(zone: string | null | undefined): string {
   if (!zone) return "UTC";
@@ -45,12 +39,9 @@ function wallOf(instant: number, zone: string): Wall {
   const year = Number(parts.year);
   const month = Number(parts.month);
   const day = Number(parts.day);
-  
   const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
   return { year, month, day, hour: Number(parts.hour), minute: Number(parts.minute), second: Number(parts.second), weekday };
 }
-
-
 
 function instantOf(year: number, month: number, day: number, minuteOfDay: number, zone: string): number {
   const asUtc = Date.UTC(year, month - 1, day, Math.floor(minuteOfDay / 60), minuteOfDay % 60);
@@ -70,8 +61,6 @@ export function isWorkingTime(instant: Date | string | number, zone: string): bo
   return isWeekday(wall.weekday) && minute >= START_MINUTE && minute <= END_MINUTE;
 }
 
-
-
 export function workingMinutesBetween(from: Date | string | number, to: Date | string | number, zone: string): number {
   const tz = validZone(zone);
   const start = new Date(from).getTime();
@@ -79,7 +68,6 @@ export function workingMinutesBetween(from: Date | string | number, to: Date | s
   if (!(end > start)) return 0;
   let total = 0;
   const first = wallOf(start, tz);
-  
   for (let cursor = Date.UTC(first.year, first.month - 1, first.day); ; cursor += 86_400_000) {
     const date = new Date(cursor);
     const [year, month, day] = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
@@ -94,12 +82,9 @@ export function workingMinutesBetween(from: Date | string | number, to: Date | s
   return total;
 }
 
-
-
 export function workingMinutesBefore(to: Date | string | number, minutes: number, zone: string): Date {
   const tz = validZone(zone);
   const now = wallOf(new Date(to).getTime(), tz);
-  
   let wall = Date.UTC(now.year, now.month - 1, now.day, now.hour, now.minute, now.second) + (new Date(to).getTime() % 1000);
   const dayOf = (value: number) => Math.floor(value / 86_400_000) * 86_400_000;
   const previousWorkingClose = (value: number) => {
@@ -121,7 +106,6 @@ export function workingMinutesBefore(to: Date | string | number, minutes: number
     left -= available;
     wall = previousWorkingClose(wall);
   }
-  
   const date = new Date(dayOf(wall));
   const opens = instantOf(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), START_MINUTE, tz);
   return new Date(opens + (wall - dayOf(wall) - START_MINUTE * MINUTE));

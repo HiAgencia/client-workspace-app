@@ -1,12 +1,6 @@
 import { peekTool, tool, type Answer, type EventsFailure } from "./client-api";
 import type { Kept } from "./read-cache";
 
-
-
-
-
-
-
 export type EventsRead<E> = { events: E[]; failures: EventsFailure[]; waiting: number };
 
 type AccountAnswer<E> = Answer<{ events: E[]; failures: EventsFailure[] }>;
@@ -17,7 +11,6 @@ type EventKey = { id: string; origin?: string; accountId: string; calendarId?: s
 
 const keyOf = (event: EventKey) => `${event.origin}:${event.accountId}:${event.calendarId}:${event.id}`;
 const startOf = (event: EventKey) => Date.parse(event.allDay ? `${event.start}T00:00:00` : event.start);
-
 
 function merged<E>(first: FirstAnswer<E>, toRead: string[], answers: Array<AccountAnswer<E> | null>): EventsRead<E> {
   const failures = [...first.failures];
@@ -40,8 +33,6 @@ function merged<E>(first: FirstAnswer<E>, toRead: string[], answers: Array<Accou
   return { events, failures, waiting: answers.filter((answer) => answer === null).length };
 }
 
-
-
 export async function readEvents<E>(
   input: Record<string, unknown>,
   { withAccounts = true, ask = tool as Ask, onArrived }: { withAccounts?: boolean; ask?: Ask; onArrived?: (read: EventsRead<E>) => void } = {},
@@ -60,8 +51,6 @@ export async function readEvents<E>(
   );
   return { ok: true, ...merged(first, toRead, answers) };
 }
-
-
 
 export function keptEvents<E>(input: Record<string, unknown>, { withAccounts = true, peek = peekTool as Peek }: { withAccounts?: boolean; peek?: Peek } = {}): Kept<EventsRead<E>> | null {
   const first = peek("browse_events", input) as Kept<{ ok: true } & FirstAnswer<E>> | null;

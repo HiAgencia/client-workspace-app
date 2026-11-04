@@ -4,8 +4,6 @@ import { fail, isError, ok } from "./result";
 import { itemSchema, selectAllItems, toItem, type Item } from "./rows";
 import { loadScope, reachOf, resolveNode, type ReadPlace } from "./tree";
 
-
-
 function after(value: string | null, since: number): boolean {
   return value !== null && Date.parse(value) > since;
 }
@@ -30,7 +28,6 @@ export const getUpdatesSince = defineTool({
   }),
   output: z.object({
     since: z.string(),
-    
     until: z.string(),
     newNodes: z.array(z.object({ id: z.string(), path: z.string(), kind: z.string() })),
     created: z.array(itemSchema),
@@ -41,8 +38,6 @@ export const getUpdatesSince = defineTool({
   async run(ctx, input) {
     const sinceValue = input.since ?? ctx.updatesSince;
     if (!sinceValue) return fail("since_required", "say since when: an ISO date-time such as 2026-05-01T09:00:00Z");
-    
-    
     const since = input.since ? new Date(input.since).toISOString() : sinceValue;
     const loaded = await loadScope(ctx);
     if (isError(loaded)) return loaded;
@@ -62,7 +57,6 @@ export const getUpdatesSince = defineTool({
     const sinceMs = Date.parse(since);
     for (const item of items) {
       const kind = classify(item, sinceMs);
-      
       if (kind === "deleted" && after(item.createdAt, sinceMs)) continue;
       lists[kind].push(item);
     }
@@ -70,8 +64,6 @@ export const getUpdatesSince = defineTool({
       .map((id) => scope.all.get(id)!)
       .filter((node) => after(node.createdAt, sinceMs))
       .map((node) => ({ id: node.id, path: node.path, kind: node.kind }));
-    
-    
     const stamps = [...items.map((item) => item.updatedAt), ...newNodes.map((n) => scope.all.get(n.id)!.createdAt)];
     const until = stamps.reduce((latest, value) => {
       const a = Date.parse(value);

@@ -1,11 +1,8 @@
 import { count } from "@/lib/count";
 
-
-
 export function repliesText(replies: number, more: boolean): string {
   return `${count(replies, "possible reply", "possible replies")}${more ? " and more" : ""}`;
 }
-
 
 export function repliesTally(entry: { replies: unknown[]; more: unknown[]; failures: Array<{ accountId: string }> }): string {
   const accounts = new Set(entry.failures.map((failure) => failure.accountId)).size;

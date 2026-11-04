@@ -6,8 +6,6 @@ import { createMailStore, type MailAccountRef } from "./mail-store";
 import { forgetReads } from "./read-cache";
 import { warmPage, type Warmth } from "./warm-reads";
 
-
-
 const TODAY = "2026-11-02";
 const NODE = "11111111-1111-4111-8111-111111111111";
 const tree: TreeNode[] = [{ id: NODE, parentId: null, kind: "client", name: "Acme", path: "Acme", openTasks: 1, color: null, ownColor: null }];
@@ -29,7 +27,6 @@ function server() {
   );
   return asked;
 }
-
 
 const listed: string[] = [];
 const NO_MAIL = { forTasks: { count: 0, messages: [] }, unread: { count: 0, messages: [] }, earlier: { count: 0, messages: [] } };

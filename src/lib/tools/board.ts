@@ -10,19 +10,12 @@ const day = z.iso.date();
 const FIGURES = ["open", "late", "dueToday", "dueInRange", "undated"] as const;
 
 const figuresSchema = z.object({
-  
   open: z.number(),
-  
   late: z.number(),
   dueToday: z.number(),
-  
   dueInRange: z.number(),
-  
   undated: z.number(),
 });
-
-
-
 
 export const getBoard = defineTool({
   name: "get_board",
@@ -63,7 +56,6 @@ export const getBoard = defineTool({
       "reading the board",
     );
     if (isError(read)) return read;
-    
     const { total, perNode } = countInSubtrees(read.rows, scope, new Set(reach.nodeIds), FIGURES, (row) => {
       if (!shownAsRow(row)) return [];
       if (row.due_on === null) return ["open", "undated"];

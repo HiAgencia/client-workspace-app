@@ -1,9 +1,6 @@
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
 
-
-
-
 export type LinkCandidate = { id: string; title: string; path?: string | null };
 
 const plain = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();

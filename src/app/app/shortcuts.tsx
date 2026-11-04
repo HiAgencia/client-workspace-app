@@ -6,11 +6,7 @@ import { CloseIcon } from "@/components/ui/icons";
 import { useExit } from "@/components/ui/use-exit";
 import { useMac } from "./side-nav";
 
-
-
-
 const OPEN_EVENT = "client-workspace:shortcuts";
-
 
 export function showShortcuts() {
   window.dispatchEvent(new Event(OPEN_EVENT));
@@ -46,7 +42,6 @@ export function Shortcuts() {
     if (open && !element.open) element.showModal();
     if (!open && element.open) element.close();
   }, [open]);
-  
   const shown = useExit(open, dialog);
 
   const mod = mac ? "⌘" : "Ctrl";
@@ -82,7 +77,6 @@ export function Shortcuts() {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
       }}
       onClick={(event) => {
-        
         if (event.target === dialog.current && dialog.current.dataset.downOutside !== undefined) setOpen(false);
         if (dialog.current) delete dialog.current.dataset.downOutside;
       }}

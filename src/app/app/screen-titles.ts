@@ -1,5 +1,3 @@
-
-
 export const SCREEN_TITLES: Record<string, string> = {
   "/app": "Overview",
   "/app/tasks": "Tasks",

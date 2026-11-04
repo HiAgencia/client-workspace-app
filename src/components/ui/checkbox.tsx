@@ -6,9 +6,6 @@ type CheckboxProps = Omit<ComponentProps<"button">, "onChange" | "onClick" | "ro
   onCheckedChange: (checked: boolean) => void;
 };
 
-
-
-
 export function Checkbox({ checked, onCheckedChange, className, ...props }: CheckboxProps) {
   return (
     <button

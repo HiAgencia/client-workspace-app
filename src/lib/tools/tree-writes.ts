@@ -5,11 +5,6 @@ import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 import { forgetScope, loadScope, resolveNode } from "./tree";
 
-
-
-
-
-
 export const createNodeInput = z
   .strictObject({
     parent: z.string().min(1).optional(),
@@ -54,7 +49,6 @@ export const changeNodeInput = z
   .strictObject({
     name: z.string().trim().min(1).max(200).optional(),
     archived: z.boolean().optional(),
-    
     color: z.enum(NODE_COLORS).nullable().optional(),
   })
   .refine((value) => value.name !== undefined || value.archived !== undefined || value.color !== undefined, { message: "nothing to change" });
@@ -66,7 +60,6 @@ export async function changeNode(
 ): Promise<ToolResult<{ node: { id: string; name: string; archived: boolean; color: string | null } }>> {
   const loaded = await loadScope(ctx);
   if (isError(loaded)) return loaded;
-  
   if (input.archived !== false) {
     const resolved = resolveNode(loaded.scope, id);
     if (isError(resolved)) return resolved;

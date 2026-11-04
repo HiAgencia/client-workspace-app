@@ -16,9 +16,6 @@ import { callTool } from "@/lib/tools/registry";
 import { chatTurn } from "../support/chat-turn";
 import { createDisposableUser, deleteDisposableUsers, serviceClient, type DisposableUser } from "../support/supabase";
 
-
-
-
 let user: DisposableUser | undefined;
 let deps: GoogleDeps;
 const ids = { root: "", project: "", leaf: "", agency: "", landing: "", revoked: "" };
@@ -62,12 +59,10 @@ const fakeGoogle: Fetch = async (input, init) => {
   }
   if (url.pathname.includes("/events")) {
     const token = (init?.headers as Record<string, string>).Authorization.replace("Bearer ", "");
-    
     if (token === "token-dead") return json(401, { error: { code: 401, status: "UNAUTHENTICATED" } });
     const list = (googleEvents[token] ??= []) as Array<Record<string, unknown>>;
     const eventId = decodeURIComponent(url.pathname.split("/events/")[1] ?? "");
     const method = init?.method ?? "GET";
-    
     if (method === "POST") {
       const created = { id: `w${++written}`, htmlLink: "https://calendar.example/e", ...JSON.parse(String(init?.body)) };
       list.push(created);
@@ -109,7 +104,6 @@ async function insertAccount(email: string, refresh: string, node: string, owner
       owner_id: owner.id,
       email,
       refresh_token: await encrypt(deps.key, refresh),
-      
       access_token: await encrypt(deps.key, "stale"),
       access_token_expires_at: "2020-01-01T00:00:00Z",
     })
@@ -148,7 +142,6 @@ type Read = { ok: boolean; toRead: string[]; events: EventRead[]; failures: Arra
 
 const readerContext = (owner = user!): ToolContext => ({ db: owner.client, ownerId: owner.id, source: "manual", events: googleEventsSource(deps) });
 
-
 async function readWhole(ctx: ToolContext, name: "list_events" | "browse_events", input: Record<string, unknown>) {
   const first = (await callTool(name, ctx, input)) as unknown as Read;
   expect(first.ok).toBe(true);
@@ -174,7 +167,6 @@ describe("events from inherited accounts", () => {
   });
 
   it("the root sees only its own account", async () => {
-    
     const first = (await callTool("list_events", readerContext(), { node: ids.root, ...window })) as unknown as Read;
     expect(first.toRead).toEqual([]);
     expect(first.events.map((e) => e.accountEmail)).toEqual(["agency@example.com"]);
@@ -200,7 +192,6 @@ describe("events from inherited accounts", () => {
       const { events, failures } = await eventsOf(ids.leaf);
       expect(failures.map((failure) => failure.accountEmail)).toEqual(["revoked@example.com"]);
       expect(events.every((event) => event.accountId !== sample.id)).toBe(true);
-      
       expect(calls.filter((call) => call.includes("/events")).length).toBe(2);
       const after = await service.from("google_accounts").select("status").eq("id", sample.id).single();
       expect(after.data?.status).toBe("active");
@@ -218,7 +209,6 @@ describe("events from inherited accounts", () => {
     expect(browsed.events.find((event) => event.id === "a1")?.linkedTaskIds).toEqual([task.item.id]);
     expect(browsed.events.find((event) => event.id === "l1")?.linkedTaskIds).toEqual([]);
     expect(browsed.events.flatMap((event) => event.linkedTaskIds)).not.toContain(other.item.id);
-    
     await callTool("delete_item", ctx, { id: task.item.id });
     const after = await readWhole(ctx, "browse_events", { node: ids.leaf, ...window, ...days });
     expect(after.events.find((event) => event.id === "a1")?.linkedTaskIds).toEqual([]);
@@ -238,7 +228,6 @@ describe("events from inherited accounts", () => {
   });
 
   it("a token Google refused before its date is renewed once and read again, and a revoked grant marks the account", async () => {
-    
     const node = await insertNode("client", "Late");
     const service = serviceClient();
     const accountIds: string[] = [];
@@ -270,9 +259,6 @@ describe("events from inherited accounts", () => {
 });
 
 describe("what reading the calendars costs in requests of the Worker's own", () => {
-  
-  
-  
   const SIZES = [1, 3, 10];
   let owner: DisposableUser | undefined;
   let place = "";
@@ -293,7 +279,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
     const urls = spy.mock.calls.map(([input]) => (input instanceof Request ? input.url : String(input)));
     spy.mockRestore();
     if (!settled.ok) throw settled.error;
-    
     expect(urls.filter((url) => !/\/(rest|auth)\/v1\//.test(url))).toEqual([]);
     const token = calls.filter((call) => call.endsWith("/token")).length;
     const google = calls.length - token;
@@ -305,7 +290,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
     if (error) throw new Error(error.message);
   }
 
-  
   async function withReaders(count: number) {
     while (readers.length < count) readers.push(await insertAccount(`reader-${readers.length + 1}@example.com`, "refresh-reader", place, owner!));
     const extra = readers.splice(count);
@@ -321,7 +305,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       await withReaders(size);
       await expireTokens();
       const { cost, result } = await costOf(read);
-      
       expect(result).toMatchObject({ ok: true });
       measured.push(cost);
     }
@@ -353,7 +336,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
     for (const [name, read] of reads) {
       const measured = await acrossSizes(read);
       expect({ name, measured }).toEqual({ name, measured: [measured[0], measured[0], measured[0]] });
-      
       expect(measured[0].google).toBe(1);
       expect(measured[0].token).toBe(1);
     }
@@ -416,10 +398,8 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
         ["Reader sync", "google"],
       ]);
     }
-    
     const named = (await callTool("browse_events", ownerContext(), { ...range, account: readers[0] })) as unknown as Read;
     expect(named.events.map((event) => event.title)).toEqual(["Reader sync"]);
-    
     calls.length = 0;
     const agenda = (await callTool("get_overview", ownerContext(), { node: place })) as unknown as { eventsToRead: string[] };
     expect(agenda.eventsToRead).toEqual([]);
@@ -436,7 +416,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       expect(fromInside.events.map((event) => event.fromNodeId)).toEqual([inside]);
       const fromAbove = (await callTool("browse_events", ownerContext(), { ...range, node: place, account: readers[0] })) as unknown as Read;
       expect(fromAbove.events.map((event) => event.fromNodeId)).toEqual([place]);
-      
       const everything = (await callTool("browse_events", ownerContext(), { ...range, account: readers[0] })) as unknown as Read;
       const tree = (await callTool("list_tree", ownerContext(), { withMail: true })) as unknown as { mail: { accounts: Array<{ id: string; nodeId: string; nodeIds: string[] }> } };
       const hanging = tree.mail.accounts.find((account) => account.id === readers[0])!;
@@ -452,7 +431,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
     const scoped = { ...ownerContext(), db: serviceClient(), scopeNodeId: inside, source: "agent" as const, agentLabel: "laptop" };
     const tree = (await callTool("list_tree", scoped, { withMail: true })) as unknown as { mail: { accounts: Array<{ id: string; nodeId: string | null; nodeIds: string[] }> } };
     expect(tree.mail.accounts.find((account) => account.id === readers[0])).toMatchObject({ nodeId: null, nodeIds: [] });
-    
     type Said = { accounts: Array<{ nodeId: string | null }>; events: EventRead[] };
     const message = { id: "m1", threadId: "t1", accountId: readers[0], accountEmail: "reader-1@example.com", from: { name: null, email: "a@example.com" }, to: [], subject: "Hello", snippet: "", receivedAt: "2026-11-03T12:00:00Z", unread: false, important: false };
     const mail = { list: async () => ({ messages: [message], failures: [] }), unread: async () => ({ messages: [], failures: [] }) } as unknown as MailSource;
@@ -465,7 +443,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       const said = (await read(scoped)) as unknown as Said;
       expect({ name, accounts: said.accounts.map((account) => account.nodeId) }).toEqual({ name, accounts: [null] });
       expect({ name, from: said.events.filter((event) => event.origin === "google").map((event) => event.fromNodeId) }).toEqual({ name, from: [""] });
-      
       const whole = (await read({ ...ownerContext(), ...(name.startsWith("list_events") ? { scopeNodeId: place } : {}) })) as unknown as Said;
       expect({ name, accounts: whole.accounts.map((account) => account.nodeId) }).toEqual({ name, accounts: [place] });
       expect({ name, from: whole.events.filter((event) => event.origin === "google").map((event) => event.fromNodeId) }).toEqual({ name, from: [place] });
@@ -496,12 +473,9 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       };
       expect(await daysOf("2026-11-05", "2026-11-05")).toEqual(["2026-11-05"]);
       expect(await daysOf("2026-11-05", "2026-11-06")).toEqual(["2026-11-05", "2026-11-06"]);
-      
       expect(await daysOf("2026-11-06T02:00:00+09:00", "2026-11-06T10:00:00+09:00")).toEqual(["2026-11-06"]);
       expect(await daysOf("2026-11-05T22:00:00-03:00", "2026-11-05T23:30:00-03:00")).toEqual(["2026-11-05"]);
-      
       expect(await daysOf("2026-11-05T00:00:00-03:00", "2026-11-07T00:00:00-03:00")).toEqual(["2026-11-05", "2026-11-06"]);
-      
       expect(await daysOf("2026-10-31")).toEqual(["2026-11-04", "2026-11-05", "2026-11-06"]);
     } finally {
       await serviceClient().from("nodes").delete().eq("id", node.data.id);
@@ -567,12 +541,10 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       });
       expect(requests).toHaveLength(1);
       expect(requests[0].google + requests[0].token).toBe(0);
-      
       const outputs = message.parts.flatMap((part) => (isToolUIPart(part) && part.state === "output-available" ? [part.output as { eventsToRead?: string[]; mailToRead?: string[] }] : []));
       expect(outputs).toHaveLength(spots.length * 2);
       expect(outputs.flatMap((output) => output.eventsToRead ?? []).sort()).toEqual(spots.map((spot) => spot.account).sort());
       expect(outputs.flatMap((output) => output.mailToRead ?? []).sort()).toEqual(spots.map((spot) => spot.account).sort());
-      
       await expireTokens();
       const { cost } = await costOf(() => Promise.all(spots.flatMap((spot) => [callTool("get_overview", withMail(), { node: spot.node }), callTool("get_item", withMail(), { id: spot.task })])));
       expect(cost.google).toBeGreaterThanOrEqual(spots.length * 2);
@@ -608,7 +580,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       const item = (await callTool("get_item", ctx("chat"), { id: task.data.id })) as unknown as { mailToRead: string[] };
       expect(item.mailToRead).toEqual([connected]);
       expect(asked).toEqual([sample.data.id]);
-      
       asked.length = 0;
       const detail = (await callTool("get_item", ctx("manual"), { id: task.data.id })) as unknown as { mailToRead: string[] };
       expect([...detail.mailToRead].sort()).toEqual([connected, sample.data.id].sort());
@@ -641,7 +612,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
       await deleteDisposableUsers([stranger]);
     }
     expect(calls).toEqual([]);
-    
     const reached = await callTool("browse_events", ownerContext(), { ...range, node: place, account: readers[0] });
     expect(reached).toMatchObject({ ok: true });
     expect(calls.length).toBeGreaterThan(0);
@@ -682,7 +652,6 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
         ctx: { ...ownerContext(), source: "chat" },
         model: simulatedModel(),
         messages: [{ id: "asked", role: "user", parts: [{ type: "text", text: "What's on my calendar this week?" }] }],
-        
         request: async (run) => {
           const { cost, result } = await costOf(async () => {
             await readSession(owner!.client);
@@ -703,17 +672,14 @@ describe("what reading the calendars costs in requests of the Worker's own", () 
     }
     const medium = await turnIn(3);
     const large = await turnIn(10);
-    
     expect(medium.said).toMatch(/This week|Nothing is on the calendars/);
     expect(large.said).toMatch(/This week|Nothing is on the calendars/);
     for (const turn of [medium, large]) expect(turn.requests.map((cost) => cost.google + cost.token)).toEqual(turn.requests.map(() => 0));
     expect(large.requests.map((cost) => cost.total)).toEqual(medium.requests.map((cost) => cost.total));
-    
     expect(medium.reads).toHaveLength(1 + 3);
     expect(large.reads).toHaveLength(1 + 10);
     expect(large.reads[0].google + large.reads[0].token).toBe(0);
     expect(large.reads.slice(1).every((cost) => cost.token === 1 && cost.google === 1)).toBe(true);
-    
     expect(new Set([...medium.reads.slice(1), ...large.reads.slice(1)].map((cost) => cost.total)).size).toBe(1);
   }, 180_000);
 });
@@ -767,7 +733,6 @@ describe("writing to Google", () => {
     };
     expect(moved.event).toMatchObject({ title: "Client call (moved)", allDay: true, start: "2026-11-05", end: "2026-11-06" });
     const stored = (googleEvents["token-agency"] as Array<{ id: string; end: { date: string } }>).find((e) => e.id === created.event.id);
-    
     expect(stored?.end).toEqual({ date: "2026-11-07" });
 
     const removed = await callTool("delete_google_event", ctx(), { account: ids.agency, calendar: "primary", event: created.event.id });
@@ -787,7 +752,6 @@ describe("writing to Google", () => {
     } finally {
       await deleteDisposableUsers([other]);
     }
-    
     const scoped = await callTool("create_google_event", { ...ctx(), db: serviceClient(), scopeNodeId: ids.root, source: "agent", agentLabel: "laptop" }, { account: ids.landing, calendar: "primary", title: "x", startsOn: "2026-11-04" });
     expect(scoped).toMatchObject({ ok: false, code: "not_found" });
     const notConfigured = await callTool("create_google_event", { db: user!.client, ownerId: user!.id, source: "manual" }, { account: ids.agency, calendar: "primary", title: "x", startsOn: "2026-11-04" });
@@ -804,8 +768,6 @@ describe("writing to Google", () => {
   });
 
   it("connecting refuses an authorization without the Gmail permission", async () => {
-    
-    
     grantedScope = "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly";
     try {
       await expect(connectAccount(deps, { ownerId: user!.id, nodeId: ids.project }, "code", "http://localhost/api/google/callback")).rejects.toThrow(/mail access/);

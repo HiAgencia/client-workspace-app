@@ -23,11 +23,6 @@ import { PathText, SenderMark } from "./app/item-parts";
 import { TaskRow, TODAY } from "./landing-shot";
 import { RevealColumn, Scene, VisitorStamp, type Frame, type SceneGlyphs } from "./landing-motion";
 
-
-
-
-
-
 const GLYPHS: SceneGlyphs = { pause: <PauseIcon />, play: <PlayIcon /> };
 
 function Story({ id, title, children, text, scene }: { id: string; title: string; children: ReactNode; text?: ReactNode; scene: ReactNode }) {
@@ -44,8 +39,6 @@ function Story({ id, title, children, text, scene }: { id: string; title: string
     </section>
   );
 }
-
-
 
 type PlaceView = {
   key: "1" | "2" | "3";
@@ -234,8 +227,6 @@ function PlacesScene() {
   );
 }
 
-
-
 const REPLY_FRAMES: readonly Frame[] = [
   { set: [], ms: 2000 },
   { set: ["aim-yes"], ms: 800 },
@@ -248,7 +239,6 @@ const REPLY_FRAMES: readonly Frame[] = [
 ];
 
 function RepliesScene() {
-  
   const reply = (subject: string, offset: number, aim: boolean) => (
     <>
       <SenderMark name="Developer Platform" email="noreply@developers.example" />
@@ -268,7 +258,6 @@ function RepliesScene() {
       </span>
     </>
   );
-  
   const card = (twin: boolean) => (
     <div className="card replies-card" data-twin={twin ? "" : undefined} aria-hidden={twin || undefined}>
       <div className="replies-task">
@@ -297,7 +286,6 @@ function RepliesScene() {
             </p>
           </div>
           <ul className="task-reply-list">
-            {}
             <li className="task-reply">
               {reply("Your app review was approved", 0, true)}
               <span className="task-reply-outcome replies-outcome" data-show="asked">
@@ -327,7 +315,6 @@ function RepliesScene() {
       label="In the picture, the task that waits for the app review shows two possible replies; the first one is chosen, and the task is closed as approved."
     >
       <div className="story-stage replies-stage">
-        {}
         <div className="replies-room">
           {card(false)}
           {card(true)}
@@ -345,8 +332,6 @@ function RepliesScene() {
     </Scene>
   );
 }
-
-
 
 const CHAT_FRAMES: readonly Frame[] = [
   { set: [], ms: 1800 },
@@ -439,8 +424,6 @@ function ChatScene() {
   );
 }
 
-
-
 const AGENT_FRAMES: readonly Frame[] = [
   { set: [], ms: 1500 },
   { set: ["asked-1"], ms: 1100 },
@@ -463,7 +446,6 @@ function AgentScene() {
         <pre className="read-block t-code agent-log">
           <code>
             <span className="code-line agent-line agent-where">~/code/larkspur-website</span>
-            {}
             <span className="shot-stack">
               <span className="code-line" data-hide="asked-1">
                 <span className="agent-prompt">›</span> <span className="agent-caret" />
@@ -505,7 +487,6 @@ function AgentScene() {
                 </span>
               </div>
             </div>
-            {}
             <ul className="task-list" data-layout="list">
               {TODAY.map((row, index) =>
                 index === TODAY.length - 1 ? <TaskRow key={row.title} row={row} show="added" className="agent-row" /> : <TaskRow key={row.title} row={row} />,
@@ -519,7 +500,6 @@ function AgentScene() {
 }
 
 export function LandingStories({ endpoint }: { endpoint: string }) {
-  
   return (
     <RevealColumn className="stories">
       <Story id="story-places" title="Every client keeps its own accounts." scene={<PlacesScene />}>
@@ -545,7 +525,6 @@ export function LandingStories({ endpoint }: { endpoint: string }) {
             </p>
             <pre className="read-block t-code agent-config-block">
               <code>
-                {}
                 {mcpJson(endpoint)
                   .split("\n")
                   .map((line, index) => (

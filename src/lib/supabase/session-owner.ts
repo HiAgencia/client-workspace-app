@@ -1,8 +1,4 @@
-
-
-
 const SESSION_COOKIE = /^sb-[a-z0-9]+-auth-token(?:\.(\d+))?$/;
-
 
 function fromBase64Url(value: string): string {
   const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
@@ -13,8 +9,6 @@ export function sessionOwner(cookies: Array<{ name: string; value: string }>): s
   return sessionCookieUser(cookies)?.id ?? null;
 }
 
-
-
 export function sessionCookieUser(cookies: Array<{ name: string; value: string }>): { id: string; isAnonymous: boolean } | null {
   const parts = cookies
     .flatMap((cookie) => {
@@ -23,7 +17,6 @@ export function sessionCookieUser(cookies: Array<{ name: string; value: string }
     })
     .sort((a, b) => a.index - b.index);
   if (parts.length === 0) return null;
-  
   const whole = parts.find((part) => part.index === -1);
   let raw = whole ? whole.value : parts.map((part) => part.value).join("");
   try {
@@ -35,7 +28,6 @@ export function sessionCookieUser(cookies: Array<{ name: string; value: string }
     return null;
   }
 }
-
 
 export function documentCookies(): Array<{ name: string; value: string }> {
   try {

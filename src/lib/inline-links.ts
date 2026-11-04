@@ -1,12 +1,6 @@
 import { isRichHtml, safeHref, sanitizeRichText } from "./rich-text";
 
-
-
-
-
 const LINK = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
-
-
 
 export function inlineLink(words: string, address: string): string {
   const text = words.trim().replace(/\[/g, "(").replace(/\]/g, ")");
@@ -14,7 +8,6 @@ export function inlineLink(words: string, address: string): string {
 }
 
 export type InlinePiece = { text: string; href: string | null };
-
 
 export function inlinePieces(value: string): InlinePiece[] {
   const pieces: InlinePiece[] = [];
@@ -32,14 +25,11 @@ export function inlinePieces(value: string): InlinePiece[] {
 
 const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-
 export function inlineToHtml(value: string): string {
   return inlinePieces(value)
     .map((piece) => (piece.href ? `<a href="${escapeHtml(piece.href)}">${escapeHtml(piece.text)}</a>` : escapeHtml(piece.text)))
     .join("");
 }
-
-
 
 export function writtenBody(input: string | null | undefined): string | null {
   if (input == null) return null;
@@ -51,7 +41,6 @@ export function writtenBody(input: string | null | undefined): string | null {
       .join(""),
   );
 }
-
 
 export function inlinePlain(value: string): string {
   return inlinePieces(value)

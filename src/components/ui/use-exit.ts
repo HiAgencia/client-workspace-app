@@ -4,10 +4,6 @@ import { useEffect, useState, type RefObject } from "react";
 
 type Leaving = Element | null | undefined;
 
-
-
-
-
 export function afterExit(elements: Leaving | Leaving[], done: () => void): () => void {
   let live = true;
   const running = [elements]
@@ -22,9 +18,6 @@ export function afterExit(elements: Leaving | Leaving[], done: () => void): () =
   };
 }
 
-
-
-
 export function focusAfterClose(target: () => HTMLElement | null | undefined): void {
   let acted = false;
   const act = () => {
@@ -38,8 +31,6 @@ export function focusAfterClose(target: () => HTMLElement | null | undefined): v
     if (!acted) target()?.focus({ preventScroll: true });
   });
 }
-
-
 
 export function useExit(open: boolean, element: RefObject<Element | null>): boolean {
   const [held, setHeld] = useState(open);

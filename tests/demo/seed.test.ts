@@ -10,17 +10,11 @@ import { sanitizeRichText } from "@/lib/rich-text";
 import { isWorkingTime, workingMinutesBetween } from "@/lib/working-time";
 import { createAnonymousUser, createDisposableUser, deleteDisposableUsers, publicClient, serviceClient, type Db, type DisposableUser } from "../support/supabase";
 
-
-
-
-
 const TODAY = "2026-10-27";
 const ZONE = "America/Argentina/Buenos_Aires";
-
 const TOLERANCE = 2;
 type Tree = ReturnType<typeof demoSeedTree>;
 type ExpectedNode = { path: string; kind: string; position: number; color: string | null };
-
 const GENERAL = "General";
 type ExpectedItem = {
   path: string;
@@ -36,7 +30,6 @@ type ExpectedItem = {
   agentLabel: string | null;
   deleted: boolean;
 };
-
 
 function expectedNodes(): ExpectedNode[] {
   const rows: ExpectedNode[] = [];
@@ -80,14 +73,12 @@ function expectedItems(): ExpectedItem[] {
     } else if (tool === "add_note") {
       row.type = "note";
       row.body = String(input.text);
-      
       row.title = noteTitle(row.body);
     } else if (tool === "add_decision") {
       row.type = "decision";
       row.title = String(input.decision);
       row.body = input.rationale ? String(input.rationale) : null;
     } else if (tool === "request_review") {
-      
       row.type = "task";
       row.title = input.url ? inlineLink(String(input.title), String(input.url)) : String(input.title);
       row.priority = 4;
@@ -107,7 +98,6 @@ function expectedItems(): ExpectedItem[] {
   for (const item of demoGeneral(TODAY).items) add(GENERAL, item, null);
   return rows;
 }
-
 
 function everyItem(): SeedItem[] {
   const list: SeedItem[] = [];
@@ -141,7 +131,6 @@ function expectedEvents(): ExpectedEvent[] {
   return rows;
 }
 
-
 function expectedChats(): Array<{ path: string; title: string; chat: SeedChat }> {
   const rows: Array<{ path: string; title: string; chat: SeedChat }> = [];
   const collect = (path: string, list: SeedItem[]) => {
@@ -160,7 +149,6 @@ function expectedChats(): Array<{ path: string; title: string; chat: SeedChat }>
   walk(demoSeedTree(TODAY), "");
   return rows;
 }
-
 
 function expectedAccounts(today = TODAY): Array<{ path: string; account: SeedAccount }> {
   const rows: Array<{ path: string; account: SeedAccount }> = [];
@@ -191,9 +179,6 @@ function declaredTokens(): Array<{ path: string; token: SeedToken }> {
 function expectedTokens(): Array<{ path: string; label: string }> {
   return declaredTokens().map(({ path, token }) => ({ path, label: token.label }));
 }
-
-
-
 
 async function expectWorkingMoments(db: Db, zone: string) {
   const now = Date.now();
@@ -227,7 +212,6 @@ async function expectWorkingMoments(db: Db, zone: string) {
     else expect(Math.abs(workingMinutesBetween(row.deleted_at!, now, zone) - expected!.deletedAgo), `${row.title} deleted`).toBeLessThanOrEqual(TOLERANCE);
   }
 }
-
 
 function inZone(instant: string): { day: string; time: string } {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(instant));
@@ -264,7 +248,6 @@ afterAll(async () => {
 }, 60_000);
 
 describe("the demo's week", () => {
-  
   const dayOf = (start: string, offset: number) => {
     const date = new Date(`${start}T12:00:00Z`);
     date.setUTCDate(date.getUTCDate() + offset);
@@ -344,9 +327,7 @@ describe("the demo seed", () => {
     );
     expect(actualNodes).toHaveLength(expectedNodes().length);
     expect(actualItems).toHaveLength(expectedItems().length);
-    
     for (const row of actualItems) if (row.body) expect(sanitizeRichText(row.body)).toBe(row.body);
-    
     const notes = actualItems.filter((row) => row.type === "note");
     expect(notes.filter((row) => /\[[^\]]+\]\(https?:/.test(row.body ?? ""))).toEqual([]);
     const linked = notes.filter((row) => (row.body ?? "").includes("<a href="));
@@ -354,7 +335,6 @@ describe("the demo seed", () => {
     for (const row of linked) expect(row.title, row.title).toMatch(/^\[[^\]]+\]\(https:\/\/[^)]+\)$/);
     expect(firstLine(linked[0].body)).not.toContain("](");
 
-    
     const undated = (items.data ?? [])
       .filter((row) => row.type === "task" && row.status === "open" && row.due_on === null && row.parent_item_id === null && row.deleted_at === null)
       .sort((x, y) => Number(x.position) - Number(y.position))
@@ -366,7 +346,6 @@ describe("the demo seed", () => {
     expect(ranked.length).toBeGreaterThan(1);
     expect(undated).toEqual(ranked);
 
-    
     const trash = await listTrash({ db: user.client, ownerId: user.id, source: "manual" });
     if (!trash.ok) throw new Error(trash.message);
     expect(trash.items.map((entry) => ({ title: entry.title, branch: entry.branch }))).toEqual([
@@ -374,14 +353,10 @@ describe("the demo seed", () => {
       { title: "Draft the post on hosting costs", branch: 2 },
     ]);
 
-    
-    
     await expectWorkingMoments(user.client, ZONE);
 
-    
     const tokens = await user.client.from("agent_tokens").select("node_id, label, revoked_at");
     expect(tokens.error).toBeNull();
-    
     const labels = [...(tokens.data ?? []).map((row) => row.label), ...actualItems.flatMap((row) => (row.agentLabel ? [row.agentLabel] : []))];
     expect(labels.length).toBeGreaterThan(2);
     for (const label of labels) expect(label, label).toMatch(/^\p{Lu}/u);
@@ -389,8 +364,6 @@ describe("the demo seed", () => {
       (tokens.data ?? []).map((row) => ({ path: pathOf(byId.get(row.node_id)!, byId), label: row.label, revoked: row.revoked_at })).sort((x, y) => x.path.localeCompare(y.path)),
     ).toEqual(expectedTokens().map((row) => ({ ...row, revoked: null })).sort((x, y) => x.path.localeCompare(y.path)));
 
-    
-    
     expect(await settleDemoTokens(serviceClient(), user.id, ZONE)).toEqual({ settled: declaredTokens().length, failed: 0, reasons: [] });
     const dated = await user.client.from("agent_tokens").select("node_id, label, created_at, last_used_at");
     expect(dated.error).toBeNull();
@@ -402,9 +375,6 @@ describe("the demo seed", () => {
       }
     }
 
-    
-    
-    
     const chats = expectedChats();
     expect(chats).toHaveLength(3);
     const nodeIdByPath = new Map(nodeRows.map((row) => [pathOf(row, byId), row.id]));
@@ -446,11 +416,9 @@ describe("the demo seed", () => {
     }));
     expect(actualEvents.sort((a, b) => a.title.localeCompare(b.title))).toEqual(expectedEvents().sort((a, b) => a.title.localeCompare(b.title)));
     expect(expectedEvents().some((event) => event.linkedTo.length > 0)).toBe(true);
-    
     expect(expectedEvents().some((event) => event.at === null) && expectedEvents().some((event) => event.at !== null)).toBe(true);
     expect((events.data ?? []).filter((row) => row.all_day).every((row) => row.starts_on === row.ends_on)).toBe(true);
 
-    
     const meetings = await user.client.from("demo_events").select("account_id, calendar_name, title, location, starts_at, ends_at");
     expect(meetings.error).toBeNull();
     const actualMeetings = (meetings.data ?? []).map((row) => ({
@@ -476,7 +444,6 @@ describe("the demo seed", () => {
       })),
     );
     expect(actualMeetings.sort((a, b) => a.title.localeCompare(b.title))).toEqual(declaredMeetings.sort((a, b) => a.title.localeCompare(b.title)));
-    
     const calendars = await user.client.from("account_calendars").select("account_id, summary, selected");
     expect(calendars.error).toBeNull();
     expect((calendars.data ?? []).map((row) => ({ account: row.account_id, calendar: row.summary, selected: row.selected })).sort((a, b) => a.calendar.localeCompare(b.calendar))).toEqual(
@@ -486,17 +453,14 @@ describe("the demo seed", () => {
     );
     expect(new Set(declaredMeetings.map((meeting) => meeting.account)).size).toBeGreaterThan(1);
     expect(expectedAccounts().some(({ account }) => !account.calendar)).toBe(true);
-    
     const ofToday = everyItem().filter((item) => item.tool !== "add_note" && item.tool !== "add_decision" && (item.tool === "request_review" || item.input.dueOn === TODAY) && item.doneAgo === undefined);
     expect(ofToday.length).toBeGreaterThan(2);
     expect(ofToday.filter((item) => item.tool === "create_task" && Number(item.input.priority) <= 2).length * 2).toBeLessThanOrEqual(ofToday.length);
 
-    
     const changed = (items.data ?? []).find((row) => row.title === "Present two logo directions")!;
     const versions = await user.client.from("revisions").select("snapshot").eq("item_id", changed.id);
     expect(versions.data?.map((row) => (row.snapshot as { title: string }).title)).toEqual(["Present logo directions"]);
 
-    
     const accounts = await user.client.from("google_accounts").select("id, email, is_demo");
     const attached = await user.client.from("node_accounts").select("node_id, account_id");
     const emailOf = new Map((accounts.data ?? []).map((row) => [row.id, row.email]));
@@ -534,7 +498,6 @@ describe("the demo seed", () => {
       const declared = expectedAccounts().flatMap(({ account }) => account.mail).find((message) => message.subject === row.subject)!;
       expect(isWorkingTime(row.received_at, ZONE), row.subject).toBe(true);
       expect(Math.abs(workingMinutesBetween(row.received_at, now, ZONE) - declared.ago), row.subject).toBeLessThanOrEqual(TOLERANCE);
-      
       expect(sanitizeMailHtml(row.html).removed).toEqual({ elements: 0, handlers: 0, links: 0, styles: 0 });
     }
     const waits = await user.client.from("task_mail").select("item_id, account_id, waits_for, dismissed");
@@ -550,7 +513,6 @@ describe("the demo seed", () => {
         .sort((x, y) => x.title.localeCompare(y.title)),
     );
 
-    
     const mailLinks = await user.client.from("mail_links").select("account_id, message_id, item_id, node_id");
     expect(mailLinks.error).toBeNull();
     const linkedMail = (mailLinks.data ?? []).map((row) => {
@@ -597,7 +559,6 @@ describe("the demo seed", () => {
     try {
       const anonymous = await publicClient().rpc("seed_demo", { p_today: TODAY });
       expect(anonymous.error?.code).toBe("42501");
-      
       const seeded = await other.client.rpc("seed_demo", { p_today: TODAY });
       expect(seeded.error).toBeNull();
       expect(seeded.data).toBe(true);
@@ -638,7 +599,6 @@ describe("the demo seed", () => {
 
   it("starts over: a demo's workspace is emptied, and one that is not a demo's cannot", async () => {
     if (!user) throw new Error("the test user was not created");
-    
     const first = await user.client.rpc("reset_demo");
     expect(first.error).toBeNull();
     expect(first.data).toBe(true);
@@ -648,8 +608,6 @@ describe("the demo seed", () => {
     const reset = await user.client.rpc("reset_demo");
     expect(reset.error).toBeNull();
     expect(reset.data).toBe(true);
-    
-    
     const emptied = [
       ["nodes", "id"],
       ["items", "id"],
@@ -668,11 +626,9 @@ describe("the demo seed", () => {
       expect(error, table).toBeNull();
       expect(count, table).toBe(0);
     }
-    
     const again = await user.client.rpc("seed_demo", { p_today: TODAY, p_zone: ZONE });
     expect(again.error).toBeNull();
     expect(again.data).toBe(true);
-    
     const person = await createDisposableUser("reset-refused");
     try {
       const refused = await person.client.rpc("reset_demo");
@@ -701,13 +657,11 @@ describe("the demo seed", () => {
       const before = { nodes: await count(other.client, "nodes"), items: await count(other.client, "items"), mail: await count(other.client, "demo_mail") };
       expect(before.nodes).toBe(expectedNodes().length);
       expect(before.items).toBeGreaterThan(0);
-      
       expect(await count(user.client, "nodes")).toBeGreaterThan(0);
 
       const reset = await user.client.rpc("reset_demo");
       expect(reset.error).toBeNull();
       expect(await count(user.client, "nodes")).toBe(0);
-      
       expect({ nodes: await count(other.client, "nodes"), items: await count(other.client, "items"), mail: await count(other.client, "demo_mail") }).toEqual(before);
       const kept = await person.client.from("nodes").select("id, name");
       expect(kept.data).toEqual([{ id: own.data!.id, name: "Kept client" }]);
@@ -719,7 +673,6 @@ describe("the demo seed", () => {
   it("starting over keeps the demo's usage, and only the service role refills it", async () => {
     if (!user) throw new Error("the test user was not created");
     const service = serviceClient();
-    
     const day = "2001-01-01";
     const total = async () => {
       const { data, error } = await service.rpc("anonymous_usage", { p_kind: "chat_message", p_day: day });
@@ -729,15 +682,12 @@ describe("the demo seed", () => {
     const taken = await service.rpc("take_usage", { p_owner: user.id, p_kind: "chat_message", p_day: day, p_cap: 100 });
     expect(taken.error).toBeNull();
     expect(await total()).toBe(1);
-    
     const reset = await user.client.rpc("reset_demo");
     expect(reset.error).toBeNull();
     expect(await total()).toBe(1);
-    
     const refused = await user.client.rpc("reset_demo_usage", { p_owner: user.id });
     expect(refused.error?.code).toBe("42501");
     expect(await total()).toBe(1);
-    
     const refilled = await service.rpc("reset_demo_usage", { p_owner: user.id });
     expect(refilled.error).toBeNull();
     expect(refilled.data).toBeGreaterThan(0);

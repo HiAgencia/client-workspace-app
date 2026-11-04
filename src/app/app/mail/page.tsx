@@ -34,11 +34,6 @@ import { MAIL_PHONE, MailViewer, useMailMode } from "./mail-viewer";
 import { subjectOf, taskLine } from "./subject";
 import "../../styles/mail.css";
 
-
-
-
-
-
 type TasksAnswer = { groups: { overdue: { tasks: TaskData[] }; today: { tasks: TaskData[] }; upcoming: { days: Array<{ tasks: TaskData[] }> }; noDate: { tasks: TaskData[] } } };
 
 const GROUPS = [
@@ -47,14 +42,10 @@ const GROUPS = [
   { key: "earlier", label: "Already read" },
 ] as const;
 
-
 const REPLIES = 20;
-
-
 const LIST_WAIT = 4000;
 
 const keyOf = (row: Pick<MailRow, "accountId" | "id">) => `${row.accountId}:${row.id}`;
-
 
 function once(rows: MailRow[]): MailRow[] {
   const seen = new Set<string>();
@@ -77,7 +68,6 @@ export default function MailPage() {
 
 const noSubscription = () => () => {};
 
-
 const shortWhen = (iso: string): string => mailWhen(iso, today());
 
 function Mail() {
@@ -90,15 +80,11 @@ function Mail() {
   const router = useRouter();
   const pathname = usePathname();
   const place = placeFromUrl(params.get("place"), tree);
-  
   const read = useMailRead({ kind: "all" }, null);
   const mail = read.data;
   const readError = read.error;
   const [tasks, setTasks] = useState<TaskData[]>([]);
-  
-  
   const replies = useTaskReplies({}, mounted ? today() : null, tree, REPLIES);
-  
   const [revealed, setRevealed] = useState(false);
   const repliesRead = replies.data !== null || replies.error !== null;
   const readWhole = mail !== null && mail.waiting === 0 && repliesRead;
@@ -109,11 +95,7 @@ function Mail() {
     const timer = setTimeout(() => setRevealed(true), LIST_WAIT);
     return () => clearTimeout(timer);
   }, [holding]);
-  
-  
   const [opened, setOpened] = useState<Set<string>>(new Set());
-  
-  
   const rawMessage = params.get("message");
   const boxAccount = rawMessage && !rawMessage.includes(":") ? params.get("account") : null;
   const selected = rawMessage && boxAccount ? `${boxAccount}:${rawMessage}` : rawMessage;
@@ -149,8 +131,6 @@ function Mail() {
     };
   }, [version]);
 
-  
-  
   const { inPlace, seenFrom } = useMemo(() => {
     const branches = new Map((tree ?? []).map((node) => [node.id, branchOf(tree, node.id)]));
     const sees = new Map((tree ?? []).map((node) => [node.id, new Set(accountsSeenFrom(tree, mailAccounts ?? [], node.id))]));
@@ -175,15 +155,11 @@ function Mail() {
     [mail, replies.data],
   );
   const accountParam = boxAccount ? null : params.get("account");
-  
   const account = accountFromUrl(accountParam, mail?.accounts ?? [], tree);
   const chosen = chosenAccounts(account, mail?.accounts ?? [], tree);
   const ofAccount = (accountId: string) => chosen === null || chosen.has(accountId);
-  
   const severalAccounts = (chosen?.size ?? mail?.accounts.length ?? 0) > 1;
   const keep = (row: MailRow) => inPlace(row, place) && ofAccount(row.accountId);
-  
-  
   const waiting = (replies.data?.tasks ?? [])
     .map((entry) => ({
       ...entry,
@@ -192,7 +168,6 @@ function Mail() {
     }))
     .filter((entry) => entry.replies.length > 0);
   const possible = new Set(waiting.flatMap((entry) => entry.replies.map(keyOf)));
-  
   const toDone = mail ? [...mail.groups.unread.messages, ...mail.groups.earlier.messages].filter((row) => row.tasks.length > 0) : [];
   const groups = GROUPS.map((group) => {
     const own = mail?.groups[group.key].messages ?? [];
@@ -203,7 +178,6 @@ function Mail() {
   const linkedToTasks = groups.find((group) => group.key === "forTasks")?.messages ?? [];
   const forTasks = once([...waiting.flatMap((entry) => entry.replies), ...linkedToTasks]).length;
   const isUnread = (row: MailRow) => row.unread && !opened.has(keyOf(row));
-  
   const failures = [...(mail?.failures ?? []), ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures)].filter(
     (failure, index, list) => list.findIndex((other) => other.accountId === failure.accountId) === index,
   );
@@ -213,8 +187,6 @@ function Mail() {
   const accountCounts = countsByAccount(mail?.accounts ?? [], tree, (some) => all.filter((row) => (some === null || some.has(row.accountId)) && inPlace(row, place)).length);
 
   const listedRow = selected ? (shown.find((row) => keyOf(row) === selected) ?? all.find((row) => keyOf(row) === selected) ?? null) : null;
-  
-  
   const [apart, setApart] = useState<{ key: string; row: MailRow | null; error: string | null } | null>(null);
   const listsDone = mail !== null && mail.waiting === 0;
   useEffect(() => {
@@ -231,15 +203,12 @@ function Mail() {
   const apartHere = apart?.key === selected && !listedRow ? apart : null;
   const current = listedRow ?? apartHere?.row ?? null;
   const index = current ? shown.findIndex((row) => keyOf(row) === keyOf(current)) : -1;
-  
-  
   const seenHere = mail ? mail.accounts.filter((entry) => ofAccount(entry.id) && seenFrom(entry.id, place)) : [];
   const figure = mail ? mailStore.figure(seenHere) : null;
   const unreadApart = shown.filter((row) => isUnread(row) && !seenHere.some((entry) => entry.id === row.accountId)).length;
   const unread = figure && { ...figure, unread: figure.unread + unreadApart };
   const unreadWords = unread && !unread.partial && unread.unread === 0 ? "Nothing unread" : figureWords(unread);
 
-  
   const countAgain = useCallback(
     (accountId: string) => {
       const account = mailAccounts?.find((entry) => entry.id === accountId);
@@ -256,9 +225,6 @@ function Mail() {
     }
   }
 
-  
-  
-  
   const step = useEffectEvent((by: 1 | -1) => {
     const next = index < 0 ? (by === 1 ? shown[0] : undefined) : shown[index + by];
     if (!next) return;
@@ -279,8 +245,6 @@ function Mail() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  
-  
   const newest = (rows: MailRow[]) => rows.reduce<MailRow | null>((best, row) => (!best || Date.parse(row.receivedAt) > Date.parse(best.receivedAt) ? row : best), null);
   const newestReply = newest(waiting.flatMap((entry) => entry.replies));
   const newestUnread = newest(shown.filter(isUnread));
@@ -293,7 +257,6 @@ function Mail() {
         : shown.length > 0
           ? { row: newest(shown) as MailRow, label: "Open the newest message" }
           : null;
-  
   const focusSubject = useRef(false);
   const currentKey = current ? keyOf(current) : null;
   useEffect(() => {
@@ -302,7 +265,6 @@ function Mail() {
     document.getElementById("mail-subject")?.focus({ preventScroll: true });
   }, [currentKey]);
 
-  
   const landed = current && current.unread && !opened.has(keyOf(current)) ? current : null;
   useEffect(() => {
     if (!landed) return;
@@ -337,7 +299,6 @@ function Mail() {
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page mail-page">
-        {}
         <PageHeader
           title="Mail"
           count={
@@ -405,7 +366,6 @@ function Mail() {
                 groups
                   .filter((group) => group.messages.length > 0 || (group.key === "forTasks" && waiting.length > 0))
                   .map((group) => {
-                    
                     const held = group.key === "forTasks" ? forTasks : group.messages.length;
                     return (
                       <div key={group.key} className="mail-group" role="group" aria-labelledby={`mail-group-${group.key}`}>
@@ -428,7 +388,6 @@ function Mail() {
               <div className="mail-view-column">
                 <section className="card mail-view" aria-label="The open message">
                   <div className="mail-view-in">
-                    {}
                     {viewer ?? (
                       <div className="mail-view-none">
                         <div className="mail-view-go">
@@ -464,8 +423,6 @@ function Mail() {
   );
 }
 
-
-
 function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (message: MailRow) => ReactNode }) {
   const title = inlinePlain(entry.task.title);
   const headId = `mail-task-${entry.task.id}`;
@@ -487,9 +444,6 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
     </div>
   );
 }
-
-
-
 
 function MailRowView({ row, unread, current, account, onOpen }: { row: MailRow; unread: boolean; current: boolean; account: boolean; onOpen: () => void }) {
   const line = taskLine(row);
@@ -527,8 +481,6 @@ function MailRowView({ row, unread, current, account, onOpen }: { row: MailRow; 
   );
 }
 
-
-
 function OpenMessage({
   row,
   unread,
@@ -554,14 +506,11 @@ function OpenMessage({
   const phone = useMedia(MAIL_PHONE);
   const { mode, setMode } = useMailMode();
   const closeTask = useCompleteTask();
-  
   const [answering, setAnswering] = useState<{ message: string; task: { id: string; title: string } } | null>(null);
-  
   const [linking, setLinking] = useState<string | null>(null);
   const actions = useRef<HTMLDivElement>(null);
   const outcome = useRef<HTMLDivElement>(null);
   const finder = useRef<HTMLDivElement>(null);
-  
   const picked = useRef(false);
   const findingTask = useRef(false);
   const chosen = answering?.message === keyOf(row) ? answering.task : null;
@@ -591,9 +540,7 @@ function OpenMessage({
   async function answer(task: { id: string; title: string }, result: string) {
     if (await closeTask(task, row, result)) setAnswering(null);
   }
-  
   const focusLink = () => actions.current?.closest("[data-mail-viewer]")?.querySelector<HTMLElement>(".mail-link-menu, .mail-more-menu")?.focus();
-  
   function stopAnswering() {
     setAnswering(null);
     focusAfterClose(() => actions.current?.querySelector<HTMLElement>(".mail-answers-menu"));
@@ -618,7 +565,6 @@ function OpenMessage({
         : [{ kind: "action", label: "Linked to every client and project", disabled: true, onSelect: () => undefined }],
     },
   ];
-  
   const waiting = tasks.filter((task) => task.status === "open" && task.mail);
   const replyOf = new Set((replies ?? []).filter((entry) => entry.replies.some((reply) => keyOf(reply) === keyOf(row))).map((entry) => entry.task.id));
   const answerEntry = (task: TaskData): MenuEntry => ({
@@ -641,15 +587,12 @@ function OpenMessage({
           ...(rest.length > 0 ? [{ kind: "group" as const, label: first.length > 0 ? "Other tasks that wait for mail" : "Tasks that wait for mail", entries: rest.map(answerEntry) }] : []),
         ];
   const gmail = `https://mail.google.com/mail/?authuser=${encodeURIComponent(row.accountEmail)}#all/${encodeURIComponent(row.threadId || row.id)}`;
-  
   const answersFirst = first.length > 0;
-  
   const linkFocus = () => {
     const target = findingTask.current ? finder.current?.querySelector<HTMLElement>("input") : null;
     findingTask.current = false;
     return target;
   };
-  
   const mayAnswer = first.filter((task) => !row.tasks.some((linked) => linked.id === task.id));
   const moreEntries: MenuEntry[] = [
     { kind: "submenu", label: "Link to…", entries },
@@ -774,8 +717,6 @@ function OpenMessage({
 
   const more = phone ? <Menu label="More" about={`for “${row.subject}”`} entries={moreEntries} variant="control" className="mail-more-menu" finalFocus={linkFocus} /> : null;
 
-  
-  
   const note = isDemo ? (
     <span id="mail-gmail-why" className="pill mail-sample">
       <span aria-hidden="true">Sample</span>
@@ -786,9 +727,7 @@ function OpenMessage({
   return <MailViewer row={{ ...row, unread }} onPrevious={onPrevious} onNext={onNext} note={note} onClose={onClose} actions={bar} below={below} more={more} />;
 }
 
-
 const FOUND_SHOWN = 12;
-
 
 function TaskFinder({ tasks, onPick, onCancel }: { tasks: TaskData[]; onPick: (task: TaskData) => void; onCancel: () => void }) {
   const [query, setQuery] = useState("");
@@ -834,7 +773,6 @@ function TaskFinder({ tasks, onPick, onCancel }: { tasks: TaskData[]; onPick: (t
     </div>
   );
 }
-
 
 function MailSheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);

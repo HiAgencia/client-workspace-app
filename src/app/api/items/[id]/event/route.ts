@@ -5,7 +5,6 @@ import { EVENT_COLUMNS, taskEventLinks, toLocalEvent } from "@/lib/tools/local-e
 import { isError } from "@/lib/tools/result";
 import { isUuid, loadScope, reaches } from "@/lib/tools/tree";
 
-
 export async function GET(_request: Request, { params }: RouteContext<"/api/items/[id]/event">) {
   const { id } = await params;
   if (!isUuid(id)) return problem(404, "no such item");

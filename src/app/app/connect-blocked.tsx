@@ -6,11 +6,7 @@ import { Button } from "@/components/ui/button";
 import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import { useWorkspace } from "./workspace";
 
-
-
-
 export type ConnectBlocked = "demo" | "not_configured" | null;
-
 
 export function ConnectBlockedNote({ reason, samples }: { reason: ConnectBlocked; samples: boolean }) {
   const { config } = useWorkspace();
