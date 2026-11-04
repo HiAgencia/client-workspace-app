@@ -164,7 +164,7 @@ describe("the workspace's own chat, with no node open", () => {
     const read = message.parts.find((part) => part.type === "tool-list_task_replies") as { output: { ok: boolean; replies: Array<{ id: string }> } } | undefined;
     expect(read?.output).toMatchObject({ ok: true, replies: [{ id: "transfer" }] });
     const answer = message.parts.filter((part) => part.type === "text").map((part) => (part as { text: string }).text).join(" ");
-    expect(answer).toContain('"Wait for the transfer": 1 possible reply, the latest "Transfer received" from Bayside Bank.');
+    expect(answer).toContain("“Wait for the transfer”: 1 possible reply, the latest “Transfer received” from Bayside Bank.");
     const after = await user!.client.from("items").select("status").eq("id", task.item.id).single();
     expect(after.data?.status).toBe("open");
   });

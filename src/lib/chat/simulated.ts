@@ -2,6 +2,7 @@ import type { LanguageModelV4Prompt, LanguageModelV4StreamPart } from "@ai-sdk/p
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { count } from "@/lib/count";
+import { inlinePlain } from "@/lib/inline-links";
 
 const usage = {
   inputTokens: { total: 0, noCache: 0, cacheRead: undefined, cacheWrite: undefined },
@@ -52,6 +53,8 @@ function toolResults(prompt: LanguageModelV4Prompt): Array<{ toolName: string; o
       : [],
   );
 }
+
+const quoted = (title: string) => `“${inlinePlain(title)}”`;
 
 function text(value: string): LanguageModelV4StreamPart[] {
   return [
@@ -122,9 +125,9 @@ function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart[] {
       byTask.set(value.task.id, entry);
     }
     const lines = [...byTask.values()].map(({ title, replies }) => {
-      if (replies.length === 0) return `"${title}": nothing has arrived yet.`;
+      if (replies.length === 0) return `${quoted(title)}: nothing has arrived yet.`;
       const latest = replies[0];
-      return `"${title}": ${count(replies.length, "possible reply", "possible replies")}, the latest "${latest.subject}" from ${latest.from.name ?? latest.from.email}.`;
+      return `${quoted(title)}: ${count(replies.length, "possible reply", "possible replies")}, the latest “${latest.subject}” from ${latest.from.name ?? latest.from.email}.`;
     });
     return text(`${[...failed, ...lines].join(" ")} Open a task to see them and say which one answers it.`);
   }
@@ -139,15 +142,15 @@ function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart[] {
     const late = groups?.overdue?.tasks ?? [];
     const due = groups?.today?.tasks ?? [];
     if (late.length + due.length === 0) return text("Nothing is due today, and nothing is late.");
-    const said = [late.length > 0 ? `Late: ${late.map((row) => row.title).join("; ")}.` : "", due.length > 0 ? `Due today: ${due.map((row) => row.title).join("; ")}.` : ""];
-    return text(`${said.filter(Boolean).join(" ")} Start with "${(late[0] ?? due[0]).title}".`);
+    const said = [late.length > 0 ? `Late: ${late.map((row) => inlinePlain(row.title)).join("; ")}.` : "", due.length > 0 ? `Due today: ${due.map((row) => inlinePlain(row.title)).join("; ")}.` : ""];
+    return text(`${said.filter(Boolean).join(" ")} Start with ${quoted((late[0] ?? due[0]).title)}.`);
   }
   if (CALENDAR.test(request) && results.some((result) => result.toolName === "browse_events")) {
     const answers = results.filter((result) => result.toolName === "browse_events").map(({ output }) => (output as { value?: EventsRead }).value);
     const read = new Set(answers.flatMap((value) => (value?.toRead?.length ? [] : (value?.accounts ?? []).map((account) => account.id))));
     const toRead = answers.flatMap((value) => value?.toRead ?? []).filter((account) => !read.has(account));
     if (toRead.length > 0) return calls(...toRead.map((account) => ({ toolName: "browse_events", input: { ...weekAhead(prompt), account } })));
-    const titles = answers.flatMap((value) => (value?.events ?? []).map((event) => event.title));
+    const titles = answers.flatMap((value) => (value?.events ?? []).map((event) => inlinePlain(event.title)));
     const failed = answers.flatMap((value) => (value?.ok === false ? [`I could not read the calendars: ${value.message}`] : (value?.failures ?? []).map((failure) => `The calendar of ${failure.accountEmail} could not be read: ${failure.reason}.`)));
     return text([...failed, titles.length === 0 ? "Nothing is on the calendars this week." : `This week: ${titles.join("; ")}.`].join(" "));
   }
@@ -158,7 +161,7 @@ function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart[] {
     if (!found) return call("search_items", { query: title, type: "task", status: "open" });
     const items = (found.output as { value?: { items?: Array<{ id: string; title: string }> } }).value?.items ?? [];
     const task = items.find((item) => item.title.toLowerCase() === title.toLowerCase());
-    if (!task) return text(`No open task is called "${title}", so nothing was closed.`);
+    if (!task) return text(`No open task is called ${quoted(title)}, so nothing was closed.`);
     return call("complete_task", { task: task.id, outcome: closing[2].trim() });
   }
   if (results.length > 0) {
@@ -180,9 +183,9 @@ function script(prompt: LanguageModelV4Prompt): LanguageModelV4StreamPart[] {
           const open = (toolName === "get_overview" ? value?.openTasks : value?.items) ?? [];
           return open.length === 0
             ? "Nothing is pending here."
-            : `Pending here: ${open.map((task) => task.title).join("; ")}. Start with "${open[0].title}".`;
+            : `Pending here: ${open.map((task) => inlinePlain(task.title)).join("; ")}. Start with ${quoted(open[0].title)}.`;
         }
-        return `Done: ${toolName.replace(/_/g, " ")} "${value?.item?.title ?? ""}".`;
+        return `Done: ${toolName.replace(/_/g, " ")} ${quoted(value?.item?.title ?? "")}.`;
       })
       .join(" ");
     return text(summary);
