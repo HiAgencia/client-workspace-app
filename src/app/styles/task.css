@@ -817,6 +817,11 @@
     }
   }
 }
+@media (hover: hover) {
+  .task:hover .task-title .inline-link {
+    color: var(--accent-ink);
+  }
+}
 @media (pointer: fine) {
   .task:not([data-layout="board"]):where(:has(.task-title .inline-link)) {
     grid-template-rows: auto minmax(1.5rem, auto);
