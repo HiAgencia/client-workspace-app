@@ -22,3 +22,9 @@ export function Link({ onPointerEnter, onFocus, ...props }: ComponentProps<typeo
     />
   );
 }
+
+
+
+export function LinkOrAnchor({ href, ...props }: Omit<ComponentProps<"a">, "href"> & { href: string }) {
+  return href.startsWith("/api/") ? <a href={href} {...props} /> : <Link href={href} {...props} />;
+}

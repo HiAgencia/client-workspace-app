@@ -1,6 +1,6 @@
 "use client";
 
-import { Link } from "@/components/ui/link";
+import { Link, LinkOrAnchor } from "@/components/ui/link";
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Field } from "@/components/ui/field";
@@ -427,6 +427,7 @@ export function Figure({ n, one, many, className }: { n: number; one: string; ma
 
 
 
+
 const FIRST_SHOWN = 5;
 
 
@@ -786,10 +787,10 @@ export function MailBoxContent({
       ) : (
         <BoxEmpty text={connectText ?? "Connect a Google account to see its mail here."} reason="no-account">
           {connect ?? (
-            <Link className={buttonClass({ variant: "quiet", size: "sm" })} href={connectHref}>
+            <LinkOrAnchor className={buttonClass({ variant: "quiet", size: "sm" })} href={connectHref}>
               <GoogleMark />
               <span className="btn-label">Connect Google account</span>
-            </Link>
+            </LinkOrAnchor>
           )}
         </BoxEmpty>
       );

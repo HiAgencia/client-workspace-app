@@ -1,6 +1,6 @@
 "use client";
 
-import { Link } from "@/components/ui/link";
+import { Link, LinkOrAnchor } from "@/components/ui/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -467,7 +467,7 @@ function NodeStrip({
           {mailAccounts && accounts.length === 0 && !offerOwn && (
             <li data-flip-key="connect">
               {}
-              <Link className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
+              <LinkOrAnchor className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
                 <span className="node-chip-name">
                   <GoogleMark className="node-chip-mark" />
                   Connect Google account
@@ -475,7 +475,7 @@ function NodeStrip({
                 <span id={`${id}connect`} className="node-chip-detail">
                   {`The one you use with ${node.name}`}
                 </span>
-              </Link>
+              </LinkOrAnchor>
             </li>
           )}
         </FlipList>
