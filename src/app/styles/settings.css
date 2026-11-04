@@ -402,14 +402,12 @@
     opacity: 0;
   }
 }
-.settings-box .box-body > .stack:has(> h3.t-label) {
+.settings-box .box-body > .stack:has(> h3.t-group) {
   padding-top: 0.875rem;
   border-top: 1px solid var(--division);
 
-  & > h3.t-label {
+  & > h3.t-group {
     margin: 0;
-    color: var(--ink);
-    font-weight: 600;
   }
 }
 :is(.settings-token, .settings-account-out) .btn-danger {

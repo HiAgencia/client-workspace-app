@@ -517,7 +517,7 @@ function AgentTokensSection() {
         <>
           {error && <BoxFailed what="The tokens" message={error} kept onRetry={() => setReads((n) => n + 1)} />}
           <div className="stack">
-            <h3 className="t-label" id="mcp-json">
+            <h3 className="t-group" id="mcp-json">
               The .mcp.json block
             </h3>
             <p className="t-help">
@@ -536,7 +536,7 @@ function AgentTokensSection() {
             </Fold>
           </div>
           <div className="stack">
-            <h3 className="t-label">Issued tokens</h3>
+            <h3 className="t-group">Issued tokens</h3>
             {data.tokens.length === 0 ? (
               <BoxEmpty text="No tokens yet." reason="no-tokens" />
             ) : (
