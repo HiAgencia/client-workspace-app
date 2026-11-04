@@ -171,8 +171,9 @@ export function RevealColumn({ className, children }: { className?: string; chil
   useEffect(() => {
     const node = root.current;
     if (!node || window.matchMedia(REDUCED).matches) return;
-    const line = window.innerHeight * 0.88;
-    const waiting = [...node.children].filter((part) => part.getBoundingClientRect().top >= line);
+    
+    
+    const waiting = [...node.children].filter((part) => part.getBoundingClientRect().top >= window.innerHeight);
     if (waiting.length === 0) return;
     for (const part of node.children) if (!waiting.includes(part)) part.setAttribute("data-entered", "");
     node.setAttribute("data-reveal", "");
