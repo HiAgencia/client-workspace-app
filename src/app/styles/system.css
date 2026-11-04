@@ -422,6 +422,11 @@
     --btn-fill: var(--interior-hover);
     scale: none;
   }
+  @media (pointer: coarse) {
+    & > .btn-icon {
+      width: calc(var(--touch) + 4px);
+    }
+  }
 }
 :where(.icon-forward, .icon-back, .icon-up, .icon-down, .icon-turn, .icon-turn-back) {
   transition: color var(--dur-hover-out) var(--ease-hover-out), translate var(--dur-hover-out) var(--ease-hover-out),
