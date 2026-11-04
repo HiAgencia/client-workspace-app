@@ -87,9 +87,10 @@ const checks = [
   },
 ];
 
-// The stock icon sets, by package name: line sets and their look-alikes, whole families under a scope included.
+// The stock icon sets, by package name: line sets and their look-alikes, whole families under a scope included. Every
+// name also takes any path inside its package (`<package>/dynamic`, `<package>/dist/...`), by the one suffix at the end.
 const STOCK_ICONS =
-  /^(?:lucide(?:-[\w-]+)?|@lucide\/.+|heroicons|@heroicons\/.+|react-feather|feather-icons|@tabler\/icons(?:-[\w-]+)?|react-icons(?:\/.+)?|@phosphor-icons\/.+|phosphor-react|phosphor-icons|@radix-ui\/react-icons|@iconify(?:-icon)?\/.+|iconify-icon|unplugin-icons|~icons\/.+|@mui\/icons-material(?:\/.+)?|@fortawesome\/.+|@ant-design\/icons(?:-svg)?|ionicons|react-ionicons|bootstrap-icons|react-bootstrap-icons|@primer\/octicons(?:-react)?|@remixicon\/.+|remixicon|boxicons|@carbon\/icons(?:-react)?|@mdi\/.+|material-icons|material-symbols|@material-symbols\/.+|iconoir(?:-react)?|@hugeicons\/.+|hugeicons-react|@untitled-ui\/icons-react|akar-icons|css\.gg|eva-icons|line-awesome|react-line-awesome|@iconscout\/.+|@icons-pack\/.+|simple-icons)$/;
+  /^(?:lucide(?:-[\w-]+)?|@lucide\/.+|heroicons|@heroicons\/.+|react-feather|feather-icons|@tabler\/icons(?:-[\w-]+)?|react-icons|@phosphor-icons\/.+|phosphor-react|phosphor-icons|@radix-ui\/react-icons|@iconify(?:-icon)?\/.+|iconify-icon|unplugin-icons|~icons\/.+|@mui\/icons-material|@fortawesome\/.+|@ant-design\/icons(?:-svg)?|ionicons|react-ionicons|bootstrap-icons|react-bootstrap-icons|@primer\/octicons(?:-react)?|@remixicon\/.+|remixicon|boxicons|@carbon\/icons(?:-react)?|@mdi\/.+|material-icons|material-symbols|@material-symbols\/.+|iconoir(?:-react)?|@hugeicons\/.+|hugeicons-react|@untitled-ui\/icons-react|akar-icons|css\.gg|eva-icons|line-awesome|react-line-awesome|@iconscout\/.+|@icons-pack\/.+|simple-icons)(?:\/.+)?$/;
 // Where a module names another: `from "x"`, `import "x"`, `import("x")`, `require("x")`.
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g;
 
@@ -123,11 +124,14 @@ function proveStockRule() {
     `const icons = await import(${q}@tabler/icons-react${q});`,
     `const { FiX } = require(${q}react-icons/fi${q});`,
     `export { Icon } from ${q}@iconify/react${q};`,
+    `import { DynamicIcon } from ${q}${lucide}/dynamic${q};`,
+    `import IconX from ${q}@tabler/icons-react/dist/esm/icons/IconX${q};`,
   ];
   const twins = [
     `import { CheckIcon } from ${q}@/components/ui/icons${q};`,
     `import ${q}./icons.css${q};`,
     `const lucideLike = ${q}${lucide}${q};`,
+    `import { DynamicIcon } from ${q}@/components/ui/icons/dynamic${q};`,
   ];
   const misses = [];
   planted.forEach((line, i) => stockImports(`planted ${i + 1}`, line).length !== 1 && misses.push(`planted import not found: ${line}`));
