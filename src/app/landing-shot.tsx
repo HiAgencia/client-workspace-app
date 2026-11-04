@@ -274,16 +274,18 @@ function Sidebar({ due, unread }: { due: number; unread: number }) {
                 </span>
               </li>
             </ul>
-            <div className="side-group">
-              <span className="side-toggle">Clients</span>
-              <div className="side-group-body">
-                <ul className="tree">{CLIENTS.map(branch)}</ul>
+            <div className="side-places">
+              <div className="side-group">
+                <span className="side-toggle">Clients</span>
+                <div className="side-group-body">
+                  <ul className="tree">{CLIENTS.map(branch)}</ul>
+                </div>
               </div>
-            </div>
-            <div className="side-group">
-              <span className="side-toggle">Projects</span>
-              <div className="side-group-body">
-                <ul className="tree">{PROJECTS.map(branch)}</ul>
+              <div className="side-group">
+                <span className="side-toggle">Projects</span>
+                <div className="side-group-body">
+                  <ul className="tree">{PROJECTS.map(branch)}</ul>
+                </div>
               </div>
             </div>
           </div>
