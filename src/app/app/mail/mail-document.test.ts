@@ -68,7 +68,7 @@ describe("the colors a message is read in", () => {
     const { doc, adapts } = documentFor(message(null), "dark", false);
     expect(adapts).toBe(false);
     expect(doc).toContain("color-scheme:light");
-    expect(doc).toContain("body{background:Canvas;min-height:100vh;filter:invert(.92) hue-rotate(180deg)}");
+    expect(doc).toContain("body{box-sizing:border-box;background:Canvas;min-height:100vh;filter:invert(.92) hue-rotate(180deg)}");
     expect(doc).toContain("img,video,[background],[style*=\"background-image\"]{filter:invert(1) hue-rotate(180deg)}");
   });
 

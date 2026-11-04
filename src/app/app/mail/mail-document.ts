@@ -23,7 +23,7 @@ export function documentFor(message: MailContent, mode: Theme, images: boolean):
   const scheme = adapts ? mode : "light";
   const turned = !adapts && mode === "dark";
   const turn = turned
-    ? `body{background:Canvas;min-height:100vh;filter:invert(.92) hue-rotate(180deg)}
+    ? `body{box-sizing:border-box;background:Canvas;min-height:100vh;filter:invert(.92) hue-rotate(180deg)}
 img,video,[background],[style*="background-image"]{filter:invert(1) hue-rotate(180deg)}`
     : "";
   const held = (markup: string) =>
