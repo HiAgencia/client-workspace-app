@@ -342,14 +342,15 @@ function AccountsSection() {
                               <ul className="plain-list settings-calendars" aria-label={`Calendars of ${account.email} shown`}>
                                 {account.calendars.map((calendar) => (
                                   <li key={calendar.id}>
+                                    {}
                                     <label className="check-row">
                                       <Checkbox
                                         checked={calendar.selected}
                                         disabled={account.isDemo}
-                                        aria-labelledby={`calendar-${calendar.id}`}
+                                        aria-labelledby={`calendar-${account.id}-${calendar.id}`}
                                         onCheckedChange={() => void act({ action: "select_calendar", accountId: account.id, calendarId: calendar.id, selected: !calendar.selected })}
                                       />
-                                      <span id={`calendar-${calendar.id}`} className="t-value">
+                                      <span id={`calendar-${account.id}-${calendar.id}`} className="t-value">
                                         {calendar.name}
                                       </span>
                                       {}
