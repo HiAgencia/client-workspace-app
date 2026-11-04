@@ -412,8 +412,12 @@ function AgentTokensSection() {
     setMissing(lacking);
     if (lacking.node || lacking.label) {
       const first = document.getElementById(lacking.node ? "token-where" : "token-name");
-      setSaid(first !== null && first === document.activeElement ? (lacking.node ? WHERE_MISSING : NAME_MISSING) : "");
-      requestAnimationFrame(() => first?.focus());
+      const again = first !== null && first === document.activeElement ? (lacking.node ? WHERE_MISSING : NAME_MISSING) : "";
+      setSaid("");
+      requestAnimationFrame(() => {
+        setSaid(again);
+        first?.focus();
+      });
       return;
     }
     setSaid("");
