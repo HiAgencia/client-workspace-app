@@ -348,9 +348,9 @@ describe("the demo seed", () => {
 
     const trash = await listTrash({ db: user.client, ownerId: user.id, source: "manual" });
     if (!trash.ok) throw new Error(trash.message);
-    expect(trash.items.map((entry) => ({ title: entry.title, branch: entry.branch }))).toEqual([
-      { title: "Order new business cards", branch: 1 },
-      { title: "Draft the post on hosting costs", branch: 2 },
+    expect(trash.items.map((entry) => ({ title: entry.title, with: entry.with }))).toEqual([
+      { title: "Order new business cards", with: { subtasks: 0, notes: 0, decisions: 0 } },
+      { title: "Draft the post on hosting costs", with: { subtasks: 1, notes: 0, decisions: 0 } },
     ]);
 
     await expectWorkingMoments(user.client, ZONE);

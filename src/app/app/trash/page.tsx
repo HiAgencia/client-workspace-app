@@ -12,17 +12,10 @@ import { get, post, type Item } from "../client-api";
 import { PathText, TYPE_NAMES } from "../item-parts";
 import { PageHeader } from "../page-header";
 import { useWorkspace } from "../workspace";
+import { broughtBack, type DeletedWith } from "./brought-back";
 import "../../styles/settings.css";
 
-type Entry = Item & { branch: number; with: { subtasks: number; notes: number }; deletedAt: string };
-
-function broughtBack(item: Entry): string | null {
-  const parts = [
-    item.with.subtasks > 0 ? count(item.with.subtasks, "subtask", "subtasks") : null,
-    item.with.notes > 0 ? count(item.with.notes, "note", "notes") : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" and ") : null;
-}
+type Entry = Item & { with: DeletedWith; deletedAt: string };
 
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -84,7 +77,7 @@ export default function TrashPage() {
                   <ul className="plain-list trash-list fade-enter">
                     {items.map((item) => {
                       const title = inlinePlain(item.title);
-                      const back = broughtBack(item);
+                      const back = broughtBack(item.with);
                       return (
                         <li key={item.id} className="trash-item" data-trash={item.id} data-leaving={leaving === item.id || undefined}>
                           <div className="trash-row">

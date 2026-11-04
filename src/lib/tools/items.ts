@@ -555,7 +555,9 @@ export async function restoreRevision(ctx: ToolContext, revisionId: string): Pro
   return ok({ item: toItem(data, found.scope) });
 }
 
-export type TrashEntry = z.infer<typeof itemSchema> & { branch: number; with: { subtasks: number; notes: number } };
+export type TrashEntry = z.infer<typeof itemSchema> & { with: { subtasks: number; notes: number; decisions: number } };
+
+const WITH_KEY: Record<ItemType, keyof TrashEntry["with"]> = { task: "subtasks", note: "notes", decision: "decisions" };
 
 export async function listTrash(ctx: ToolContext): Promise<ToolResult<{ items: TrashEntry[] }>> {
   const loaded = await loadScope(ctx);
@@ -563,21 +565,20 @@ export async function listTrash(ctx: ToolContext): Promise<ToolResult<{ items: T
   const read = await selectAllItems(ctx, reachOf(loaded.scope, { kind: "all" }), (query) => query.not("deleted_at", "is", null), "reading the trash");
   if (isError(read)) return read;
   const byId = new Map(read.rows.map((row) => [row.id, row]));
-  const tops = new Map<string, { row: ItemRow; branch: number; with: TrashEntry["with"] }>();
+  const tops = new Map<string, { row: ItemRow; with: TrashEntry["with"] }>();
   for (const row of read.rows) {
     let top = row;
     for (let parent = top.parent_item_id ? byId.get(top.parent_item_id) : undefined; parent && parent.deleted_at === top.deleted_at; ) {
       top = parent;
       parent = top.parent_item_id ? byId.get(top.parent_item_id) : undefined;
     }
-    const entry = tops.get(top.id) ?? { row: top, branch: 0, with: { subtasks: 0, notes: 0 } };
-    entry.branch++;
-    if (row !== top) entry.with[row.type === "task" ? "subtasks" : "notes"]++;
+    const entry = tops.get(top.id) ?? { row: top, with: { subtasks: 0, notes: 0, decisions: 0 } };
+    if (row !== top) entry.with[WITH_KEY[row.type as ItemType]]++;
     tops.set(top.id, entry);
   }
   const items = [...tops.values()]
     .sort((a, b) => (a.row.deleted_at! < b.row.deleted_at! ? 1 : -1))
     .slice(0, 200)
-    .map(({ row, branch, with: deletedWith }) => ({ ...toItem(row, loaded.scope), branch, with: deletedWith }));
+    .map(({ row, with: deletedWith }) => ({ ...toItem(row, loaded.scope), with: deletedWith }));
   return ok({ items });
 }

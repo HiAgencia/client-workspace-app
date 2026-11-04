@@ -789,9 +789,21 @@ describe("versions", () => {
     const trash = await listTrash(userCtx(a));
     if (!trash.ok) throw new Error(trash.message);
     const entry = trash.items.find((i) => i.id === task.id);
-    expect(entry?.branch).toBe(2);
-    expect(entry?.with).toEqual({ subtasks: 1, notes: 0 });
+    expect(entry?.with).toEqual({ subtasks: 1, notes: 0, decisions: 0 });
     expect(trash.items.some((i) => i.title === "Trash child")).toBe(false);
+  });
+
+  it("the trash counts a branch's notes and decisions apart", async () => {
+    const { item: task } = await run<{ item: ItemOut }>("create_task", userCtx(a), { node: treeA.mobile, title: "Trash kinds" });
+    await run("create_task", userCtx(a), { parent: task.id, title: "Trash kinds subtask" });
+    await run("add_note", userCtx(a), { parent: task.id, text: "Trash kinds note" });
+    const { item: decision } = await run<{ item: ItemOut }>("add_decision", userCtx(a), { node: treeA.mobile, decision: "Trash kinds decision" });
+    await run("move_item", userCtx(a), { id: decision.id, parent: task.id });
+    await run("delete_item", userCtx(a), { id: task.id });
+    const trash = await listTrash(userCtx(a));
+    if (!trash.ok) throw new Error(trash.message);
+    expect(trash.items.find((i) => i.id === task.id)?.with).toEqual({ subtasks: 1, notes: 1, decisions: 1 });
+    expect(trash.items.some((i) => i.id === decision.id)).toBe(false);
   });
 });
 
