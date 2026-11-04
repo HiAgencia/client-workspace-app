@@ -38,6 +38,18 @@
   transition-duration: var(--dur), var(--dur-slow);
   transition-timing-function: var(--ease-out), var(--ease-out);
 }
+:root:has(.notices > .notice) .guide-card[data-guide="offer"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) var(--ease-in),
+    visibility 0s linear var(--dur-fast),
+    right var(--dur) var(--ease-in);
+}
+:root:has(.guide-card[data-guide="offer"]) .notices > .notice:not([data-leaving]) {
+  transition-delay: var(--dur-fast);
+}
 @media (width < 40rem) {
   .guide-card,
   .guide-card[data-guide="step"] {
