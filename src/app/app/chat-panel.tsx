@@ -34,12 +34,16 @@ export function ChatDock() {
   const { chat } = useWorkspace();
   const docked = useDocked();
   const { setOpen } = chat;
-  const close = useCallback(() => setOpen(false), [setOpen]);
+  const dock = useRef<HTMLElement>(null);
+  const sheet = useRef<HTMLDialogElement>(null);
+  const close = useCallback(() => {
+    const held = dock.current?.contains(document.activeElement) ?? false;
+    setOpen(false);
+    if (held) requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-page-header] [data-chat-toggle]")?.focus({ preventScroll: true }));
+  }, [setOpen]);
   const open = chat.scope !== undefined && chat.open;
   const [kept, setKept] = useState<{ scope: string | null; docked: boolean } | null>(null);
   if (open && (kept === null || kept.scope !== chat.scope || kept.docked !== docked)) setKept({ scope: chat.scope ?? null, docked });
-  const dock = useRef<HTMLElement>(null);
-  const sheet = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (open || kept === null) return;
     return afterExit(kept.docked ? [dock.current, dock.current?.parentElement] : sheet.current, () => setKept(null));
@@ -88,13 +92,13 @@ function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTML
 
 const MAX_IMAGE = 4 * 1024 * 1024;
 
-export function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
+function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
   const [initial, setInitial] = useState<{ messages: UIMessage[]; off: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
   const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
-  const reach = nodeId === null ? "All clients and projects" : node ? <><PathText path={node.path} />{below}</> : "This page's client or project";
+  const reach = nodeId === null ? "Works in all clients and projects" : node ? <>Works in <PathText path={node.path} />{below}</> : "Works in this page's client or project";
 
   useEffect(() => {
     void get<{ messages: UIMessage[]; off: string | null }>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat").then((answer) => {
@@ -206,7 +210,7 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
   return (
     <>
       <ol className="chat-log" ref={log} aria-live="polite">
-        {messages.length === 0 && !off && (
+        {!off && (
           <li className="inline-note">
             {nodeId === null
               ? `Ask what is pending, add a task to any client or project by its name, or check what arrived for the tasks that wait for mail. Attach an image of a message to turn it into tasks. ${ASSISTANT_NAME} acts only when you ask.`
