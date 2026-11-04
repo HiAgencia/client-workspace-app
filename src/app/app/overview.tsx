@@ -166,7 +166,7 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
         notes: {
           id: "notes",
           title: place.kind === "node" ? NAMES.notes : "Notes in General",
-          purpose: "Notes in General",
+          purpose: "What to keep in view, apart from the tasks",
           surface: "rest",
           count: notesCount(notes.data?.total),
           action: noteAdd.trigger,
