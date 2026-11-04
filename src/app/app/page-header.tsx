@@ -10,7 +10,7 @@ import { PRODUCT_NAME } from "@/lib/product";
 import { cx } from "@/lib/utils";
 import { useWorkspace } from "./workspace";
 
-export type Crumb = { label: string; href?: string };
+type Crumb = { label: string; href?: string };
 export type PageLayout = "list" | "board";
 
 type PageHeaderProps = {
@@ -64,7 +64,7 @@ export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0,
                       {crumb.label}
                     </Link>
                   ) : (
-                    <span className="page-trail-here">{crumb.label}</span>
+                    <span className="page-trail-label">{crumb.label}</span>
                   )}
                 </li>
               ))}
@@ -177,9 +177,6 @@ function ViewSwitch({ label, value, options, onChange }: { label: string; value:
   usePiece(rail, '[aria-pressed="true"]');
   return (
     <div className="named page-layout-named">
-      <span className="t-label named-label" aria-hidden="true">
-        {label}
-      </span>
       <div ref={rail} role="group" aria-label={label} className="seg page-layout" data-page-layout={value}>
         {options.map((option) => (
           <button key={option.value} type="button" className="seg-option" aria-pressed={option.value === value} onClick={() => onChange(option.value)}>
@@ -194,7 +191,7 @@ function ViewSwitch({ label, value, options, onChange }: { label: string; value:
 function ChatButton() {
   const { chat } = useWorkspace();
   return (
-    <Button aria-expanded={chat.open} data-chat-toggle onClick={() => chat.setOpen(!chat.open)}>
+    <Button aria-expanded={chat.open} aria-controls={chat.open ? "chat-panel" : undefined} data-chat-toggle onClick={() => chat.setOpen(!chat.open)}>
       <ChatIcon />
       <span className="btn-label">Chat</span>
     </Button>

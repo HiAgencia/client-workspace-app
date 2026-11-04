@@ -11,7 +11,7 @@ type Step = { targets: string[]; title: string; text: string };
 
 const STEPS: Step[] = [
   {
-    targets: [".sidebar .side-main", ".topbar .drawer-trigger"],
+    targets: [".sidebar .side-places", ".topbar .drawer-trigger"],
     title: "Clients and projects",
     text: "Each one keeps its tasks, notes, calendars and mail together. Open one from here, and its page shows only what belongs to it.",
   },

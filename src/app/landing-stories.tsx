@@ -130,7 +130,7 @@ function PlacesScene() {
             <div key={place.key} className="places-view" data-show={`at-${place.key}`}>
               <div className="page-header-text">
                 <p className="page-trail">
-                  <span className="page-trail-here">{place.trail}</span>
+                  <span className="page-trail-label">{place.trail}</span>
                 </p>
                 <div className="page-title-line">
                   <span className="page-mark" data-color={place.color}>
@@ -359,7 +359,7 @@ function ChatScene() {
             <div className="stack chat-title">
               <p className="t-title">{ASSISTANT_NAME}</p>
               <p className="t-meta chat-models">{ASSISTANT_MODELS}</p>
-              <p className="t-value chat-reach">All clients and projects</p>
+              <p className="t-value chat-reach">Works in all clients and projects</p>
             </div>
             <span className="btn btn-quiet btn-sm btn-icon">
               <CloseIcon />

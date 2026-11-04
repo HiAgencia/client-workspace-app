@@ -109,8 +109,10 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
               )}
             </li>
           </ul>
-          <NodeGroup kind="client" current={current} ids={ids} />
-          <NodeGroup kind="project" current={current} ids={ids} />
+          <div className="side-places">
+            <NodeGroup kind="client" current={current} ids={ids} />
+            <NodeGroup kind="project" current={current} ids={ids} />
+          </div>
         </div>
       </div>
       <div ref={foot} className="side-foot side-pieces">
