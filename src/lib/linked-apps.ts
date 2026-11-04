@@ -1,7 +1,3 @@
-
-
-
-
 export type LinkedApp =
   | "github"
   | "figma"
@@ -17,24 +13,6 @@ export type LinkedApp =
   | "slack"
   | "youtube";
 
-
-export const LINKED_APP_NAMES: Record<LinkedApp, string> = {
-  github: "GitHub",
-  figma: "Figma",
-  docs: "Google Docs",
-  sheets: "Google Sheets",
-  slides: "Google Slides",
-  drive: "Google Drive",
-  meet: "Google Meet",
-  calendar: "Google Calendar",
-  gmail: "Gmail",
-  analytics: "Google Analytics",
-  notion: "Notion",
-  slack: "Slack",
-  youtube: "YouTube",
-};
-
-
 const GOOGLE_HOSTS = new Map<string, LinkedApp>([
   ["drive.google.com", "drive"],
   ["meet.google.com", "meet"],
@@ -47,7 +25,6 @@ const GOOGLE_EDITORS: Array<[string, LinkedApp]> = [
   ["/spreadsheets/", "sheets"],
   ["/presentation/", "slides"],
 ];
-
 
 const DOMAINS: Array<[string, LinkedApp]> = [
   ["github.com", "github"],

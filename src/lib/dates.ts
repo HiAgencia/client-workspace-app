@@ -1,8 +1,4 @@
-
-
-
 export type Day = string;
-
 
 export const LOCALE = "en";
 
@@ -35,7 +31,6 @@ export function addMonths(day: Day, offset: number): Day {
   return dayOf(target);
 }
 
-
 function shortDay(day: Day, now: Day = today()): string {
   const date = toDate(day);
   const sameYear = day.slice(0, 4) === now.slice(0, 4);
@@ -49,7 +44,6 @@ export function longDay(day: Day): string {
 export function monthTitle(day: Day): string {
   return new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" }).format(toDate(day));
 }
-
 
 export function dueTone(day: Day | null, now: Day = today()): "alert" | "accent" | "neutral" | "muted" {
   if (!day) return "muted";
@@ -66,19 +60,12 @@ export function dueLabel(day: Day | null, now: Day = today()): string {
   return shortDay(day, now);
 }
 
-
 export function weekOf(day: Day, weekStart: number): { from: Day; to: Day } {
   const jsStart = weekStart % 7;
   const back = (toDate(day).getDay() - jsStart + 7) % 7;
   const from = addDays(day, -back);
   return { from, to: addDays(from, 6) };
 }
-
-export function monthOf(day: Day): { from: Day; to: Day } {
-  const date = toDate(day);
-  return { from: dayOf(new Date(date.getFullYear(), date.getMonth(), 1)), to: dayOf(new Date(date.getFullYear(), date.getMonth() + 1, 0)) };
-}
-
 
 export function instantsOf(from: Day, to: Day): { from: string; to: string } {
   return { from: toDate(from).toISOString(), to: toDate(addDays(to, 1)).toISOString() };
@@ -92,8 +79,6 @@ export function isDay(value: string | null | undefined): value is Day {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(toDate(value).getTime());
 }
 
-
-
 export function untilAgain(seconds: number | null): string {
   if (!seconds || !Number.isFinite(seconds)) return "tomorrow";
   const hours = Math.round(seconds / 3600);
@@ -101,7 +86,6 @@ export function untilAgain(seconds: number | null): string {
   if (hours === 1) return "in about an hour";
   return "in a few minutes";
 }
-
 
 export function firstWeekday(): number {
   try {
@@ -114,7 +98,6 @@ export function firstWeekday(): number {
     return 1;
   }
 }
-
 
 export function monthGrid(day: Day, weekStart: number): Day[][] {
   const date = toDate(day);
@@ -140,7 +123,7 @@ export function monthGrid(day: Day, weekStart: number): Day[][] {
 }
 
 export function weekdayNames(weekStart: number): Array<{ short: string; long: string }> {
-  const base = new Date(2024, 0, 7); 
+  const base = new Date(2024, 0, 7);
   return Array.from({ length: 7 }, (_, i) => {
     const date = new Date(base);
     date.setDate(base.getDate() + ((weekStart % 7) + i));
