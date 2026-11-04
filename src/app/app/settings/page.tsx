@@ -29,10 +29,12 @@ import "../../styles/settings.css";
 
 
 
+
+
 const PARTS = ["theme-settings", "accounts-settings", "agent-tokens"] as const;
 const ENTRY_CAP_MS = 6000;
 
-const SettledContext = createContext<{ ready: boolean; report: (id: string, settled: boolean) => void }>({ ready: true, report: () => undefined });
+const SettledContext = createContext<{ ready: boolean; revealed: boolean; report: (id: string, settled: boolean) => void }>({ ready: true, revealed: true, report: () => undefined });
 
 export default function SettingsPage() {
   const [settled, setSettled] = useState<Record<string, boolean>>({ "theme-settings": true });
@@ -45,13 +47,23 @@ export default function SettingsPage() {
   
   const [entered, setEntered] = useState(false);
   if (!entered && (capped || PARTS.every((id) => settled[id]))) setEntered(true);
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!entered || revealed) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => (second = requestAnimationFrame(() => setRevealed(true))));
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [entered, revealed]);
 
   return (
     <Suspense fallback={null}>
       <ViewTransition enter="page-in" exit="page-out" default="none">
         <div className="page page-settings">
           <PageHeader title="Settings" />
-          <SettledContext.Provider value={{ ready: entered, report }}>
+          <SettledContext.Provider value={{ ready: entered, revealed, report }}>
             <div className="settings-boxes" data-ready={entered || undefined} aria-busy={!entered || undefined}>
               <ThemeSection />
               <AccountsSection />
@@ -77,15 +89,17 @@ function useSettled(id: string, settled: boolean) {
 
 
 
-function SettingsBox({ id, title, icon: Glyph, count: figure, order, children }: { id: string; title: string; icon: Icon; count?: ReactNode; order: number; children: ReactNode }) {
-  const { ready } = useContext(SettledContext);
+function SettingsBox({ id, title, icon: Glyph, count: figure, order, below = false, children }: { id: string; title: string; icon: Icon; count?: ReactNode; order: number; below?: boolean; children: ReactNode }) {
+  const { ready, revealed } = useContext(SettledContext);
+  const behind = below && !revealed;
   return (
     <section
       className="box settings-box"
       aria-labelledby={`${id}-title`}
       id={id}
       data-settings={id}
-      data-shown={ready ? "" : undefined}
+      data-shown={ready && !behind ? "" : undefined}
+      data-behind={behind || undefined}
       style={{ "--enter-delay": `${order * 55}ms` } as CSSProperties}
     >
       <header className="box-head">
@@ -145,6 +159,8 @@ function AccountsSection() {
   const mailRead = useMailRead({ kind: "all" }, null);
   const mail = mailRead.data;
   useSettled("accounts-settings", (accounts !== null || error !== null) && mailRead.settled);
+  
+  const { ready } = useContext(SettledContext);
 
   useEffect(() => {
     let live = true;
@@ -186,9 +202,11 @@ function AccountsSection() {
   }
 
   return (
-    <SettingsBox id="accounts-settings" title="Google accounts" icon={AccountIcon} order={1} count={accounts && accounts.length > 0 ? `${accounts.length} connected` : undefined}>
+    <SettingsBox id="accounts-settings" title="Google accounts" icon={AccountIcon} order={1} count={ready && accounts && accounts.length > 0 ? `${accounts.length} connected` : undefined}>
       <p className="t-help">An account&apos;s calendars and mail show in the client or project it is connected to, and in its projects.</p>
-      {tree !== null && tree.length === 0 ? (
+      {!ready ? (
+        <BoxWait what="Loading the accounts…" rows={2} />
+      ) : tree !== null && tree.length === 0 ? (
         <FirstPlace what="An account is connected to a client or a project, so there is nowhere to connect one yet." />
       ) : canConnect ? (
         <div className="settings-form" aria-label="Connect Google account" role="group">
@@ -216,7 +234,7 @@ function AccountsSection() {
         
         accounts && accounts.length > 0 && <ConnectBlockedNote reason={connectBlocked} samples={accounts.some((account) => account.isDemo)} />
       )}
-      {!accounts ? (
+      {!ready ? null : !accounts ? (
         error ? (
           <BoxFailed what="The accounts" message={error} kept={false} onRetry={() => setRound((n) => n + 1)} />
         ) : (
@@ -447,7 +465,7 @@ function AgentTokensSection() {
   const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A client or project no longer listed";
   const live = data?.tokens.filter((token) => !token.revokedAt).length;
   return (
-    <SettingsBox id="agent-tokens" title="Agent tokens" icon={TokenIcon} order={2} count={live ? `${live} in use` : undefined}>
+    <SettingsBox id="agent-tokens" title="Agent tokens" icon={TokenIcon} order={2} below count={live ? `${live} in use` : undefined}>
       <p className="t-help">A token lets a coding agent read and update one client or project, and everything in it.</p>
       {tree !== null && tree.length === 0 ? (
         <FirstPlace what="A token reaches one client or project, so there is none to issue one for yet." />

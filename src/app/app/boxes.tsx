@@ -317,6 +317,23 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
   const fine = useFinePointer();
   
   const [spread, setSpread] = useState(true);
+  
+  
+  
+  
+  const stack = spread ? [] : [...(wide ? [wide.id] : []), ...shown(first), ...shown(second), ...shown(row)];
+  const behindNow = stack.filter((id, at) => stack.slice(0, at).some((above) => !revealed.has(above)));
+  const behindKey = behindNow.join(",");
+  const [held, setHeld] = useState<string[]>([]);
+  useEffect(() => {
+    let second = 0;
+    const first = requestAnimationFrame(() => (second = requestAnimationFrame(() => setHeld(behindKey ? behindKey.split(",") : []))));
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [behindKey]);
+  const behind = new Set([...held, ...behindNow]);
 
   useEffect(() => {
     announcer = setSaid;
@@ -329,13 +346,15 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
   
   useFlip(host, { items: "[data-box]", layout: "grid" });
   
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = host.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => {
+    const read = () => {
       const columns = element.querySelector<HTMLElement>(".boxes-cols");
       if (columns) setSpread(getComputedStyle(columns).getPropertyValue("--spread").trim() === "1");
-    });
+    };
+    read();
+    const observer = new ResizeObserver(read);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -428,7 +447,8 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
             isLast={every.at(-1) === id}
             zone={zone}
             spread={spread}
-            shown={revealed.has(id)}
+            shown={revealed.has(id) && !behind.has(id)}
+            behind={behind.has(id)}
           />
         ))}
         {}
@@ -442,7 +462,7 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
     <div ref={host} className="boxes" data-ready={ready || undefined} data-at-once={atOnce || undefined} aria-label={label} role="region">
       {wide && (
         <div className="boxes-wide">
-          <Box spec={wide} index={0} board={board} draggable={false} dropBefore={false} isFirst isLast zone={0} spread={spread} fixed shown={revealed.has(wide.id)} />
+          <Box spec={wide} index={0} board={board} draggable={false} dropBefore={false} isFirst isLast zone={0} spread={spread} fixed shown={revealed.has(wide.id)} behind={false} />
         </div>
       )}
       {}
@@ -483,6 +503,7 @@ function Box({
   spread,
   fixed = false,
   shown,
+  behind,
 }: {
   spec: BoxSpec;
   index: number;
@@ -498,6 +519,8 @@ function Box({
   fixed?: boolean;
   
   shown: boolean;
+  
+  behind: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const titleId = `box-${spec.id}-title`;
@@ -522,6 +545,7 @@ function Box({
       data-drop-before={dropBefore || undefined}
       aria-labelledby={titleId}
       data-shown={shown || undefined}
+      data-behind={behind || undefined}
       aria-busy={!shown || spec.busy || undefined}
       style={{ "--enter-delay": `calc(var(--enter-step) * ${3 + Math.min(index, 8)})` } as CSSProperties}
     >
