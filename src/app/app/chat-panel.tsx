@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { MetaMark } from "@/components/ui/brands";
 import { Button, buttonClass } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
@@ -10,6 +10,7 @@ import { AttachImageIcon, CloseIcon, CopiedIcon, MicIcon, SendIcon, UndoIcon } f
 import { afterExit } from "@/components/ui/use-exit";
 import { BROWSER_READS, leftUnfinished, turnGoesOn } from "@/lib/chat/browser-reads";
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
+import { inlinePieces } from "@/lib/inline-links";
 import { ASSISTANT_MODELS, ASSISTANT_NAME } from "@/lib/product";
 import { PathText } from "./item-parts";
 import { get, tool } from "./client-api";
@@ -228,7 +229,15 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
                   </p>
                 ) : (
                   <p key={index} className="msg-text t-body">
-                    {part.text}
+                    {inlinePieces(part.text).map((piece, at) =>
+                      piece.href ? (
+                        <a key={at} href={piece.href} target="_blank" rel="noreferrer noopener">
+                          {piece.text}
+                        </a>
+                      ) : (
+                        <Fragment key={at}>{piece.text}</Fragment>
+                      ),
+                    )}
                   </p>
                 );
               }
