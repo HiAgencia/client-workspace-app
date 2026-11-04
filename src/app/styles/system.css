@@ -778,6 +778,9 @@ textarea.field {
   transition: background-color var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out),
     box-shadow var(--dur-hover-out) var(--ease-hover-out);
   box-shadow: inset 0 0 0 1px transparent;
+  @media (pointer: coarse) {
+    min-height: var(--touch);
+  }
   &[data-highlighted] {
     background: var(--interior-hover);
     transition-duration: var(--dur-hover);
