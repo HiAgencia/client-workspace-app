@@ -40,7 +40,7 @@ import { settledInBrowser } from "./started";
 import { Welcome } from "./welcome";
 import { useChatScope, useWorkspace, type Person } from "./workspace";
 
-export const OVERVIEW_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
+const OVERVIEW_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
 const NAMES: Record<string, string> = { tasks: "Tasks", calendar: "Calendar", mail: "Mail", no_date: "No date", activity: "Activity", notes: "Notes" };
 
@@ -165,7 +165,7 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
         },
         notes: {
           id: "notes",
-          title: NAMES.notes,
+          title: place.kind === "node" ? NAMES.notes : "Notes in General",
           purpose: "Notes in General",
           surface: "rest",
           count: notesCount(notes.data?.total),
