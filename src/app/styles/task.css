@@ -432,7 +432,6 @@
   margin: 0;
   font-weight: 450;
   overflow-wrap: anywhere;
-  text-wrap: pretty;
   text-decoration-line: line-through;
   text-decoration-color: transparent;
   transition: color var(--dur-slow) var(--ease-out), text-decoration-color var(--dur-slow) var(--ease-out);
@@ -474,7 +473,6 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   white-space: normal;
-  text-wrap: pretty;
 }
 .task-meta {
   grid-column: 2;
@@ -1084,7 +1082,6 @@
   line-height: 1.25;
   letter-spacing: var(--tracking-h1);
   overflow-wrap: anywhere;
-  text-wrap: pretty;
   pointer-events: none;
   transition: color var(--dur) var(--ease-std);
 

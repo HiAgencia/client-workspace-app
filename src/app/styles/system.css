@@ -116,7 +116,6 @@
   font-weight: 400;
   line-height: 1.55;
   color: var(--ink-soft);
-  text-wrap: pretty;
 }
 .t-help {
   font-family: var(--font-text);
@@ -124,7 +123,6 @@
   font-weight: 400;
   line-height: 1.5;
   color: var(--muted);
-  text-wrap: pretty;
 }
 .t-meta {
   font-family: var(--font-text);
@@ -1474,7 +1472,6 @@ textarea.field {
   font-size: var(--text-body);
   font-weight: 400;
   line-height: 1.5;
-  text-wrap: pretty;
 
   &[data-tone="alert"] {
     background: var(--alert-tint);

@@ -139,7 +139,6 @@
   font-size: var(--landing-lead);
   line-height: 1.5;
   letter-spacing: -0.006em;
-  text-wrap: pretty;
 }
 .session-slot {
   min-height: calc(var(--landing-cta-h) + 2.25rem);
@@ -161,7 +160,6 @@
   }
   & .t-meta {
     max-width: 40rem;
-    text-wrap: pretty;
   }
 }
 @media (width < 30rem) {
@@ -409,7 +407,6 @@
   min-height: 2rem;
   margin: 0;
   padding-inline-end: 3rem;
-  text-wrap: pretty;
 }
 .shot-mail {
   --mail-row-h: 5.375rem;
@@ -600,7 +597,6 @@
   color: var(--muted);
   font-size: var(--text-meta);
   line-height: 1.4;
-  text-wrap: pretty;
 }
 @media (width >= 34rem) {
   .works-list {
@@ -672,7 +668,6 @@
   color: var(--ink-soft);
   font-size: var(--text-lead);
   line-height: 1.6;
-  text-wrap: pretty;
 }
 .story-scene {
   min-width: 0;
