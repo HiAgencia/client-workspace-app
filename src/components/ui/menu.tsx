@@ -56,6 +56,15 @@ export function Menu({ label, about, name, entries, variant = "quiet", className
   );
 }
 
+function EntryText({ label, detail }: { label: string; detail?: ReactNode }) {
+  return (
+    <span className="menu-item-text">
+      <span className="menu-item-label">{label}</span>
+      {detail ? <span className="menu-item-detail">{detail}</span> : null}
+    </span>
+  );
+}
+
 function Entries({ entries, container }: { entries: MenuEntry[]; container: ReturnType<typeof usePopupContainer> }): ReactNode {
   return entries.map((entry, index) => {
     const key = `${entry.kind}-${entry.kind === "action" && entry.id ? entry.id : "label" in entry ? entry.label : index}`;
@@ -73,8 +82,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
             onClick={() => entry.onSelect()}
           >
             {entry.icon && <entry.icon className="menu-item-icon" />}
-            <span className="menu-item-label">{entry.label}</span>
-            {entry.detail && <span className="menu-item-detail">{entry.detail}</span>}
+            <EntryText label={entry.label} detail={entry.detail} />
           </Base.Item>
         );
       case "group":
@@ -89,8 +97,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
           <Base.SubmenuRoot key={key}>
             <Base.SubmenuTrigger className="option menu-item menu-sub" label={entry.label}>
               {entry.icon && <entry.icon className="menu-item-icon" />}
-              <span className="menu-item-label">{entry.label}</span>
-              <span className="menu-item-detail">{entry.options.find((option) => option.value === entry.value)?.label ?? ""}</span>
+              <EntryText label={entry.label} detail={entry.options.find((option) => option.value === entry.value)?.label} />
             </Base.SubmenuTrigger>
             <Base.Portal container={container}>
               <Base.Positioner className="positioner" sideOffset={4} alignOffset={-4}>
@@ -112,8 +119,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
           <Base.SubmenuRoot key={key}>
             <Base.SubmenuTrigger className="option menu-item menu-sub" label={entry.label}>
               {entry.icon && <entry.icon className="menu-item-icon" />}
-              <span className="menu-item-label">{entry.label}</span>
-              {entry.detail && <span className="menu-item-detail">{entry.detail}</span>}
+              <EntryText label={entry.label} detail={entry.detail} />
             </Base.SubmenuTrigger>
             <Base.Portal container={container}>
               <Base.Positioner className="positioner" sideOffset={4} alignOffset={-4}>
