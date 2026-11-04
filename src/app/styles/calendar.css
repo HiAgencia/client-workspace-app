@@ -497,6 +497,9 @@
     margin-inline: calc(-1 * var(--pad-card) - 1rem - 1px);
     padding-inline: 0;
   }
+  .cal-card:has(.cal-month[data-narrow]) .cal-list {
+    margin-inline: 0;
+  }
 }
 .cal-month-name {
   padding: 0 0.4rem 0.2rem 0.75rem;
