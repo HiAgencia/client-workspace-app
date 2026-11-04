@@ -430,12 +430,12 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       },
     });
   }, []);
-  const closeItem = useCallback((id: string) => {
+  const closeItem = useCallback((id: string, from: HTMLElement | null) => {
     setDetail(null);
     focusAfterClose(() => {
       const row = document.querySelector<HTMLElement>(`[data-item="${id}"]`);
       return row?.querySelector<HTMLElement>("[data-detail]") ?? row?.querySelector<HTMLElement>("[data-item-title]");
-    });
+    }, from);
   }, []);
   const deleteItem = useCallback(
     async (item: Item) => {

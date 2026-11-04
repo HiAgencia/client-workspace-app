@@ -39,7 +39,7 @@ export function ItemPanel({
   item: Item | null;
   saving: Saving;
   version: number;
-  onClose: (id: string) => void;
+  onClose: (id: string, from: HTMLElement | null) => void;
   onDelete: (item: Item) => void;
 }) {
   const { tree } = useWorkspace();
@@ -53,6 +53,7 @@ export function ItemPanel({
 
   const current = item && shown && shown.id === item.id ? shown : (item ?? shown);
   const id = useRef<string | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const latest = useRef("");
   const confirmed = useRef("");
   const pending = useRef<string | null>(null);
@@ -71,7 +72,10 @@ export function ItemPanel({
       setNotes(item.body ?? "");
       setStatus("");
       setRevisions(null);
-      if (!el.open) el.showModal();
+      if (!el.open) {
+        opener.current = document.activeElement as HTMLElement | null;
+        el.showModal();
+      }
       requestAnimationFrame(() => el.querySelector<HTMLElement>(".rich-field")?.focus({ preventScroll: true }));
     } else if (!item && el.open) {
       el.close();
@@ -167,7 +171,7 @@ export function ItemPanel({
       }}
       onClose={() => {
         void flush();
-        if (id.current) onClose(id.current);
+        if (id.current) onClose(id.current, opener.current);
       }}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";

@@ -18,7 +18,9 @@ export function afterExit(elements: Leaving | Leaving[], done: () => void): () =
   };
 }
 
-export function focusAfterClose(target: () => HTMLElement | null | undefined): void {
+export function focusAfterClose(target: () => HTMLElement | null | undefined, from?: HTMLElement | null): void {
+  const here = document.activeElement;
+  if (from !== undefined && here && here !== document.body && here !== from && !here.closest("dialog:not([open])")) return;
   let acted = false;
   const act = () => {
     acted = true;
