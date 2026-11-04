@@ -14,7 +14,15 @@ import { PageHeader } from "../page-header";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 
-type Entry = Item & { branch: number; deletedAt: string };
+type Entry = Item & { branch: number; with: { subtasks: number; notes: number }; deletedAt: string };
+
+function broughtBack(item: Entry): string | null {
+  const parts = [
+    item.with.subtasks > 0 ? count(item.with.subtasks, "subtask", "subtasks") : null,
+    item.with.notes > 0 ? count(item.with.notes, "note", "notes") : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" and ") : null;
+}
 
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -76,6 +84,7 @@ export default function TrashPage() {
                   <ul className="plain-list trash-list fade-enter">
                     {items.map((item) => {
                       const title = inlinePlain(item.title);
+                      const back = broughtBack(item);
                       return (
                         <li key={item.id} className="trash-item" data-trash={item.id} data-leaving={leaving === item.id || undefined}>
                           <div className="trash-row">
@@ -84,9 +93,7 @@ export default function TrashPage() {
                               <span className="t-meta">
                                 {TYPE_NAMES[item.type]} in {item.nodePath ? <PathText path={item.nodePath} /> : "General"}, deleted {stamp(item.deletedAt)}
                               </span>
-                              {item.branch > 1 && (
-                                <span className="t-meta">{`Restore also brings back the ${count(item.branch - 1, "subtask or note", "subtasks and notes")} deleted with it`}</span>
-                              )}
+                              {back && <span className="t-meta">{`Restore also brings back ${back} deleted with it`}</span>}
                             </div>
                             <Button size="sm" disabled={leaving !== null} onClick={() => void restore(item)} aria-label={`Restore “${title}”`} title={RESTORES}>
                               <RestoreIcon />

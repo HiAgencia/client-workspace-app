@@ -790,6 +790,7 @@ describe("versions", () => {
     if (!trash.ok) throw new Error(trash.message);
     const entry = trash.items.find((i) => i.id === task.id);
     expect(entry?.branch).toBe(2);
+    expect(entry?.with).toEqual({ subtasks: 1, notes: 0 });
     expect(trash.items.some((i) => i.title === "Trash child")).toBe(false);
   });
 });
