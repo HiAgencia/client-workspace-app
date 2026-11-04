@@ -638,8 +638,6 @@ export function useMailCount(read: BoxRead<MailList>): string | undefined {
   return figureWords(figure) ?? undefined;
 }
 
-export { mailWhen };
-
 const mailKey = (message: MailRow) => `${message.accountId}:${message.id}`;
 
 export function mailBoxRows(mail: MailList, replies: TaskReplies[], accounts: Set<string> | null): Array<{ message: MailRow; label: string | null }> {
