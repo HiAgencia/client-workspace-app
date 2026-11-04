@@ -25,13 +25,8 @@ import { isFresh, keep, peek, refreshEnded, refreshStarted, stamp, type Kept } f
 import { useWorkspace } from "./workspace";
 import "../styles/boxes.css";
 
-
-
-
 const MOVE_ON = ["Move to the second column", "Move to the row below", "Move to the first column"];
 const ZONE_NAMES = ["the first column", "the second column", "the row below"];
-
-
 
 export function useBoardLayout(page: string, defaults: string[], saved: BoardLayout | null, apart: string | null = null) {
   const { notify } = useWorkspace();
@@ -39,9 +34,6 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   const confirmed = useRef(layout);
   const touched = useRef(false);
 
-  
-  
-  
   useEffect(() => {
     let live = true;
     void get<{ preferences: { boards: Record<string, BoardLayout> } }>("/api/preferences").then((answer) => {
@@ -55,13 +47,9 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     return () => {
       live = false;
     };
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  
-  
-  
   const wanted = useRef<BoardLayout | null>(null);
   const sending = useRef(false);
   const send = useCallback(async () => {
@@ -91,10 +79,8 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     [send],
   );
 
-  
   const visible = (order: string[]) => order.filter((id) => isMark(id) || (!layout.hidden.includes(id) && id !== apart));
 
-  
   function step(id: string, by: -1 | 1, name: string, spread: boolean) {
     const order = steppedOrder(layout.order, visible(layout.order), id, by, spread);
     if (!order) return;
@@ -102,7 +88,6 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     refocus(id);
   }
 
-  
   function moveOn(id: string, name: string, spread: boolean) {
     const [first, second] = columnsOf(layout);
     const from: Zone = first.includes(id) ? 0 : second.includes(id) ? 1 : 2;
@@ -111,7 +96,6 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     refocus(id);
   }
 
-  
   function place(id: string, before: string | null, zone: Zone) {
     const order = orderDropped(layout.order, id, before, zone);
     if (order.join() === layout.order.join()) return;
@@ -120,7 +104,6 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
 
   function hide(id: string, name: string) {
     commit({ ...layout, hidden: [...layout.hidden, id] }, `${name} hidden. Show it again from More › Customize.`);
-    
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true }));
   }
 
@@ -138,15 +121,12 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
 
 export type Board = ReturnType<typeof useBoardLayout>;
 
-
-
 let preferenceChain: Promise<unknown> = Promise.resolve();
 export function savePreference(change: Record<string, unknown>): Promise<{ ok: true } | { ok: false; message: string }> {
   const next = preferenceChain.then(() => post("/api/preferences", change));
   preferenceChain = next.catch(() => {});
   return next;
 }
-
 
 export function customizeEntries(board: Board, names: Record<string, string>): MenuEntry[] {
   const hidden = board.layout.hidden.filter((id) => names[id]);
@@ -166,21 +146,16 @@ export function customizeEntries(board: Board, names: Record<string, string>): M
   ];
 }
 
-
 let announcer: ((text: string) => void) | null = null;
 function announce(text: string) {
   announcer?.(text);
 }
-
 
 function refocus(id: string) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-box="${id}"] .box-more .menu-trigger`)?.focus({ preventScroll: true })),
   );
 }
-
-
-
 
 const BOX_ICONS: Record<string, Icon> = {
   tasks: TasksIcon,
@@ -193,31 +168,20 @@ const BOX_ICONS: Record<string, Icon> = {
 
 export type BoxSpec = {
   id: string;
-  
   title: string;
-  
   purpose: ReactNode;
-  
   count?: ReactNode;
-  
   surface?: "rest";
-  
   action?: ReactNode;
-  
   unfold?: ReactNode;
-  
   menu?: MenuEntry[];
-  
   busy?: boolean;
   content: ReactNode;
 };
 
 type BoxDrag = { id: string };
 let boxDrag: BoxDrag | null = null;
-
 const BOX_GRAB = { x: 32, y: 20 };
-
-
 
 function dropLine(board: HTMLElement, drop: { before: string | null; zone: Zone }, sideways: boolean): { x: number; y: number; w: number; h: number } | null {
   const origin = board.getBoundingClientRect();
@@ -250,14 +214,31 @@ function useFinePointer(): boolean {
   );
 }
 
-
-
-
 const ENTRY_CAP_MS = 6000;
 const BoxIdContext = createContext<string | null>(null);
 const SettledContext = createContext<((id: string, settled: boolean) => void) | null>(null);
 
+export function useEntryCap(): boolean {
+  const [capped, setCapped] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setCapped(true), ENTRY_CAP_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return capped;
+}
 
+export function useTwoFramesLate<T>(value: T, initial: T): T {
+  const [late, setLate] = useState(initial);
+  useEffect(() => {
+    let second = 0;
+    const first = requestAnimationFrame(() => (second = requestAnimationFrame(() => setLate(value))));
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [value]);
+  return late;
+}
 
 export function useBoxSettled(settled: boolean): void {
   const id = useContext(BoxIdContext);
@@ -267,39 +248,27 @@ export function useBoxSettled(settled: boolean): void {
   }, [id, settled, report]);
 }
 
-
-
 export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: Board; boxes: Record<string, BoxSpec>; label: string; wide?: BoxSpec | null; hold?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const [settled, setSettled] = useState<Record<string, boolean>>({});
-  const [capped, setCapped] = useState(false);
+  const capped = useEntryCap();
   const reported = useRef<Record<string, boolean>>({});
   const report = useCallback((id: string, value: boolean) => {
     reported.current[id] = value;
     setSettled((known) => (known[id] === value ? known : { ...known, [id]: value }));
   }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => setCapped(true), ENTRY_CAP_MS);
-    return () => clearTimeout(timer);
-  }, []);
   const [first, second, row] = board.columns;
   const shown = (ids: string[]) => ids.filter((id) => boxes[id] && id !== wide?.id);
-  
   const lone = (shown(first).length === 0) !== (shown(second).length === 0);
   const inView = [...first, ...second, ...row, ...(wide ? [wide.id] : [])].filter((id) => boxes[id]);
   const [entered, setEntered] = useState(false);
   if (!entered && !hold && (capped || inView.every((id) => settled[id]))) setEntered(true);
   const ready = entered;
-  
-  
   const [atOnce, setAtOnce] = useState(false);
   useLayoutEffect(() => {
     if (inView.length > 0 && inView.every((id) => reported.current[id])) setAtOnce(true);
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
-  
   const revealed = new Set<string>();
   if (entered) inView.forEach((id) => revealed.add(id));
   else if (!hold && (!wide || settled[wide.id])) {
@@ -315,25 +284,12 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
   const [drop, setDrop] = useState<{ before: string | null; zone: Zone } | null>(null);
   const [said, setSaid] = useState("");
   const fine = useFinePointer();
-  
   const [spread, setSpread] = useState(true);
-  
-  
-  
-  
   const stack = spread ? [] : [...(wide ? [wide.id] : []), ...shown(first), ...shown(second), ...shown(row)];
   const behindNow = stack.filter((id, at) => stack.slice(0, at).some((above) => !revealed.has(above)));
   const behindKey = behindNow.join(",");
-  const [held, setHeld] = useState<string[]>([]);
-  useEffect(() => {
-    let second = 0;
-    const first = requestAnimationFrame(() => (second = requestAnimationFrame(() => setHeld(behindKey ? behindKey.split(",") : []))));
-    return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(second);
-    };
-  }, [behindKey]);
-  const behind = new Set([...held, ...behindNow]);
+  const heldKey = useTwoFramesLate(behindKey, "");
+  const behind = new Set([...(heldKey ? heldKey.split(",") : []), ...behindNow]);
 
   useEffect(() => {
     announcer = setSaid;
@@ -342,10 +298,7 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
     };
   }, []);
 
-  
-  
   useFlip(host, { items: "[data-box]", layout: "grid" });
-  
   useLayoutEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -359,9 +312,6 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
     return () => observer.disconnect();
   }, []);
 
-  
-  
-  
   const line = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const mark = line.current;
@@ -372,7 +322,6 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
       mark.removeAttribute("data-show");
       return;
     }
-    
     const appearing = !mark.hasAttribute("data-show");
     if (appearing) mark.setAttribute("data-placing", "");
     Object.assign(mark.style, { translate: `${at.x}px ${at.y}px`, width: `${at.w}px`, height: `${at.h}px` });
@@ -393,12 +342,10 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
       const box = target.getBoundingClientRect();
       const ids = shown(board.columns[zone]);
       const at = ids.indexOf(target.dataset.box!);
-      
       const ahead = (zone === 2 || lone) && spread ? event.clientX < box.left + box.width / 2 : event.clientY < box.top + box.height / 2;
       before = ahead ? ids[at] : (ids[at + 1] ?? null);
     } else if (target) return;
     else {
-      
       const next = [...event.currentTarget.querySelectorAll<HTMLElement>("[data-box]")].find((el) => {
         const r = el.getBoundingClientRect();
         return event.clientY < r.top || (event.clientY <= r.bottom && event.clientX < r.left);
@@ -416,7 +363,6 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
   function onDrop(event: DragEvent<HTMLElement>) {
     if (!boxDrag || !drop) return;
     event.preventDefault();
-    
     landFrom(boxDrag.id, { x: event.clientX - BOX_GRAB.x, y: event.clientY - BOX_GRAB.y, w: 0, h: 0 });
     board.place(boxDrag.id, drop.before, drop.zone);
     boxDrag = null;
@@ -451,7 +397,6 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
             behind={behind.has(id)}
           />
         ))}
-        {}
         <div className="boxes-end" data-drop={(drop && drop.before === null && drop.zone === zone) || undefined} aria-hidden="true" />
       </div>
     );
@@ -465,7 +410,6 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
           <Box spec={wide} index={0} board={board} draggable={false} dropBefore={false} isFirst isLast zone={0} spread={spread} fixed shown={revealed.has(wide.id)} behind={false} />
         </div>
       )}
-      {}
       <div
         className="boxes-cols"
         data-lone={lone || undefined}
@@ -513,13 +457,9 @@ function Box({
   isFirst: boolean;
   isLast: boolean;
   zone: Zone;
-  
   spread: boolean;
-  
   fixed?: boolean;
-  
   shown: boolean;
-  
   behind: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -558,8 +498,6 @@ function Box({
           event.dataTransfer.effectAllowed = "move";
           event.dataTransfer.setData("text/plain", spec.title);
           const box = (event.currentTarget as HTMLElement).closest<HTMLElement>(".box");
-          
-          
           box?.setAttribute("data-lifted", "");
           if (box) event.dataTransfer.setDragImage(box, BOX_GRAB.x, BOX_GRAB.y);
           requestAnimationFrame(() => {
@@ -601,20 +539,12 @@ function Box({
   );
 }
 
-
-
-
-
-
-
 export type WaitShape = "tasks" | "mail" | "week" | "events" | "notes" | "activity" | "lines";
-
 
 const TITLE_WIDTHS = [72, 52, 64, 44, 58];
 const META_WIDTHS = [40, 28, 46, 32, 36];
 
 function WaitRows({ rows, shape, from = 0 }: { rows: number; shape: WaitShape; from?: number }) {
-  
   const marked = shape !== "lines" && shape !== "notes";
   return Array.from({ length: rows }, (_, at) => {
     const index = at + from;
@@ -632,7 +562,6 @@ function WaitRows({ rows, shape, from = 0 }: { rows: number; shape: WaitShape; f
 }
 
 export function BoxWait({ what, rows = 3, shape = "lines" }: { what: string; rows?: number; shape?: WaitShape }) {
-  
   const groups = shape === "tasks" && rows >= 4 ? Math.ceil(rows / 2) : 0;
   return (
     <div className="box-wait" data-shape={shape} role="status" aria-busy="true">
@@ -660,8 +589,6 @@ export function BoxWait({ what, rows = 3, shape = "lines" }: { what: string; row
     </div>
   );
 }
-
-
 
 export function GroupsWait({ what, layout }: { what: string; layout: "list" | "board" }) {
   const group = (key: string, rows: number, days = 0) => (
@@ -702,8 +629,6 @@ export function GroupsWait({ what, layout }: { what: string; layout: "list" | "b
   );
 }
 
-
-
 export function BoxEmpty({ text, children, reason }: { text: ReactNode; children?: ReactNode; reason?: string }) {
   return (
     <div className="box-empty" data-empty={reason}>
@@ -712,8 +637,6 @@ export function BoxEmpty({ text, children, reason }: { text: ReactNode; children
     </div>
   );
 }
-
-
 
 export function BoxFailed({ what, message, kept, onRetry }: { what: string; message: string; kept: boolean; onRetry: () => void }) {
   return (
@@ -728,21 +651,12 @@ export function BoxFailed({ what, message, kept, onRetry }: { what: string; mess
   );
 }
 
-
-
-
-
 export type BoxRead<T> = { data: T | null; error: string | null; stale: boolean; settled: boolean; retry: () => void };
-
-
 
 type Held<T> = { key: string; value: T; partial?: boolean; freshIn?: number };
 
 const heldFrom = <T,>(key: string, hit: Kept<T> | null, version: number): Held<T> | null =>
   hit ? { key, value: hit.value, freshIn: isFresh(hit) ? version : undefined } : null;
-
-
-
 
 export function useBoxRead<T>(
   read: ((publish: (partial: T) => void) => Promise<{ ok: true } & T | { ok: false; message: string }>) | null,
@@ -769,15 +683,12 @@ export function useBoxRead<T>(
   useEffect(() => {
     const run = reader.current;
     if (!run) return;
-    
     if (round === 0 && held.current?.key === key && held.current.freshIn === version) return;
     let live = true;
     const asked = stamp();
-    
     const publish = (partial: T) => {
       if (live) setState((now) => (now?.key === key && !now.partial ? now : { key, value: partial, partial: true }));
     };
-    
     const behind = held.current !== null;
     if (behind) refreshStarted();
     void run(publish)
@@ -795,7 +706,6 @@ export function useBoxRead<T>(
     return () => {
       live = false;
     };
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, version, round]);
   const failed = error?.key === key ? error.message : null;
@@ -807,7 +717,6 @@ export function useBoxRead<T>(
     retry: () => setRound((value) => value + 1),
   };
 }
-
 
 export function useToolRead<T>(name: string, input: Record<string, unknown> | null): BoxRead<T> {
   const key = input ? `${name}:${JSON.stringify(input)}` : `${name}:off`;

@@ -15,7 +15,7 @@ import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { LOCALE } from "@/lib/dates";
 import { useMailRead } from "../box-kinds";
-import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
+import { BoxEmpty, BoxFailed, BoxWait, useEntryCap, useTwoFramesLate } from "../boxes";
 import { get, post } from "../client-api";
 import { ConfirmButton } from "../confirm-button";
 import { ConnectBlockedNote, type ConnectBlocked } from "../connect-blocked";
@@ -26,38 +26,17 @@ import { PlaceName } from "../task-row";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 
-
-
-
-
-
-
 const PARTS = ["theme-settings", "accounts-settings", "agent-tokens"] as const;
-const ENTRY_CAP_MS = 6000;
 
 const SettledContext = createContext<{ ready: boolean; revealed: boolean; report: (id: string, settled: boolean) => void }>({ ready: true, revealed: true, report: () => undefined });
 
 export default function SettingsPage() {
   const [settled, setSettled] = useState<Record<string, boolean>>({ "theme-settings": true });
-  const [capped, setCapped] = useState(false);
+  const capped = useEntryCap();
   const report = useCallback((id: string, value: boolean) => setSettled((known) => (known[id] === value ? known : { ...known, [id]: value })), []);
-  useEffect(() => {
-    const timer = setTimeout(() => setCapped(true), ENTRY_CAP_MS);
-    return () => clearTimeout(timer);
-  }, []);
-  
   const [entered, setEntered] = useState(false);
   if (!entered && (capped || PARTS.every((id) => settled[id]))) setEntered(true);
-  const [revealed, setRevealed] = useState(false);
-  useEffect(() => {
-    if (!entered || revealed) return;
-    let second = 0;
-    const first = requestAnimationFrame(() => (second = requestAnimationFrame(() => setRevealed(true))));
-    return () => {
-      cancelAnimationFrame(first);
-      cancelAnimationFrame(second);
-    };
-  }, [entered, revealed]);
+  const revealed = useTwoFramesLate(entered, false);
 
   return (
     <Suspense fallback={null}>
@@ -82,13 +61,10 @@ export default function SettingsPage() {
   );
 }
 
-
 function useSettled(id: string, settled: boolean) {
   const { report } = useContext(SettledContext);
   useEffect(() => report(id, settled), [id, settled, report]);
 }
-
-
 
 function SettingsBox({ id, title, icon: Glyph, count: figure, order, below = false, children }: { id: string; title: string; icon: Icon; count?: ReactNode; order: number; below?: boolean; children: ReactNode }) {
   const { ready, revealed } = useContext(SettledContext);
@@ -117,8 +93,6 @@ function SettingsBox({ id, title, icon: Glyph, count: figure, order, below = fal
   );
 }
 
-
-
 function FirstPlace({ what }: { what: string }) {
   return (
     <div className="settings-first" data-first-place>
@@ -146,7 +120,6 @@ function ThemeSection() {
 type Calendar = { id: string; name: string; color: string | null; selected: boolean };
 type Account = { id: string; email: string; status: string; isDemo: boolean; nodeIds: string[]; calendars: Calendar[] };
 
-
 function AccountsSection() {
   const { tree, saving, version } = useWorkspace();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
@@ -155,12 +128,9 @@ function AccountsSection() {
   const [error, setError] = useState<string | null>(null);
   const [connectNode, setConnectNode] = useState<string | null>(null);
   const [round, setRound] = useState(0);
-  
-  
   const mailRead = useMailRead({ kind: "all" }, null);
   const mail = mailRead.data;
   useSettled("accounts-settings", (accounts !== null || error !== null) && mailRead.settled);
-  
   const { ready } = useContext(SettledContext);
 
   useEffect(() => {
@@ -184,17 +154,12 @@ function AccountsSection() {
   const colorOf = (id: string) => tree?.find((node) => node.id === id)?.color ?? null;
   const nodeOptions = (tree ?? []).map((node) => ({ value: node.id, label: node.path }));
 
-  
-  
   function mailLine(account: Account): { text: string; tone?: "alert"; failed?: boolean } {
     const failure = mail?.failures.find((entry) => entry.accountId === account.id);
-    
     if (failure) {
       const reason = failure.reason.replace(/\.+$/, "");
       return failure.partial ? { text: reason.replace(/^\p{Ll}/u, (letter) => letter.toUpperCase()), failed: true } : { text: `Could not be read: ${reason}`, tone: "alert", failed: true };
     }
-    
-    
     const listed = [...(mail?.groups.forTasks.messages ?? []), ...(mail?.groups.unread.messages ?? []), ...(mail?.groups.earlier.messages ?? [])].some((message) => message.accountId === account.id);
     const unread = mail?.unreadByAccount[account.id];
     if (unread === undefined && !listed) return { text: "Reading…" };
@@ -232,7 +197,6 @@ function AccountsSection() {
           )}
         </div>
       ) : (
-        
         accounts && accounts.length > 0 && <ConnectBlockedNote reason={connectBlocked} samples={accounts.some((account) => account.isDemo)} />
       )}
       {!ready ? null : !accounts ? (
@@ -249,9 +213,6 @@ function AccountsSection() {
               {!canConnect && <ConnectBlockedNote reason={connectBlocked} samples={false} />}
             </BoxEmpty>
           ) : (
-            
-            
-            
             <div className="settings-accounts-frame fade-enter">
               <table className="settings-accounts" role="table" aria-labelledby="accounts-settings-title">
                 <thead role="rowgroup">
@@ -274,7 +235,6 @@ function AccountsSection() {
                   </tr>
                 </thead>
                 <tbody role="rowgroup">
-                  {}
                   {accountGroups(accounts, tree).flatMap((group) => group.accounts).map((account) => {
                     const line = mailLine(account);
                     return (
@@ -343,7 +303,6 @@ function AccountsSection() {
                               <ul className="plain-list settings-calendars" aria-label={`Calendars of ${account.email} shown`}>
                                 {account.calendars.map((calendar) => (
                                   <li key={calendar.id}>
-                                    {}
                                     <label className="check-row">
                                       <Checkbox
                                         checked={calendar.selected}
@@ -354,7 +313,6 @@ function AccountsSection() {
                                       <span id={`calendar-${account.id}-${calendar.id}`} className="t-value">
                                         {calendar.name}
                                       </span>
-                                      {}
                                       {calendar.color && <span className="settings-calendar-color" style={{ "--swatch": calendar.color } as CSSProperties} aria-hidden="true" />}
                                     </label>
                                   </li>
@@ -374,10 +332,10 @@ function AccountsSection() {
                           </div>
                         </td>
                         <td role="cell" className="settings-account-go">
-                          <a className={buttonClass({ variant: "quiet", size: "sm", className: "head-action head-link" })} href={`/app/mail?account=${account.id}`}>
+                          <Link className={buttonClass({ variant: "quiet", size: "sm", className: "head-action head-link" })} href={`/app/mail?account=${account.id}`}>
                             <span className="btn-label">Show its mail</span>
                             <OpenIcon />
-                          </a>
+                          </Link>
                         </td>
                       </tr>
                     );
@@ -397,7 +355,6 @@ type Tokens = { tokens: Token[]; mcpJson: string; tokenEnv: string };
 
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-
 function CodeLines({ text }: { text: string }) {
   return text.split("\n").map((line, index) => (
     <span key={index} className="code-line" style={{ "--indent": line.length - line.trimStart().length } as CSSProperties}>
@@ -406,8 +363,6 @@ function CodeLines({ text }: { text: string }) {
     </span>
   ));
 }
-
-
 
 function AgentTokensSection() {
   const { tree, saving } = useWorkspace();
@@ -436,8 +391,6 @@ function AgentTokensSection() {
     };
   }, [reads]);
 
-  
-  
   useEffect(() => {
     if (!asked || window.location.hash !== "#agent-tokens") return;
     requestAnimationFrame(() => {
@@ -451,7 +404,6 @@ function AgentTokensSection() {
     if (!nodeId) return setMissing("node");
     if (!label.trim()) return setMissing("label");
     setMissing(null);
-    
     const name = label.trim().replace(/^\p{Ll}/u, (letter) => letter.toUpperCase());
     const answer = await post<{ token: string }>("/api/agent-tokens", { action: "issue", nodeId, label: name });
     if (await saving(Promise.resolve(answer))) {
@@ -558,7 +510,6 @@ function AgentTokensSection() {
                   <li key={token.id} className="settings-token" data-token={token.label}>
                     <div className="settings-token-main">
                       <span className="t-name">{token.label}</span>
-                      {}
                       <span className="t-meta">{[`For ${path(token.nodeId)}`, `Issued ${stamp(token.createdAt)}`, token.lastUsedAt ? `Last synced ${stamp(token.lastUsedAt)}` : null].filter(Boolean).join(" · ")}</span>
                     </div>
                     {token.revokedAt ? (
@@ -567,7 +518,6 @@ function AgentTokensSection() {
                       </span>
                     ) : (
                       <ConfirmButton
-                        
                         label={`Revoke “${token.label}” for ${path(token.nodeId)}`}
                         confirm="Any agent using it loses access at once. This cannot be undone."
                         onConfirm={() => void revoke(token.id)}
