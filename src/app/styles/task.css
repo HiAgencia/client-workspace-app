@@ -566,9 +566,6 @@
     transition-duration: var(--dur-press);
   }
 }
-.task-when[data-when="overdue"] .picker {
-  background: transparent;
-}
 .task-when .picker {
   gap: 0.3rem;
 }
@@ -583,7 +580,6 @@
     --chip: calc(1.4em + 2px);
     --target: max(1.5rem, var(--chip));
     position: relative;
-    isolation: isolate;
     min-height: var(--target);
     margin-block: calc((var(--chip) - var(--target)) / 2);
   }
@@ -598,18 +594,6 @@
     border: 0;
     rotate: none;
     translate: none;
-  }
-  .task-when[data-when="overdue"] .picker {
-    background: transparent;
-
-    &::before {
-      content: "";
-      position: absolute;
-      inset: calc((var(--target) - var(--chip)) / 2 - 1px) -1px;
-      z-index: -1;
-      border-radius: inherit;
-      background: transparent;
-    }
   }
 }
 @media (forced-colors: active) {
@@ -1859,7 +1843,7 @@
     &:focus-within:hover {
       background: var(--field-hover);
       border-color: var(--focus);
-      box-shadow: var(--shadow-field-hover), 0 0 0 4px var(--focus-halo);
+      box-shadow: var(--shadow-field-hover), 0 0 0 4px var(--focus-halo-hover);
     }
   }
 }
