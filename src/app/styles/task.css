@@ -359,7 +359,7 @@
   }
   @media (hover: hover) {
     &:hover {
-      background: var(--interior);
+      background: color-mix(in srgb, var(--ink) 5%, transparent);
       transition-duration: var(--dur-hover);
     }
     &:hover .task-place {
@@ -368,10 +368,10 @@
     }
   }
   &[data-menu-open] {
-    background: var(--interior);
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
   }
   &:has(> .task-open:active) {
-    background: var(--interior-hover);
+    background: color-mix(in srgb, var(--ink) 9%, transparent);
     transition-duration: var(--dur-press);
   }
 }

@@ -72,8 +72,8 @@
   --due-later: var(--muted);
   --prio-urgent: #c2410c;
   --prio-high: #9a5b06;
-  --prio-normal: #8f8f8f;
-  --prio-low: #8f8f8f;
+  --prio-normal: #888888;
+  --prio-low: #888888;
   --mail-waiting: var(--accent-ink);
   --tone-red: var(--node-red);
   --tone-amber: var(--node-amber);
