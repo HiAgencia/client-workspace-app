@@ -378,7 +378,7 @@
   display: contents;
 }
 @container shot-page (width < 38rem) {
-  .shot-col > :is([data-preview-box="tasks"], [data-preview-box="calendar"]) {
+  .shot-col > :is([data-shot-box="tasks"], [data-shot-box="calendar"]) {
     display: none;
   }
 }

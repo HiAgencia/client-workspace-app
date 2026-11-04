@@ -321,11 +321,11 @@ function Strip() {
         <span className="btn btn-quiet btn-sm reply-strip-more head-action">
           <span className="btn-label">
             <span className="shot-swap">
-              <span data-hide="found">Show them</span>
+              <span data-hide="found">Show the tasks</span>
               <span data-show="found" data-hide="done">
-                Show 1 more
+                Show 1 more task
               </span>
-              <span data-show="done">Show it</span>
+              <span data-show="done">Show the task</span>
             </span>
           </span>
           <DownIcon />
@@ -362,7 +362,7 @@ function Strip() {
 
 function TasksBox({ figures }: { figures: DemoOverview }) {
   return (
-    <section className="box" data-shown="" data-preview-box="tasks">
+    <section className="box" data-shown="" data-shot-box="tasks">
       <header className="box-head">
         <span className="box-icon">
           <TasksIcon />
@@ -425,7 +425,7 @@ function TasksBox({ figures }: { figures: DemoOverview }) {
 
 function MailBox({ unread }: { unread: number }) {
   return (
-    <section className="box" data-shown="" data-preview-box="mail">
+    <section className="box" data-shown="" data-shot-box="mail">
       <header className="box-head">
         <span className="box-icon">
           <MailIcon />
@@ -507,7 +507,7 @@ function MailBox({ unread }: { unread: number }) {
 
 function CalendarBox() {
   return (
-    <section className="box" data-shown="" data-preview-box="calendar">
+    <section className="box" data-shown="" data-shot-box="calendar">
       <header className="box-head">
         <span className="box-icon">
           <CalendarIcon />
@@ -544,7 +544,7 @@ function CalendarBox() {
 export function LandingShot({ figures, caption }: { figures: DemoOverview; caption: string }) {
   const due = figures.overdue + figures.today;
   return (
-    <figure className="landing-shot enter" aria-labelledby="shot-caption" data-landing-preview>
+    <figure className="landing-shot enter" aria-labelledby="shot-caption" data-landing-shot>
       <Scene frames={FRAMES} still={STILL} glyphs={GLYPHS} className="shot-scene" label="In the picture, a message from Developer Platform arrives, it shows as a possible reply for the task that waits for it, and the task is closed as approved.">
         <div className="shot">
           <Sidebar due={due} unread={figures.unread} />

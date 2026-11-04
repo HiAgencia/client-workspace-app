@@ -27,6 +27,7 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
   const waiting = tasks?.filter((entry) => entry.replies.length === 0 && entry.failures.length === 0).length ?? 0;
   const noneArrived = tasks !== null && tasks.length > 0 && waiting === tasks.length;
   const folded = noneArrived ? tasks : (tasks?.slice(1) ?? []);
+  const unit = (count: number) => (count === 1 ? "task" : "tasks");
   return (
     <section className="reply-strip" data-replies-strip data-stale={read.stale || undefined} aria-labelledby={titleId}>
       <div className="reply-strip-head">
@@ -39,7 +40,7 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
         <p className="sr-only">Mail that may answer the tasks that wait for it. You decide which one does, in the task.</p>
         {folded.length > 0 && (
           <Button variant="quiet" size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
-            <span className="btn-label">{open ? "Show less" : noneArrived ? `Show ${waiting === 1 ? "it" : "them"}` : `Show ${folded.length} more`}</span>
+            <span className="btn-label">{open ? "Show less" : noneArrived ? `Show the ${unit(waiting)}` : `Show ${folded.length} more ${unit(folded.length)}`}</span>
             <DownIcon />
           </Button>
         )}
