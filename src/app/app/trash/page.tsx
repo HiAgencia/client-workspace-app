@@ -3,7 +3,7 @@
 import { Link } from "@/components/ui/link";
 import { useEffect, useState, ViewTransition } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
-import { DecisionIcon, NoteIcon, RestoreIcon, TaskIcon } from "@/components/ui/icons";
+import { RestoreIcon } from "@/components/ui/icons";
 import { count } from "@/lib/count";
 import { LOCALE } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
@@ -71,21 +71,22 @@ export default function TrashPage() {
                     </Link>
                   </BoxEmpty>
                 ) : (
+                  <>
+                  <p className="t-help">What you delete waits here until you restore it.</p>
                   <ul className="plain-list trash-list fade-enter">
                     {items.map((item) => {
                       const title = inlinePlain(item.title);
                       return (
                         <li key={item.id} className="trash-item" data-trash={item.id} data-leaving={leaving === item.id || undefined}>
                           <div className="trash-row">
-                            <span className="trash-icon" aria-hidden="true">
-                              {item.type === "task" ? <TaskIcon /> : item.type === "decision" ? <DecisionIcon /> : <NoteIcon />}
-                            </span>
                             <div className="trash-main">
                               <span className="t-value trash-title">{title}</span>
                               <span className="t-meta">
                                 {TYPE_NAMES[item.type]} in {item.nodePath ? <PathText path={item.nodePath} /> : "General"}, deleted {stamp(item.deletedAt)}
-                                {item.branch > 1 ? `, with ${count(item.branch - 1, "more item", "more items")}` : ""}
                               </span>
+                              {item.branch > 1 && (
+                                <span className="t-meta">{`Restore also brings back the ${count(item.branch - 1, "subtask or note", "subtasks and notes")} deleted with it`}</span>
+                              )}
                             </div>
                             <Button size="sm" disabled={leaving !== null} onClick={() => void restore(item)} aria-label={`Restore “${title}”`} title={RESTORES}>
                               <RestoreIcon />
@@ -96,6 +97,7 @@ export default function TrashPage() {
                       );
                     })}
                   </ul>
+                  </>
                 )}
               </>
             )}

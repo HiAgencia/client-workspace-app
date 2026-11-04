@@ -434,35 +434,42 @@ function AgentTokensSection() {
             placeholder="Pick a client or a project…"
             value={nodeId}
             options={(tree ?? []).map((node) => ({ value: node.id, label: node.path }))}
+            invalid={missing === "node"}
+            describedBy={missing === "node" ? "token-where-note" : undefined}
             onChange={(value) => {
               setNodeId(value);
               if (missing === "node") setMissing(null);
             }}
           />
+          {missing === "node" && (
+            <p id="token-where-note" className="inline-note" data-tone="alert">
+              Pick the client or project the token reaches.
+            </p>
+          )}
         </div>
-        <Field
-          id="token-name"
-          name="token-name"
-          aria-label="Token name"
-          aria-describedby="token-name-help"
-          aria-invalid={missing === "label" || undefined}
-          placeholder="Token name, such as Laptop"
-          className="settings-grow"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void issue()}
-        />
+        <div className="settings-grow">
+          <Field
+            id="token-name"
+            name="token-name"
+            aria-label="Token name"
+            aria-describedby="token-name-help"
+            aria-invalid={missing === "label" || undefined}
+            placeholder="Token name, such as Laptop"
+            value={label}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              if (missing === "label") setMissing(null);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && void issue()}
+          />
+          <p id="token-name-help" className={missing === "label" ? "inline-note" : "t-help"} data-tone={missing === "label" ? "alert" : undefined}>
+            {missing === "label" ? "Name the token after where the agent runs, such as Laptop." : "The name appears beside everything this agent adds."}
+          </p>
+        </div>
         <Button variant="primary" onClick={() => void issue()}>
           Issue an agent token
         </Button>
       </div>
-      <p id="token-name-help" className={missing ? "inline-note" : "t-help"} data-tone={missing ? "alert" : undefined}>
-        {missing === "node"
-          ? "Pick the client or project the token reaches."
-          : missing === "label"
-            ? "Name the token after where the agent runs, such as Laptop."
-            : "The name appears beside everything this agent adds."}
-      </p>
         </>
       )}
       {issued && data && (
