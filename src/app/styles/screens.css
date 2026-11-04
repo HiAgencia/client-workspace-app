@@ -91,12 +91,6 @@
   gap: var(--gap-cards);
   min-width: 0;
 }
-.page-head-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem 0.9rem;
-}
 [data-stale] {
   opacity: var(--opacity-stale);
   transition: opacity var(--dur) var(--ease-std);

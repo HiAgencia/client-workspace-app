@@ -140,16 +140,14 @@
 }
 @supports (text-box: trim-both cap alphabetic) {
   .t-h1,
-  .t-title,
-  .card-head > .t-meta {
+  .t-title {
     text-box: trim-both cap alphabetic;
   }
   .btn-label,
   .picker-value,
   .side-link-name,
   .count,
-  .action-card > .t-value,
-  .page-head-row > .t-name {
+  .action-card > .t-value {
     text-box: trim-both cap alphabetic;
   }
   .count {
@@ -169,14 +167,6 @@
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   padding: var(--pad-card);
-}
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  min-height: 2.25rem;
-  margin-bottom: 0.875rem;
 }
 .code-line {
   display: block;
