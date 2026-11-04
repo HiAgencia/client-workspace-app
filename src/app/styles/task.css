@@ -362,6 +362,10 @@
       background: color-mix(in srgb, var(--ink) 5%, transparent);
       transition-duration: var(--dur-hover);
     }
+    &:hover .link {
+      color: var(--accent-ink);
+      transition-duration: var(--dur-hover);
+    }
     &:hover .task-place {
       color: var(--ink-soft);
       transition-duration: var(--dur-hover);
