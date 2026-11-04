@@ -50,7 +50,7 @@ import { NewNode } from "./side-nav";
 import { useTaskReplies } from "./task-replies";
 import { useChatScope, useWorkspace } from "./workspace";
 
-export const NODE_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
+const NODE_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
 type Account = { id: string; email: string; status: string; nodeIds: string[]; calendars: Array<{ selected: boolean }> };
 type Accounts = { accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked };
@@ -366,7 +366,7 @@ function NodeStrip({
         <h2 id={`${id}below`} className="t-label named-label">
           {name}
         </h2>
-        <FlipList className="node-chips" layout="grid">
+        <FlipList className="node-chips node-below" layout="grid">
           {below.map((child) => (
             <li key={child.id} data-flip-key={child.id}>
               <Link className={cx(buttonClass({}), "node-chip")} href={`/app/node/${child.id}`}>
