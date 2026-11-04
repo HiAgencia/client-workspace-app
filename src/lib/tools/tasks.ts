@@ -38,6 +38,7 @@ export const taskRowSchema = z.object({
   parentId: z.string().nullable(),
   subtasks: z.object({ done: z.number(), total: z.number() }),
   notes: z.number(),
+  decisions: z.number(),
   source: z.enum(["manual", "chat", "agent", "review"]),
   agentLabel: z.string().nullable(),
   position: z.number(),
@@ -101,7 +102,24 @@ function order(rows: TaskRow[], sort: Sort, group: TaskGroup): TaskRow[] {
   return [...rows].sort(compare);
 }
 
-export function rowOf(row: ItemRow, scope: Scope, counts: Map<string, { done: number; total: number; notes: number }>, mail: Map<string, TaskMail>): TaskRow {
+export type HangCounts = { done: number; total: number; notes: number; decisions: number };
+
+export function hangCounts(rows: Array<Pick<ItemRow, "parent_item_id" | "type" | "status">>): Map<string, HangCounts> {
+  const counts = new Map<string, HangCounts>();
+  for (const row of rows) {
+    if (!row.parent_item_id) continue;
+    const count = counts.get(row.parent_item_id) ?? { done: 0, total: 0, notes: 0, decisions: 0 };
+    if (row.type === "task") {
+      count.total++;
+      if (row.status === "done") count.done++;
+    } else if (row.type === "decision") count.decisions++;
+    else count.notes++;
+    counts.set(row.parent_item_id, count);
+  }
+  return counts;
+}
+
+export function rowOf(row: ItemRow, scope: Scope, counts: Map<string, HangCounts>, mail: Map<string, TaskMail>): TaskRow {
   const node = row.node_id === null ? null : scope.all.get(row.node_id);
   const count = counts.get(row.id);
   return {
@@ -118,6 +136,7 @@ export function rowOf(row: ItemRow, scope: Scope, counts: Map<string, { done: nu
     parentId: row.parent_item_id,
     subtasks: { done: count?.done ?? 0, total: count?.total ?? 0 },
     notes: count?.notes ?? 0,
+    decisions: count?.decisions ?? 0,
     source: row.source,
     agentLabel: row.agent_label,
     position: Number(row.position),
@@ -133,7 +152,7 @@ export const getTasks = defineTool({
     "The tasks of a view for the person's calendar day, in four groups: overdue, today, upcoming (day by day), and no " +
     "date (in the person's manual order); over everything in reach, General alone (node null), or one node and " +
     "everything below it. Each group says how many it holds; each task says its place, its subtasks done and in all, " +
-    "and how many notes it has. Use it to answer what is due, what is late, and what is next.",
+    "and how many notes and how many decisions it has. Use it to answer what is due, what is late, and what is next.",
   readOnly: true,
   input: z.strictObject({
     node: placeRef,
@@ -162,16 +181,7 @@ export const getTasks = defineTool({
       everyTaskMail(ctx),
     ]);
     if (isError(read)) return read;
-    const counts = new Map<string, { done: number; total: number; notes: number }>();
-    for (const row of read.rows) {
-      if (!row.parent_item_id) continue;
-      const count = counts.get(row.parent_item_id) ?? { done: 0, total: 0, notes: 0 };
-      if (row.type === "task") {
-        count.total++;
-        if (row.status === "done") count.done++;
-      } else count.notes++;
-      counts.set(row.parent_item_id, count);
-    }
+    const counts = hangCounts(read.rows);
     const taskIds = read.rows.filter((row) => row.type === "task").map((row) => row.id);
     if (taskIds.length > 0 && isError(waited)) return waited;
     const waits = { byTask: isError(waited) ? new Map<string, TaskMail>() : taskMailIn(waited.rows, taskIds) };

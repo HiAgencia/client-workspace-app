@@ -393,19 +393,21 @@ describe("a general task with subtasks and notes", () => {
     const parent = await task({ title: "Plan the offsite", priority: 2 });
     const step = await task({ parent: parent.id, title: "Pick the dates" });
     const { item: note } = await run<{ item: Item }>("add_note", me(), { parent: parent.id, text: "By train" });
+    const { item: decided } = await run<{ item: Item }>("add_note", me(), { parent: parent.id, text: "In March" });
+    await run("update_item", me(), { id: decided.id, decision: true });
     expect(step).toMatchObject({ nodeId: null, parentId: parent.id });
     expect(note).toMatchObject({ nodeId: null, parentId: parent.id });
     const view = await run<TasksView>("get_tasks", me(), { node: null, today: TODAY });
-    expect(view.groups.noDate.tasks.find((row) => row.id === parent.id)).toMatchObject({ subtasks: { done: 0, total: 1 }, notes: 1, path: null });
+    expect(view.groups.noDate.tasks.find((row) => row.id === parent.id)).toMatchObject({ subtasks: { done: 0, total: 1 }, notes: 1, decisions: 1, path: null });
     const children = await run<{ items: Item[] }>("list_items", me(), { parent: parent.id });
-    expect(children.items.map((item) => item.id).sort()).toEqual([step.id, note.id].sort());
+    expect(children.items.map((item) => item.id).sort()).toEqual([step.id, note.id, decided.id].sort());
     expect((await refuse("create_task", me(), { parent: parent.id, node: ids.own, title: "Elsewhere" })).code).toBe("invalid_input");
     const direct = await owner!.client.from("items").insert({ node_id: ids.own, parent_item_id: parent.id, type: "task", title: "Elsewhere" });
     expect(direct.error?.code).toBe("23514");
     const deleted = await run<{ branch: number }>("delete_item", me(), { id: parent.id });
-    expect(deleted.branch).toBe(3);
+    expect(deleted.branch).toBe(4);
     const restored = await restoreItem(me(), parent.id);
-    expect(restored.ok && restored.branch).toBe(3);
+    expect(restored.ok && restored.branch).toBe(4);
   });
 
   it("is out of an agent's reach whatever the way in", async () => {

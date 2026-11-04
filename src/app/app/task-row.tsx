@@ -18,7 +18,7 @@ import { LinkMark } from "@/components/ui/brands";
 import { DatePicker } from "@/components/ui/date-picker";
 import { landFrom, useFlip } from "@/components/ui/flip";
 import { Fold } from "@/components/ui/fold";
-import { ByAgentIcon, ByChatIcon, DateIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon, TimeIcon } from "@/components/ui/icons";
+import { ByAgentIcon, ByChatIcon, DateIcon, DecisionIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon, TimeIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { addDays, LOCALE, today, type Day } from "@/lib/dates";
@@ -315,6 +315,7 @@ export function taskFromItem(item: Item, extra: Partial<TaskData> = {}): TaskDat
     parentId: item.parentId,
     subtasks: { done: 0, total: 0 },
     notes: 0,
+    decisions: 0,
     source: item.source,
     agentLabel: item.agentLabel,
     position: item.position ?? 0,
@@ -593,7 +594,7 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
   const plain = inlinePlain(task.title);
   const groupFor = (day: Day | null) => groupOfDay(day, now);
   const place = placeOnPage(task, showPlace, pageNode, tree);
-  const hasMeta = Boolean(when || task.subtasks.total || task.priority === 1 || task.notes || mail || task.source !== "manual" || place.shown);
+  const hasMeta = Boolean(when || task.subtasks.total || task.priority === 1 || task.notes || task.decisions || mail || task.source !== "manual" || place.shown);
 
   useEffect(() => {
     if (returning !== task.id) return;
@@ -673,6 +674,12 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
             <span className="task-notes">
               <NoteIcon />
               {count(task.notes, "note", "notes")}
+            </span>
+          )}
+          {task.decisions > 0 && (
+            <span className="task-notes">
+              <DecisionIcon />
+              {count(task.decisions, "decision", "decisions")}
             </span>
           )}
           {task.source !== "manual" && (

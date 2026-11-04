@@ -9,7 +9,7 @@ import { taskMailOf } from "./waits";
 import { noteRowSchema } from "./notes";
 import { dbFail, isError, ok } from "./result";
 import { itemSchema, newestFirst, selectAllItems, toItem } from "./rows";
-import { rowOf, taskRowSchema } from "./tasks";
+import { hangCounts, rowOf, taskRowSchema } from "./tasks";
 import { reaches } from "./tree";
 
 const itemDetailOutput = z.object({
@@ -63,16 +63,7 @@ export const getItem = defineTool({
 
     const place = await selectAllItems(ctx, { nodeIds: row.node_id ? [row.node_id] : [], general: row.node_id === null }, (query) => query.is("deleted_at", null), "reading what hangs from the item");
     if (isError(place)) return place;
-    const counts = new Map<string, { done: number; total: number; notes: number }>();
-    for (const child of place.rows) {
-      if (!child.parent_item_id) continue;
-      const count = counts.get(child.parent_item_id) ?? { done: 0, total: 0, notes: 0 };
-      if (child.type === "task") {
-        count.total++;
-        if (child.status === "done") count.done++;
-      } else count.notes++;
-      counts.set(child.parent_item_id, count);
-    }
+    const counts = hangCounts(place.rows);
     const children = place.rows.filter((child) => child.parent_item_id === row.id);
     const subtaskRows = children.filter((child) => child.type === "task").sort((a, b) => Number(a.position) - Number(b.position) || (a.created_at < b.created_at ? -1 : 1));
     const waits = await taskMailOf(ctx, [row.id, ...subtaskRows.map((child) => child.id)]);
