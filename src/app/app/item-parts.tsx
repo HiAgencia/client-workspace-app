@@ -15,7 +15,7 @@ export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "N
 export function PathText({ path }: { path: string }) {
   const places = path.split(" / ");
   return (
-    <span>
+    <span className="path-text">
       {places.map((place, index) => (
         <span key={index}>
           {index > 0 && " "}

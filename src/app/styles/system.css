@@ -141,6 +141,9 @@
 .nowrap {
   white-space: nowrap;
 }
+.path-text {
+  text-wrap: balance;
+}
 .icon {
   flex: none;
   width: var(--icon);
