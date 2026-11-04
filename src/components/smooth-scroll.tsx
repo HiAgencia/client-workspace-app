@@ -4,6 +4,8 @@ import Lenis from "lenis";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import "lenis/dist/lenis.css";
+import { pageHeld, setSmoothScroll } from "./page-scroll";
+
 
 
 
@@ -20,6 +22,12 @@ export function SmoothScroll() {
 
   useEffect(() => {
     const wanted = window.matchMedia(SMOOTH);
+    const hold = () => {
+      const current = lenis.current;
+      if (!current) return;
+      if (pageHeld()) current.stop();
+      else current.start();
+    };
     const start = () => {
       if (lenis.current || !wanted.matches) return;
       lenis.current = new Lenis({
@@ -29,15 +37,22 @@ export function SmoothScroll() {
         allowNestedScroll: true,
         prevent: (node) => node instanceof Element && node.matches(OWN_SCROLL),
       });
+      setSmoothScroll(lenis.current);
+      hold();
     };
     const stop = () => {
       lenis.current?.destroy();
       lenis.current = null;
+      setSmoothScroll(null);
     };
     const follow = () => (wanted.matches ? start() : stop());
+    
+    const layers = new MutationObserver(hold);
+    layers.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "data-open"] });
     follow();
     wanted.addEventListener("change", follow);
     return () => {
+      layers.disconnect();
       wanted.removeEventListener("change", follow);
       stop();
     };
@@ -49,7 +64,7 @@ export function SmoothScroll() {
     const current = lenis.current;
     if (!current) return;
     current.stop();
-    current.start();
+    if (!pageHeld()) current.start();
   }, [pathname]);
 
   return null;

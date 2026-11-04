@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { createContext, Suspense, useCallback, useContext, useEffect, useState, ViewTransition, type CSSProperties, type ReactNode } from "react";
+import { scrollPlaceIntoView } from "@/components/page-scroll";
 import { GoogleMark } from "@/components/ui/brands";
 import { Link } from "@/components/ui/link";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -440,7 +441,8 @@ function AgentTokensSection() {
   useEffect(() => {
     if (!asked || window.location.hash !== "#agent-tokens") return;
     requestAnimationFrame(() => {
-      document.getElementById("agent-tokens")?.scrollIntoView({ block: "start", behavior: "instant" });
+      const section = document.getElementById("agent-tokens");
+      if (section) scrollPlaceIntoView(section, "start", true);
       document.getElementById("token-name")?.focus({ preventScroll: true });
     });
   }, [asked]);

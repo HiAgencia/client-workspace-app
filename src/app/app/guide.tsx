@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { scrollPageTo } from "@/components/page-scroll";
 import { Button } from "@/components/ui/button";
 import { GUIDE_KEY, GUIDE_VERSION } from "@/lib/guide-key";
 import { ASSISTANT_NAME } from "@/lib/product";
@@ -104,7 +105,7 @@ function bringIntoView(target: HTMLElement): Promise<void> {
   const room = foot - top;
   const wanted = part.height < room ? top + (room - part.height) / 2 : top + CARD_AIR;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  window.scrollBy({ top: part.top - wanted, behavior: reduced ? "instant" : "smooth" });
+  scrollPageTo(window.scrollY + part.top - wanted, reduced);
   return new Promise((done) => {
     const started = performance.now();
     let last = window.scrollY;

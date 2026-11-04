@@ -11,6 +11,15 @@
     -moz-osx-font-smoothing: grayscale;
     font-optical-sizing: auto;
     font-synthesis-weight: none;
+    scrollbar-gutter: stable;
+    transition: background-color var(--dur-fast) var(--ease-in);
+  }
+  html:has(dialog:modal, .positioner[data-open]) {
+    overflow: hidden;
+  }
+  html:has(dialog.dialog:modal) {
+    background-color: var(--scrim-ground);
+    transition: background-color var(--dur) var(--ease-out);
   }
   body {
     min-height: 100svh;

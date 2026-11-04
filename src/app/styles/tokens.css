@@ -22,7 +22,9 @@
   --piece: #ffffff;
   --piece-rim: #e3e3e3;
   --rail-ink: var(--muted);
-  --scrim: color-mix(in srgb, var(--shadow-ink) 32%, transparent);
+  --scrim-share: 32%;
+  --scrim: color-mix(in srgb, var(--shadow-ink) var(--scrim-share), transparent);
+  --scrim-ground: color-mix(in srgb, var(--shadow-ink) var(--scrim-share), var(--canvas));
   --tile: #f5f5f5;
   --tile-rim: #ebebeb;
   --tile-ink: #525252;
@@ -208,7 +210,7 @@
   --piece: #2e2e2e;
   --piece-rim: #3a3a3a;
   --rail-ink: #868686;
-  --scrim: color-mix(in srgb, var(--shadow-ink) 62%, transparent);
+  --scrim-share: 62%;
   --tile: #222222;
   --tile-rim: #2e2e2e;
   --tile-ink: #c9c9c9;

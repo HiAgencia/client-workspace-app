@@ -1,6 +1,7 @@
 "use client";
 
 import type { MouseEvent } from "react";
+import { scrollPageTo, scrollPlaceIntoView } from "@/components/page-scroll";
 import type { Item } from "./client-api";
 
 
@@ -98,8 +99,8 @@ export async function land(target: FocusTarget, { acted = false }: { acted?: boo
   if (closed) await Promise.allSettled([closed, element.closest<HTMLElement>(".task-item")].flatMap((box) => box?.getAnimations() ?? []).map((animation) => animation.finished));
   
   
-  if (target.kind === "node") window.scrollTo({ top: 0, behavior: reduced ? "instant" : "smooth" });
-  else element.scrollIntoView({ block: "center", behavior: reduced ? "instant" : "smooth" });
+  if (target.kind === "node") scrollPageTo(0, reduced);
+  else scrollPlaceIntoView(element, "center", reduced);
   if (target.kind === "item") {
     const row = element.closest<HTMLElement>("[data-item]");
     if (row && !reduced) {
