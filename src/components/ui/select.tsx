@@ -1,7 +1,7 @@
 "use client";
 
 import { Select as Base } from "@base-ui/react/select";
-import { Fragment, type ReactElement } from "react";
+import { Fragment, useId, type ReactElement } from "react";
 import { cx } from "@/lib/utils";
 import { usePopupContainer } from "./popup-layer";
 
@@ -33,6 +33,7 @@ type SelectProps = {
   onChange: (value: string) => void;
   options: SelectOption[];
   label: string;
+  labelledBy?: string;
   placeholder?: string;
   look?: "field" | "chip";
   id?: string;
@@ -48,10 +49,12 @@ const item = (option: SelectOption, marked: boolean) => (
   </Base.Item>
 );
 
-export function Select({ value, onChange, options, label, placeholder = "Choose…", look = "field", id, invalid, describedBy }: SelectProps) {
+export function Select({ value, onChange, options, label, labelledBy, placeholder = "Choose…", look = "field", id, invalid, describedBy }: SelectProps) {
   const chosen = options.find((option) => option.value === value);
   const marked = options.some((option) => option.mark);
   const container = usePopupContainer();
+  const ownId = useId();
+  const triggerId = id ?? ownId;
   return (
     <Base.Root
       value={chosen?.value ?? null}
@@ -62,8 +65,9 @@ export function Select({ value, onChange, options, label, placeholder = "Choose�
       modal={false}
     >
       <Base.Trigger
-        id={id}
-        aria-label={`${label}: ${chosen?.label ?? placeholder}`}
+        id={labelledBy ? triggerId : id}
+        aria-label={labelledBy ? undefined : `${label}: ${chosen?.label ?? placeholder}`}
+        aria-labelledby={labelledBy ? `${labelledBy} ${triggerId}` : undefined}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cx("picker", look === "field" ? "field" : "chip-picker")}

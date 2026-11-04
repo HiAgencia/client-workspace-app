@@ -23,6 +23,7 @@ import { lostWords } from "../mail-store";
 import { PageHeader } from "../page-header";
 import { accountGroups } from "../place-filters";
 import { PlaceName } from "../task-row";
+import { useSwap } from "../use-swap";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 
@@ -364,6 +365,9 @@ function CodeLines({ text }: { text: string }) {
   ));
 }
 
+const WHERE_MISSING = "Pick the client or project the token reaches.";
+const NAME_MISSING = "Name the token after where the agent runs, such as Laptop.";
+
 function AgentTokensSection() {
   const { tree, saving } = useWorkspace();
   const asked = useSearchParams().get("node");
@@ -371,8 +375,11 @@ function AgentTokensSection() {
   const [error, setError] = useState<string | null>(null);
   const [nodeId, setNodeId] = useState<string | null>(asked);
   const [label, setLabel] = useState("");
-  const [missing, setMissing] = useState<"node" | "label" | null>(null);
+  const [missing, setMissing] = useState<{ node: boolean; label: boolean }>({ node: false, label: false });
+  const [said, setSaid] = useState("");
   const [issued, setIssued] = useState<{ token: string; path: string } | null>(null);
+  const tokenSwap = useSwap(issued, issued?.token ?? "");
+  const shownToken = tokenSwap.shown ?? issued;
   const [reads, setReads] = useState(0);
   const [blockOpen, setBlockOpen] = useState(false);
   useSettled("agent-tokens", data !== null || error !== null);
@@ -401,9 +408,15 @@ function AgentTokensSection() {
   }, [asked]);
 
   async function issue() {
-    if (!nodeId) return setMissing("node");
-    if (!label.trim()) return setMissing("label");
-    setMissing(null);
+    const lacking = { node: !nodeId, label: !label.trim() };
+    setMissing(lacking);
+    if (lacking.node || lacking.label) {
+      const first = document.getElementById(lacking.node ? "token-where" : "token-name");
+      setSaid(first !== null && first === document.activeElement ? (lacking.node ? WHERE_MISSING : NAME_MISSING) : "");
+      requestAnimationFrame(() => first?.focus());
+      return;
+    }
+    setSaid("");
     const name = label.trim().replace(/^\p{Ll}/u, (letter) => letter.toUpperCase());
     const answer = await post<{ token: string }>("/api/agent-tokens", { action: "issue", nodeId, label: name });
     if (await saving(Promise.resolve(answer))) {
@@ -428,57 +441,68 @@ function AgentTokensSection() {
         <>
       <div className="settings-form">
         <div className="settings-where">
+          <label id="token-where-label" htmlFor="token-where" className="t-label">
+            Client or project
+          </label>
           <Select
             id="token-where"
             label="Client or project"
+            labelledBy="token-where-label"
             placeholder="Pick a client or a project…"
             value={nodeId}
             options={(tree ?? []).map((node) => ({ value: node.id, label: node.path }))}
-            invalid={missing === "node"}
-            describedBy={missing === "node" ? "token-where-note" : undefined}
+            invalid={missing.node}
+            describedBy={missing.node ? "token-where-note" : undefined}
             onChange={(value) => {
               setNodeId(value);
-              if (missing === "node") setMissing(null);
+              setMissing((was) => ({ ...was, node: false }));
             }}
           />
-          {missing === "node" && (
+          {missing.node && (
             <p id="token-where-note" className="inline-note" data-tone="alert">
-              Pick the client or project the token reaches.
+              {WHERE_MISSING}
             </p>
           )}
         </div>
         <div className="settings-grow">
+          <label htmlFor="token-name" className="t-label">
+            Token name
+          </label>
           <Field
             id="token-name"
             name="token-name"
-            aria-label="Token name"
             aria-describedby="token-name-help"
-            aria-invalid={missing === "label" || undefined}
-            placeholder="Token name, such as Laptop"
+            aria-invalid={missing.label || undefined}
+            placeholder="Such as Laptop"
             value={label}
             onChange={(e) => {
               setLabel(e.target.value);
-              if (missing === "label") setMissing(null);
+              setMissing((was) => ({ ...was, label: false }));
             }}
             onKeyDown={(e) => e.key === "Enter" && void issue()}
           />
-          <p id="token-name-help" className={missing === "label" ? "inline-note" : "t-help"} data-tone={missing === "label" ? "alert" : undefined}>
-            {missing === "label" ? "Name the token after where the agent runs, such as Laptop." : "The name appears beside everything this agent adds."}
+          <p id="token-name-help" className={missing.label ? "inline-note" : "t-help"} data-tone={missing.label ? "alert" : undefined}>
+            {missing.label ? NAME_MISSING : "The name appears beside everything this agent adds."}
           </p>
         </div>
+        <p className="sr-only" role="alert">
+          {said}
+        </p>
         <Button variant="primary" onClick={() => void issue()}>
           Issue an agent token
         </Button>
       </div>
         </>
       )}
-      {issued && data && (
-        <div className="stack inline-note" data-tone="accent" data-issued-token>
-          <p className="t-label">Copy it now: it won’t be shown again. Set it where the agent runs. It works for {issued.path}.</p>
-          <pre id="issued-token" className="read-block t-code" tabIndex={0} aria-label="The new token">{`${data.tokenEnv}=${issued.token}`}</pre>
-          <CopyButton text={`${data.tokenEnv}=${issued.token}`} target="issued-token" label="Copy the token" />
-        </div>
-      )}
+      <Fold open={Boolean(issued && data)} id="issued-token-fold" className="issued-fold">
+        {shownToken && data && (
+          <div className="stack inline-note issued-token" data-tone="accent" data-issued-token data-leaving={tokenSwap.leaving || undefined}>
+            <p className="t-label">Copy it now: it won’t be shown again. Set it where the agent runs. It works for {shownToken.path}.</p>
+            <pre id="issued-token" className="read-block t-code" tabIndex={0} aria-label="The new token">{`${data.tokenEnv}=${shownToken.token}`}</pre>
+            <CopyButton text={`${data.tokenEnv}=${shownToken.token}`} target="issued-token" label="Copy the token" />
+          </div>
+        )}
+      </Fold>
       {!data ? (
         error ? (
           <BoxFailed what="The tokens" message={error} kept={false} onRetry={() => setReads((n) => n + 1)} />
