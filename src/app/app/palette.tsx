@@ -49,6 +49,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     if (!open && el.open) el.close();
   }, [open]);
   
+  
   const shown = useExit(open, dialog);
   return (
     <dialog

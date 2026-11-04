@@ -287,14 +287,6 @@
   justify-content: flex-end;
   gap: 0.5rem;
 }
-.agenda {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-rows);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 .stack {
   display: flex;
   flex-direction: column;
@@ -330,16 +322,8 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--accent);
-
-  & > .icon {
-    --icon: 1.125rem;
-  }
-}
-.chat-icon:has(> .logo) {
   width: 1.5rem;
+  height: 1.25rem;
 
   & > .logo {
     --icon: 1.5rem;
@@ -778,9 +762,6 @@ fieldset.stack {
   border: 0;
   min-width: 0;
 }
-.agenda {
-  container: agenda / inline-size;
-}
 .panel {
   margin: 0 0 0 auto;
   width: min(32rem, 100vw);
@@ -1022,59 +1003,9 @@ fieldset.stack {
     padding-inline-start: var(--gutter);
   }
 }
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45em;
-  min-height: 2.25rem;
-  padding: 0.25em 0.45em 0.25em 0.8em;
-  border: 1px solid var(--control-rim);
-  border-radius: var(--radius-pill);
-  background: var(--interior);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: var(--text-meta);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color var(--dur-hover-out) var(--ease-hover-out), border-color var(--dur-hover-out) var(--ease-hover-out),
-    box-shadow var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out);
-
-  &[aria-pressed="true"] {
-    background: var(--accent-tint);
-    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-    color: var(--accent-ink);
-  }
-  @media (hover: hover) {
-    &:hover {
-      background: var(--interior-hover);
-      border-color: var(--field-rim);
-      box-shadow: var(--shadow-control-hover);
-      transition-duration: var(--dur-hover);
-    }
-    &[aria-pressed="true"]:hover {
-      background: var(--accent-tint-hover);
-    }
-  }
-}
 .connect-blocked {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.6rem;
-}
-.cal-month {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 3px;
-  & th {
-    padding-bottom: 0.3rem;
-    text-align: left;
-  }
-  & td {
-    vertical-align: top;
-  }
-  & td[data-outside] .cal-cell {
-    opacity: 0.55;
-  }
 }

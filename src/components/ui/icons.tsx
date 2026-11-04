@@ -11,7 +11,6 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarOff,
-  CalendarPlus,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -21,11 +20,9 @@ import {
   CircleAlert,
   CircleCheck,
   Circle,
-  CirclePlus,
   Clock,
   Copy,
   Ellipsis,
-  ExternalLink,
   Flag,
   GripVertical,
   Handshake,
@@ -35,7 +32,6 @@ import {
   ImagePlus,
   Inbox,
   Italic,
-  Info,
   KeyRound,
   Layers,
   Link as LinkGlyph,
@@ -52,10 +48,8 @@ import {
   Moon,
   Palette,
   Pause,
-  Pencil,
   Play,
   Plus,
-  Reply,
   RotateCcw,
   Scale,
   Search,
@@ -78,7 +72,7 @@ export type Icon = (props: LucideProps) => React.ReactElement;
 
 
 
-type Motion = "forward" | "back" | "up" | "down" | "turn" | "turn-back" | "out";
+type Motion = "forward" | "back" | "up" | "down" | "turn" | "turn-back";
 
 function named(Glyph: LucideIcon, motion?: Motion): Icon {
   function ProductIcon({ className, ...props }: LucideProps) {
@@ -107,23 +101,18 @@ export const NoDateIcon = named(CalendarOff);
 
 
 export const AddIcon = named(Plus, "turn");
-export const AddCircleIcon = named(CirclePlus);
 export const SearchIcon = named(Search);
 export const ChatIcon = named(MessageSquare);
 export const MoreIcon = named(Ellipsis);
 export const CloseIcon = named(X);
-export const EditIcon = named(Pencil);
 export const DuplicateIcon = named(Copy);
 export const DeleteIcon = named(Trash2);
-export const CopyIcon = named(Copy);
 export const CopiedIcon = named(Check);
 export const MoveIcon = named(ArrowRight, "forward");
 
 export const OpenIcon = named(ArrowRight, "forward");
 export const RepliesIcon = named(MailCheck);
 export const LinkIcon = named(LinkGlyph);
-export const ExternalIcon = named(ExternalLink, "out");
-export const ReplyIcon = named(Reply);
 export const UndoIcon = named(Undo2, "turn-back");
 export const RestoreIcon = named(RotateCcw, "turn-back");
 export const SignOutIcon = named(LogOut, "forward");
@@ -135,7 +124,6 @@ export const SendIcon = named(ArrowUp, "up");
 export const MicIcon = named(Mic);
 export const AttachImageIcon = named(ImagePlus);
 export const ImageIcon = named(ImageGlyph);
-export const NewEventIcon = named(CalendarPlus);
 export const EventIcon = named(CalendarDays);
 export const RescheduleIcon = named(CalendarClock);
 export const PreviousIcon = named(ChevronLeft, "back");
@@ -170,7 +158,6 @@ export const NumbersIcon = named(ListOrdered);
 export const LightIcon = named(Sun);
 export const DarkIcon = named(Moon);
 export const AlertIcon = named(CircleAlert);
-export const InfoIcon = named(Info);
 
 
 export const EnterKeyIcon = named(CornerDownLeft);

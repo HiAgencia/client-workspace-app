@@ -9,7 +9,7 @@ const CONTROL = '[aria-controls="fold-1"]';
 const CLOSED_FOLD = '.fold[data-open="false"]';
 const CLOSED_ROWS = '.first-rows[data-open="false"]';
 
-function page({ opensAfter = 1, folded = true, controlled = true, behindShowAll = false, seen = false } = {}) {
+function page({ opensAfter = 1, folded = true, controlled = true, behindShowMore = false, seen = false } = {}) {
   const log: string[] = [];
   const fold = { id: "fold-1", dataset: { open: folded ? "false" : "true" }, getAnimations: () => [{ finished: Promise.resolve().then(() => log.push("fold opened")) }] };
   const row = { removeAttribute: () => {}, setAttribute: () => {}, offsetWidth: 0 };
@@ -25,8 +25,8 @@ function page({ opensAfter = 1, folded = true, controlled = true, behindShowAll 
   };
   const title = {
     closest: (selector: string) => {
-      if (selector === CLOSED_FOLD) return !behindShowAll && fold.dataset.open === "false" ? fold : null;
-      if (selector === CLOSED_ROWS) return behindShowAll && fold.dataset.open === "false" ? fold : null;
+      if (selector === CLOSED_FOLD) return !behindShowMore && fold.dataset.open === "false" ? fold : null;
+      if (selector === CLOSED_ROWS) return behindShowMore && fold.dataset.open === "false" ? fold : null;
       if (selector === "[data-item]") return row;
       return null;
     },
@@ -97,8 +97,8 @@ describe("landing on a place", () => {
     expect(log).toContain("click");
   });
 
-  it("opens the rows a box keeps behind «Show all» for a place among them", async () => {
-    const { log, doc, title } = page({ behindShowAll: true });
+  it("opens the rows a box keeps behind «Show N more» for a place among them", async () => {
+    const { log, doc, title } = page({ behindShowMore: true });
     await expect(land(target)).resolves.toBe("landed");
     expect(doc.activeElement).toBe(title);
     expect(log.indexOf("click")).toBeLessThan(log.indexOf("focus"));
@@ -106,7 +106,7 @@ describe("landing on a place", () => {
   });
 
   it("leaves a long list closed for a place among its first rows, which is in view already", async () => {
-    const { log, doc, title } = page({ behindShowAll: true, seen: true });
+    const { log, doc, title } = page({ behindShowMore: true, seen: true });
     await expect(land(target)).resolves.toBe("landed");
     expect(doc.activeElement).toBe(title);
     expect(log).not.toContain("click");
