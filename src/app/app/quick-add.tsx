@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Fold } from "@/components/ui/fold";
@@ -39,15 +39,19 @@ function QuickAddEditor({
   onDone,
   inline = false,
   submitLabel = "Add task",
+  draft,
+  onDraft,
 }: {
   start: QuickAddStart;
   onDone: (reason: "added" | "cancel") => void;
   inline?: boolean;
   submitLabel?: string;
+  draft?: string;
+  onDraft?: (text: string) => void;
 }) {
   const { tree, notify, touch, saving } = useWorkspace();
-  const [text, setText] = useState("");
-  const [caret, setCaret] = useState(0);
+  const [text, setText] = useState(draft ?? "");
+  const [caret, setCaret] = useState(draft?.length ?? 0);
   const [dismissed, setDismissed] = useState<Array<{ kind: PieceKind; text: string }>>([]);
   const [overrides, setOverrides] = useState<Overrides>({});
   const [active, setActive] = useState(0);
@@ -57,6 +61,14 @@ function QuickAddEditor({
   const field = useRef<HTMLTextAreaElement>(null);
   const listId = useId();
   const fieldId = useId();
+  useEffect(() => {
+    onDraft?.(text);
+  }, [text, onDraft]);
+  const opened = useRef(draft);
+  useLayoutEffect(() => {
+    const words = opened.current;
+    if (words) field.current?.setSelectionRange(words.length, words.length);
+  }, []);
   const now = today();
   const clock = clockNow();
 
@@ -319,7 +331,8 @@ function QuickAddEditor({
       )}
       <div className="qa-foot">
         <p className="t-meta qa-hint">
-          <kbd className="kbd">#</kbd> client or project · <kbd className="kbd">p1</kbd>–<kbd className="kbd">p4</kbd> priority · <span className="nowrap">a day like “tomorrow 4pm”</span>
+          <kbd className="kbd">#</kbd> client or project · <span className="nowrap"><kbd className="kbd">p1</kbd> {PRIORITIES[0].label.toLowerCase()}</span> to{" "}
+          <span className="nowrap"><kbd className="kbd">p4</kbd> {PRIORITIES[3].label.toLowerCase()}</span> · <span className="nowrap">a day like “tomorrow 4pm”</span>
         </p>
         <div className="qa-actions">
           <Button size="sm" onClick={() => onDone("cancel")}>
@@ -341,8 +354,13 @@ export function QuickAddDialog() {
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const popupOpen = useRef(false);
+  const draft = useRef("");
+  const keepDraft = useCallback((text: string) => {
+    draft.current = text;
+  }, []);
   const [start, setStart] = useState<QuickAddStart | null>(null);
   const [round, setRound] = useState(0);
+  const [words, setWords] = useState("");
 
   useEffect(
     () =>
@@ -351,6 +369,7 @@ export function QuickAddDialog() {
         if (!el) return;
         if (!el.open) opener.current = document.activeElement as HTMLElement | null;
         setStart(next);
+        setWords(draft.current);
         setRound((value) => value + 1);
         if (!el.open) el.showModal();
       }),
@@ -375,7 +394,7 @@ export function QuickAddDialog() {
         afterExit(element, () => {
           if (!element?.open) setStart(null);
         });
-        focusAfterClose(() => opener.current);
+        focusAfterClose(() => opener.current, opener.current);
       }}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
@@ -386,7 +405,9 @@ export function QuickAddDialog() {
       }}
     >
       <PopupLayerProvider container={dialog}>
-        {start && <QuickAddEditor key={round} start={start} onDone={() => dialog.current?.close()} />}
+        {start && (
+          <QuickAddEditor key={round} start={start} draft={words} onDraft={keepDraft} onDone={() => dialog.current?.close()} />
+        )}
       </PopupLayerProvider>
     </dialog>
   );
