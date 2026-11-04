@@ -11,7 +11,9 @@
   background: var(--card);
   box-shadow: var(--shadow-pop);
   opacity: 1;
-  transition: opacity var(--dur) var(--ease-out);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    right var(--dur) var(--ease-in);
 
   @starting-style {
     opacity: 0;
@@ -23,7 +25,7 @@
     transition-timing-function: var(--ease-in);
   }
   &[data-guide="offer"] {
-    right: var(--gutter);
+    right: calc(var(--gutter) + var(--chat-dock, 0px));
     bottom: var(--gutter);
   }
   &[data-guide="step"] {
@@ -31,6 +33,10 @@
     left: 0;
     translate: var(--guide-x, 0) var(--guide-y, 0);
   }
+}
+:root:has(.shell[data-chat="open"]) .guide-card:not([data-leaving]) {
+  transition-duration: var(--dur), var(--dur-slow);
+  transition-timing-function: var(--ease-out), var(--ease-out);
 }
 @media (width < 40rem) {
   .guide-card,
@@ -52,7 +58,6 @@
   color: var(--ink-soft);
   font-size: var(--text-body);
   line-height: 1.5;
-  text-wrap: pretty;
 }
 .guide-actions {
   display: flex;

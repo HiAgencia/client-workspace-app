@@ -197,7 +197,6 @@
   color: var(--ink-soft);
   font-size: var(--text-lead);
   line-height: 1.5;
-  text-wrap: pretty;
 }
 .welcome-paths {
   display: grid;
@@ -427,7 +426,6 @@
 .action-card > .action-text {
   flex: 1 1 13rem;
   min-width: 0;
-  text-wrap: pretty;
 }
 .action-card > .action-text + * {
   margin-inline-start: auto;
@@ -695,7 +693,8 @@
 }
 .notices {
   position: fixed;
-  inset: auto var(--gutter) var(--gutter) auto;
+  inset: auto calc(var(--gutter) + var(--chat-dock, 0px)) var(--gutter) auto;
+  transition: right var(--dur) var(--ease-in);
   z-index: var(--layer-notice);
   display: flex;
   justify-content: flex-end;
@@ -708,6 +707,10 @@
   background: transparent;
   color: inherit;
   pointer-events: none;
+}
+:root:has(.shell[data-chat="open"]) .notices {
+  transition-duration: var(--dur-slow);
+  transition-timing-function: var(--ease-out);
 }
 .notices > .notice {
   pointer-events: auto;
@@ -833,7 +836,6 @@ fieldset.stack {
   line-height: 1.25;
   letter-spacing: var(--tracking-h1);
   overflow-wrap: anywhere;
-  text-wrap: pretty;
 }
 .panel-meta {
   display: flex;
