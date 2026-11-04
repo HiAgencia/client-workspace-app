@@ -90,6 +90,8 @@ export function useWorkspace(): Workspace {
   return value;
 }
 
+export const menuButton = () => document.querySelector<HTMLElement>(".topbar .drawer-trigger");
+
 export function useChatScope(scope: string | null): void {
   const { setChatScope } = useWorkspace();
   useEffect(() => {

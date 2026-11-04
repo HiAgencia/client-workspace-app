@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { DecisionIcon, MailIcon, NextIcon, NoteIcon, SearchIcon, TasksIcon } from "@/components/ui/icons";
 import { useAutoHeight } from "@/components/ui/use-auto-height";
-import { useExit } from "@/components/ui/use-exit";
+import { focusAfterClose, handBack, takesFocus, useExit } from "@/components/ui/use-exit";
 import { useMedia } from "@/components/ui/use-media";
 import { count } from "@/lib/count";
 import { prepare, rank } from "@/lib/fuzzy";
@@ -19,7 +19,7 @@ import { subjectOf } from "./mail/subject";
 import { openQuickAdd } from "./quick-add-bus";
 import type { MailFailureRow } from "./mail-store";
 import { showShortcuts } from "./shortcuts";
-import { useWorkspace } from "./workspace";
+import { menuButton, useWorkspace } from "./workspace";
 
 type Entry =
   | { kind: "node"; id: string; node: TreeNode }
@@ -37,10 +37,14 @@ const TOUCH = "(pointer: coarse)";
 
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const el = dialog.current;
     if (!el) return;
-    if (open && !el.open) el.showModal();
+    if (open && !el.open) {
+      opener.current = document.activeElement as HTMLElement | null;
+      el.showModal();
+    }
     if (!open && el.open) el.close();
   }, [open]);
   const shown = useExit(open, dialog);
@@ -49,7 +53,10 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
       ref={dialog}
       className="dialog palette"
       aria-label={NAME}
-      onClose={onClose}
+      onClose={() => {
+        if (!takesFocus(opener.current)) focusAfterClose(handBack(opener.current, menuButton), opener.current);
+        onClose();
+      }}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
       }}

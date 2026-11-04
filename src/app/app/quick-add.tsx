@@ -7,7 +7,7 @@ import { Fold } from "@/components/ui/fold";
 import { AddIcon, DateIcon, EnterKeyIcon, GeneralIcon, PriorityIcon, TimeIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
-import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
+import { afterExit, focusAfterClose, handBack } from "@/components/ui/use-exit";
 import { today, type Day } from "@/lib/dates";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
@@ -16,7 +16,7 @@ import { tool, type Item } from "./client-api";
 import { PRIORITIES } from "./item-parts";
 import { onOpenQuickAdd, type QuickAddStart } from "./quick-add-bus";
 import { pasteLinkOver, whenLabel, whenTone } from "./task-row";
-import { useWorkspace } from "./workspace";
+import { menuButton, useWorkspace } from "./workspace";
 
 const LOW = 4;
 const clockNow = () => new Date().toTimeString().slice(0, 5);
@@ -43,7 +43,7 @@ function QuickAddEditor({
   onDraft,
 }: {
   start: QuickAddStart;
-  onDone: (reason: "added" | "cancel") => void;
+  onDone: (reason: "added" | "close" | "discard") => void;
   inline?: boolean;
   submitLabel?: string;
   draft?: string;
@@ -195,7 +195,7 @@ function QuickAddEditor({
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      onDone("cancel");
+      onDone("close");
     }
   }
 
@@ -335,7 +335,7 @@ function QuickAddEditor({
           <span className="nowrap"><kbd className="kbd">p4</kbd> {PRIORITIES[3].label.toLowerCase()}</span> · <span className="nowrap">a day like “tomorrow 4pm”</span>
         </p>
         <div className="qa-actions">
-          <Button size="sm" onClick={() => onDone("cancel")}>
+          <Button size="sm" onClick={() => onDone("discard")}>
             Cancel
           </Button>
           <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !reading.title} aria-keyshortcuts="Enter">
@@ -394,7 +394,7 @@ export function QuickAddDialog() {
         afterExit(element, () => {
           if (!element?.open) setStart(null);
         });
-        focusAfterClose(() => opener.current, opener.current);
+        focusAfterClose(handBack(opener.current, menuButton), opener.current);
       }}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
@@ -406,7 +406,16 @@ export function QuickAddDialog() {
     >
       <PopupLayerProvider container={dialog}>
         {start && (
-          <QuickAddEditor key={round} start={start} draft={words} onDraft={keepDraft} onDone={() => dialog.current?.close()} />
+          <QuickAddEditor
+            key={round}
+            start={start}
+            draft={words}
+            onDraft={keepDraft}
+            onDone={(reason) => {
+              if (reason === "discard") draft.current = "";
+              dialog.current?.close();
+            }}
+          />
         )}
       </PopupLayerProvider>
     </dialog>

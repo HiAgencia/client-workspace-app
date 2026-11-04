@@ -34,6 +34,20 @@ export function focusAfterClose(target: () => HTMLElement | null | undefined, fr
   });
 }
 
+export function takesFocus(element: Element | null | undefined): element is HTMLElement {
+  return element instanceof HTMLElement && element !== document.body && element.isConnected && !element.closest("dialog:not([open])") && element.getClientRects().length > 0;
+}
+
+export function handBack(opener: HTMLElement | null | undefined, instead: () => HTMLElement | null | undefined): () => HTMLElement | null {
+  return () => {
+    if (takesFocus(opener)) return opener;
+    const here = document.activeElement;
+    if (here && here !== document.body && !here.closest("dialog:not([open])")) return null;
+    const other = instead();
+    return takesFocus(other) ? other : null;
+  };
+}
+
 export function useExit(open: boolean, element: RefObject<Element | null>): boolean {
   const [held, setHeld] = useState(open);
   if (open && !held) setHeld(true);
