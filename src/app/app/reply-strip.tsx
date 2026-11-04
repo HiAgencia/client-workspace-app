@@ -42,7 +42,7 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
           <Button variant="quiet" size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
             <span className="btn-label">
               <span className="reply-more-long">{open ? "Show less" : noneArrived ? `Show the ${unit(waiting)}` : `Show ${folded.length} more ${unit(folded.length)}`}</span>
-              <span className="reply-more-short">{open ? "Show less" : noneArrived ? "Show all" : `${folded.length} more`}</span>
+              <span className="reply-more-short">{open ? "Show less" : noneArrived ? `${waiting} ${unit(waiting)}` : `+${folded.length} ${unit(folded.length)}`}</span>
             </span>
             <DownIcon />
           </Button>
