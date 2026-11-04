@@ -176,12 +176,8 @@ export function TaskDetail() {
     return queue.current;
   }, [saving]);
 
-  const load = useCallback(async (next: TaskDetailRequest) => {
-    current.current = next.id;
-    setFailed(null);
-    const found = await readTaskItem(next.id);
-    if (current.current !== next.id) return;
-    if (!found) return setFailed("This task is not here any more: it was deleted.");
+  
+  const take = useCallback((found: Item) => {
     setItem(found);
     setLoaded(true);
     latest.current = found.body ?? "";
@@ -189,6 +185,18 @@ export function TaskDetail() {
     setBody(found.body ?? "");
     setStatus("");
   }, []);
+
+  const load = useCallback(
+    async (next: TaskDetailRequest) => {
+      current.current = next.id;
+      setFailed(null);
+      const found = await readTaskItem(next.id);
+      if (current.current !== next.id) return;
+      if (!found) return setFailed("This task is not here any more: it was deleted.");
+      take(found);
+    },
+    [take],
+  );
 
   
   
@@ -463,7 +471,7 @@ export function TaskDetail() {
                 onMove={(value) => void movePlace(value)}
                 onLeave={leave}
                 onGo={go}
-                onRestored={() => void load({ id: item.id, task: { id: item.id, nodeId: item.nodeId } })}
+                onRestored={(restored) => current.current === restored.id && take(restored)}
               />
             ) : failed ? (
               <div className="task-detail-missing">
@@ -505,7 +513,7 @@ type BodyProps = {
   onMove: (value: string) => void;
   onLeave: (event: MouseEvent<HTMLAnchorElement>) => void;
   onGo: (href: string) => void;
-  onRestored: () => void;
+  onRestored: (restored: Item) => void;
 };
 
 
@@ -586,7 +594,7 @@ function TaskBody(props: BodyProps) {
       <NoteSection key={`n-${item.id}`} task={item} version={version} expected={known?.notes} />
       {}
       <Fold open={props.showVersions} id={`${ids.versions}-fold`} lazy follow>
-        <Versions key={`v-${item.id}`} id={ids.versions} task={item} onRestored={props.onRestored} />
+        <Versions key={`v-${item.id}`} id={ids.versions} task={item} version={version} onRestored={props.onRestored} />
       </Fold>
       <footer className="task-detail-foot">
         <p className="t-meta task-detail-origin">
@@ -1732,23 +1740,39 @@ function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElemen
   );
 }
 
-function Versions({ id, task, onRestored }: { id: string; task: Item; onRestored: () => void }) {
+function Versions({ id, task, version, onRestored }: { id: string; task: Item; version: number; onRestored: (restored: Item) => void }) {
   const { saving } = useWorkspace();
   const [revisions, setRevisions] = useState<Revision[] | null>(null);
+  
+  
+  
   useEffect(() => {
-    void get<{ revisions: Revision[] }>(`/api/items/${task.id}/revisions`).then((answer) => answer.ok && setRevisions(answer.revisions));
-  }, [task.id]);
+    let live = true;
+    void get<{ revisions: Revision[] }>(`/api/items/${task.id}/revisions`).then((answer) => live && answer.ok && setRevisions(answer.revisions));
+    return () => {
+      live = false;
+    };
+  }, [task.id, version]);
+  
+  async function restore(revisionId: string) {
+    const answer = await post<{ item: Item }>(`/api/revisions/${revisionId}/restore`, {});
+    if (!(await saving(Promise.resolve(answer))) || !answer.ok) return;
+    onRestored(answer.item);
+  }
   return (
     <section className="task-section" data-section="versions" aria-labelledby={id}>
       <SectionHead id={id} name="Versions" figure={revisions && revisions.length > 0 ? String(revisions.length) : null} tabIndex={-1} />
-      {revisions === null ? (
-        <p className="t-help">Loading the versions…</p>
-      ) : revisions.length === 0 ? (
-        <p className="t-help">No earlier versions: every change from now on leaves one here.</p>
-      ) : (
-        <ul className="task-version-list">
+      {revisions === null && <p className="t-help">Loading the versions…</p>}
+      {}
+      {revisions !== null && (
+        <Fold open={revisions.length === 0} id={`${id}-none`}>
+          <p className="t-help">No earlier versions: every change from now on leaves one here.</p>
+        </Fold>
+      )}
+      {revisions !== null && revisions.length > 0 && (
+        <FlipList className="task-version-list">
           {revisions.slice(0, 12).map((revision) => (
-            <li key={revision.id} className="task-version">
+            <li key={revision.id} className="task-version" data-flip-key={revision.id}>
               <span className="task-version-text">
                 <span className="t-value">{inlinePlain(revision.snapshot.title)}</span>
                 <span className="t-meta">
@@ -1759,13 +1783,13 @@ function Versions({ id, task, onRestored }: { id: string; task: Item; onRestored
                 size="sm"
                 variant="quiet"
                 aria-label={`Restore the version of ${stampTime(revision.createdAt)}`}
-                onClick={() => void saving(post(`/api/revisions/${revision.id}/restore`, {})).then((ok) => ok && onRestored())}
+                onClick={() => void restore(revision.id)}
               >
                 Restore
               </Button>
             </li>
           ))}
-        </ul>
+        </FlipList>
       )}
     </section>
   );
