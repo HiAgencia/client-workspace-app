@@ -919,7 +919,10 @@ textarea.field {
     cursor: not-allowed;
   }
   &:disabled[aria-checked="true"] {
-    background: var(--muted);
+    background: var(--interior);
+    border-color: var(--division);
+  }
+  &:disabled[aria-checked="true"]::after {
     border-color: var(--muted);
   }
   @media (forced-colors: active) {

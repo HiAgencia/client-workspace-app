@@ -504,10 +504,12 @@
   border-radius: var(--radius-card);
   background: var(--card);
   box-shadow: var(--shadow-card);
-
-  &:is([data-surface="rest"], [data-zone="rest"]) {
-    background: var(--card);
-  }
+}
+.groups[data-mode="page"][data-layout="list"] > .groups-zone {
+  background: var(--rail);
+}
+.box:is([data-surface="rest"], [data-zone="rest"]) {
+  background: var(--card);
 }
 .box {
   display: flex;
