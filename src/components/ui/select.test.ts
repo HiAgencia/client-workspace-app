@@ -39,6 +39,31 @@ describe("the Select's value", () => {
   });
 });
 
+describe("the Select's name", () => {
+  const trigger = (markup: string): string => {
+    const found = /<[a-z]+\s[^>]*class="picker[ "][^>]*>/.exec(markup);
+    if (!found) throw new Error(`no trigger in the markup: ${markup}`);
+    return found[0];
+  };
+  const attribute = (tag: string, name: string): string | null => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1] ?? null;
+  const render = (labelledBy?: string) =>
+    trigger(renderToStaticMarkup(h(Select, { label: "Account", labelledBy, value: "second", options, placeholder: "Pick one", onChange: () => {} })));
+
+  it("with a visible label, is that label and then the trigger's own value, and carries no aria-label", () => {
+    const tag = render("account-label");
+    const id = attribute(tag, "id");
+    expect(id).toBeTruthy();
+    expect(attribute(tag, "aria-labelledby")).toBe(`account-label ${id}`);
+    expect(attribute(tag, "aria-label")).toBeNull();
+  });
+
+  it("without one, is its aria-label with the value, and points at no label", () => {
+    const tag = render();
+    expect(attribute(tag, "aria-label")).toBe("Account: Second account");
+    expect(attribute(tag, "aria-labelledby")).toBeNull();
+  });
+});
+
 describe("a task's time in its Select", () => {
   const readTime = (value: string) => valueText(renderToStaticMarkup(h(Select, { label: "Time", value, options: dueTimeOptions(value), onChange: () => {} })));
 

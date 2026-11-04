@@ -45,6 +45,7 @@ import { openTaskDetail, TaskCircle, timeLabel, type TaskData } from "../task-ro
 import { useSwap } from "../use-swap";
 import { cascade } from "./cascade";
 import { activates, useGridKeys } from "./grid-keys";
+import { holds } from "./holds";
 import { useChatScope, useWorkspace } from "../workspace";
 import "../../styles/calendar.css";
 
@@ -987,11 +988,6 @@ function WeekList({
       })}
     </ol>
   );
-}
-
-function holds(events: number, tasks: number): string {
-  if (events > 0 && tasks > 0) return `${count(events, "event", "events")} and ${count(tasks, "task", "tasks")}`;
-  return events > 0 ? count(events, "event", "events") : count(tasks, "task", "tasks");
 }
 
 const MONTH_SHOWN = 4;
