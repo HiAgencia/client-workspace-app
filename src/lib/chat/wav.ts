@@ -48,6 +48,11 @@ export function encodeWav(samples: Float32Array, sampleRate = SAMPLE_RATE): Uint
   return bytes;
 }
 
+export function wavSeconds(bytes: Uint8Array): number {
+  const rate = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(24, true);
+  return Math.max(0, bytes.length - 44) / (rate * 2);
+}
+
 export function isSupportedWav(bytes: Uint8Array): boolean {
   if (bytes.length < 44) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

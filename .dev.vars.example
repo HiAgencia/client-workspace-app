@@ -20,3 +20,5 @@ DEMO_CHAT_DAILY_CAP=
 DEMO_TRANSCRIPTION_DAILY_CAP=
 DEMO_TOTAL_CHAT_DAILY_CAP=
 DEMO_TOTAL_TRANSCRIPTION_DAILY_CAP=
+# What the server's key may spend before each person goes on with their own key from Settings, in dollars (125 if unset).
+AI_CREDIT_CAP_USD=

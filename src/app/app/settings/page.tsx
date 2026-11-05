@@ -28,7 +28,7 @@ import { useSwap } from "../use-swap";
 import { useWorkspace } from "../workspace";
 import "../../styles/settings.css";
 
-const PARTS = ["theme-settings", "accounts-settings", "agent-tokens"] as const;
+const PARTS = ["theme-settings", "accounts-settings", "agent-tokens", "ai-key"] as const;
 
 const SettledContext = createContext<{ ready: boolean; revealed: boolean; report: (id: string, settled: boolean) => void }>({ ready: true, revealed: true, report: () => undefined });
 
@@ -50,9 +50,10 @@ export default function SettingsPage() {
               <ThemeSection />
               <AccountsSection />
               <AgentTokensSection />
+              <AiKeySection />
               {!entered && (
                 <p className="settings-wait t-meta" role="status">
-                  Reading your settings, accounts, and tokens…
+                  Reading your settings, accounts, tokens, and key…
                 </p>
               )}
             </div>
@@ -568,6 +569,106 @@ function AgentTokensSection() {
             )}
           </div>
         </>
+      )}
+    </SettingsBox>
+  );
+}
+
+type AiKey = { hint: string | null; freeCredits: boolean };
+
+function AiKeySection() {
+  const { saving } = useWorkspace();
+  const [data, setData] = useState<AiKey | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reads, setReads] = useState(0);
+  const [value, setValue] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useSettled("ai-key", data !== null || error !== null);
+
+  useEffect(() => {
+    let live = true;
+    void get<AiKey>("/api/ai-key").then((answer) => {
+      if (!live) return;
+      if (answer.ok) {
+        setData({ hint: answer.hint, freeCredits: answer.freeCredits });
+        setError(null);
+      } else setError(answer.message);
+    });
+    return () => {
+      live = false;
+    };
+  }, [reads]);
+
+  async function save() {
+    if (!value.trim()) {
+      setNote("Paste your Meta API key first.");
+      document.getElementById("ai-key-value")?.focus();
+      return;
+    }
+    setBusy(true);
+    const answer = await post<{ hint: string }>("/api/ai-key", { key: value.trim() });
+    setBusy(false);
+    if (!answer.ok) return setNote(answer.message.replace(/^\p{Ll}/u, (letter) => letter.toUpperCase()) + ".");
+    setNote(null);
+    setValue("");
+    setReads((n) => n + 1);
+  }
+
+  async function remove() {
+    if (await saving(post("/api/ai-key", {}, "DELETE"))) setReads((n) => n + 1);
+  }
+
+  return (
+    <SettingsBox id="ai-key" title="Meta API key" icon={TokenIcon} order={3} below count={data?.hint ? "Your own key" : undefined}>
+      <p className="t-help">
+        {data && !data.freeCredits && !data.hint
+          ? "The free AI credits are used up. Add your own Meta API key to keep using the assistant and dictation."
+          : "The assistant runs on free credits while they last. With your own Meta API key, your messages and dictation use your own credits."}
+      </p>
+      {!data ? (
+        error ? (
+          <BoxFailed what="The key" message={error} kept={false} onRetry={() => setReads((n) => n + 1)} />
+        ) : (
+          <BoxWait what="Loading the key…" rows={1} />
+        )
+      ) : data.hint ? (
+        <div className="settings-line" data-ai-key-saved>
+          <span className="t-value">Saved key ending in {data.hint}</span>
+          <ConfirmButton confirm="Your messages and dictation go back to the free credits, while they last." onConfirm={() => void remove()}>
+            Remove
+          </ConfirmButton>
+        </div>
+      ) : (
+        <div className="settings-form">
+          <div className="settings-grow">
+            <label htmlFor="ai-key-value" className="t-label">
+              Your Meta API key
+            </label>
+            <Field
+              id="ai-key-value"
+              name="ai-key-value"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="ai-key-help"
+              aria-invalid={note ? true : undefined}
+              placeholder="Paste it here"
+              value={value}
+              onChange={(e) => {
+                setValue(e.target.value);
+                setNote(null);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && void save()}
+            />
+            <p id="ai-key-help" className={note ? "inline-note" : "t-help"} data-tone={note ? "alert" : undefined} role={note ? "alert" : undefined}>
+              {note ?? "Create one at dev.meta.ai. It is checked with Meta and stored encrypted."}
+            </p>
+          </div>
+          <Button variant="primary" disabled={busy} onClick={() => void save()}>
+            {busy ? "Checking the key…" : "Save the key"}
+          </Button>
+        </div>
       )}
     </SettingsBox>
   );

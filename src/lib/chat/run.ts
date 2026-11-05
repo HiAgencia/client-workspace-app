@@ -12,6 +12,7 @@ import { count } from "@/lib/count";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { stepsTaken, whatWasDone } from "./browser-reads";
+import { stepCost, UNREPORTED_STEP } from "./credits";
 import { chatTools } from "./tools";
 
 const MAX_STEPS = 6;
@@ -50,6 +51,16 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
       ? "Prefer the open node when the person does not name another."
       : "No node is open: this conversation covers every client and project, and General. Write where the request says; a task that names no client or project and fits none goes to General.",
     "A screenshot or image the person sends may hold requests from a client: turn each request into a task.",
+    "You also guide the person through the app when they ask how to do something in it: the sidebar opens Overview,",
+    "Tasks, Calendar, Mail, Guide, Help, Trash and Settings, and lists the clients and projects with «Add client» and «Add",
+    "project»; «Add task» and the Q key add a task, with its date, place, priority and event chosen in its fields, and the",
+    "task opens when added; Ctrl+K (Cmd+K on a Mac) finds a client, a project, a task or an action; a client's or a",
+    "project's More connects a Google account, whose calendar and mail are then seen there and in what hangs from it, and",
+    "issues an agent token, which Settings lists with the .mcp.json block for a coding agent; Settings also holds the",
+    "theme and the connected accounts; Guide walks through the Overview. Name the control by the words it shows.",
+    "Your scope is this workspace and this app: its tasks, notes, decisions, calendars and mail, and how to use it. A",
+    "request outside it —writing code, an essay, general knowledge, another product— is declined in one sentence that says",
+    "what you can do here instead; it is not answered, not even in part.",
     "Answer briefly, in the person's language. Never invent items, dates, or links you did not read.",
     "",
     `Now: ${local} (time zone ${timeZone}).`,
@@ -77,6 +88,7 @@ export async function runChat(options: {
   timeZone: string;
   onEnd?: (event: { responseMessage: UIMessage; isAborted: boolean }) => Promise<void> | void;
   abortSignal?: AbortSignal;
+  onCost?: (microUsd: number) => void;
 }): Promise<ReadableStream<UIMessageChunk>> {
   const taken = stepsTaken(options.messages);
   const result = streamText({
@@ -88,6 +100,8 @@ export async function runChat(options: {
     prepareStep: ({ stepNumber }) => (taken + stepNumber >= MAX_STEPS - 1 ? { toolChoice: "none" as const } : undefined),
     providerOptions: options.providerOptions,
     abortSignal: options.abortSignal,
+    onStepEnd: ({ usage }) => options.onCost?.(stepCost(usage)),
+    onAbort: () => options.onCost?.(UNREPORTED_STEP),
   });
   return toUIMessageStream({
     stream: result.stream,

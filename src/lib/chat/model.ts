@@ -1,7 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
-import { requireServerEnv, serverEnv } from "@/lib/env";
+import { serverEnv } from "@/lib/env";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { simulatedModel } from "./simulated";
 
@@ -18,9 +18,9 @@ export function chatProvider(): ChatProvider {
 
 export const AI_OFF_MESSAGE = `${ASSISTANT_NAME} is not available right now: messages, dictation and images cannot be sent to it. Everything else works as usual.`;
 
-export function chatModel(provider: LiveProvider): { model: LanguageModel; providerOptions?: ProviderOptions } {
+export function chatModel(provider: LiveProvider, apiKey: string): { model: LanguageModel; providerOptions?: ProviderOptions } {
   if (provider === "simulated") return { model: simulatedModel() };
-  const meta = createOpenAI({ baseURL: META_BASE_URL, apiKey: requireServerEnv("MODEL_API_KEY") });
+  const meta = createOpenAI({ baseURL: META_BASE_URL, apiKey });
   return {
     model: meta.responses(META_CHAT_MODEL),
     providerOptions: { openai: { store: false, include: ["reasoning.encrypted_content"] } },

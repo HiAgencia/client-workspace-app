@@ -2,7 +2,8 @@ import { createUIMessageStreamResponse, isToolUIPart, validateUIMessages, type U
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { continuedTurn, openCall, whatWasDone } from "@/lib/chat/browser-reads";
-import { loadHistory, withoutEarlierFiles } from "@/lib/chat/history";
+import { loadHistory, NEW_CHAT_MARK, withoutEarlierFiles } from "@/lib/chat/history";
+import { addServerSpend, chooseKey, CREDITS_MESSAGE } from "@/lib/chat/credits";
 import { AI_OFF_MESSAGE, chatModel, chatProvider } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
 import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
@@ -47,6 +48,28 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  if (!sameOrigin(request)) return problem(403, "requests must come from this site");
+  const asked = request.nextUrl.searchParams.get("node");
+  if (asked !== null && !isUuid(asked)) return problem(400, "no such node");
+  const nodeId = asked;
+  const session = await sessionContext("chat", nodeId ?? undefined);
+  if (!session.ok) return session.response;
+  const { ctx } = session;
+  if (nodeId) {
+    const reachable = await ctx.db.from("nodes").select("id").eq("id", nodeId).maybeSingle();
+    if (reachable.error || !reachable.data) return problem(404, "no such node");
+  }
+  const { error } = await serviceClient()
+    .from("chat_messages")
+    .insert({ owner_id: ctx.ownerId, node_id: nodeId, role: "system", parts: [{ type: "text", text: NEW_CHAT_MARK }] });
+  if (error) {
+    console.error("chat: new chat failed", error.message);
+    return problem(500, "a new chat could not be started");
+  }
+  return json({ ok: true });
+}
+
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return problem(403, "requests must come from this site");
   const provider = chatProvider();
@@ -81,7 +104,12 @@ export async function POST(request: Request) {
   if (message.parts.filter((part) => part.type === "file").length > 1) return problem(422, "attach one image per message");
 
   const service = serviceClient();
-  if (!continuing) {
+  const key = provider === "meta" ? await chooseKey(service, user.id) : ({ ok: true, apiKey: "", own: false } as const);
+  if (!key.ok) {
+    if (key.reason === "credits") return json({ ok: false, code: "credits", message: CREDITS_MESSAGE }, 402);
+    return problem(503, "the chat is unavailable right now: try again");
+  }
+  if (!continuing && !key.own) {
     const taken = await takeUsageFor(service, user, "chat_message");
     if (!taken.allowed) {
       if (taken.reason === "error") return problem(503, "the chat is unavailable right now: try again");
@@ -117,7 +145,8 @@ export async function POST(request: Request) {
   }
   const messages = withoutEarlierFiles(continued ? [...history.slice(0, -1), continued] : [...history, message]);
 
-  const { model, providerOptions } = chatModel(provider);
+  const { model, providerOptions } = chatModel(provider, key.apiKey);
+  const countsOnServer = provider === "meta" && !key.own;
   const stream = await runChat({
     ctx,
     model,
@@ -125,6 +154,7 @@ export async function POST(request: Request) {
     messages,
     timeZone: validTimeZone(parsed.data.timeZone),
     abortSignal: request.signal,
+    onCost: countsOnServer ? (microUsd) => void addServerSpend(service, microUsd) : undefined,
     onEnd: async ({ responseMessage, isAborted }) => {
       const kept = isAborted ? whatWasDone(responseMessage) : responseMessage;
       if (isAborted && !stored && !kept.parts.some(isToolUIPart)) return;

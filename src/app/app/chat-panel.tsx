@@ -13,7 +13,7 @@ import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { inlinePieces } from "@/lib/inline-links";
 import { ASSISTANT_MODELS, ASSISTANT_NAME } from "@/lib/product";
 import { PathText } from "./item-parts";
-import { get, tool } from "./client-api";
+import { get, post, tool } from "./client-api";
 import { onFocusRequest } from "./focus-request";
 import { WRITES, type WriteOutput } from "./chat-cards";
 import { useWorkspace } from "./workspace";
@@ -96,6 +96,8 @@ const MAX_IMAGE = 4 * 1024 * 1024;
 function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
   const [initial, setInitial] = useState<{ messages: UIMessage[]; off: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
+  const [starting, setStarting] = useState(false);
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
   const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
@@ -121,6 +123,25 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
           <p className="t-meta chat-models">{ASSISTANT_MODELS}</p>
           <p className="t-value chat-reach">{reach}</p>
         </div>
+        <Button
+          size="sm"
+          variant="quiet"
+          data-chat-new
+          disabled={initial === null || initial.off !== null || starting}
+          onClick={() => {
+            setStarting(true);
+            setError(null);
+            void post<object>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat", {}, "DELETE")
+              .then((answer) => {
+                if (!answer.ok) return setError(answer.message);
+                setInitial((now) => (now ? { ...now, messages: [] } : now));
+                setRound((now) => now + 1);
+              })
+              .finally(() => setStarting(false));
+          }}
+        >
+          <span className="btn-label">{starting ? "Starting…" : "New chat"}</span>
+        </Button>
         <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title="Close chat">
           <CloseIcon />
           <span className="sr-only">Close chat</span>
@@ -141,13 +162,20 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
           )}
         </div>
       ) : (
-        <Conversation nodeId={nodeId} initial={initial.messages} off={initial.off} />
+        <>
+          {error && (
+            <p className="inline-note" data-tone="alert">
+              {error}
+            </p>
+          )}
+          <Conversation key={round} round={round} nodeId={nodeId} initial={initial.messages} off={initial.off} />
+        </>
       )}
     </section>
   );
 }
 
-function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial: UIMessage[]; off: string | null }) {
+function Conversation({ round, nodeId, initial, off }: { round: number; nodeId: string | null; initial: UIMessage[]; off: string | null }) {
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
   const [image, setImage] = useState<FileUIPart | null>(null);
@@ -156,7 +184,7 @@ function Conversation({ nodeId, initial, off }: { nodeId: string | null; initial
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [reading, setReading] = useState(0);
   const { messages, sendMessage, addToolOutput, status, error, clearError } = useChat({
-    id: nodeId ?? "workspace",
+    id: `${nodeId ?? "workspace"}:${round}`,
     messages: initial,
     transport: new DefaultChatTransport({
       api: "/api/chat",

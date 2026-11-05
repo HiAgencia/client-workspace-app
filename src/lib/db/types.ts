@@ -82,6 +82,45 @@ export type Database = {
           },
         ]
       }
+      ai_keys: {
+        Row: {
+          ciphertext: string
+          created_at: string
+          hint: string
+          owner_id: string
+        }
+        Insert: {
+          ciphertext: string
+          created_at?: string
+          hint: string
+          owner_id: string
+        }
+        Update: {
+          ciphertext?: string
+          created_at?: string
+          hint?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
+      ai_spend: {
+        Row: {
+          id: boolean
+          micro_usd: number
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          micro_usd?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          micro_usd?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           created_at: string
@@ -645,8 +684,8 @@ export type Database = {
         Row: {
           archived_at: string | null
           color: string | null
-          icon: string | null
           created_at: string
+          icon: string | null
           id: string
           kind: Database["public"]["Enums"]["node_kind"]
           name: string
@@ -658,8 +697,8 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           color?: string | null
-          icon?: string | null
           created_at?: string
+          icon?: string | null
           id?: string
           kind: Database["public"]["Enums"]["node_kind"]
           name: string
@@ -671,8 +710,8 @@ export type Database = {
         Update: {
           archived_at?: string | null
           color?: string | null
-          icon?: string | null
           created_at?: string
+          icon?: string | null
           id?: string
           kind?: Database["public"]["Enums"]["node_kind"]
           name?: string
@@ -831,6 +870,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_ai_spend: { Args: { p_micro_usd: number }; Returns: number }
       anonymous_usage: {
         Args: { p_day: string; p_kind: string }
         Returns: number

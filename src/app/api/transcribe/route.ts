@@ -1,7 +1,8 @@
+import { addServerSpend, chooseKey, CREDITS_MESSAGE, ownKey, transcriptionCost } from "@/lib/chat/credits";
 import { AI_OFF_MESSAGE, chatProvider } from "@/lib/chat/model";
 import { transcribe } from "@/lib/chat/transcribe";
 import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
-import { isSupportedWav } from "@/lib/chat/wav";
+import { isSupportedWav, wavSeconds } from "@/lib/chat/wav";
 import { serverEnv } from "@/lib/env";
 import { json, problem, sameOrigin } from "@/lib/http";
 import { requireUser, serviceClient, userClient } from "@/lib/supabase/server";
@@ -12,7 +13,9 @@ export async function GET() {
   const who = await requireUser(await userClient());
   if (!who.ok) return who.response;
   const provider = chatProvider();
-  const available = provider === "simulated" || (provider === "meta" && Boolean(serverEnv("MODEL_API_KEY")));
+  const available =
+    provider === "simulated" ||
+    (provider === "meta" && (Boolean(serverEnv("MODEL_API_KEY")) || (await ownKey(serviceClient(), who.user.id)) !== null));
   return json({ ok: true, available });
 }
 
@@ -37,14 +40,21 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await audio.arrayBuffer());
   if (!isSupportedWav(bytes)) return problem(415, "the note must be mono 16-bit WAV at 16 or 24 kHz");
 
-  const taken = await takeUsageFor(serviceClient(), user, "transcription");
+  const service = serviceClient();
+  const key = provider === "meta" ? await chooseKey(service, user.id) : ({ ok: true, apiKey: "", own: false } as const);
+  if (!key.ok) {
+    if (key.reason === "credits") return json({ ok: false, code: "credits", message: CREDITS_MESSAGE }, 402);
+    return problem(503, "transcription is unavailable right now: try again");
+  }
+  const taken = key.own ? ({ allowed: true } as const) : await takeUsageFor(service, user, "transcription");
   if (!taken.allowed) {
     if (taken.reason === "error") return problem(503, "transcription is unavailable right now: try again");
     return json({ ok: false, code: "cap", message: capMessage(taken.reason, "transcription") }, 429, {
       "Retry-After": String(secondsToNextDay()),
     });
   }
-  const result = await transcribe(provider, bytes);
+  const result = await transcribe(provider, bytes, key.apiKey);
+  if (provider === "meta" && !key.own) await addServerSpend(service, transcriptionCost(wavSeconds(bytes)));
   if (!result.ok) return problem(result.status, result.message);
   return json({ ok: true, text: result.text });
 }
