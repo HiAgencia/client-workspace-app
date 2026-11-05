@@ -102,11 +102,11 @@ function QuickAddEditor({
     void readEvents<ListedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }).then((answer) => {
       if (!live) return;
       if (!answer.ok) {
-        setProblem("The calendars could not be read.");
+        setProblem("The calendars could not be read. Add the task, and link the event from it.");
         return;
       }
       setEvents(answer.events);
-      if (answer.failures.length > 0) setProblem("Some calendars could not be read.");
+      if (answer.failures.length > 0) setProblem("Some calendars could not be read. The ones that answered are in the list.");
     });
     return () => {
       live = false;
