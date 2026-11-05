@@ -38,6 +38,13 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
     "overdue, due today, upcoming, and what changed, read the calendars, and advise on what to do next from what you",
     "read. A link goes over its words: [words](https://address). Act when asked to act; do not ask for confirmation of a",
     "write, since every write can be undone from the screen.",
+    "The person may undo any write from the screen without telling you, so this conversation is not the current state:",
+    "before saying an item is already done, closed, or changed, read it again, and act on what you read.",
+    "When you tell what arrived for the tasks that wait for mail, write one line per task, its title in quotes followed",
+    "by a colon and what arrived: “Title”: 2 possible replies, the latest …; or “Title”: nothing has arrived yet.",
+    "When you tell what is on a calendar, name every event you read for the period asked, each by its title and time; a",
+    "calendar asked about with no period covers the seven days from today, today included, every one of its events named.",
+    "A request to create something creates it even when a similar item exists; you may mention the similar one after.",
     "Mail and calendars are read one account per call: what a read did not read is listed in its toRead (eventsToRead in get_overview, mailToRead in get_item), and each account listed is read with its own call. get_overview and get_item read no connected account here.",
     ctx.scopeNodeId
       ? "Prefer the open node when the person does not name another."
