@@ -574,7 +574,7 @@ function AgentTokensSection() {
   );
 }
 
-type AiKey = { hint: string | null; freeCredits: boolean };
+type AiKey = { hint: string | null; broken: boolean; freeCredits: boolean | null };
 
 function AiKeySection() {
   const { saving } = useWorkspace();
@@ -591,7 +591,7 @@ function AiKeySection() {
     void get<AiKey>("/api/ai-key").then((answer) => {
       if (!live) return;
       if (answer.ok) {
-        setData({ hint: answer.hint, freeCredits: answer.freeCredits });
+        setData({ hint: answer.hint, broken: answer.broken, freeCredits: answer.freeCredits });
         setError(null);
       } else setError(answer.message);
     });
@@ -622,9 +622,11 @@ function AiKeySection() {
   return (
     <SettingsBox id="ai-key" title="Meta API key" icon={TokenIcon} order={3} below count={data?.hint ? "Your own key" : undefined}>
       <p className="t-help">
-        {data && !data.freeCredits && !data.hint
-          ? "The free AI credits are used up. Add your own Meta API key to keep using the assistant and dictation."
-          : "The assistant runs on free credits while they last. With your own Meta API key, your messages and dictation use your own credits."}
+        {data?.broken
+          ? "Your saved key cannot be used. Remove it and add it again."
+          : data && data.freeCredits === false && !data.hint
+            ? "The free AI credits are used up. Add your own Meta API key to keep using the assistant and dictation."
+            : "With your own Meta API key, your messages and dictation use your own credits instead of the free ones."}
       </p>
       {!data ? (
         error ? (

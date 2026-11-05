@@ -12,7 +12,7 @@ import { count } from "@/lib/count";
 import type { ToolContext } from "@/lib/tools/context";
 import { callTool } from "@/lib/tools/registry";
 import { stepsTaken, whatWasDone } from "./browser-reads";
-import { stepCost, UNREPORTED_STEP } from "./credits";
+import { OWN_KEY_REFUSED, stepCost, UNREPORTED_STEP } from "./credits";
 import { chatTools } from "./tools";
 
 const MAX_STEPS = 6;
@@ -72,11 +72,12 @@ export async function systemPrompt(ctx: ToolContext, timeZone: string, now = new
     .join("\n");
 }
 
-function describeModelError(error: unknown): string {
+function describeModelError(error: unknown, ownKey: boolean): string {
   const status = typeof error === "object" && error && "statusCode" in error ? Number((error as { statusCode: unknown }).statusCode) : 0;
-  console.error("chat model:", status || "", error instanceof Error ? error.message : error);
+  const refused = status === 401 || status === 403;
+  console.error("chat model:", status || "", refused ? "the key was refused" : error instanceof Error ? error.message : error);
   if (status === 429) return "It is busy right now. Try again in a minute.";
-  if (status === 401 || status === 403) return "It is unavailable right now.";
+  if (refused) return ownKey ? OWN_KEY_REFUSED : "It is unavailable right now.";
   return "Try again in a moment.";
 }
 
@@ -88,7 +89,8 @@ export async function runChat(options: {
   timeZone: string;
   onEnd?: (event: { responseMessage: UIMessage; isAborted: boolean }) => Promise<void> | void;
   abortSignal?: AbortSignal;
-  onCost?: (microUsd: number) => void;
+  onCost?: (microUsd: number) => Promise<void> | void;
+  ownKey?: boolean;
 }): Promise<ReadableStream<UIMessageChunk>> {
   const taken = stepsTaken(options.messages);
   const result = streamText({
@@ -107,7 +109,7 @@ export async function runChat(options: {
     stream: result.stream,
     originalMessages: options.messages,
     sendReasoning: true,
-    onError: describeModelError,
+    onError: (error) => describeModelError(error, options.ownKey ?? false),
     onEnd: options.onEnd,
   });
 }

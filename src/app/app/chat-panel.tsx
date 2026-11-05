@@ -98,6 +98,7 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
   const [starting, setStarting] = useState(false);
+  const [working, setWorking] = useState(false);
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
   const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
@@ -127,7 +128,7 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
           size="sm"
           variant="quiet"
           data-chat-new
-          disabled={initial === null || initial.off !== null || starting}
+          disabled={initial === null || initial.off !== null || starting || working}
           onClick={() => {
             setStarting(true);
             setError(null);
@@ -168,14 +169,14 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
               {error}
             </p>
           )}
-          <Conversation key={round} round={round} nodeId={nodeId} initial={initial.messages} off={initial.off} />
+          <Conversation key={round} round={round} nodeId={nodeId} initial={initial.messages} off={initial.off} onBusy={setWorking} />
         </>
       )}
     </section>
   );
 }
 
-function Conversation({ round, nodeId, initial, off }: { round: number; nodeId: string | null; initial: UIMessage[]; off: string | null }) {
+function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; nodeId: string | null; initial: UIMessage[]; off: string | null; onBusy: (busy: boolean) => void }) {
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
   const [image, setImage] = useState<FileUIPart | null>(null);
@@ -203,6 +204,7 @@ function Conversation({ round, nodeId, initial, off }: { round: number; nodeId: 
     },
   });
   const busy = status === "submitted" || status === "streaming" || reading > 0;
+  useEffect(() => onBusy(busy), [busy, onBusy]);
 
   useLayoutEffect(() => {
     const el = log.current;

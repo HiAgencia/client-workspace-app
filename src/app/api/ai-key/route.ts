@@ -1,22 +1,25 @@
 import { z } from "zod";
-import { creditCapMicroUsd, keyHint, saveOwnKey, serverSpent } from "@/lib/chat/credits";
-import { META_BASE_URL } from "@/lib/chat/model";
+import { creditCapMicroUsd, keyHint, ownKey, saveOwnKey, serverSpent } from "@/lib/chat/credits";
+import { chatProvider, META_BASE_URL } from "@/lib/chat/model";
 import { serverEnv } from "@/lib/env";
 import { json, problem, sameOrigin } from "@/lib/http";
 import { requireUser, serviceClient, userClient } from "@/lib/supabase/server";
 
-const body = z.object({ key: z.string().trim().min(8).max(512) });
+const body = z.object({ key: z.string().trim().min(8).max(512).regex(/^[!-~]+$/) });
 
 export async function GET() {
   const who = await requireUser(await userClient());
   if (!who.ok) return who.response;
   const service = serviceClient();
-  const saved = await service.from("ai_keys").select("hint").eq("owner_id", who.user.id).maybeSingle();
-  if (saved.error) return problem(500, "the key could not be read");
-  const spent = serverSpent(service);
-  const serverKey = Boolean(serverEnv("MODEL_API_KEY"));
-  const left = serverKey && ((await spent) ?? Number.POSITIVE_INFINITY) < creditCapMicroUsd();
-  return json({ ok: true, hint: saved.data?.hint ?? null, freeCredits: left });
+  const [saved, own] = await Promise.all([service.from("ai_keys").select("hint").eq("owner_id", who.user.id).maybeSingle(), ownKey(service, who.user.id)]);
+  if (saved.error || own.state === "error") return problem(500, "the key could not be read");
+  let freeCredits: boolean | null = null;
+  if (chatProvider() === "meta" && serverEnv("MODEL_API_KEY")) {
+    const spent = await serverSpent(service);
+    if (spent === null) return problem(500, "the credits could not be read");
+    freeCredits = spent < creditCapMicroUsd();
+  }
+  return json({ ok: true, hint: saved.data?.hint ?? null, broken: own.state === "broken", freeCredits });
 }
 
 export async function POST(request: Request) {
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
   } catch {
     return problem(400, "the body must be JSON");
   }
-  if (!parsed.success) return problem(422, "paste the whole key");
+  if (!parsed.success) return problem(422, "paste the whole key, with nothing around it");
   const apiKey = parsed.data.key;
   let check: Response;
   try {
@@ -37,7 +40,8 @@ export async function POST(request: Request) {
       headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
       signal: AbortSignal.timeout(10_000),
     });
-  } catch {
+  } catch (error) {
+    console.error("ai key: the check did not answer", error instanceof Error ? error.name : error);
     return problem(504, "Meta did not answer to check the key: try again");
   }
   if (check.status === 401 || check.status === 403) return problem(422, "Meta did not accept this key");

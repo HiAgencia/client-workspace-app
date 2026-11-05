@@ -2,24 +2,20 @@ import type { UIMessage } from "ai";
 import type { Db } from "@/lib/db/client";
 
 const HISTORY_MESSAGES = 10;
-const READ_BACK = 200;
 export const NEW_CHAT_MARK = "new-chat";
 
-type Row = { id: string; role: string; parts: unknown; seq: number };
-
-const isMark = (row: Row) =>
-  row.role === "system" && Array.isArray(row.parts) && (row.parts as Array<{ text?: unknown }>).some((part) => part?.text === NEW_CHAT_MARK);
+type Row = { id: string; role: string; parts: unknown };
 
 export async function loadHistory(db: Db, nodeId: string | null, limit = HISTORY_MESSAGES): Promise<UIMessage[]> {
-  const base = db.from("chat_messages").select("id, role, parts, seq");
-  const { data, error } = await (nodeId ? base.eq("node_id", nodeId) : base.is("node_id", null))
-    .order("seq", { ascending: false })
-    .limit(Math.max(limit, READ_BACK));
+  const marks = db.from("chat_messages").select("seq").eq("role", "system");
+  const marked = await (nodeId ? marks.eq("node_id", nodeId) : marks.is("node_id", null)).order("seq", { ascending: false }).limit(1).maybeSingle();
+  if (marked.error) throw new Error(`reading the conversation: ${marked.error.message}`);
+  const rows = db.from("chat_messages").select("id, role, parts").neq("role", "system");
+  let read = nodeId ? rows.eq("node_id", nodeId) : rows.is("node_id", null);
+  if (marked.data) read = read.gt("seq", marked.data.seq);
+  const { data, error } = await read.order("seq", { ascending: false }).limit(limit);
   if (error) throw new Error(`reading the conversation: ${error.message}`);
-  const newestFirst = data as Row[];
-  const mark = newestFirst.findIndex(isMark);
-  const current = (mark === -1 ? newestFirst : newestFirst.slice(0, mark)).filter((row) => row.role !== "system");
-  const window = current.slice(0, limit).reverse();
+  const window = (data as Row[]).reverse();
   const first = window.findIndex((row) => row.role === "user");
   return (first === -1 ? window : window.slice(first)).map((row) => ({ id: row.id, role: row.role as UIMessage["role"], parts: row.parts as UIMessage["parts"] }));
 }

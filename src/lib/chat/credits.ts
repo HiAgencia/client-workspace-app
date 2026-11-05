@@ -11,10 +11,13 @@ export const UNREPORTED_STEP = 20_000;
 
 export const CREDITS_MESSAGE =
   "The free AI credits are used up. Add your own Meta API key in Settings to keep using the assistant and dictation.";
+export const OWN_KEY_BROKEN = "Your saved Meta API key cannot be used. Remove it in Settings and add it again.";
+export const OWN_KEY_REFUSED = "Meta did not accept your saved API key. Check it in Settings.";
 
 export function creditCapMicroUsd(): number {
-  const configured = Number(serverEnv("AI_CREDIT_CAP_USD"));
-  return Math.floor((Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_CAP_USD) * 1_000_000);
+  const value = serverEnv("AI_CREDIT_CAP_USD");
+  const configured = value === undefined ? Number.NaN : Number(value);
+  return Math.floor((Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_CAP_USD) * 1_000_000);
 }
 
 export function stepCost(usage: LanguageModelUsage | undefined): number {
@@ -51,20 +54,22 @@ function encryptionKey(): Promise<CryptoKey> | null {
 
 export const keyHint = (key: string) => key.slice(-4);
 
-export async function ownKey(service: Db, ownerId: string): Promise<string | null> {
+export type OwnKey = { state: "none" } | { state: "saved"; apiKey: string } | { state: "broken" } | { state: "error" };
+
+export async function ownKey(service: Db, ownerId: string): Promise<OwnKey> {
   const { data, error } = await service.from("ai_keys").select("ciphertext").eq("owner_id", ownerId).maybeSingle();
   if (error) {
     console.error("ai key: read failed", error.message);
-    return null;
+    return { state: "error" };
   }
-  if (!data) return null;
+  if (!data) return { state: "none" };
   const key = encryptionKey();
-  if (!key) return null;
+  if (!key) return { state: "broken" };
   try {
-    return await decrypt(await key, data.ciphertext);
+    return { state: "saved", apiKey: await decrypt(await key, data.ciphertext) };
   } catch {
     console.error("ai key: a stored key no longer decrypts");
-    return null;
+    return { state: "broken" };
   }
 }
 
@@ -81,14 +86,22 @@ export async function saveOwnKey(service: Db, ownerId: string, apiKey: string): 
 
 export type KeyChoice =
   | { ok: true; apiKey: string; own: boolean }
-  | { ok: false; reason: "credits" | "unconfigured" };
+  | { ok: false; reason: "credits" | "broken" | "unconfigured" | "error" };
 
 export async function chooseKey(service: Db, ownerId: string): Promise<KeyChoice> {
   const own = await ownKey(service, ownerId);
-  if (own) return { ok: true, apiKey: own, own: true };
+  if (own.state === "saved") return { ok: true, apiKey: own.apiKey, own: true };
+  if (own.state !== "none") return { ok: false, reason: own.state };
   const server = serverEnv("MODEL_API_KEY");
   if (!server) return { ok: false, reason: "unconfigured" };
   const spent = await serverSpent(service);
-  if (spent === null || spent >= creditCapMicroUsd()) return { ok: false, reason: "credits" };
+  if (spent === null) return { ok: false, reason: "error" };
+  if (spent >= creditCapMicroUsd()) return { ok: false, reason: "credits" };
   return { ok: true, apiKey: server, own: false };
+}
+
+export function keyRefusal(reason: "credits" | "broken" | "unconfigured" | "error"): { status: number; code: string; message: string } {
+  if (reason === "credits") return { status: 402, code: "credits", message: CREDITS_MESSAGE };
+  if (reason === "broken") return { status: 409, code: "own_key", message: OWN_KEY_BROKEN };
+  return { status: 503, code: "unavailable", message: "The assistant is unavailable right now. Try again in a moment." };
 }

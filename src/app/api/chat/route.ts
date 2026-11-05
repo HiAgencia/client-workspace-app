@@ -3,7 +3,7 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { continuedTurn, openCall, whatWasDone } from "@/lib/chat/browser-reads";
 import { loadHistory, NEW_CHAT_MARK, withoutEarlierFiles } from "@/lib/chat/history";
-import { addServerSpend, chooseKey, CREDITS_MESSAGE } from "@/lib/chat/credits";
+import { addServerSpend, chooseKey, keyRefusal } from "@/lib/chat/credits";
 import { AI_OFF_MESSAGE, chatModel, chatProvider } from "@/lib/chat/model";
 import { runChat } from "@/lib/chat/run";
 import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
@@ -106,8 +106,8 @@ export async function POST(request: Request) {
   const service = serviceClient();
   const key = provider === "meta" ? await chooseKey(service, user.id) : ({ ok: true, apiKey: "", own: false } as const);
   if (!key.ok) {
-    if (key.reason === "credits") return json({ ok: false, code: "credits", message: CREDITS_MESSAGE }, 402);
-    return problem(503, "the chat is unavailable right now: try again");
+    const refusal = keyRefusal(key.reason);
+    return json({ ok: false, code: refusal.code, message: refusal.message }, refusal.status);
   }
   if (!continuing && !key.own) {
     const taken = await takeUsageFor(service, user, "chat_message");
@@ -154,7 +154,8 @@ export async function POST(request: Request) {
     messages,
     timeZone: validTimeZone(parsed.data.timeZone),
     abortSignal: request.signal,
-    onCost: countsOnServer ? (microUsd) => void addServerSpend(service, microUsd) : undefined,
+    onCost: countsOnServer ? (microUsd) => addServerSpend(service, microUsd) : undefined,
+    ownKey: key.own,
     onEnd: async ({ responseMessage, isAborted }) => {
       const kept = isAborted ? whatWasDone(responseMessage) : responseMessage;
       if (isAborted && !stored && !kept.parts.some(isToolUIPart)) return;

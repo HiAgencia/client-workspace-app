@@ -29,7 +29,7 @@ export async function transcribe(provider: LiveProvider, wav: Uint8Array<ArrayBu
   }
   if (!response.ok) {
     console.error("transcribe: HTTP", response.status, (await response.text()).slice(0, 300));
-    return { ok: false, status: response.status === 429 ? 429 : 502, message: "The note could not be transcribed. Try again." };
+    return { ok: false, status: response.status === 429 ? 429 : response.status === 401 || response.status === 403 ? 401 : 502, message: "The note could not be transcribed. Try again." };
   }
   const answer = (await response.json()) as { transcript?: string };
   return { ok: true, text: (answer.transcript ?? "").trim() };

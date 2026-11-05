@@ -35,7 +35,11 @@ describe("the AI's credits", () => {
     expect(creditCapMicroUsd()).toBe(125_000_000);
     vi.stubEnv("AI_CREDIT_CAP_USD", "40.5");
     expect(creditCapMicroUsd()).toBe(40_500_000);
+    vi.stubEnv("AI_CREDIT_CAP_USD", "0");
+    expect(creditCapMicroUsd()).toBe(0);
     vi.stubEnv("AI_CREDIT_CAP_USD", "nope");
+    expect(creditCapMicroUsd()).toBe(125_000_000);
+    vi.stubEnv("AI_CREDIT_CAP_USD", "-3");
     expect(creditCapMicroUsd()).toBe(125_000_000);
   });
 });

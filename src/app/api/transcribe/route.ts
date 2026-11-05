@@ -1,4 +1,4 @@
-import { addServerSpend, chooseKey, CREDITS_MESSAGE, ownKey, transcriptionCost } from "@/lib/chat/credits";
+import { addServerSpend, chooseKey, keyRefusal, OWN_KEY_REFUSED, ownKey, transcriptionCost } from "@/lib/chat/credits";
 import { AI_OFF_MESSAGE, chatProvider } from "@/lib/chat/model";
 import { transcribe } from "@/lib/chat/transcribe";
 import { capMessage, secondsToNextDay, takeUsageFor } from "@/lib/chat/usage";
@@ -15,7 +15,7 @@ export async function GET() {
   const provider = chatProvider();
   const available =
     provider === "simulated" ||
-    (provider === "meta" && (Boolean(serverEnv("MODEL_API_KEY")) || (await ownKey(serviceClient(), who.user.id)) !== null));
+    (provider === "meta" && (Boolean(serverEnv("MODEL_API_KEY")) || (await ownKey(serviceClient(), who.user.id)).state === "saved"));
   return json({ ok: true, available });
 }
 
@@ -43,8 +43,8 @@ export async function POST(request: Request) {
   const service = serviceClient();
   const key = provider === "meta" ? await chooseKey(service, user.id) : ({ ok: true, apiKey: "", own: false } as const);
   if (!key.ok) {
-    if (key.reason === "credits") return json({ ok: false, code: "credits", message: CREDITS_MESSAGE }, 402);
-    return problem(503, "transcription is unavailable right now: try again");
+    const refusal = keyRefusal(key.reason);
+    return json({ ok: false, code: refusal.code, message: refusal.message }, refusal.status);
   }
   const taken = key.own ? ({ allowed: true } as const) : await takeUsageFor(service, user, "transcription");
   if (!taken.allowed) {
@@ -55,6 +55,7 @@ export async function POST(request: Request) {
   }
   const result = await transcribe(provider, bytes, key.apiKey);
   if (provider === "meta" && !key.own) await addServerSpend(service, transcriptionCost(wavSeconds(bytes)));
-  if (!result.ok) return problem(result.status, result.message);
+  if (!result.ok && result.status === 401 && key.own) return json({ ok: false, code: "own_key", message: OWN_KEY_REFUSED }, 409);
+  if (!result.ok) return problem(result.status === 401 ? 502 : result.status, result.message);
   return json({ ok: true, text: result.text });
 }
