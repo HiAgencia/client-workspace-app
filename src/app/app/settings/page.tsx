@@ -123,6 +123,7 @@ function ThemeSection() {
 
 type Calendar = { id: string; name: string; color: string | null; selected: boolean };
 type Account = { id: string; email: string; status: string; isDemo: boolean; nodeIds: string[]; calendars: Calendar[] };
+type ConnectLink = { id: string; nodeId: string; status: string; email: string | null; expiresAt: string };
 
 function AccountsSection() {
   const { tree, saving, version } = useWorkspace();
@@ -132,6 +133,9 @@ function AccountsSection() {
   const [error, setError] = useState<string | null>(null);
   const [connectNode, setConnectNode] = useState<string | null>(null);
   const [round, setRound] = useState(0);
+  const [links, setLinks] = useState<ConnectLink[]>([]);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
   const mailRead = useMailRead({ kind: "all" }, null);
   const mail = mailRead.data;
   useSettled("accounts-settings", (accounts !== null || error !== null) && mailRead.settled);
@@ -152,6 +156,44 @@ function AccountsSection() {
       live = false;
     };
   }, [version, round]);
+
+  const loadLinks = useCallback(async () => {
+    const answer = await get<{ links: ConnectLink[] }>("/api/google/connect-links");
+    if (answer.ok) setLinks(answer.links);
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    void get<{ links: ConnectLink[] }>("/api/google/connect-links").then((answer) => {
+      if (live && answer.ok) setLinks(answer.links);
+    });
+    const timer = window.setInterval(() => void loadLinks(), 4000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [loadLinks]);
+
+  async function createLink() {
+    if (!connectNode) return;
+    setLinkBusy(true);
+    const answer = await post<{ url: string }>("/api/google/connect-links", { action: "create", nodeId: connectNode });
+    setLinkBusy(false);
+    if (answer.ok) {
+      setLinkUrl(answer.url);
+      void loadLinks();
+    }
+  }
+
+  async function actOnLink(id: string, action: "accept" | "reject" | "cancel") {
+    setLinkBusy(true);
+    const answer = await post("/api/google/connect-links", { action, id });
+    setLinkBusy(false);
+    if (answer.ok) {
+      if (action === "accept") setRound((n) => n + 1);
+      void loadLinks();
+    }
+  }
 
   const act = (body: Record<string, unknown>) => saving(post("/api/accounts", body));
   const path = (id: string) => tree?.find((node) => node.id === id)?.path ?? "A client or project no longer listed";
@@ -199,6 +241,44 @@ function AccountsSection() {
               Pick a client or a project first.
             </span>
           )}
+          <div className="settings-link-connect">
+            <p className="t-help">
+              To connect an account that is signed in in another browser or Chrome profile, create a one-time
+              link, open it there, and accept the account here when Google has authorized it.
+            </p>
+            <Button onClick={() => void createLink()} disabled={!connectNode || linkBusy} aria-busy={linkBusy || undefined}>
+              <span className="btn-label">Create a link for another browser</span>
+            </Button>
+            {linkUrl && (
+              <span className="settings-link-row">
+                <code id="connect-link-url" className="t-name settings-link-url">{linkUrl}</code>
+                <CopyButton text={linkUrl} target="connect-link-url" label="Copy the connect link" />
+              </span>
+            )}
+            {links.map((link) => (
+              <span key={link.id} className="settings-link-row">
+                {link.status === "authorized" ? (
+                  <>
+                    <span className="t-name">{link.email}</span>
+                    <span className="t-help">Authorized in another browser</span>
+                    <Button size="sm" variant="primary" onClick={() => void actOnLink(link.id, "accept")} disabled={linkBusy}>
+                      <span className="btn-label">Accept</span>
+                    </Button>
+                    <Button size="sm" onClick={() => void actOnLink(link.id, "reject")} disabled={linkBusy}>
+                      <span className="btn-label">Reject</span>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="t-help">Waiting for an account to be authorized…</span>
+                    <Button size="sm" onClick={() => void actOnLink(link.id, "cancel")} disabled={linkBusy}>
+                      <span className="btn-label">Cancel link</span>
+                    </Button>
+                  </>
+                )}
+              </span>
+            ))}
+          </div>
         </div>
       ) : (
         accounts && accounts.length > 0 && <ConnectBlockedNote reason={connectBlocked} samples={accounts.some((account) => account.isDemo)} />

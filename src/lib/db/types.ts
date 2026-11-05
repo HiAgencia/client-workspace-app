@@ -381,6 +381,54 @@ export type Database = {
         }
         Relationships: []
       }
+      google_connect_links: {
+        Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
+          authorized_at: string | null
+          created_at: string
+          email: string | null
+          expires_at: string
+          id: string
+          node_id: string
+          owner_id: string
+          refresh_token: string | null
+          scopes: string[]
+          status: string
+          token_hash: string
+        }
+        Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          authorized_at?: string | null
+          created_at?: string
+          email?: string | null
+          expires_at: string
+          id?: string
+          node_id: string
+          owner_id: string
+          refresh_token?: string | null
+          scopes?: string[]
+          status?: string
+          token_hash: string
+        }
+        Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          authorized_at?: string | null
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          node_id?: string
+          owner_id?: string
+          refresh_token?: string | null
+          scopes?: string[]
+          status?: string
+          token_hash?: string
+        }
+        Relationships: []
+      }
       item_events: {
         Row: {
           account_id: string | null

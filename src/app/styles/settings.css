@@ -105,6 +105,24 @@
     grid-column: 3;
   }
 }
+.settings-link-connect {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.settings-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+.settings-link-url {
+  overflow-wrap: anywhere;
+}
 .settings-box .box-body > .issued-fold {
   margin-top: -0.75rem;
 }

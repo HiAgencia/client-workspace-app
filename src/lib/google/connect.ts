@@ -1,5 +1,5 @@
 import { CALENDAR_LIST_SCOPE, CONNECT_SCOPES, EVENTS_SCOPE, exchangeCode, GMAIL_READ_SCOPE, GOOGLE_AUTH_URL, listCalendars, userEmail } from "./api";
-import { encrypt } from "./crypto";
+import { decrypt, encrypt } from "./crypto";
 import type { GoogleDeps } from "./events";
 
 export function authorizationUrl(clientId: string, redirectUri: string, state: string, loginHint?: string): string {
@@ -18,12 +18,15 @@ export function authorizationUrl(clientId: string, redirectUri: string, state: s
 
 export type ConnectedAccount = { accountId: string; email: string; calendars: number };
 
-export async function connectAccount(
-  deps: GoogleDeps,
-  target: { ownerId: string; nodeId: string },
-  code: string,
-  redirectUri: string,
-): Promise<ConnectedAccount> {
+export type AuthorizedAccount = {
+  email: string;
+  refreshToken: string;
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  scopes: string[];
+};
+
+export async function authorizeAccount(deps: GoogleDeps, code: string, redirectUri: string): Promise<AuthorizedAccount> {
   const tokens = await exchangeCode(deps.fetch, deps.client, code, redirectUri);
   if (!tokens.refresh_token) throw new Error("Google returned no refresh token: connect the account again");
   const scopes = (tokens.scope ?? "").split(" ").filter(Boolean);
@@ -35,17 +38,53 @@ export async function connectAccount(
   }
   const profile = await userEmail(deps.fetch, tokens.access_token);
   if (!profile.email) throw new Error("Google did not share the account's email");
+  return {
+    email: profile.email.toLowerCase(),
+    refreshToken: tokens.refresh_token,
+    accessToken: tokens.access_token,
+    accessTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    scopes,
+  };
+}
 
+export async function encryptAuthorized(deps: GoogleDeps, authorized: AuthorizedAccount) {
+  return {
+    email: authorized.email,
+    refresh_token: await encrypt(deps.key, authorized.refreshToken),
+    access_token: await encrypt(deps.key, authorized.accessToken),
+    access_token_expires_at: authorized.accessTokenExpiresAt,
+    scopes: authorized.scopes,
+  };
+}
+
+export async function decryptAuthorized(
+  deps: GoogleDeps,
+  stored: { email: string; refresh_token: string; access_token: string; access_token_expires_at: string; scopes: string[] },
+): Promise<AuthorizedAccount> {
+  return {
+    email: stored.email,
+    refreshToken: await decrypt(deps.key, stored.refresh_token),
+    accessToken: await decrypt(deps.key, stored.access_token),
+    accessTokenExpiresAt: stored.access_token_expires_at,
+    scopes: stored.scopes,
+  };
+}
+
+export async function storeAuthorizedAccount(
+  deps: GoogleDeps,
+  target: { ownerId: string; nodeId: string },
+  authorized: AuthorizedAccount,
+): Promise<ConnectedAccount> {
   const { data: account, error } = await deps.service
     .from("google_accounts")
     .upsert(
       {
         owner_id: target.ownerId,
-        email: profile.email.toLowerCase(),
-        refresh_token: await encrypt(deps.key, tokens.refresh_token),
-        access_token: await encrypt(deps.key, tokens.access_token),
-        access_token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-        scopes,
+        email: authorized.email,
+        refresh_token: await encrypt(deps.key, authorized.refreshToken),
+        access_token: await encrypt(deps.key, authorized.accessToken),
+        access_token_expires_at: authorized.accessTokenExpiresAt,
+        scopes: authorized.scopes,
         status: "active",
       },
       { onConflict: "owner_id,email" },
@@ -59,7 +98,7 @@ export async function connectAccount(
     .upsert({ node_id: target.nodeId, account_id: account.id }, { onConflict: "node_id,account_id", ignoreDuplicates: true });
   if (link.error) throw new Error(`attaching the account: ${link.error.message}`);
 
-  const calendars = await listCalendars(deps.fetch, tokens.access_token);
+  const calendars = await listCalendars(deps.fetch, authorized.accessToken);
   if (calendars.length > 0) {
     const rows = calendars.map((calendar) => ({
       account_id: account.id,
@@ -86,4 +125,13 @@ export async function connectAccount(
     }
   }
   return { accountId: account.id, email: account.email, calendars: calendars.length };
+}
+
+export async function connectAccount(
+  deps: GoogleDeps,
+  target: { ownerId: string; nodeId: string },
+  code: string,
+  redirectUri: string,
+): Promise<ConnectedAccount> {
+  return storeAuthorizedAccount(deps, target, await authorizeAccount(deps, code, redirectUri));
 }
