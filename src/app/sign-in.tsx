@@ -9,7 +9,7 @@ import { dayOf } from "@/lib/dates";
 import { browserClient } from "@/lib/supabase/browser";
 import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import type { SessionUser } from "@/lib/supabase/server";
-import { trackDemoStart, trackSignIn } from "@/lib/analytics";
+import { trackDemoStart, trackSignIn, trackSignOut } from "@/lib/analytics";
 import { askOnceMoreIfCut, forgetLayout } from "./app/client-api";
 
 type Session = { kind: "loading" } | { kind: "out" } | { kind: "in"; user: SessionUser };
@@ -97,6 +97,7 @@ async function tryDemo(config: PublicConfig, at: Spot, enter: () => void) {
 
 async function signOut(config: PublicConfig) {
   const of = round;
+  trackSignOut();
   put({ busy: { what: "out", at: "hero" } }, of);
   await forgetLayout();
   await browserClient(config).auth.signOut();

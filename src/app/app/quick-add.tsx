@@ -6,6 +6,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Fold } from "@/components/ui/fold";
 import { TextArea } from "@/components/ui/field";
 import { NodeGlyph } from "@/components/node-glyph";
+import { trackTaskCreated } from "@/lib/analytics";
 import { AddIcon, DateIcon, EnterKeyIcon, EventIcon, GeneralIcon, PriorityIcon, TimeIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
@@ -171,6 +172,7 @@ function QuickAddEditor({
         ...(payload.dueOn ? { dueOn: payload.dueOn } : {}),
         ...(payload.dueTime ? { dueTime: payload.dueTime } : {}),
       });
+      if (answer.ok) trackTaskCreated();
       if (!answer.ok) {
         setProblem(`The task could not be added: ${answer.message}`);
         return;

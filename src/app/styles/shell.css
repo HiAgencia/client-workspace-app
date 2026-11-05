@@ -307,6 +307,12 @@
     padding-left: 0;
   }
 }
+.side-theme {
+  display: flex;
+  align-items: center;
+  padding: 0.375rem 0.375rem 0;
+}
+
 .side-avatar {
   --avatar: 1.5rem;
 }

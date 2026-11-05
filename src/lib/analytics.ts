@@ -31,6 +31,34 @@ export function trackImageAttach(): void {
   send("image_attach");
 }
 
+export function trackChatWrite(toolName: string): void {
+  send("chat_write", { tool: toolName });
+}
+
+export function trackUndo(): void {
+  send("undo");
+}
+
+export function trackTaskCreated(): void {
+  send("task_created");
+}
+
+export function trackAccountConnect(): void {
+  send("account_connect");
+}
+
+export function trackTokenIssued(): void {
+  send("token_issued");
+}
+
+export function trackKeySaved(): void {
+  send("key_saved");
+}
+
+export function trackSignOut(): void {
+  send("sign_out");
+}
+
 function send(name: string, params: Params = {}): void {
   if (typeof window === "undefined") return;
   window.dataLayer ??= [];

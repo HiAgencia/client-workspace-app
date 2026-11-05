@@ -14,6 +14,7 @@ import { AccountIcon, AddIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from 
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { mcpJson } from "@/lib/agent-token";
+import { trackAccountConnect, trackKeySaved, trackTokenIssued } from "@/lib/analytics";
 import { LOCALE } from "@/lib/dates";
 import { useMailRead } from "../box-kinds";
 import { BoxEmpty, BoxFailed, BoxWait, useEntryCap, useTwoFramesLate } from "../boxes";
@@ -183,7 +184,7 @@ function AccountsSection() {
             <Select id="connect-where" label="Connect to" placeholder="Pick a client or a project…" value={connectNode} options={nodeOptions} onChange={setConnectNode} />
           </div>
           {connectNode ? (
-            <a className={buttonClass({ variant: "primary" })} href={`/api/google/connect?node=${connectNode}`}>
+            <a className={buttonClass({ variant: "primary" })} href={`/api/google/connect?node=${connectNode}`} onClick={() => trackAccountConnect()}>
               <GoogleMark />
               <span className="btn-label">Connect Google account</span>
             </a>
@@ -427,7 +428,10 @@ function AgentTokensSection() {
     const name = label.trim().replace(/^\p{Ll}/u, (letter) => letter.toUpperCase());
     const answer = await post<{ token: string }>("/api/agent-tokens", { action: "issue", nodeId, label: name });
     if (await saving(Promise.resolve(answer))) {
-      if (answer.ok) setIssued({ token: answer.token, path: tree?.find((node) => node.id === nodeId)?.path ?? "" });
+      if (answer.ok) {
+        setIssued({ token: answer.token, path: tree?.find((node) => node.id === nodeId)?.path ?? "" });
+        trackTokenIssued();
+      }
       setLabel("");
       setReads((n) => n + 1);
     }
@@ -613,6 +617,7 @@ function AiKeySection() {
     setNote(null);
     setValue("");
     setReads((n) => n + 1);
+    trackKeySaved();
   }
 
   async function remove() {
@@ -620,7 +625,7 @@ function AiKeySection() {
   }
 
   return (
-    <SettingsBox id="ai-key" title="Meta API key" icon={TokenIcon} order={3} below count={data?.hint ? "Your own key" : undefined}>
+    <SettingsBox id="ai-key" title="Meta API key" icon={TokenIcon} order={3} below count={data?.hint && !data.broken ? "Your own key" : undefined}>
       <p className="t-help">
         {data?.broken
           ? "Your saved key cannot be used. Remove it and add it again."

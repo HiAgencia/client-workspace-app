@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { trackChatMessage, trackDictation, trackImageAttach, trackNewChat } from "@/lib/analytics";
+import { trackChatMessage, trackChatWrite, trackDictation, trackImageAttach, trackNewChat, trackUndo } from "@/lib/analytics";
 import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { MetaMark } from "@/components/ui/brands";
@@ -252,7 +252,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
               : `Ask it to add a task, record a decision, or say what is pending here. Attach an image of a message to turn it into tasks. ${ASSISTANT_NAME} acts only when you ask.`}
           </li>
         )}
-        {messages.map((message) => (
+        {messages.map((message, at) => (
           <li key={message.id} data-role={message.role} className="msg">
             <span className="t-meta">{message.role === "user" ? "You" : ASSISTANT_NAME}</span>
             {message.parts.map((part, index) => {
@@ -276,7 +276,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
                 );
               }
               if (part.type === "file" && part.mediaType.startsWith("image/")) {
-                return part.url ? (
+                return part.url && at >= messages.length - 6 ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the person's own attachment, already a data URL this browser holds: no optimizer to run.
                   <img key={index} className="msg-thumb" src={part.url} alt={part.filename ?? "Attached image"} />
                 ) : (
@@ -374,7 +374,14 @@ function readable(message: string): string {
 function ActionCard({ toolName, output }: { toolName: string; output: WriteOutput }) {
   const { saving } = useWorkspace();
   const [undone, setUndone] = useState(false);
+  const counted = useRef(false);
+  useEffect(() => {
+    if (counted.current || !output?.ok) return;
+    counted.current = true;
+    trackChatWrite(toolName);
+  }, [output, toolName]);
   if (!(toolName in WRITES)) return null;
+  const card = WRITES[toolName](output);
   if (!output?.ok) {
     return (
       <p className="action-card t-help" data-card="failed">
@@ -382,11 +389,13 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
       </p>
     );
   }
-  const card = WRITES[toolName](output);
   if (!card) return null;
 
   async function undo() {
-    if (card?.undo && (await saving(card.undo()))) setUndone(true);
+    if (card?.undo && (await saving(card.undo()))) {
+      setUndone(true);
+      trackUndo();
+    }
   }
 
   return (
@@ -416,6 +425,17 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   const [working, setWorking] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
+  const microphone = useRef<MediaStream | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(
+    () => () => {
+      mounted.current = false;
+      if (recorder.current?.state === "recording") recorder.current.stop();
+      microphone.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
 
   useEffect(() => {
     if (typeof MediaRecorder === "undefined") return;
@@ -431,11 +451,13 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   async function start() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      microphone.current = stream;
       const chunks: Blob[] = [];
       const next = new MediaRecorder(stream);
       next.ondataavailable = (event) => chunks.push(event.data);
       next.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
+        if (!mounted.current) return;
         void finish(new Blob(chunks, { type: next.mimeType }));
       };
       next.start();

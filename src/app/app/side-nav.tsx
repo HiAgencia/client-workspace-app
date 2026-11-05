@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
+import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { Tick } from "@/components/ui/tick";
 import { AddIcon, CalendarIcon, GuideIcon, HelpIcon, MailIcon, OverviewIcon, SearchIcon, SettingsIcon, SignOutIcon, TasksIcon, TrashIcon, type Icon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
@@ -143,6 +144,9 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           <SettingsIcon className="side-icon" />
           <span className="side-link-name">Settings</span>
         </Link>
+        <div className="side-theme">
+          <ThemeSwitch />
+        </div>
         <div className="side-account" data-session={person ? (person.isAnonymous ? "anonymous" : "google") : undefined}>
           {person && !person.isAnonymous ? (
             <Link href="/app/profile" className="side-link side-profile" aria-current={here("/app/profile")} title={person.email ?? undefined} data-side-profile>
