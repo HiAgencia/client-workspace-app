@@ -1,5 +1,7 @@
 # Brief
 
+The live app is [brief.hiagencia.com](https://brief.hiagencia.com).
+
 > Built for the Meta Global AI Developer Hackathon (Indie Developer Track, "Build for Your World"),
 > October 26 – November 4, 2026.
 
@@ -74,7 +76,8 @@ The app runs as a Cloudflare Worker built with OpenNext, against a Supabase proj
    calendars, a 32-byte base64 `TOKEN_ENCRYPTION_KEY`, and `MODEL_PROVIDER` (`simulated` runs the chat with no API
    spend; `meta` calls Meta Model API with `MODEL_API_KEY`; without a value the AI is off and the rest of the app works).
 3. Apply the schema: `pnpm db:push` (Supabase CLI linked to the project).
-4. `pnpm preview` builds the Worker and serves it at `http://localhost:8787`, exactly as it is deployed.
+4. `pnpm preview` builds the Worker and serves it at `http://localhost:8796`, the port in `wrangler.jsonc`, the same
+   build that is deployed.
 5. To connect a coding agent, open a client, project, or subproject, choose "Issue an agent token" (it opens Settings
    with that place chosen), issue a token, and copy the `.mcp.json` block into the repository; the token goes in the
    `CLIENT_WORKSPACE_TOKEN` environment variable.
