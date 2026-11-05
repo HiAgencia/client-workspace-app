@@ -312,7 +312,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
         below={children}
         name={childName}
         one={one}
-        connectHref={connectHref}
+        connectHref={accounts.data ? connectHref : null}
         sessionEmail={sessionEmail}
         blocked={blocked}
         calendars={accounts.data?.accounts ?? null}
@@ -362,7 +362,7 @@ function NodeStrip({
   below: TreeNode[];
   name: string;
   one: string;
-  connectHref: string;
+  connectHref: string | null;
   sessionEmail: string | null;
   blocked: string | null;
   calendars: Account[] | null;
@@ -372,7 +372,6 @@ function NodeStrip({
   onAddDone: () => void;
 }) {
   const { tree, mailAccounts, mailStore } = useWorkspace();
-  const router = useRouter();
   const container = usePopupContainer();
   const addButton = useRef<HTMLButtonElement>(null);
   const fold = useRef<HTMLDivElement>(null);
@@ -477,24 +476,16 @@ function NodeStrip({
                   <Base.Portal container={container}>
                     <Base.Positioner className="positioner" sideOffset={6}>
                       <Base.Popup className="popup menu-popup">
-                        <Base.Item
-                          className="option menu-item"
-                          label="View mail"
-                          onClick={() => router.push(`/app/mail?account=${account.id}`)}
-                        >
+                        <Base.LinkItem className="option menu-item" label="View mail" href={`/app/mail?account=${account.id}`}>
                           <span className="menu-item-text">
                             <span className="menu-item-label">View mail</span>
                           </span>
-                        </Base.Item>
-                        <Base.Item
-                          className="option menu-item"
-                          label="Manage in Settings"
-                          onClick={() => router.push("/app/settings#accounts-settings")}
-                        >
+                        </Base.LinkItem>
+                        <Base.LinkItem className="option menu-item" label="Manage in Settings" href="/app/settings#accounts-settings">
                           <span className="menu-item-text">
                             <span className="menu-item-label">Manage in Settings</span>
                           </span>
-                        </Base.Item>
+                        </Base.LinkItem>
                       </Base.Popup>
                     </Base.Positioner>
                   </Base.Portal>
@@ -502,7 +493,7 @@ function NodeStrip({
               </li>
             );
           })}
-          {mailAccounts && accounts.length > 0 && !blocked && (
+          {mailAccounts && connectHref && accounts.length > 0 && !blocked && (
             <li data-flip-key="connect-more">
               <LinkOrAnchor className={cx(buttonClass({}), "node-chip", "node-add")} href={connectHref}>
                 <span className="node-chip-name">
@@ -512,7 +503,7 @@ function NodeStrip({
               </LinkOrAnchor>
             </li>
           )}
-          {mailAccounts && accounts.length === 0 && !offerOwn && (
+          {mailAccounts && connectHref && accounts.length === 0 && !offerOwn && (
             <li data-flip-key="connect">
               <LinkOrAnchor className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
                 <span className="node-chip-name">
