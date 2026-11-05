@@ -438,6 +438,53 @@
   color: var(--ink);
   overflow-wrap: anywhere;
 }
+.msg[data-role="assistant"] {
+  max-width: 88%;
+}
+.msg[data-role="assistant"] .msg-bubble {
+  align-self: flex-start;
+  border: 1px solid var(--card-rim);
+  border-radius: 1rem 1rem 1rem 0.3rem;
+  background: var(--card);
+}
+.msg-thumb {
+  display: block;
+  width: 10rem;
+  max-width: 100%;
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-control);
+}
+.attach-row {
+  align-items: center;
+  gap: 0.5rem;
+}
+.attach-thumb {
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: cover;
+  border: 1px solid var(--card-rim);
+  border-radius: var(--radius-control);
+}
+.rec-live {
+  align-items: center;
+  gap: 0.45rem;
+}
+.rec-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--alert-ink);
+  animation: rec-pulse 1.2s var(--ease-std) infinite;
+}
+@keyframes rec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
 .msg > .t-meta:first-child {
   position: absolute;
   width: 1px;

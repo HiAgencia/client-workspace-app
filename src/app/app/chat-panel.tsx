@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { trackChatMessage, trackDictation, trackImageAttach, trackNewChat } from "@/lib/analytics";
 import { DefaultChatTransport, isToolUIPart, type FileUIPart, type UIMessage } from "ai";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { MetaMark } from "@/components/ui/brands";
@@ -132,6 +133,7 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
           onClick={() => {
             setStarting(true);
             setError(null);
+            trackNewChat();
             void post<object>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat", {}, "DELETE")
               .then((answer) => {
                 if (!answer.ok) return setError(answer.message);
@@ -217,6 +219,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
     if (busy || (!input.trim() && !image)) return;
     clearError();
     setNotice(null);
+    trackChatMessage(nodeId !== null);
     void sendMessage({ role: "user", parts: [...(image ? [image] : []), { type: "text", text: input.trim() || "Turn this into tasks." }] });
     setInput("");
     setImage(null);
@@ -233,6 +236,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
     if (!file) return;
     if (!file.type.startsWith("image/")) return setNotice("Attach an image: a screenshot or a photo.");
     if (file.size > MAX_IMAGE) return setNotice("That image is too large. Attach one under 4 MB.");
+    trackImageAttach();
     const reader = new FileReader();
     reader.onload = () => setImage({ type: "file", mediaType: file.type, filename: file.name, url: String(reader.result) });
     reader.readAsDataURL(file);
@@ -258,7 +262,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
                     {part.text}
                   </p>
                 ) : (
-                  <p key={index} className="msg-text t-body">
+                  <p key={index} className="msg-bubble msg-text t-body">
                     {inlinePieces(part.text).map((piece, at) =>
                       piece.href ? (
                         <a key={at} href={piece.href} target="_blank" rel="noreferrer noopener">
@@ -272,10 +276,11 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
                 );
               }
               if (part.type === "file" && part.mediaType.startsWith("image/")) {
-                return (
-                  <p key={index} className="pill">
-                    Image: {part.filename ?? "attached"}
-                  </p>
+                return part.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- the person's own attachment, already a data URL this browser holds: no optimizer to run.
+                  <img key={index} className="msg-thumb" src={part.url} alt={part.filename ?? "Attached image"} />
+                ) : (
+                  <p key={index} className="pill">Image: {part.filename ?? "attached"}</p>
                 );
               }
               if (part.type.startsWith("tool-") && "state" in part && part.state === "output-available") {
@@ -320,8 +325,10 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
             </p>
           )}
           {image && (
-            <p className="inline" data-attached>
-              <span className="pill">Attached: {image.filename}</span>
+            <p className="inline attach-row" data-attached>
+              {/* eslint-disable-next-line @next/next/no-img-element -- the same data URL, shown small before it is sent: no optimizer to run. */}
+              <img className="attach-thumb" src={image.url} alt="" />
+              <span className="pill">{image.filename}</span>
               <Button variant="quiet" size="sm" onClick={() => setImage(null)}>
                 Remove
               </Button>
@@ -407,12 +414,19 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   const [available, setAvailable] = useState(false);
   const [recording, setRecording] = useState(false);
   const [working, setWorking] = useState(false);
+  const [seconds, setSeconds] = useState(0);
   const recorder = useRef<MediaRecorder | null>(null);
 
   useEffect(() => {
     if (typeof MediaRecorder === "undefined") return;
     void get<{ available: boolean }>("/api/transcribe").then((answer) => setAvailable(answer.ok && answer.available));
   }, []);
+
+  useEffect(() => {
+    if (!recording) return;
+    const tick = setInterval(() => setSeconds((n) => n + 1), 1_000);
+    return () => clearInterval(tick);
+  }, [recording]);
 
   async function start() {
     try {
@@ -426,7 +440,9 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
       };
       next.start();
       recorder.current = next;
+      setSeconds(0);
       setRecording(true);
+      trackDictation();
     } catch {
       onNotice("The microphone is not available: allow it in the browser to dictate.");
     }
@@ -456,10 +472,21 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   }
 
   if (!available) return null;
+  if (recording) {
+    return (
+      <span className="inline rec-live" role="status" aria-label="Recording your note">
+        <span className="rec-dot" aria-hidden="true" />
+        <span className="t-value">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span>
+        <Button size="sm" variant="quiet" onClick={() => recorder.current?.stop()}>
+          <span className="btn-label">Stop</span>
+        </Button>
+      </span>
+    );
+  }
   return (
-    <Button size="sm" variant="quiet" disabled={working} onClick={() => (recording ? recorder.current?.stop() : void start())}>
+    <Button size="sm" variant="quiet" disabled={working} onClick={() => void start()}>
       <MicIcon />
-      <span className="btn-label">{working ? "Transcribing…" : recording ? "Stop and transcribe" : "Dictate"}</span>
+      <span className="btn-label">{working ? "Transcribing…" : "Dictate"}</span>
     </Button>
   );
 }
