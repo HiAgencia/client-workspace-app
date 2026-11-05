@@ -372,7 +372,7 @@ function NodeStrip({
   onAdd: () => void;
   onAddDone: () => void;
 }) {
-  const { tree, mailAccounts, mailStore, notify } = useWorkspace();
+  const { tree, mailAccounts, mailStore, notify, refreshTree, touch } = useWorkspace();
   const container = usePopupContainer();
   const addButton = useRef<HTMLButtonElement>(null);
   const fold = useRef<HTMLDivElement>(null);
@@ -421,7 +421,11 @@ function NodeStrip({
     setLinkBusy(false);
     if (answer.ok) {
       setLinkUrl(null);
-      if (action === "accept" && link?.email) notify({ text: `${link.email} is connected here.`, tone: "status" });
+      if (action === "accept") {
+        void refreshTree();
+        touch();
+        if (link?.email) notify({ text: `${link.email} is connected here.`, tone: "status" });
+      }
       void loadLinks();
     } else {
       notify({ text: answer.message, tone: "error" });

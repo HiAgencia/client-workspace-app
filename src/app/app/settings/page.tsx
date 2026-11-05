@@ -126,7 +126,7 @@ type Account = { id: string; email: string; status: string; isDemo: boolean; nod
 type ConnectLink = { id: string; nodeId: string; status: string; email: string | null; expiresAt: string };
 
 function AccountsSection() {
-  const { tree, saving, version } = useWorkspace();
+  const { tree, saving, version, refreshTree, touch } = useWorkspace();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [canConnect, setCanConnect] = useState(false);
   const [connectBlocked, setConnectBlocked] = useState<ConnectBlocked>(null);
@@ -190,7 +190,11 @@ function AccountsSection() {
     const answer = await post("/api/google/connect-links", { action, id });
     setLinkBusy(false);
     if (answer.ok) {
-      if (action === "accept") setRound((n) => n + 1);
+      if (action === "accept") {
+        setRound((n) => n + 1);
+        void refreshTree();
+        touch();
+      }
       void loadLinks();
     }
   }
