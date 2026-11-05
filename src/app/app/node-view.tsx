@@ -1,6 +1,8 @@
 "use client";
 
 import { Link, LinkOrAnchor } from "@/components/ui/link";
+import { Menu as Base } from "@base-ui/react/menu";
+import { usePopupContainer } from "@/components/ui/popup-layer";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -370,6 +372,8 @@ function NodeStrip({
   onAddDone: () => void;
 }) {
   const { tree, mailAccounts, mailStore } = useWorkspace();
+  const router = useRouter();
+  const container = usePopupContainer();
   const addButton = useRef<HTMLButtonElement>(null);
   const fold = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -436,18 +440,29 @@ function NodeStrip({
             const lost = account.status !== "active" && !account.isDemo;
             const own = account.email === address;
             const facts = accountFacts(mailStore.figure([account]), known ? known.calendars.filter((calendar) => calendar.selected).length : null);
-            return (
-              <li key={account.id} data-flip-key={account.id}>
-                <Link className={cx(buttonClass({}), "node-chip")} href={lost ? "/app/settings#accounts-settings" : `/app/mail?account=${account.id}`}>
-                  <span className="node-chip-name t-name">
-                    <GoogleMark className="node-chip-mark" />
-                    {account.email}
-                  </span>
-                  {lost ? (
+            if (lost) {
+              return (
+                <li key={account.id} data-flip-key={account.id}>
+                  <Link className={cx(buttonClass({}), "node-chip")} href="/app/settings#accounts-settings">
+                    <span className="node-chip-name t-name">
+                      <GoogleMark className="node-chip-mark" />
+                      {account.email}
+                    </span>
                     <span className="node-chip-detail" data-tone="alert">
                       {lostWords(account.status)}
                     </span>
-                  ) : (
+                  </Link>
+                </li>
+              );
+            }
+            return (
+              <li key={account.id} data-flip-key={account.id}>
+                <Base.Root modal={false}>
+                  <Base.Trigger className={cx(buttonClass({}), "node-chip")}>
+                    <span className="node-chip-name t-name">
+                      <GoogleMark className="node-chip-mark" />
+                      {account.email}
+                    </span>
                     <span className="node-chip-detail">
                       {own ? (
                         <>
@@ -458,11 +473,45 @@ function NodeStrip({
                         facts
                       )}
                     </span>
-                  )}
-                </Link>
+                  </Base.Trigger>
+                  <Base.Portal container={container}>
+                    <Base.Positioner className="positioner" sideOffset={6}>
+                      <Base.Popup className="popup menu-popup">
+                        <Base.Item
+                          className="option menu-item"
+                          label="View mail"
+                          onClick={() => router.push(`/app/mail?account=${account.id}`)}
+                        >
+                          <span className="menu-item-text">
+                            <span className="menu-item-label">View mail</span>
+                          </span>
+                        </Base.Item>
+                        <Base.Item
+                          className="option menu-item"
+                          label="Manage in Settings"
+                          onClick={() => router.push("/app/settings#accounts-settings")}
+                        >
+                          <span className="menu-item-text">
+                            <span className="menu-item-label">Manage in Settings</span>
+                          </span>
+                        </Base.Item>
+                      </Base.Popup>
+                    </Base.Positioner>
+                  </Base.Portal>
+                </Base.Root>
               </li>
             );
           })}
+          {mailAccounts && accounts.length > 0 && !blocked && (
+            <li data-flip-key="connect-more">
+              <LinkOrAnchor className={cx(buttonClass({}), "node-chip", "node-add")} href={connectHref}>
+                <span className="node-chip-name">
+                  <AddIcon className="node-chip-mark" />
+                  Connect account
+                </span>
+              </LinkOrAnchor>
+            </li>
+          )}
           {mailAccounts && accounts.length === 0 && !offerOwn && (
             <li data-flip-key="connect">
               <LinkOrAnchor className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>

@@ -375,6 +375,10 @@
 
   & > .btn {
     margin-inline-start: auto;
+    align-self: center;
+  }
+  & > .btn ~ .btn {
+    margin-inline-start: 0;
   }
 }
 .chat-icon {

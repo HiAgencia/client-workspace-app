@@ -143,7 +143,7 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
               .finally(() => setStarting(false));
           }}
         >
-          <span className="btn-label">{starting ? "Starting…" : "New chat"}</span>
+          <span className="btn-label">{starting ? "Starting…" : "Clear chat"}</span>
         </Button>
         <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title="Close chat">
           <CloseIcon />
@@ -181,6 +181,7 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
 function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; nodeId: string | null; initial: UIMessage[]; off: string | null; onBusy: (busy: boolean) => void }) {
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
   const [image, setImage] = useState<FileUIPart | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const log = useRef<HTMLOListElement>(null);
@@ -223,6 +224,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
     void sendMessage({ role: "user", parts: [...(image ? [image] : []), { type: "text", text: input.trim() || "Turn this into tasks." }] });
     setInput("");
     setImage(null);
+    box.current?.focus({ preventScroll: true });
   }
 
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -336,6 +338,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
           )}
           <div className="compose-line">
             <TextArea
+              ref={box}
               aria-label={`Message to ${ASSISTANT_NAME}`}
               placeholder={`Ask ${ASSISTANT_NAME}…`}
               rows={1}
@@ -343,7 +346,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
             />
-            <Button type="submit" variant="primary" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy || undefined}>
               <SendIcon />
               <span className="btn-label">Send</span>
             </Button>
