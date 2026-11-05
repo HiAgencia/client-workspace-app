@@ -36,7 +36,7 @@ async function EndSessionControls() {
 async function mcpEndpoint(): Promise<string> {
   const list = await headers();
   const host = list.get("x-forwarded-host") ?? list.get("host") ?? "localhost";
-  const scheme = list.get("x-forwarded-proto") ?? (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https");
+  const scheme = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(host) ? (list.get("x-forwarded-proto") ?? "http") : "https";
   return `${scheme}://${host}/api/mcp`;
 }
 

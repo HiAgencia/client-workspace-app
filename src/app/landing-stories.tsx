@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   AddIcon,
   AttachImageIcon,
@@ -16,11 +16,11 @@ import {
   UndoIcon,
 } from "@/components/ui/icons";
 import { GoogleCalendarMark, GoogleMark, MetaMark } from "@/components/ui/brands";
-import { mcpJson } from "@/lib/agent-token";
 import { count } from "@/lib/count";
 import { ASSISTANT_MODELS, ASSISTANT_NAME } from "@/lib/product";
 import { PathText, SenderMark } from "./app/item-parts";
 import { TaskRow, TODAY } from "./landing-shot";
+import { McpBlock } from "./mcp-block";
 import { RevealColumn, Scene, VisitorStamp, type Frame, type SceneGlyphs } from "./landing-motion";
 
 const GLYPHS: SceneGlyphs = { pause: <PauseIcon />, play: <PlayIcon /> };
@@ -524,16 +524,7 @@ export function LandingStories({ endpoint }: { endpoint: string }) {
               .mcp.json
             </p>
             <pre className="read-block t-code agent-config-block">
-              <code>
-                {mcpJson(endpoint)
-                  .split("\n")
-                  .map((line, index) => (
-                    <span key={index} className="code-line" style={{ "--indent": line.length - line.trimStart().length } as CSSProperties}>
-                      {line}
-                      {"\n"}
-                    </span>
-                  ))}
-              </code>
+              <McpBlock endpoint={endpoint} />
             </pre>
           </div>
         }

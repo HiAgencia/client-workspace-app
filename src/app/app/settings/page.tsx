@@ -13,6 +13,7 @@ import { Fold } from "@/components/ui/fold";
 import { AccountIcon, AddIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
+import { mcpJson } from "@/lib/agent-token";
 import { LOCALE } from "@/lib/dates";
 import { useMailRead } from "../box-kinds";
 import { BoxEmpty, BoxFailed, BoxWait, useEntryCap, useTwoFramesLate } from "../boxes";
@@ -353,6 +354,7 @@ function AccountsSection() {
 
 type Token = { id: string; nodeId: string; label: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null };
 type Tokens = { tokens: Token[]; mcpJson: string; tokenEnv: string };
+type TokensAnswer = Omit<Tokens, "mcpJson">;
 
 const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
@@ -386,10 +388,10 @@ function AgentTokensSection() {
 
   useEffect(() => {
     let live = true;
-    void get<Tokens>("/api/agent-tokens").then((answer) => {
+    void get<TokensAnswer>("/api/agent-tokens").then((answer) => {
       if (!live) return;
       if (answer.ok) {
-        setData(answer);
+        setData({ ...answer, mcpJson: mcpJson(new URL("/api/mcp", window.location.origin).toString()) });
         setError(null);
       } else setError(answer.message);
     });

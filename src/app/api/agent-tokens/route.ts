@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { withInitialCapital } from "@/lib/initial-capital";
-import { hashAgentToken, mcpJson, newAgentToken, TOKEN_ENV } from "@/lib/agent-token";
+import { hashAgentToken, newAgentToken, TOKEN_ENV } from "@/lib/agent-token";
 import { json, problem } from "@/lib/http";
 import { readInput } from "@/lib/route-input";
 import { requireUser, userClient } from "@/lib/supabase/server";
@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
   return json({
     ok: true,
     tokenEnv: TOKEN_ENV,
-    mcpJson: mcpJson(new URL("/api/mcp", request.nextUrl.origin).toString()),
     tokens: data.map((row) => ({
       id: row.id,
       nodeId: row.node_id,
