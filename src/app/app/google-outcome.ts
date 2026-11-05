@@ -2,18 +2,20 @@
 
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { translateNow, type StringKey } from "@/lib/strings";
 import { useWorkspace } from "./workspace";
 
-const OUTCOMES: Record<string, { text: string; tone: "status" | "error" }> = {
-  connected: { text: "The Google account is connected here.", tone: "status" },
-  cancelled: { text: "Connecting the Google account was cancelled.", tone: "status" },
-  failed: { text: "The Google account could not be connected. Try again.", tone: "error" },
-  "invalid-state": { text: "That connection link expired or was started elsewhere. Start again from here.", tone: "error" },
-  "not-configured": { text: "Connecting Google accounts is not configured on this server.", tone: "error" },
+const OUTCOMES: Record<string, { key: StringKey; tone: "status" | "error" }> = {
+  connected: { key: "gout.connected", tone: "status" },
+  cancelled: { key: "gout.cancelled", tone: "status" },
+  failed: { key: "gout.failed", tone: "error" },
+  "invalid-state": { key: "gout.invalid", tone: "error" },
+  "not-configured": { key: "gout.notConfigured", tone: "error" },
 };
 
 function googleOutcome(outcome: string | null) {
-  return outcome ? (OUTCOMES[outcome] ?? null) : null;
+  const found = outcome ? (OUTCOMES[outcome] ?? null) : null;
+  return found ? { text: translateNow(found.key), tone: found.tone } : null;
 }
 
 export function useGoogleOutcome() {
