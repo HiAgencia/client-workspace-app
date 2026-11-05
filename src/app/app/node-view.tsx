@@ -1,11 +1,12 @@
 "use client";
 
-import { Link, LinkOrAnchor } from "@/components/ui/link";
+import { Link } from "@/components/ui/link";
 import { Menu as Base } from "@base-ui/react/menu";
 import { usePopupContainer } from "@/components/ui/popup-layer";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Field } from "@/components/ui/field";
 import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
@@ -380,6 +381,59 @@ function NodeStrip({
   const address = sessionEmail?.toLowerCase() ?? null;
   const accounts = (mailAccounts ?? []).filter((account) => seen.has(account.id)).sort((a, b) => Number(b.email === address) - Number(a.email === address));
   const offerOwn = sessionEmail !== null && mailAccounts !== null && !accounts.some((account) => account.email === address);
+
+  type ConnectLinkRow = { id: string; nodeId: string; status: string; email: string | null; expiresAt: string };
+  const [links, setLinks] = useState<ConnectLinkRow[]>([]);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const loadLinks = useCallback(async () => {
+    const answer = await get<{ links: ConnectLinkRow[] }>("/api/google/connect-links");
+    if (answer.ok) setLinks(answer.links.filter((link) => link.nodeId === node.id));
+  }, [node.id]);
+  useEffect(() => {
+    let live = true;
+    void get<{ links: ConnectLinkRow[] }>("/api/google/connect-links").then((answer) => {
+      if (live && answer.ok) setLinks(answer.links.filter((link) => link.nodeId === node.id));
+    });
+    const timer = window.setInterval(() => void loadLinks(), 4000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [loadLinks, node.id]);
+
+  async function createLink() {
+    setLinkBusy(true);
+    const answer = await post<{ url: string }>("/api/google/connect-links", { action: "create", nodeId: node.id });
+    setLinkBusy(false);
+    if (answer.ok) {
+      setLinkUrl(answer.url);
+      void loadLinks();
+    }
+  }
+
+  async function actOnLink(linkId: string, action: "accept" | "reject" | "cancel") {
+    setLinkBusy(true);
+    const answer = await post("/api/google/connect-links", { action, id: linkId });
+    setLinkBusy(false);
+    if (answer.ok) void loadLinks();
+  }
+
+  const connectMenu = (
+    <>
+      <Base.LinkItem className="option menu-item" label="Connect in this browser" href={connectHref ?? "/app/settings#accounts-settings"}>
+        <span className="menu-item-text">
+          <span className="menu-item-label">Connect in this browser</span>
+        </span>
+      </Base.LinkItem>
+      <Base.Item className="option menu-item" onClick={() => void createLink()}>
+        <span className="menu-item-text">
+          <span className="menu-item-label">Create a link for another browser</span>
+        </span>
+      </Base.Item>
+    </>
+  );
+
   return (
     <div className="node-strip">
       <section className="node-strip-group" aria-labelledby={`${id}below`}>
@@ -495,28 +549,73 @@ function NodeStrip({
           })}
           {mailAccounts && connectHref && accounts.length > 0 && !blocked && (
             <li data-flip-key="connect-more">
-              <LinkOrAnchor className={cx(buttonClass({}), "node-chip", "node-add")} href={connectHref}>
-                <span className="node-chip-name">
-                  <AddIcon className="node-chip-mark" />
-                  Connect account
-                </span>
-              </LinkOrAnchor>
+              <Base.Root modal={false}>
+                <Base.Trigger className={cx(buttonClass({}), "node-chip", "node-add")}>
+                  <span className="node-chip-name">
+                    <AddIcon className="node-chip-mark" />
+                    Connect account
+                  </span>
+                </Base.Trigger>
+                <Base.Portal container={container}>
+                  <Base.Positioner className="positioner" sideOffset={6}>
+                    <Base.Popup className="popup menu-popup">{connectMenu}</Base.Popup>
+                  </Base.Positioner>
+                </Base.Portal>
+              </Base.Root>
             </li>
           )}
           {mailAccounts && connectHref && accounts.length === 0 && !offerOwn && (
             <li data-flip-key="connect">
-              <LinkOrAnchor className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
-                <span className="node-chip-name">
-                  <GoogleMark className="node-chip-mark" />
-                  Connect Google account
-                </span>
-                <span id={`${id}connect`} className="node-chip-detail">
-                  {`The one you use with ${node.name}`}
-                </span>
-              </LinkOrAnchor>
+              <Base.Root modal={false}>
+                <Base.Trigger className={cx(buttonClass({}), "node-chip node-connect")} aria-describedby={`${id}connect`}>
+                  <span className="node-chip-name">
+                    <GoogleMark className="node-chip-mark" />
+                    Connect Google account
+                  </span>
+                  <span id={`${id}connect`} className="node-chip-detail">
+                    {`The one you use with ${node.name}`}
+                  </span>
+                </Base.Trigger>
+                <Base.Portal container={container}>
+                  <Base.Positioner className="positioner" sideOffset={6}>
+                    <Base.Popup className="popup menu-popup">{connectMenu}</Base.Popup>
+                  </Base.Positioner>
+                </Base.Portal>
+              </Base.Root>
             </li>
           )}
         </FlipList>
+        {(linkUrl || links.length > 0) && (
+          <div className="node-link-rows">
+            {linkUrl && (
+              <span className="node-link-row">
+                <code id={`${id}link-url`} className="t-name node-link-url">{linkUrl}</code>
+                <CopyButton text={linkUrl} target={`${id}link-url`} label="Copy the connect link" />
+              </span>
+            )}
+            {links.map((link) =>
+              link.status === "authorized" ? (
+                <span key={link.id} className="node-link-row">
+                  <span className="t-name">{link.email}</span>
+                  <span className="t-help">Authorized in another browser</span>
+                  <Button size="sm" variant="primary" onClick={() => void actOnLink(link.id, "accept")} disabled={linkBusy}>
+                    <span className="btn-label">Accept</span>
+                  </Button>
+                  <Button size="sm" onClick={() => void actOnLink(link.id, "reject")} disabled={linkBusy}>
+                    <span className="btn-label">Reject</span>
+                  </Button>
+                </span>
+              ) : (
+                <span key={link.id} className="node-link-row">
+                  <span className="t-help">Waiting for an account to be authorized…</span>
+                  <Button size="sm" onClick={() => void actOnLink(link.id, "cancel")} disabled={linkBusy}>
+                    <span className="btn-label">Cancel link</span>
+                  </Button>
+                </span>
+              ),
+            )}
+          </div>
+        )}
       </section>
     </div>
   );
