@@ -51,6 +51,25 @@ const CARD_AIR = 14;
 
 const seen = () => localStorage.getItem(GUIDE_KEY) === GUIDE_VERSION;
 const remember = () => localStorage.setItem(GUIDE_KEY, GUIDE_VERSION);
+const GUIDE_OPEN = "guide:open";
+
+export function requestGuide(): void {
+  try {
+    sessionStorage.setItem(GUIDE_OPEN, "1");
+  } catch {
+  }
+  window.dispatchEvent(new Event(GUIDE_OPEN));
+}
+
+function takeGuideRequest(): boolean {
+  try {
+    if (sessionStorage.getItem(GUIDE_OPEN) !== "1") return false;
+    sessionStorage.removeItem(GUIDE_OPEN);
+    return true;
+  } catch {
+    return false;
+  }
+}
 const targetOf = (step: Step) => step.targets.map((selector) => document.querySelector<HTMLElement>(selector)).find((element) => element?.checkVisibility()) ?? null;
 const docked = () => window.matchMedia("(width < 40rem)").matches;
 const between = (low: number, value: number, high: number) => Math.max(low, Math.min(value, high));
@@ -238,6 +257,33 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
       requestAnimationFrame(() => requestAnimationFrame(() => next.current?.focus({ preventScroll: true })));
     });
   }, [swap]);
+
+  useEffect(() => {
+    if (!offer) return;
+    let waiting: number | undefined;
+    let live = true;
+    const run = () => {
+      if (!takeGuideRequest()) return;
+      const started = performance.now();
+      const look = () => {
+        if (!live) return;
+        const ready = document.querySelector(".boxes[data-ready]") !== null || performance.now() - started > ENTRY_CAP_MS;
+        if (!ready) {
+          waiting = window.setTimeout(look, 200);
+          return;
+        }
+        open();
+      };
+      look();
+    };
+    run();
+    window.addEventListener(GUIDE_OPEN, run);
+    return () => {
+      live = false;
+      if (waiting) window.clearTimeout(waiting);
+      window.removeEventListener(GUIDE_OPEN, run);
+    };
+  }, [offer, open]);
 
   const goTo = useCallback(
     (to: number) => {

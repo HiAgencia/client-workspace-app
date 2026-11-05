@@ -30,6 +30,7 @@
   }
 }
 .brand {
+  --brand-size: 1.75rem;
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
@@ -44,8 +45,8 @@
       color: var(--ink);
       transition-duration: var(--dur-hover);
     }
-    &:hover .brand-mark > rect {
-      fill: var(--brand-tile-hover);
+    &:hover .brand-mark {
+      color: var(--ink-soft);
       transition-duration: var(--dur-hover);
     }
     &:is(:hover, :focus-visible) .brand-mark {
@@ -61,29 +62,94 @@
 }
 .brand-mark {
   flex: none;
-  width: 1.75rem;
-  height: 1.75rem;
-  transition: translate var(--dur-hover-out) var(--ease-hover-out);
+  width: calc(var(--brand-size) * 22 / 18);
+  height: var(--brand-size);
+  color: var(--ink);
+  transition: translate var(--dur-hover-out) var(--ease-hover-out), color var(--dur-hover-out) var(--ease-hover-out);
 }
 .topbar .brand {
+  --brand-size: 1.375rem;
   gap: 0.5rem;
-
-  & .brand-mark {
-    width: 1.375rem;
-    height: 1.375rem;
-  }
-  & .brand-name {
-    font-size: var(--text-body);
-  }
 }
-.brand-mark > rect {
+.brand-mark > g {
   transition: fill var(--dur-hover-out) var(--ease-hover-out);
 }
 .brand-name {
   font-family: var(--font-display);
-  font-size: var(--text-lead);
+  font-size: var(--brand-size);
   font-weight: 600;
+  line-height: 1;
   letter-spacing: -0.012em;
+}
+.site-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  background: var(--page);
+}
+.site-page-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4rem;
+  padding-inline: var(--gutter);
+}
+@media (width < 36rem) {
+  .site-page-bar .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+.site-page-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2rem;
+  width: min(var(--content-w), 100%);
+  margin-inline: auto;
+  padding: 2.5rem var(--gutter) 3.5rem;
+}
+.site-page-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 40rem;
+}
+.site-page-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.75rem 2.5rem;
+}
+.site-page-main section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 40rem;
+}
+.site-foot {
+  border-top: 1px solid var(--division);
+}
+.site-foot-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  width: min(var(--content-w, 72rem), 100%);
+  margin-inline: auto;
+  padding: 1.5rem var(--gutter) 2rem;
+}
+.site-foot-in .brand {
+  --brand-size: 1.375rem;
+}
+.site-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
 }
 .page {
   display: flex;

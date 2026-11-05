@@ -1,6 +1,7 @@
 import { count } from "@/lib/count";
 import type { Database } from "@/lib/db/types";
 import { isNodeColor, type NodeColor } from "@/lib/node-colors";
+import { isNodeIcon, type NodeIconName } from "@/lib/node-icons";
 import type { ToolContext } from "./context";
 import { dbFail, fail, isError, ok, type ToolResult } from "./result";
 
@@ -17,6 +18,8 @@ export type TreeNode = {
   segments: string[];
   ownColor: NodeColor | null;
   color: NodeColor | null;
+  ownIcon: NodeIconName | null;
+  icon: NodeIconName | null;
 };
 
 export type Scope = {
@@ -69,7 +72,7 @@ export function forgetScope(ctx: ToolContext): void {
 async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>> {
   const { data, error } = await ctx.db
     .from("nodes")
-    .select("id, parent_id, kind, name, position, color, created_at")
+    .select("id, parent_id, kind, name, position, color, icon, created_at")
     .eq("owner_id", ctx.ownerId)
     .is("archived_at", null)
     .order("position")
@@ -89,6 +92,8 @@ async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>
       segments: [],
       ownColor: isNodeColor(row.color) ? row.color : null,
       color: null,
+      ownIcon: isNodeIcon(row.icon) ? row.icon : null,
+      icon: null,
     });
   }
   for (const node of [...all.values()]) {
@@ -98,6 +103,7 @@ async function readScope(ctx: ToolContext): Promise<ToolResult<{ scope: Scope }>
     for (let depth = 0; cursor && depth < 64; depth++) {
       names.unshift(cursor.name);
       node.color ??= cursor.ownColor;
+      node.icon ??= cursor.ownIcon;
       if (cursor.parentId === null) {
         rooted = true;
         break;

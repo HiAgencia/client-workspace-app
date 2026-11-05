@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
+import { SiteFoot } from "../site-foot";
 import { Button } from "@/components/ui/button";
 import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
 import { AddIcon, AlertIcon, CloseIcon, CopiedIcon, MenuIcon } from "@/components/ui/icons";
@@ -489,6 +490,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
         </span>
         <main id="content" className="main" tabIndex={-1}>
           {children}
+          <SiteFoot />
         </main>
         <ChatDock />
       </div>

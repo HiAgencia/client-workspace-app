@@ -4,24 +4,27 @@ import { Link } from "@/components/ui/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { BrandMark } from "@/components/brand-mark";
+import { NodeGlyph } from "@/components/node-glyph";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
 import { Tick } from "@/components/ui/tick";
-import { AddIcon, CalendarIcon, MailIcon, OverviewIcon, SearchIcon, SettingsIcon, SignOutIcon, TasksIcon, TrashIcon, type Icon } from "@/components/ui/icons";
+import { AddIcon, CalendarIcon, GuideIcon, HelpIcon, MailIcon, OverviewIcon, SearchIcon, SettingsIcon, SignOutIcon, TasksIcon, TrashIcon, type Icon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
 import { count } from "@/lib/count";
 import { PRODUCT_NAME } from "@/lib/product";
 import { post, type TreeNode } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
 import { figureText } from "./mail-store";
+import { requestGuide } from "./guide";
 import { openQuickAdd } from "./quick-add-bus";
 import { useWorkspace } from "./workspace";
 
 export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: boolean; onLeave?: () => void; onSignOut: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { taskCounts, mailFigure, openPalette, person } = useWorkspace();
   const mailNumber = mailFigure ? figureText(mailFigure) : null;
   const current = useCurrentNode();
@@ -116,6 +119,22 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
         </div>
       </div>
       <div ref={foot} className="side-foot side-pieces">
+        <button
+          type="button"
+          className="side-link"
+          onClick={() => {
+            onLeave?.();
+            requestGuide();
+            if (pathname !== "/app") router.push("/app");
+          }}
+        >
+          <GuideIcon className="side-icon" />
+          <span className="side-link-name">Guide</span>
+        </button>
+        <Link href="/help" className="side-link" onClick={() => onLeave?.()}>
+          <HelpIcon className="side-icon" />
+          <span className="side-link-name">Help</span>
+        </Link>
         <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
           <TrashIcon className="side-icon" />
           <span className="side-link-name">Trash</span>
@@ -128,7 +147,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           {person && !person.isAnonymous ? (
             <Link href="/app/profile" className="side-link side-profile" aria-current={here("/app/profile")} title={person.email ?? undefined} data-side-profile>
               <Avatar className="side-avatar" src={person.avatarUrl} name={person.name} email={person.email} />
-              <span className="side-link-name side-who">{person.name ?? person.email}</span>
+              <span className="t-name side-who">{person.name ?? person.email}</span>
               <span className="sr-only">, Your profile</span>
             </Link>
           ) : (
@@ -326,11 +345,12 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
           href={`/app/node/${node.id}`}
           className="side-link"
           data-kind={node.kind}
+          data-color={node.color ?? undefined}
           data-depth={Math.min(depth, 3)}
           aria-current={node.id === current ? "page" : undefined}
           onClick={(event) => plainClick(event) && requestFocus({ kind: "node", nodeId: node.id })}
         >
-          <span className="side-mark" data-color={node.color ?? undefined} aria-hidden="true" />
+          <NodeGlyph className="side-icon" kind={node.kind} icon={node.icon} />
           <span className="side-link-name">{node.name}</span>
           {node.openTasks > 0 && <Count value={node.openTasks} spoken={count(node.openTasks, "open task", "open tasks")} />}
         </Link>

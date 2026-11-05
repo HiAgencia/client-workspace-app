@@ -1,11 +1,10 @@
 import geometry from "./brand-geometry.json";
 
 export function BrandMark({ className }: { className?: string }) {
-  const { size, tileRadius, bars } = geometry;
+  const { bars } = geometry;
   return (
-    <svg className={className} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" focusable="false">
-      <rect width={size} height={size} rx={tileRadius} fill="var(--brand-tile)" />
-      <g fill="var(--brand-ink)">
+    <svg className={className} viewBox="5 7 22 18" aria-hidden="true" focusable="false">
+      <g fill="currentColor">
         {bars.map((bar) => (
           <rect key={`${bar.x}-${bar.y}`} x={bar.x} y={bar.y} width={bar.w} height={bar.h} rx={bar.h / 2} />
         ))}

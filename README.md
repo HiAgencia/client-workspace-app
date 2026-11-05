@@ -1,6 +1,6 @@
-# Client Workspace
+# Brief
 
-> Working name. Built for the Meta Global AI Developer Hackathon (Indie Developer Track, "Build for Your World"),
+> Built for the Meta Global AI Developer Hackathon (Indie Developer Track, "Build for Your World"),
 > October 26 – November 4, 2026.
 
 A task manager where **the project is the unit**, not the account. Anyone who runs many clients and projects works

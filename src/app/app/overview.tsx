@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useSyncExternalStore, ViewTransition } from "react";
+import { useEffect, useState, useSyncExternalStore, ViewTransition } from "react";
 import { Menu } from "@/components/ui/menu";
 import { firstWeekday, longDay, today } from "@/lib/dates";
 import { ASSISTANT_NAME } from "@/lib/product";
@@ -27,7 +27,7 @@ import {
 } from "./box-kinds";
 import { FOOT, SPLIT, type BoardLayout } from "./board-layout";
 import { BoxBoard, customizeEntries, useBoardLayout, type BoxSpec } from "./boxes";
-import { useGuide } from "./guide";
+import { requestGuide, useGuide } from "./guide";
 import { useGoogleOutcome } from "./google-outcome";
 import { PageHeader } from "./page-header";
 import { useQuickAddInline } from "./quick-add";
@@ -79,7 +79,17 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
   const { set } = useAddress();
   const router = useRouter();
   const place = usePlaceParam(tree);
-  const account = useSearchParams().get("account");
+  const search = useSearchParams();
+  const account = search.get("account");
+  const askedGuide = search.get("guide") === "1";
+  useEffect(() => {
+    if (!askedGuide) return;
+    requestGuide();
+    const next = new URLSearchParams(search);
+    next.delete("guide");
+    const query = next.toString();
+    router.replace(query ? `/app?${query}` : "/app");
+  }, [askedGuide, router, search]);
   const [weekStart] = useState(() => (typeof window === "undefined" ? 1 : firstWeekday()));
   const now = mounted ? today() : null;
 

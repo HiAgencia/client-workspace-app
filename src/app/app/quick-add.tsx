@@ -1,37 +1,59 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Fold } from "@/components/ui/fold";
-import { AddIcon, DateIcon, EnterKeyIcon, GeneralIcon, PriorityIcon, TimeIcon } from "@/components/ui/icons";
+import { TextArea } from "@/components/ui/field";
+import { NodeGlyph } from "@/components/node-glyph";
+import { AddIcon, DateIcon, EnterKeyIcon, EventIcon, GeneralIcon, PriorityIcon, TimeIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { afterExit, focusAfterClose, handBack } from "@/components/ui/use-exit";
-import { today, type Day } from "@/lib/dates";
-import { prepare, rank } from "@/lib/fuzzy";
+import { addDays, instantsOf, today, type Day } from "@/lib/dates";
+import { taskPayload } from "@/lib/create-task";
 import { inlinePlain } from "@/lib/inline-links";
-import { readQuickAdd, type PieceKind, type QuickAddPiece, type QuickAddPlace } from "@/lib/quick-add";
 import { tool, type Item } from "./client-api";
+import { dueTimeOptions, NO_TIME } from "./due-times";
+import { readEvents } from "./events-read";
 import { PRIORITIES } from "./item-parts";
 import { onOpenQuickAdd, type QuickAddStart } from "./quick-add-bus";
-import { pasteLinkOver, whenLabel, whenTone } from "./task-row";
+import { openTaskDetail, pasteLinkOver, whenLabel, whenTone } from "./task-row";
 import { menuButton, useWorkspace } from "./workspace";
 
 const LOW = 4;
-const clockNow = () => new Date().toTimeString().slice(0, 5);
-
-const KIND_NAMES: Record<PieceKind, string> = { date: "Date", place: "Client or project", priority: "Priority" };
 const GENERAL = "general";
+const NONE = "none";
+const NEW_EVENT = "new";
 
-type Overrides = { date?: { day: Day | null; time: string | null }; place?: string | null; priority?: number | null };
+type ListedEvent = {
+  id: string;
+  title: string;
+  start: string;
+  allDay: boolean;
+  origin: "google" | "local";
+  localId: string | null;
+  accountId: string;
+  calendarId: string;
+};
 
-function placeQuery(text: string, caret: number): { start: number; query: string } | null {
-  const before = text.slice(0, caret);
-  const match = /(?:^|\s)#([^#\n]{0,40})$/u.exec(before);
-  if (!match) return null;
-  const start = before.length - match[1].length - 1;
-  return { start, query: match[1] };
+type EventChoice =
+  | { kind: "none" }
+  | { kind: "new" }
+  | { kind: "local"; id: string }
+  | { kind: "google"; accountId: string; calendarId: string; id: string };
+
+type Done = (reason: "added" | "close" | "discard", createdId?: string) => void;
+
+const eventKey = (event: ListedEvent) =>
+  event.origin === "local" && event.localId ? `local:${event.localId}` : `google:${event.accountId}:${event.calendarId}:${event.id}`;
+
+function eventSpan(day: Day, time: string | null) {
+  if (!time) return { startsOn: day };
+  const [h, m] = time.split(":").map(Number);
+  const [y, mo, d] = day.split("-").map(Number);
+  const start = new Date(y, mo - 1, d, h, m);
+  return { startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 3_600_000).toISOString() };
 }
 
 function QuickAddEditor({
@@ -43,7 +65,7 @@ function QuickAddEditor({
   onDraft,
 }: {
   start: QuickAddStart;
-  onDone: (reason: "added" | "close" | "discard") => void;
+  onDone: Done;
   inline?: boolean;
   submitLabel?: string;
   draft?: string;
@@ -51,143 +73,145 @@ function QuickAddEditor({
 }) {
   const { tree, notify, touch, saving } = useWorkspace();
   const [text, setText] = useState(draft ?? "");
-  const [caret, setCaret] = useState(draft?.length ?? 0);
-  const [dismissed, setDismissed] = useState<Array<{ kind: PieceKind; text: string }>>([]);
-  const [overrides, setOverrides] = useState<Overrides>({});
-  const [active, setActive] = useState(0);
-  const [closedAt, setClosedAt] = useState<number | null>(null);
+  const [day, setDay] = useState<Day | null>(start.day ?? null);
+  const [time, setTime] = useState<string | null>(null);
+  const [placeId, setPlaceId] = useState<string | null>(start.placeId ?? null);
+  const [priority, setPriority] = useState(LOW);
+  const [description, setDescription] = useState("");
+  const [subtasks, setSubtasks] = useState<string[]>([]);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [eventChoice, setEventChoice] = useState<EventChoice>({ kind: "none" });
+  const [events, setEvents] = useState<ListedEvent[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
-  const listId = useId();
   const fieldId = useId();
+  const descriptionId = useId();
+  const now = today();
+
   useEffect(() => {
     onDraft?.(text);
   }, [text, onDraft]);
-  const opened = useRef(draft);
-  useLayoutEffect(() => {
-    const words = opened.current;
-    if (words) field.current?.setSelectionRange(words.length, words.length);
+
+  useEffect(() => {
+    let live = true;
+    const from = today();
+    const to = addDays(from, 30);
+    const range = instantsOf(from, to);
+    void readEvents<ListedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }, { withAccounts: false }).then((answer) => {
+      if (live && answer.ok) setEvents(answer.events.slice(0, 20));
+    });
+    return () => {
+      live = false;
+    };
   }, []);
-  const now = today();
-  const clock = clockNow();
 
-  const places = useMemo<QuickAddPlace[]>(() => (tree ?? []).map((node) => ({ id: node.id, name: node.name, path: node.path })), [tree]);
-  const prepared = useMemo(() => places.map((place) => ({ place, prepared: prepare(`${place.path} ${place.name}`) })), [places]);
-  const reading = useMemo(() => readQuickAdd(text, { today: now, clock, places, dismissed }), [text, now, clock, places, dismissed]);
-  const byId = (id: string | null | undefined) => (id ? places.find((place) => place.id === id) ?? null : null);
-  const colorOf = (id: string | null | undefined) => (id ? (tree?.find((node) => node.id === id)?.color ?? undefined) : undefined);
+  const places = useMemo(() => (tree ?? []).map((node) => ({ id: node.id, name: node.name, path: node.path })), [tree]);
+  const place = placeId ? places.find((entry) => entry.id === placeId) ?? null : null;
+  const colorOf = (id: string | null) => (id ? (tree?.find((node) => node.id === id)?.color ?? undefined) : undefined);
+  const placeOptions: SelectOption[] = [{ value: GENERAL, label: "General" }, ...places.map((entry) => ({ value: entry.id, label: entry.path }))];
+  const hours = time ? dueTimeOptions(time) : dueTimeOptions(null).filter((option) => option.value !== NO_TIME);
+  const eventValue = eventChoice.kind === "none" ? NONE : eventChoice.kind === "new" ? NEW_EVENT : eventChoice.kind === "local" ? `local:${eventChoice.id}` : `google:${eventChoice.accountId}:${eventChoice.calendarId}:${eventChoice.id}`;
+  const eventOptions: SelectOption[] = [
+    { value: NONE, label: "No event" },
+    { value: NEW_EVENT, label: "New calendar event" },
+    ...events.map((event) => ({ value: eventKey(event), label: event.allDay ? `${event.title}, ${event.start.slice(0, 10)}` : `${event.title}, ${event.start.slice(0, 16).replace("T", " ")}` })),
+  ];
 
-  const day = overrides.date !== undefined ? overrides.date.day : (reading.day ?? start.day ?? null);
-  const time = overrides.date !== undefined ? overrides.date.time : reading.day ? reading.time : null;
-  const placeId = overrides.place !== undefined ? overrides.place : (reading.place?.id ?? (reading.placeCandidates.length ? undefined : (start.placeId ?? null)));
-  const priority = overrides.priority !== undefined ? overrides.priority : reading.priority;
-  const place = byId(placeId ?? null);
-
-  const query = closedAt === null || placeQuery(text, caret)?.start !== closedAt ? placeQuery(text, caret) : null;
-  const placedPiece = query ? reading.pieces.find((piece) => piece.kind === "place" && piece.start === query.start) : undefined;
-  const typedPiece = placedPiece && placedPiece.end >= caret ? placedPiece : undefined;
-  const suggestions =
-    query && !(placedPiece && caret > placedPiece.end)
-      ? (query.query.trim() ? rank(query.query, prepared, (entry) => entry.prepared).map((hit) => hit.entry.place) : places).slice(0, 6)
-      : [];
-  const listOpen = suggestions.length > 0;
-  const highlighted = Math.min(active, Math.max(0, suggestions.length - 1));
-  const [lastShown, setLastShown] = useState(suggestions);
-  if (listOpen && (lastShown.length !== suggestions.length || lastShown.some((entry, index) => entry.id !== suggestions[index].id))) setLastShown(suggestions);
-  const drawn = listOpen ? suggestions : lastShown;
-
-  function sync() {
-    const el = field.current;
-    if (el) setCaret(el.selectionStart ?? el.value.length);
-  }
-
-  function edit(next: string, at?: number) {
-    setText(next);
-    setProblem(null);
-    if (at !== undefined) {
-      setCaret(at);
-      requestAnimationFrame(() => field.current?.setSelectionRange(at, at));
-    }
-  }
-
-  function pick(chosen: QuickAddPlace) {
-    if (!query) return;
-    const shared = places.filter((other) => other.name.toLowerCase() === chosen.name.toLowerCase()).length > 1;
-    const words = `#${shared ? chosen.path : chosen.name} `;
-    const end = typedPiece ? typedPiece.end : caret;
-    const next = text.slice(0, query.start) + words + text.slice(end).replace(/^ /, "");
-    edit(next, query.start + words.length);
-    setOverrides((was) => ({ ...was, place: undefined }));
-    setActive(0);
-  }
-
-  function choose(kind: PieceKind, value: Overrides[keyof Overrides] | null, removing: boolean) {
-    const piece = reading.pieces.find((entry) => entry.kind === kind);
-    if (piece && removing) setDismissed((was) => [...was, { kind, text: piece.text }]);
-    if (piece && !removing) {
-      const next = (text.slice(0, piece.start) + text.slice(piece.end)).replace(/\s{2,}/g, " ");
-      edit(next, Math.min(piece.start, next.length));
-    }
-    setOverrides((was) => ({ ...was, [kind]: value }) as Overrides);
-    focusAfterClose(() => field.current);
+  function pickEvent(value: string) {
+    if (value === NONE) return setEventChoice({ kind: "none" });
+    if (value === NEW_EVENT) return setEventChoice({ kind: "new" });
+    const event = events.find((entry) => eventKey(entry) === value);
+    if (!event) return setEventChoice({ kind: "none" });
+    if (event.origin === "local" && event.localId) setEventChoice({ kind: "local", id: event.localId });
+    else setEventChoice({ kind: "google", accountId: event.accountId, calendarId: event.calendarId, id: event.id });
   }
 
   async function add() {
     if (busy) return;
-    const title = reading.title;
-    if (!title) {
+    const payload = taskPayload({
+      title: text,
+      day,
+      time,
+      placeId,
+      parentId: start.parentId,
+      priority,
+      description,
+      subtasks,
+      notes,
+    });
+    if (!payload.title) {
       setProblem("Write what has to be done.");
       return field.current?.focus();
     }
-    if (placeId === undefined) {
-      setProblem(`More than one client or project is called “${reading.pieces.find((piece) => piece.kind === "place")?.text.slice(1) ?? ""}”: choose one on its chip.`);
-      return;
-    }
     setBusy(true);
+    setProblem(null);
     try {
       const answer = await tool<{ item: Item }>("create_task", {
-        node: placeId,
-        ...(start.parentId ? { parent: start.parentId } : {}),
-        title,
-        priority: priority ?? LOW,
-        ...(day ? { dueOn: day } : {}),
-        ...(day && time ? { dueTime: time } : {}),
+        node: payload.node,
+        ...(payload.parent ? { parent: payload.parent } : {}),
+        title: payload.title,
+        priority: payload.priority,
+        ...(payload.notes ? { notes: payload.notes } : {}),
+        ...(payload.dueOn ? { dueOn: payload.dueOn } : {}),
+        ...(payload.dueTime ? { dueTime: payload.dueTime } : {}),
       });
-      if (!answer.ok) return setProblem(`The task could not be added: ${answer.message}`);
-      touch();
+      if (!answer.ok) {
+        setProblem(`The task could not be added: ${answer.message}`);
+        return;
+      }
       const id = answer.item.id;
-      notify({ text: `Added “${inlinePlain(title)}”`, tone: "status", undo: () => void saving(tool("delete_item", { id })) });
+      const missed: string[] = [];
+      for (const line of payload.subtasks) {
+        const child = await tool("create_task", { parent: id, title: line });
+        if (!child.ok) missed.push("A subtask");
+      }
+      for (const line of payload.notesToAdd) {
+        const note = await tool("add_note", { parent: id, text: line });
+        if (!note.ok) missed.push("A note");
+      }
+      if (eventChoice.kind === "new") {
+        const made = await tool<{ event: { id: string } }>("create_event", {
+          node: payload.node,
+          title: inlinePlain(payload.title),
+          ...eventSpan(payload.dueOn ?? today(), payload.dueTime ?? null),
+        });
+        const linked = made.ok && (await tool("link_task_event", { task: id, event: made.event.id })).ok;
+        if (!linked) missed.push("The calendar event");
+      } else if (eventChoice.kind === "local") {
+        if (!(await tool("link_task_event", { task: id, event: eventChoice.id })).ok) missed.push("The calendar event");
+      } else if (eventChoice.kind === "google") {
+        const linked = await tool("link_task_event", {
+          task: id,
+          account: eventChoice.accountId,
+          calendar: eventChoice.calendarId,
+          googleEvent: eventChoice.id,
+        });
+        if (!linked.ok) missed.push("The calendar event");
+      }
+      touch();
+      const where = place?.path ?? "General";
+      const failed = [...new Set(missed)].map((item) => item.charAt(0).toLowerCase() + item.slice(1));
+      const missedText = failed.join(" and ");
+      notify({
+        text: failed.length
+          ? `Added “${inlinePlain(payload.title)}” in ${where}. ${missedText.charAt(0).toUpperCase()}${missedText.slice(1)} could not be added: it is open, add it there.`
+          : `Added “${inlinePlain(payload.title)}” in ${where}.`,
+        tone: failed.length ? "error" : "status",
+        undo: () => void saving(tool("delete_item", { id })),
+      });
       setText("");
-      setDismissed([]);
-      setOverrides({});
-      setProblem(null);
-      onDone("added");
+      setDescription("");
+      setSubtasks([]);
+      setNotes([]);
+      setEventChoice({ kind: "none" });
+      onDone("added", id);
     } finally {
       setBusy(false);
     }
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (listOpen) {
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        const step = event.key === "ArrowDown" ? 1 : -1;
-        setActive((highlighted + step + suggestions.length) % suggestions.length);
-        return;
-      }
-      if (event.key === "Enter" || event.key === "Tab") {
-        event.preventDefault();
-        pick(suggestions[highlighted]);
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        setClosedAt(query?.start ?? null);
-        return;
-      }
-    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void add();
@@ -199,146 +223,83 @@ function QuickAddEditor({
     }
   }
 
-  const marked: ReactNode[] = [];
-  let at = 0;
-  for (const piece of reading.pieces) {
-    if (piece.start > at) marked.push(text.slice(at, piece.start));
-    marked.push(
-      <mark key={piece.start} className="qa-mark" data-kind={piece.kind}>
-        {text.slice(piece.start, piece.end)}
-      </mark>,
-    );
-    at = piece.end;
-  }
-  marked.push(text.slice(at));
-
-  const readKinds = new Set(reading.pieces.map((piece: QuickAddPiece) => piece.kind));
-  const candidates = reading.placeCandidates;
-  const placeOptions: SelectOption[] = [
-    { value: GENERAL, label: "General" },
-    ...(candidates.length > 1 && overrides.place === undefined ? candidates : places).map((entry) => ({ value: entry.id, label: entry.path })),
-  ];
-
   return (
     <div className="qa" data-inline={inline || undefined}>
-      <div className="field qa-box">
-        <div className="qa-mirror" aria-hidden="true">
-          {marked}
-          {"​"}
-        </div>
-        <textarea
+      <div className="qa-head">
+        <label className="t-label" htmlFor={fieldId}>
+          Task
+        </label>
+        <TextArea
           ref={field}
           id={fieldId}
-          name={fieldId}
-          className="qa-input"
-          rows={1}
+          className="qa-title"
+          rows={2}
           autoFocus
           lang="en"
-          aria-label="Task, with a date, #client or project and p1–p4 priority"
-          placeholder="Call the printer tomorrow 4pm #Website p2"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={listOpen}
-          aria-controls={listId}
-          aria-activedescendant={listOpen ? `${listId}-${highlighted}` : undefined}
+          placeholder="Call the printer"
           value={text}
           onChange={(event) => {
             setText(event.target.value);
-            setCaret(event.target.selectionStart ?? event.target.value.length);
             setProblem(null);
-            setActive(0);
-            setClosedAt(null);
           }}
-          onSelect={sync}
           onKeyDown={onKeyDown}
           onPaste={(event) => {
             const next = pasteLinkOver(event.currentTarget, event.clipboardData.getData("text"));
             if (next !== null) {
               event.preventDefault();
-              edit(next, next.length);
+              setText(next);
             }
           }}
         />
-        <ul id={listId} className="popup qa-suggest" role="listbox" aria-label="Clients and projects" hidden={!listOpen}>
-          {drawn.map((entry, index) => (
-            <li
-              key={entry.id}
-              id={`${listId}-${index}`}
-              role="option"
-              aria-selected={listOpen && index === highlighted}
-              className="option"
-              data-highlighted={listOpen && index === highlighted ? "" : undefined}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => pick(entry)}
-            >
-              <span className="qa-suggest-disc" data-color={colorOf(entry.id)} aria-hidden="true" />
-              {entry.path}
-            </li>
-          ))}
-        </ul>
       </div>
-      <div className="qa-chips" role="group" aria-label="What the task will be">
-        <span
-          className="qa-chip task-prop"
-          data-prop="date"
-          data-read={readKinds.has("date") || undefined}
-          data-set={day ? "" : undefined}
-          data-unset={day ? undefined : ""}
-          data-when={day ? whenTone(day, now) : undefined}
-        >
+      <div className="qa-chips" role="group" aria-label="Place, date and priority">
+        <span className="qa-chip task-prop" data-prop="date" data-set={day ? "" : undefined} data-unset={day ? undefined : ""} data-when={day ? whenTone(day, now) : undefined}>
           {time ? <TimeIcon className="task-prop-icon" /> : <DateIcon className="task-prop-icon" />}
-          <DatePicker
-            look="chip"
-            label={KIND_NAMES.date}
-            value={day}
-            display={whenLabel(day, time, now)}
-            onChange={(next) => choose("date", { day: next, time: next ? time : null }, next === null)}
-          />
+          <DatePicker look="chip" label="Date" value={day} display={whenLabel(day, null, now)} onChange={(next) => { setDay(next); if (!next) setTime(null); }} />
         </span>
-        <span className="qa-chip task-prop" data-prop="place" data-read={readKinds.has("place") || undefined} data-set="" data-color={colorOf(placeId)}>
-          {placeId ? <span className="task-prop-disc" aria-hidden="true" /> : <GeneralIcon className="task-prop-icon" />}
-          <Select
-            look="chip"
-            label={KIND_NAMES.place}
-            value={placeId === undefined ? null : (placeId ?? GENERAL)}
-            placeholder={`Choose one of ${candidates.length}`}
-            options={placeOptions}
-            onChange={(value) => choose("place", value === GENERAL ? null : value, value === GENERAL)}
-          />
+        {day && (
+          <span className="qa-chip task-prop" data-prop="time" data-set={time ? "" : undefined} data-unset={time ? undefined : ""}>
+            <TimeIcon className="task-prop-icon" />
+            <Select look="chip" label="Time" value={time} placeholder="Add time" options={hours} onChange={(value) => setTime(value === NO_TIME ? null : value)} />
+          </span>
+        )}
+        <span className="qa-chip task-prop" data-prop="place" data-set="" data-color={colorOf(placeId)}>
+          {placeId ? (
+            <NodeGlyph className="task-prop-icon" kind={tree?.find((node) => node.id === placeId)?.kind} icon={tree?.find((node) => node.id === placeId)?.icon} />
+          ) : (
+            <GeneralIcon className="task-prop-icon" />
+          )}
+          <Select look="chip" label="Client or project" value={placeId ?? GENERAL} options={placeOptions} onChange={(value) => setPlaceId(value === GENERAL ? null : value)} />
         </span>
-        <span
-          className="qa-chip task-prop"
-          data-prop="priority"
-          data-read={readKinds.has("priority") || undefined}
-          data-set={priority ? "" : undefined}
-          data-unset={priority ? undefined : ""}
-          data-priority={priority ?? undefined}
-        >
+        <span className="qa-chip task-prop" data-prop="priority" data-set="" data-priority={priority}>
           <PriorityIcon className="task-prop-icon" />
-          <Select
-            look="chip"
-            label={KIND_NAMES.priority}
-            value={String(priority ?? LOW)}
-            options={PRIORITIES}
-            onChange={(value) => choose("priority", Number(value), false)}
-          />
+          <Select look="chip" label="Priority" value={String(priority)} options={PRIORITIES} onChange={(value) => setPriority(Number(value))} />
+        </span>
+        <span className="qa-chip task-prop" data-prop="event" data-set={eventChoice.kind === "none" ? undefined : ""} data-unset={eventChoice.kind === "none" ? "" : undefined}>
+          <EventIcon className="task-prop-icon" />
+          <Select look="chip" label="Calendar event" value={eventValue} options={eventOptions} onChange={pickEvent} />
         </span>
       </div>
-      {(problem || reading.unknownPlace) && (
-        <p className="inline-note qa-note" data-tone={problem ? "alert" : undefined} role={problem ? "alert" : "status"}>
-          {problem ?? `No client or project is called “${reading.unknownPlace}”: the task goes to ${place?.path ?? "General"}.`}
+      <div className="qa-more">
+        <label className="t-label" htmlFor={descriptionId}>
+          Description
+        </label>
+        <TextArea id={descriptionId} rows={3} lang="en" placeholder="Add a description" value={description} onChange={(event) => setDescription(event.target.value)} />
+        <LineList label="Subtasks" addLabel="Add subtask" lines={subtasks} onChange={setSubtasks} />
+        <LineList label="Notes" addLabel="Add note" lines={notes} onChange={setNotes} />
+      </div>
+      {problem && (
+        <p className="inline-note qa-note" data-tone="alert" role="alert">
+          {problem}
         </p>
       )}
       <div className="qa-foot">
-        <p className="t-meta qa-hint">
-          <kbd className="kbd">#</kbd> client or project · <span className="nowrap"><kbd className="kbd">p1</kbd> {PRIORITIES[0].label.toLowerCase()}</span> to{" "}
-          <span className="nowrap"><kbd className="kbd">p4</kbd> {PRIORITIES[3].label.toLowerCase()}</span> · <span className="nowrap">a day like “tomorrow 4pm”</span>
-        </p>
+        <p className="t-meta qa-hint">The task opens when you add it, in the place and on the date you set.</p>
         <div className="qa-actions">
           <Button size="sm" onClick={() => onDone("discard")}>
             Cancel
           </Button>
-          <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !reading.title} aria-keyshortcuts="Enter">
+          <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={!text.trim()} aria-keyshortcuts="Enter">
             <span className="btn-label">{busy ? "Adding…" : submitLabel}</span>
             <kbd className="kbd" aria-hidden="true">
               <EnterKeyIcon />
@@ -350,14 +311,64 @@ function QuickAddEditor({
   );
 }
 
+function LineList({ label, addLabel, lines, onChange }: { label: string; addLabel: string; lines: string[]; onChange: (lines: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const id = useId();
+  function push() {
+    const next = draft.trim();
+    if (!next) return;
+    onChange([...lines, next]);
+    setDraft("");
+  }
+  return (
+    <div className="qa-lines">
+      <label className="t-label" htmlFor={id}>
+        {label}
+      </label>
+      {lines.length > 0 && (
+        <ul className="qa-line-list">
+          {lines.map((line, index) => (
+            <li key={`${index}-${line}`}>
+              <span className="t-body">{line}</span>
+              <button type="button" className="task-add" onClick={() => onChange(lines.filter((_, at) => at !== index))} aria-label={`Remove ${line}`}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="qa-line-add">
+        <TextArea
+          id={id}
+          rows={1}
+          lang="en"
+          placeholder={addLabel === "Add subtask" ? "Confirm the stock" : "Ask for the proof"}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              push();
+            }
+          }}
+        />
+        <Button size="sm" onClick={push} disabled={!draft.trim()}>
+          {addLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function QuickAddDialog() {
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const popupOpen = useRef(false);
+  const created = useRef<string | null>(null);
   const draft = useRef("");
-  const keepDraft = useCallback((text: string) => {
+  const keepDraft = (text: string) => {
     draft.current = text;
-  }, []);
+  };
   const [start, setStart] = useState<QuickAddStart | null>(null);
   const [round, setRound] = useState(0);
   const [words, setWords] = useState("");
@@ -390,11 +401,14 @@ export function QuickAddDialog() {
         event.preventDefault();
       }}
       onClose={() => {
+        const id = created.current;
+        created.current = null;
         const element = dialog.current;
         afterExit(element, () => {
           if (!element?.open) setStart(null);
         });
         focusAfterClose(handBack(opener.current, menuButton), opener.current);
+        if (id) openTaskDetail({ id });
       }}
       onPointerDown={(event) => {
         if (event.target === dialog.current) dialog.current.dataset.downOutside = "";
@@ -411,8 +425,9 @@ export function QuickAddDialog() {
             start={start}
             draft={words}
             onDraft={keepDraft}
-            onDone={(reason) => {
+            onDone={(reason, id) => {
               if (reason === "discard") draft.current = "";
+              created.current = reason === "added" ? id ?? null : null;
               dialog.current?.close();
             }}
           />
@@ -452,8 +467,12 @@ export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }
             key={round}
             inline
             start={{ day: day ?? null, placeId, parentId }}
-            onDone={(reason) => {
-              if (reason === "added") return setRound((value) => value + 1);
+            onDone={(reason, id) => {
+              if (reason === "added") {
+                setRound((value) => value + 1);
+                if (id) openTaskDetail({ id });
+                return;
+              }
               setOpen(false);
               focusAfterClose(() => button.current);
             }}

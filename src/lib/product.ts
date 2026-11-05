@@ -1,4 +1,4 @@
-export const PRODUCT_NAME = "Client Workspace";
+export const PRODUCT_NAME = "Brief";
 
 export const PRODUCT_DESCRIPTION =
   "Every task, note, calendar, and message of each client and project in one place, with a chat that acts on it when you ask.";

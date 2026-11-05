@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { NODE_COLORS } from "@/lib/node-colors";
+import { NODE_ICONS } from "@/lib/node-icons";
 import { defineTool } from "./define";
 import { browsedEventSchema, daysOfRange, fromGoogle, fromLocal, inTimeOrder, readCalendars } from "./events";
 import { localEventsIn, type LocalEvent } from "./local-events";
@@ -26,6 +27,8 @@ const treeNodeSchema = z.object({
   openTasks: z.number(),
   color: z.enum(NODE_COLORS).nullable(),
   ownColor: z.enum(NODE_COLORS).nullable(),
+  icon: z.enum(NODE_ICONS).nullable(),
+  ownIcon: z.enum(NODE_ICONS).nullable(),
 });
 
 const reachedAccountSchema = z.object({
@@ -142,6 +145,8 @@ export const listTree = defineTool({
         openTasks: counts.get(node.id)?.tasks ?? 0,
         color: node.color,
         ownColor: node.ownColor,
+        icon: node.icon,
+        ownIcon: node.ownIcon,
       }));
     const today = input.today;
     const tasks = today

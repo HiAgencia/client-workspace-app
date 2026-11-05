@@ -10,7 +10,7 @@ import "@/app/styles/task.css";
 
 export type MenuEntry =
   | { kind: "action"; label: string; onSelect: () => void; disabled?: boolean; tone?: "danger"; detail?: string; id?: string; icon?: Icon }
-  | { kind: "choice"; label: string; value: string | null; options: Array<{ value: string; label: string }>; onChoose: (value: string) => void; icon?: Icon }
+  | { kind: "choice"; label: string; value: string | null; options: Array<{ value: string; label: string; icon?: Icon }>; onChoose: (value: string) => void; icon?: Icon }
   | { kind: "submenu"; label: string; detail?: string; entries: MenuEntry[]; icon?: Icon }
   | { kind: "group"; label: string; entries: MenuEntry[] }
   | { kind: "separator" };
@@ -105,6 +105,7 @@ function Entries({ entries, container }: { entries: MenuEntry[]; container: Retu
                   <Base.RadioGroup value={entry.value} onValueChange={(value: string) => entry.onChoose(value)}>
                     {entry.options.map((option) => (
                       <Base.RadioItem key={option.value} value={option.value} className="option menu-item" closeOnClick label={option.label}>
+                        {option.icon && <option.icon className="menu-item-icon" />}
                         <span className="menu-item-label">{option.label}</span>
                       </Base.RadioItem>
                     ))}

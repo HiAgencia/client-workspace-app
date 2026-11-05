@@ -120,6 +120,8 @@ const GLYPHS = {
   enterKey: ["M19.5 5.5V12A3 3 0 0 1 16.5 15H5", "M9 11L5 15L9 19"],
   pause: ["M9 6V18", "M15 6V18"],
   play: ["M7 5.5V18.5L18 12Z"],
+  help: [ring(12, 12, 9), "M12 11V16.5", dot(12, 8)],
+  guide: [ring(12, 12, 8), ring(12, 12, 3.5)],
 } satisfies Record<string, string[]>;
 
 type GlyphName = keyof typeof GLYPHS;
@@ -222,3 +224,5 @@ export const AlertIcon = named("alert");
 export const EnterKeyIcon = named("enterKey");
 export const PauseIcon = named("pause");
 export const PlayIcon = named("play");
+export const HelpIcon = named("help");
+export const GuideIcon = named("guide");

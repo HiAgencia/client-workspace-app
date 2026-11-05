@@ -645,6 +645,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           color: string | null
+          icon: string | null
           created_at: string
           id: string
           kind: Database["public"]["Enums"]["node_kind"]
@@ -657,6 +658,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           color?: string | null
+          icon?: string | null
           created_at?: string
           id?: string
           kind: Database["public"]["Enums"]["node_kind"]
@@ -669,6 +671,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           color?: string | null
+          icon?: string | null
           created_at?: string
           id?: string
           kind?: Database["public"]["Enums"]["node_kind"]

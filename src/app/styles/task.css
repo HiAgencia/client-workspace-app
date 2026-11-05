@@ -1177,6 +1177,9 @@
   translate: 0 -50%;
   pointer-events: none;
 }
+.task-prop[data-color] > .task-prop-icon {
+  color: var(--place);
+}
 .task-prop-icon {
   --icon: 0.9375rem;
   color: var(--prop-icon);
@@ -1830,6 +1833,49 @@
   padding: 0.625rem calc(1.125rem - 0.5rem - 1px) 0.5rem;
   font-size: 1.0625rem;
 }
+.qa-dialog .qa-head,
+.qa-dialog .qa-more {
+  padding-inline: 1.125rem;
+}
+.qa-head,
+.qa-more,
+.qa-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.qa-title {
+  min-height: 2.75rem;
+  resize: vertical;
+}
+.qa-more {
+  max-height: min(18rem, 40svh);
+  overflow: auto;
+  padding-bottom: 0.25rem;
+}
+.qa-line-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.qa-line-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.qa-line-add {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.qa-line-add .field {
+  flex: 1;
+  min-width: 0;
+}
 .qa-dialog .qa-chips {
   padding: 0 1.125rem 0.625rem;
 }
@@ -1969,10 +2015,9 @@
 }
 .qa-foot {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.625rem;
 }
 .qa-actions {
   display: flex;
@@ -2000,9 +2045,8 @@
   margin: 0;
 }
 .qa-hint {
-  flex: 1 1 16rem;
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.45;
 
   & .kbd {
     margin-inline: 0.1em;

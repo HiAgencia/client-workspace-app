@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import { connection } from "next/server";
 import { BrandMark } from "@/components/brand-mark";
+import { SiteFoot } from "./site-foot";
 import { GmailMark, GoogleCalendarMark, McpMark, MetaMark } from "@/components/ui/brands";
 import { DarkIcon, LightIcon, OpenIcon } from "@/components/ui/icons";
 import { demoOverview, demoShape } from "@/lib/demo-seed";
@@ -128,15 +129,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           </div>
         </section>
       </main>
-      <footer className="landing-foot">
-        <div className="landing-wrap landing-foot-in">
-          <span className="brand">
-            <BrandMark className="brand-mark" />
-            <span className="brand-name">{PRODUCT_NAME}</span>
-          </span>
-          <p className="t-meta">Built for the Meta Global AI Developer Hackathon.</p>
-        </div>
-      </footer>
+      <SiteFoot />
     </div>
   );
 }

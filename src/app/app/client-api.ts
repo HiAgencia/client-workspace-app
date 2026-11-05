@@ -163,6 +163,8 @@ export type TreeNode = {
   openTasks: number;
   color: string | null;
   ownColor: string | null;
+  icon: string | null;
+  ownIcon: string | null;
 };
 
 export type CalendarEvent = {

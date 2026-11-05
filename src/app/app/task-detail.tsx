@@ -3,6 +3,7 @@
 import { Link } from "@/components/ui/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref, type RefObject } from "react";
+import { NodeGlyph } from "@/components/node-glyph";
 import { GoogleMark } from "@/components/ui/brands";
 import { FlipList } from "@/components/ui/flip-list";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -21,7 +22,6 @@ import {
   GeneralIcon,
   MailIcon,
   NoteIcon,
-  PlaceIcon,
   PriorityIcon,
   UpIcon,
   VersionsIcon,
@@ -524,10 +524,8 @@ function TaskBody(props: BodyProps) {
           <Select look="chip" label="Priority" value={String(item.priority ?? 4)} options={PRIORITIES} onChange={(value) => props.onChange({ priority: Number(value) })} />
         </Prop>
         <Prop kind="place" data-color={placeColor ?? undefined}>
-          {item.nodeId && placeColor ? (
-            <span className="task-prop-disc" aria-hidden="true" />
-          ) : item.nodeId ? (
-            <PlaceIcon className="task-prop-icon" />
+          {item.nodeId ? (
+            <NodeGlyph className="task-prop-icon" kind={tree?.find((node) => node.id === item.nodeId)?.kind} icon={tree?.find((node) => node.id === item.nodeId)?.icon} />
           ) : (
             <GeneralIcon className="task-prop-icon" />
           )}

@@ -8,12 +8,14 @@ import { Field } from "@/components/ui/field";
 import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
 import { GoogleMark } from "@/components/ui/brands";
+import { NodeGlyph, glyphOf } from "@/components/node-glyph";
 import { AddIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { count } from "@/lib/count";
 import { firstWeekday, today } from "@/lib/dates";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { NODE_COLORS } from "@/lib/node-colors";
+import { NODE_ICON_LABELS, NODE_ICONS, shownIcon } from "@/lib/node-icons";
 import { cx } from "@/lib/utils";
 import { get, post, type TreeNode } from "./client-api";
 import {
@@ -154,6 +156,10 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     if (await saving(post(`/api/nodes/${nodeId}`, { color }, "PATCH"))) void refreshTree();
   }
 
+  async function setIcon(icon: string | null) {
+    if (await saving(post(`/api/nodes/${nodeId}`, { icon }, "PATCH"))) void refreshTree();
+  }
+
   async function remove() {
     const answer = await post(`/api/nodes/${nodeId}`, { archived: true }, "PATCH");
     if (!(await saving(Promise.resolve(answer)))) return;
@@ -193,6 +199,17 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
       value: node.ownColor ?? "none",
       options: [{ value: "none", label: node.color && !node.ownColor ? "Inherited" : "None" }, ...NODE_COLORS.map((color) => ({ value: color, label: COLOR_NAMES[color] }))],
       onChoose: (value) => void setColor(value === "none" ? null : value),
+    },
+    {
+      kind: "choice",
+      label: "Icon",
+      icon: glyphOf(shownIcon(node.kind, node.icon)),
+      value: node.ownIcon ?? "default",
+      options: [
+        { value: "default", label: node.icon && !node.ownIcon ? "Inherited" : "Default", icon: glyphOf(shownIcon(node.kind, node.icon && !node.ownIcon ? node.icon : null)) },
+        ...NODE_ICONS.map((icon) => ({ value: icon, label: NODE_ICON_LABELS[icon], icon: glyphOf(icon) })),
+      ],
+      onChoose: (value) => void setIcon(value === "default" ? null : value),
     },
     ...customizeEntries(board, names),
     { kind: "separator" },
@@ -312,7 +329,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
 function NodeMark({ node }: { node: TreeNode }) {
   return (
     <span className="page-mark" data-color={node.color ?? undefined} aria-hidden="true">
-      <span>{Array.from(node.name.trim())[0]?.toUpperCase()}</span>
+      <NodeGlyph kind={node.kind} icon={node.icon} />
     </span>
   );
 }

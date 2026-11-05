@@ -12,7 +12,7 @@ describe("the web manifest", () => {
   });
 
   it("names the site, where it starts, and the theme's colors", () => {
-    expect(PRODUCT_NAME).toBe("Client Workspace");
+    expect(PRODUCT_NAME).toBe("Brief");
     expect(value.name).toBe(PRODUCT_NAME);
     expect(value.short_name).toBe(PRODUCT_NAME);
     expect(value.description).toBe(PRODUCT_DESCRIPTION);

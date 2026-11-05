@@ -1,6 +1,6 @@
 {
-  "name": "Client Workspace",
-  "short_name": "Client Workspace",
+  "name": "Brief",
+  "short_name": "Brief",
   "description": "Every task, note, calendar, and message of each client and project in one place, with a chat that acts on it when you ask.",
   "start_url": "/",
   "display": "standalone",
