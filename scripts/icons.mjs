@@ -1,12 +1,13 @@
 // Draws the site's icons from the brand mark's geometry (src/components/brand-geometry.json): a black tile, the three
-// bars in white, and a thin outline in the brand's light blue (the light theme's `--brand-tile` in
-// src/app/styles/tokens.css) around each bar. It writes the web manifest that names them, all in public/: a file there
+// bars in white, and the brand's light blue (the light theme's `--brand-tile` in src/app/styles/tokens.css) only as
+// each bar's shadow, shifted at one angle behind it. It writes the web manifest that names them, all in public/: a
+// file there
 // is served before the app runs, so a page's icons spend none of the Worker's CPU. `icon.svg`, `favicon.ico` (16, 32
 // and 48 px), `apple-icon.png` (180 px, square: the system rounds it). Each pixel is the average of an 8 × 8 grid of
 // samples, so the rounded ends read smooth at 16 px. `brand-mark.test.ts` and `manifest.test.ts` fail when what is
 // written no longer matches what this draws.
 // Usage: node scripts/icons.mjs
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "../src/lib/product.ts";
@@ -20,11 +21,16 @@ function token(name) {
   return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
 }
 
-const OUTLINE = token("--brand-tile");
+const SHADOW = token("--brand-tile");
 const TILE = [0, 0, 0];
 const BAR = [255, 255, 255];
-// The outline's thickness around each bar, in geometry units: at 16 px it reads as a fine line, never a second bar.
-const OUTLINE_W = 1;
+// Each bar's shadow is one vector with the bar: the pill's capsule extruded along the light's direction —down and
+// to the right, as light at some 145 degrees casts it— by this much in geometry units. Its outline follows the
+// pill's own border with tangent continuity, so the blue is part of the pill's shape and only its lower-right
+// edge shows. A shifted copy, however small, is a second shape: its cap separates from the pill's border at the
+// corner, and that separation is the defect, at any size. (The user's call, from their reference.)
+const SHADOW_X = 0.39;
+const SHADOW_Y = 0.39;
 const CANVAS = token("--canvas");
 // In a square of `size` units: the tile, then three bars stepping in.
 const UNITS = geometry.size;
@@ -38,21 +44,46 @@ function insideRounded(px, py, x, y, w, h, r) {
   return (px - cx) ** 2 + (py - cy) ** 2 <= r * r;
 }
 
-// The mark's color at a point in geometry units, or null where the tile does not paint.
-function colorAt(px, py, rounded) {
-  if (!insideRounded(px, py, 0, 0, UNITS, UNITS, rounded ? TILE_RADIUS : 0)) return null;
-  if (BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2))) return BAR;
-  if (
-    BARS.some((bar) =>
-      insideRounded(px, py, bar.x - OUTLINE_W, bar.y - OUTLINE_W, bar.w + 2 * OUTLINE_W, bar.h + 2 * OUTLINE_W, bar.h / 2 + OUTLINE_W),
-    )
-  )
-    return OUTLINE;
-  return TILE;
+// A bar is a capsule: its spine runs from one cap's center to the other's. Its shadow is that capsule extruded
+// along the light's direction: the set of points within the cap radius of the spine swept along the same
+// direction — a parallelogram — read exactly, with no step and no second shape.
+function insideShadow(px, py, bar) {
+  const r = bar.h / 2;
+  const c1x = bar.x + r;
+  const c1y = bar.y + r;
+  const c2x = bar.x + bar.w - r;
+  const c2y = c1y;
+  const corners = [
+    [c1x, c1y],
+    [c2x, c2y],
+    [c2x + SHADOW_X, c2y + SHADOW_Y],
+    [c1x + SHADOW_X, c1y + SHADOW_Y],
+  ];
+  // Inside the parallelogram the distance is zero; outside, it is the nearest edge's.
+  let inside = true;
+  let nearest = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = corners[i];
+    const [bx, by] = corners[(i + 1) % 4];
+    if ((bx - ax) * (py - ay) - (by - ay) * (px - ax) < 0) inside = false;
+    const t = Math.min(1, Math.max(0, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2)));
+    nearest = Math.min(nearest, Math.hypot(px - (ax + t * (bx - ax)), py - (ay + t * (by - ay))));
+  }
+  return (inside ? 0 : nearest) <= r;
 }
 
-function draw(size, { rounded, background = null, scale = 1 }) {
-  const samples = 8;
+// The mark's color at a point in geometry units, or null where the tile does not paint. A palette says the tile,
+// the bars and the shadow's color; a null shadow draws no shadow, and a null tile leaves what is not a bar or a
+// shadow unpainted (the monochrome logos).
+function colorAt(px, py, rounded, palette = { tile: TILE, bar: BAR, shadow: SHADOW }) {
+  if (!insideRounded(px, py, 0, 0, UNITS, UNITS, rounded ? TILE_RADIUS : 0)) return null;
+  if (BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2))) return palette.bar;
+  if (palette.shadow && BARS.some((bar) => insideShadow(px, py, bar))) return palette.shadow;
+  return palette.tile;
+}
+
+function draw(size, { rounded, background = null, scale = 1, palette }) {
+  const samples = size >= 1000 ? 4 : 8;
   const pixels = Buffer.alloc(size * size * 4);
   const unit = UNITS / size;
   for (let row = 0; row < size; row++) {
@@ -68,7 +99,7 @@ function draw(size, { rounded, background = null, scale = 1 }) {
           // With `scale` below 1 the mark shrinks toward the center and what it leaves reads as the background.
           const gx = UNITS / 2 + (px - UNITS / 2) / scale;
           const gy = UNITS / 2 + (py - UNITS / 2) / scale;
-          const color = colorAt(gx, gy, rounded) ?? background;
+          const color = colorAt(gx, gy, rounded, palette) ?? background;
           if (!color) continue;
           r += color[0];
           g += color[1];
@@ -109,14 +140,14 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-function png(size, pixels) {
+function png(width, height, pixels) {
   const header = Buffer.alloc(13);
-  header.writeUInt32BE(size, 0);
-  header.writeUInt32BE(size, 4);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
   header[8] = 8; // bit depth
   header[9] = 6; // RGBA
-  const rows = Buffer.alloc(size * (size * 4 + 1));
-  for (let row = 0; row < size; row++) pixels.copy(rows, row * (size * 4 + 1) + 1, row * size * 4, (row + 1) * size * 4);
+  const rows = Buffer.alloc(height * (width * 4 + 1));
+  for (let row = 0; row < height; row++) pixels.copy(rows, row * (width * 4 + 1) + 1, row * width * 4, (row + 1) * width * 4);
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk("IHDR", header),
@@ -147,18 +178,42 @@ function ico(images) {
 }
 
 const hex = (rgb) => `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+const n3 = (value) => Math.round(value * 1000) / 1000;
+
+// A bar's shadow as one path: the capsule extruded along the light's direction, its arcs and lines tangent where
+// they meet, so its outline is the pill's own border continued — the same shape `insideShadow` reads for the
+// raster files.
+function shadowPath(bar) {
+  const r = bar.h / 2;
+  const c1 = { x: bar.x + r, y: bar.y + r };
+  const c2 = { x: bar.x + bar.w - r, y: c1.y };
+  const length = Math.hypot(SHADOW_X, SHADOW_Y);
+  const d = { x: SHADOW_X / length, y: SHADOW_Y / length };
+  const n = { x: d.y, y: -d.x };
+  const at = (c, a, b) => `${n3(c.x + a)} ${n3(c.y + b)}`;
+  return [
+    `M ${at(c1, r * n.x, r * n.y)}`,
+    `L ${at(c2, r * n.x, r * n.y)}`,
+    `L ${n3(c2.x + r * n.x + SHADOW_X)} ${n3(c2.y + r * n.y + SHADOW_Y)}`,
+    `A ${r} ${r} 0 0 1 ${n3(c2.x - r * n.x + SHADOW_X)} ${n3(c2.y - r * n.y + SHADOW_Y)}`,
+    `L ${n3(c1.x - r * n.x + SHADOW_X)} ${n3(c1.y - r * n.y + SHADOW_Y)}`,
+    `L ${at(c1, -r * n.x, -r * n.y)}`,
+    `A ${r} ${r} 0 0 1 ${at(c1, r * n.x, r * n.y)}`,
+    "Z",
+  ].join(" ");
+}
+
 // The three files as they should be on disk.
 export function iconFiles() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNITS} ${UNITS}"><rect width="${UNITS}" height="${UNITS}" rx="${TILE_RADIUS}" fill="${hex(TILE)}"/><g fill="${hex(OUTLINE)}">${BARS.map(
-    (bar) =>
-      `<rect x="${bar.x - OUTLINE_W}" y="${bar.y - OUTLINE_W}" width="${bar.w + 2 * OUTLINE_W}" height="${bar.h + 2 * OUTLINE_W}" rx="${bar.h / 2 + OUTLINE_W}"/>`,
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNITS} ${UNITS}"><rect width="${UNITS}" height="${UNITS}" rx="${TILE_RADIUS}" fill="${hex(TILE)}"/><g fill="${hex(SHADOW)}">${BARS.map(
+    (bar) => `<path d="${shadowPath(bar)}"/>`,
   ).join("")}</g><g fill="${hex(BAR)}">${BARS.map(
     (bar) => `<rect x="${bar.x}" y="${bar.y}" width="${bar.w}" height="${bar.h}" rx="${bar.h / 2}"/>`,
   ).join("")}</g></svg>\n`;
   return {
     "icon.svg": Buffer.from(svg),
-    "favicon.ico": ico([16, 32, 48].map((size) => ({ size, data: png(size, draw(size, { rounded: true })) }))),
-    "apple-icon.png": png(180, draw(180, { rounded: false })),
+    "favicon.ico": ico([16, 32, 48].map((size) => ({ size, data: png(size, size, draw(size, { rounded: true })) }))),
+    "apple-icon.png": png(180, 180, draw(180, { rounded: false })),
   };
 }
 
@@ -166,10 +221,89 @@ export function iconFiles() {
 // system may crop to (80% of the width), on the canvas the manifest declares as its background.
 export function manifestIconFiles() {
   return {
-    "icon-192.png": png(192, draw(192, { rounded: true })),
-    "icon-512.png": png(512, draw(512, { rounded: true })),
-    "icon-maskable-512.png": png(512, draw(512, { rounded: false, background: CANVAS, scale: 0.8 })),
+    "icon-192.png": png(192, 192, draw(192, { rounded: true })),
+    "icon-512.png": png(512, 512, draw(512, { rounded: true })),
+    "icon-maskable-512.png": png(512, 512, draw(512, { rounded: false, background: CANVAS, scale: 0.8 })),
   };
+}
+
+// The share image (1200 × 630): a black field and the mark large at the left, drawn with the same sampler and the
+// same geometry as the icons, with no rasterized text. The tile and the field are the same black, so the bars and
+// their shadow carry the picture.
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+const OG_MARK = 432;
+function drawOg() {
+  const samples = 4;
+  const pixels = Buffer.alloc(OG_WIDTH * OG_HEIGHT * 4);
+  const markX = 84;
+  const markY = (OG_HEIGHT - OG_MARK) / 2;
+  for (let row = 0; row < OG_HEIGHT; row++) {
+    for (let col = 0; col < OG_WIDTH; col++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let sy = 0; sy < samples; sy++) {
+        for (let sx = 0; sx < samples; sx++) {
+          const px = col + (sx + 0.5) / samples;
+          const py = row + (sy + 0.5) / samples;
+          let color = TILE;
+          if (px >= markX && px < markX + OG_MARK && py >= markY && py < markY + OG_MARK) {
+            const gx = ((px - markX) / OG_MARK) * UNITS;
+            const gy = ((py - markY) / OG_MARK) * UNITS;
+            color = colorAt(gx, gy, true) ?? TILE;
+          }
+          r += color[0];
+          g += color[1];
+          b += color[2];
+        }
+      }
+      const i = (row * OG_WIDTH + col) * 4;
+      const count = samples * samples;
+      pixels[i] = Math.round(r / count);
+      pixels[i + 1] = Math.round(g / count);
+      pixels[i + 2] = Math.round(b / count);
+      pixels[i + 3] = 255;
+    }
+  }
+  return pixels;
+}
+
+export function ogFile() {
+  return { "og.png": png(OG_WIDTH, OG_HEIGHT, drawOg()) };
+}
+
+// The mark as a logo at 1000 × 1000, drawn by the same source as the icons so the two never drift: the primary
+// (a black tile, white bars, their shadow), its light tone (a white tile, black bars), and the two monochromes
+// (the bars alone, no tile and no shadow, in black and in white). Each in PNG and in SVG.
+const LOGO_SIZE = 1000;
+const LOGO_BLACK = [0, 0, 0];
+const LOGO_WHITE = [255, 255, 255];
+function logoSvg(palette) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNITS} ${UNITS}">${
+    palette.tile ? `<rect width="${UNITS}" height="${UNITS}" rx="${TILE_RADIUS}" fill="${hex(palette.tile)}"/>` : ""
+  }${
+    palette.shadow
+      ? `<g fill="${hex(palette.shadow)}">${BARS.map((bar) => `<path d="${shadowPath(bar)}"/>`).join("")}</g>`
+      : ""
+  }<g fill="${hex(palette.bar)}">${BARS.map(
+    (bar) => `<rect x="${bar.x}" y="${bar.y}" width="${bar.w}" height="${bar.h}" rx="${bar.h / 2}"/>`,
+  ).join("")}</g></svg>\n`;
+}
+
+export function logoFiles() {
+  const tones = {
+    "logo-dark": { tile: LOGO_BLACK, bar: LOGO_WHITE, shadow: SHADOW },
+    "logo-light": { tile: LOGO_WHITE, bar: LOGO_BLACK, shadow: SHADOW },
+    "logo-mono-black": { tile: null, bar: LOGO_BLACK, shadow: null },
+    "logo-mono-white": { tile: null, bar: LOGO_WHITE, shadow: null },
+  };
+  const files = {};
+  for (const [name, palette] of Object.entries(tones)) {
+    files[`brand/${name}.png`] = png(LOGO_SIZE, LOGO_SIZE, draw(LOGO_SIZE, { rounded: true, palette }));
+    files[`brand/${name}.svg`] = Buffer.from(logoSvg(palette));
+  }
+  return files;
 }
 
 // The web manifest every page links: the name a system installs the site by, where it starts, and the icons it asks for. Its
@@ -194,7 +328,9 @@ export function webManifest() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const publicDir = new URL("../public/", import.meta.url);
-  for (const [name, data] of Object.entries({ ...iconFiles(), ...manifestIconFiles() })) writeFileSync(new URL(name, publicDir), data);
+  mkdirSync(new URL("brand/", publicDir), { recursive: true });
+  for (const [name, data] of Object.entries({ ...iconFiles(), ...manifestIconFiles(), ...ogFile(), ...logoFiles() }))
+    writeFileSync(new URL(name, publicDir), data);
   writeFileSync(new URL("manifest.webmanifest", publicDir), `${JSON.stringify(webManifest(), null, 2)}\n`);
-  console.log("icon.svg, favicon.ico (16, 32, 48), apple-icon.png (180), icon-192.png, icon-512.png, icon-maskable-512.png and manifest.webmanifest written in public/");
+  console.log("icon.svg, favicon.ico (16, 32, 48), apple-icon.png (180), icon-192.png, icon-512.png, icon-maskable-512.png, og.png (1200x630), the four logos in public/brand/ (1000x1000, PNG and SVG) and manifest.webmanifest written in public/");
 }
