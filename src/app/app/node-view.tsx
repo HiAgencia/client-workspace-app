@@ -501,23 +501,6 @@ function NodeStrip({
               <ConnectSession nodeId={node.id} email={sessionEmail!} primary={accounts.length === 0} detail="Brings its calendar and mail here" blocked={blocked} />
             </li>
           )}
-          {offerOwn && !blocked && (
-            <li data-flip-key="connect-another">
-              <Base.Root modal={false}>
-                <Base.Trigger className={cx(buttonClass({}), "node-chip", "node-add")}>
-                  <span className="node-chip-name">
-                    <AddIcon className="node-chip-mark" />
-                    Connect account
-                  </span>
-                </Base.Trigger>
-                <Base.Portal container={container}>
-                  <Base.Positioner className="positioner" sideOffset={6}>
-                    <Base.Popup className="popup menu-popup">{connectMenu}</Base.Popup>
-                  </Base.Positioner>
-                </Base.Portal>
-              </Base.Root>
-            </li>
-          )}
           {accounts.map((account) => {
             const known = calendars?.find((entry) => entry.id === account.id);
             const lost = account.status !== "active" && !account.isDemo;
@@ -577,7 +560,7 @@ function NodeStrip({
               </li>
             );
           })}
-          {mailAccounts && connectHref && accounts.length > 0 && !blocked && (
+          {mailAccounts && connectHref && accounts.length > 0 && !blocked && !offerOwn && (
             <li data-flip-key="connect-more">
               <Base.Root modal={false}>
                 <Base.Trigger className={cx(buttonClass({}), "node-chip", "node-add")}>
