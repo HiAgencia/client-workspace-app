@@ -20,8 +20,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .select("id, status, expires_at")
     .eq("token_hash", await hashLinkToken(token))
     .maybeSingle();
-  if (error || !link || link.status !== "pending" || Date.parse(link.expires_at) < Date.now()) return done("invalid-link");
-  const state = await signLinkState(secret, link.id);
+  if (error || !link) return done("invalid-link");
+  if (link.status !== "pending" || Date.parse(link.expires_at) < Date.now()) {
+    await service.from("google_connect_links").update({ status: "cancelled", refresh_token: null, access_token: null }).eq("id", link.id).in("status", ["pending", "authorized"]);
+    return done("invalid-link");
+  }
+  const state = await signLinkState(secret, link.id, Date.parse(link.expires_at));
   const redirectUri = new URL("/api/google/callback", origin).toString();
   return NextResponse.redirect(authorizationUrl(deps.client.clientId, redirectUri, state), { headers: SESSION_HEADERS });
 }

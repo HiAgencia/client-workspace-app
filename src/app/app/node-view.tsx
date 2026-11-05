@@ -372,7 +372,7 @@ function NodeStrip({
   onAdd: () => void;
   onAddDone: () => void;
 }) {
-  const { tree, mailAccounts, mailStore } = useWorkspace();
+  const { tree, mailAccounts, mailStore, notify } = useWorkspace();
   const container = usePopupContainer();
   const addButton = useRef<HTMLButtonElement>(null);
   const fold = useRef<HTMLDivElement>(null);
@@ -409,14 +409,23 @@ function NodeStrip({
     if (answer.ok) {
       setLinkUrl(answer.url);
       void loadLinks();
+    } else {
+      notify({ text: answer.message, tone: "error" });
     }
   }
 
   async function actOnLink(linkId: string, action: "accept" | "reject" | "cancel") {
+    const link = links.find((entry) => entry.id === linkId);
     setLinkBusy(true);
     const answer = await post("/api/google/connect-links", { action, id: linkId });
     setLinkBusy(false);
-    if (answer.ok) void loadLinks();
+    if (answer.ok) {
+      setLinkUrl(null);
+      if (action === "accept" && link?.email) notify({ text: `${link.email} is connected here.`, tone: "status" });
+      void loadLinks();
+    } else {
+      notify({ text: answer.message, tone: "error" });
+    }
   }
 
   const connectMenu = (
@@ -426,7 +435,7 @@ function NodeStrip({
           <span className="menu-item-label">Connect in this browser</span>
         </span>
       </Base.LinkItem>
-      <Base.Item className="option menu-item" onClick={() => void createLink()}>
+      <Base.Item className="option menu-item" disabled={linkBusy || Boolean(blocked)} onClick={() => void createLink()}>
         <span className="menu-item-text">
           <span className="menu-item-label">Create a link for another browser</span>
         </span>
@@ -486,6 +495,23 @@ function NodeStrip({
           {offerOwn && (
             <li data-flip-key="connect-own">
               <ConnectSession nodeId={node.id} email={sessionEmail!} primary={accounts.length === 0} detail="Brings its calendar and mail here" blocked={blocked} />
+            </li>
+          )}
+          {offerOwn && !blocked && (
+            <li data-flip-key="connect-another">
+              <Base.Root modal={false}>
+                <Base.Trigger className={cx(buttonClass({}), "node-chip", "node-add")}>
+                  <span className="node-chip-name">
+                    <AddIcon className="node-chip-mark" />
+                    Connect account
+                  </span>
+                </Base.Trigger>
+                <Base.Portal container={container}>
+                  <Base.Positioner className="positioner" sideOffset={6}>
+                    <Base.Popup className="popup menu-popup">{connectMenu}</Base.Popup>
+                  </Base.Positioner>
+                </Base.Portal>
+              </Base.Root>
             </li>
           )}
           {accounts.map((account) => {

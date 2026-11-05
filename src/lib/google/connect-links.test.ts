@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hashLinkToken, newLinkToken } from "./connect-links";
-import { signLinkState, signState, verifyLinkState, verifyState } from "./state";
+import { linkIdOfState, signLinkState, signState, verifyLinkState, verifyState } from "./state";
 
 const SECRET = "a-secret-of-the-server-that-signs-the-state";
 
@@ -16,9 +16,11 @@ describe("a connect link", () => {
 
   it("signs a state only the link callback accepts, and only while it lives", async () => {
     const now = Date.now();
-    const state = await signLinkState(SECRET, "link-1", now);
+    const state = await signLinkState(SECRET, "link-1", now + 30 * 60 * 1000);
     expect((await verifyLinkState(SECRET, state, now))?.linkId).toBe("link-1");
-    expect(await verifyLinkState(SECRET, state, now + 11 * 60 * 1000)).toBeNull();
+    expect(await verifyLinkState(SECRET, state, now + 31 * 60 * 1000)).toBeNull();
+    expect(linkIdOfState(state)).toBe("link-1");
+    expect(linkIdOfState("not-a-state")).toBeNull();
     expect(await verifyLinkState("another-secret", state, now)).toBeNull();
     expect(await verifyState(SECRET, state, now)).toBeNull();
     const browser = await signState(SECRET, { nodeId: "node", userId: "user", nonce: "nonce" }, now);

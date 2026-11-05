@@ -75,6 +75,7 @@ export async function storeAuthorizedAccount(
   target: { ownerId: string; nodeId: string },
   authorized: AuthorizedAccount,
 ): Promise<ConnectedAccount> {
+  const calendars = await listCalendars(deps.fetch, authorized.accessToken);
   const { data: account, error } = await deps.service
     .from("google_accounts")
     .upsert(
@@ -98,7 +99,6 @@ export async function storeAuthorizedAccount(
     .upsert({ node_id: target.nodeId, account_id: account.id }, { onConflict: "node_id,account_id", ignoreDuplicates: true });
   if (link.error) throw new Error(`attaching the account: ${link.error.message}`);
 
-  const calendars = await listCalendars(deps.fetch, authorized.accessToken);
   if (calendars.length > 0) {
     const rows = calendars.map((calendar) => ({
       account_id: account.id,

@@ -35,10 +35,21 @@ export async function signState(secret: string, value: Omit<ConnectState, "expir
   return `${b64url(payload)}.${b64url(signature)}`;
 }
 
-export async function signLinkState(secret: string, linkId: string, now = Date.now()) {
-  const payload = new TextEncoder().encode(JSON.stringify({ linkId, expiresAt: now + LIFETIME_MS }));
+export async function signLinkState(secret: string, linkId: string, expiresAt: number) {
+  const payload = new TextEncoder().encode(JSON.stringify({ linkId, expiresAt }));
   const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await hmacKey(secret), payload));
   return `${b64url(payload)}.${b64url(signature)}`;
+}
+
+export function linkIdOfState(state: string): string | null {
+  const [payload] = state.split(".");
+  if (!payload) return null;
+  try {
+    const value = JSON.parse(new TextDecoder().decode(fromB64url(payload))) as { linkId?: unknown };
+    return typeof value.linkId === "string" ? value.linkId : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function verifyLinkState(secret: string, state: string, now = Date.now()): Promise<LinkState | null> {
