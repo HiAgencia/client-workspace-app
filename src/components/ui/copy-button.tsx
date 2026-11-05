@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useStrings } from "@/lib/strings";
 import { Button } from "./button";
 
-export function CopyButton({ text, target, label = "Copy", onSelecting }: { text: string; target: string; label?: string; onSelecting?: () => void }) {
+export function CopyButton({ text, target, label, onSelecting }: { text: string; target: string; label?: string; onSelecting?: () => void }) {
+  const { t } = useStrings();
   const [state, setState] = useState<"idle" | "copied" | "selected">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -31,10 +33,10 @@ export function CopyButton({ text, target, label = "Copy", onSelecting }: { text
   return (
     <span className="inline">
       <Button size="sm" onClick={() => void copy()} aria-describedby={`${target}-copy-state`}>
-        {label}
+        {label ?? t("copy.copy")}
       </Button>
       <span id={`${target}-copy-state`} className="t-meta copy-state" role="status" data-shown={state !== "idle" ? "" : undefined}>
-        {state === "copied" ? "Copied" : state === "selected" ? "Selected: press Ctrl+C to copy" : ""}
+        {state === "copied" ? t("copy.copied") : state === "selected" ? t("copy.selected") : ""}
       </span>
     </span>
   );

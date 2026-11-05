@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { GoogleMark } from "@/components/ui/brands";
 import { Button } from "@/components/ui/button";
+import { useStrings } from "@/lib/strings";
 import { get, post } from "./client-api";
 import { useWorkspace } from "./workspace";
 
@@ -23,6 +24,7 @@ export function ConnectSession({
   detail?: string;
   blocked?: string | null;
 }) {
+  const { t } = useStrings();
   const detailId = useId();
   const { mailAccounts, saving, notify } = useWorkspace();
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export function ConnectSession({
     if (accountId) {
       const done = await saving(post("/api/accounts", { action: "attach", accountId, nodeId }));
       setBusy(false);
-      if (done) notify({ text: `${email} is connected here.`, tone: "status" });
+      if (done) notify({ text: t("connect.connectedHere", { email }), tone: "status" });
       return;
     }
     window.location.assign(new URL(`/api/google/connect?node=${nodeId}&as=session`, window.location.origin).toString());
@@ -60,7 +62,7 @@ export function ConnectSession({
         <>
           <span className="node-chip-name">
             <GoogleMark className="node-chip-mark" />
-            {`Connect ${email}`}
+            {t("connect.connectEmail", { email })}
           </span>
           <span id={detailId} className="node-chip-detail">
             {detail}
@@ -69,7 +71,7 @@ export function ConnectSession({
       ) : (
         <>
           <GoogleMark />
-          <span className="btn-label">{`Connect ${email}`}</span>
+          <span className="btn-label">{t("connect.connectEmail", { email })}</span>
         </>
       )}
     </Button>

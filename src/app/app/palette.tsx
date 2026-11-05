@@ -6,15 +6,16 @@ import { DecisionIcon, MailIcon, NextIcon, NoteIcon, SearchIcon, TasksIcon } fro
 import { useAutoHeight } from "@/components/ui/use-auto-height";
 import { focusAfterClose, handBack, takesFocus, useExit } from "@/components/ui/use-exit";
 import { useMedia } from "@/components/ui/use-media";
-import { count } from "@/lib/count";
 import { prepare, rank } from "@/lib/fuzzy";
 import { inlinePlain } from "@/lib/inline-links";
+import { setLanguage } from "@/lib/language";
 import { mailFailureText } from "@/lib/mail/failure-text";
+import { useStrings, type StringKey } from "@/lib/strings";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { currentTheme, setTheme } from "@/lib/theme";
 import { tool, type Item, type TreeNode } from "./client-api";
 import { requestFocus, type FocusTarget } from "./focus-request";
-import { PathText, TYPE_NAMES } from "./item-parts";
+import { PathText, typeName } from "./item-parts";
 import { subjectOf } from "./mail/subject";
 import { openQuickAdd } from "./quick-add-bus";
 import type { MailFailureRow } from "./mail-store";
@@ -25,17 +26,16 @@ type Entry =
   | { kind: "node"; id: string; node: TreeNode }
   | { kind: "item"; id: string; item: Item }
   | { kind: "mail"; id: string; row: MailRow }
-  | { kind: "action"; id: string; label: string; run: () => void };
+  | { kind: "action"; id: string; label: string; name?: string; run: () => void };
 
-const KIND_NAMES: Record<TreeNode["kind"], string> = { client: "Client", project: "Project", subproject: "Subproject" };
+const KIND_NAMES: Record<TreeNode["kind"], StringKey> = { client: "kind.client", project: "kind.project", subproject: "kind.subproject" };
 const LIMIT = { node: 6, item: 8, mail: 8 };
 const MAIL_WAIT_MS = 400;
-const NAME = "Search clients, projects, tasks, mail, and actions";
-const SHORT_NAME = "Search everything";
 const NARROW = "(width < 36rem)";
 const TOUCH = "(pointer: coarse)";
 
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useStrings();
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -52,7 +52,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     <dialog
       ref={dialog}
       className="dialog palette"
-      aria-label={NAME}
+      aria-label={t("palette.name")}
       onClose={() => {
         if (!takesFocus(opener.current)) focusAfterClose(handBack(opener.current, menuButton), opener.current);
         onClose();
@@ -71,6 +71,7 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement | null>; onClose: () => void }) {
+  const { t, lang, counted } = useStrings();
   const { tree, treeError, refreshTree, mailAccounts, person, switchAccount } = useWorkspace();
   const signedIn = person !== null && !person.isAnonymous;
   const router = useRouter();
@@ -140,26 +141,31 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
 
   const actions = useMemo<Entry[]>(() => {
     const list: Entry[] = [
-      { kind: "action", id: "go-overview", label: "Go to Overview", run: () => router.push("/app") },
-      { kind: "action", id: "go-tasks", label: "Go to Tasks", run: () => router.push("/app/tasks") },
-      { kind: "action", id: "go-calendar", label: "Go to Calendar", run: () => router.push("/app/calendar") },
-      { kind: "action", id: "go-mail", label: "Go to Mail", run: () => router.push("/app/mail") },
-      { kind: "action", id: "go-trash", label: "Go to Trash", run: () => router.push("/app/trash") },
-      { kind: "action", id: "go-settings", label: "Go to Settings", run: () => router.push("/app/settings") },
+      { kind: "action", id: "go-overview", label: t("palette.goOverview"), run: () => router.push("/app") },
+      { kind: "action", id: "go-tasks", label: t("palette.goTasks"), run: () => router.push("/app/tasks") },
+      { kind: "action", id: "go-calendar", label: t("palette.goCalendar"), run: () => router.push("/app/calendar") },
+      { kind: "action", id: "go-mail", label: t("palette.goMail"), run: () => router.push("/app/mail") },
+      { kind: "action", id: "go-trash", label: t("palette.goTrash"), run: () => router.push("/app/trash") },
+      { kind: "action", id: "go-settings", label: t("palette.goSettings"), run: () => router.push("/app/settings") },
     ];
     if (signedIn) {
-      list.push({ kind: "action", id: "go-profile", label: "Go to Profile", run: () => router.push("/app/profile") });
-      list.push({ kind: "action", id: "switch-account", label: "Switch account", run: () => void switchAccount() });
+      list.push({ kind: "action", id: "go-profile", label: t("palette.goProfile"), run: () => router.push("/app/profile") });
+      list.push({ kind: "action", id: "switch-account", label: t("palette.switchAccount"), run: () => void switchAccount() });
     }
     if (here) {
-      list.push({ kind: "action", id: "new-task", label: `New task in ${here.name}`, run: () => openQuickAdd({ placeId: here.id }) });
-      list.push({ kind: "action", id: "agent", label: `Issue an agent token for ${here.name}`, run: () => router.push(`/app/settings?node=${here.id}#agent-tokens`) });
+      list.push({ kind: "action", id: "new-task", label: t("palette.newTaskIn", { name: here.name }), run: () => openQuickAdd({ placeId: here.id }) });
+      list.push({ kind: "action", id: "agent", label: t("palette.agentTokenFor", { name: here.name }), run: () => router.push(`/app/settings?node=${here.id}#agent-tokens`) });
     }
     const dark = currentTheme() === "dark";
-    list.push({ kind: "action", id: "theme", label: dark ? "Switch to light theme" : "Switch to dark theme", run: () => setTheme(dark ? "light" : "dark") });
-    if (!touch) list.push({ kind: "action", id: "shortcuts", label: "Show keyboard shortcuts", run: showShortcuts });
+    list.push({ kind: "action", id: "theme", label: dark ? t("palette.toLight") : t("palette.toDark"), run: () => setTheme(dark ? "light" : "dark") });
+    list.push(
+      lang === "en"
+        ? { kind: "action", id: "language", label: t("language.spanish"), name: t("language.switchToSpanish"), run: () => setLanguage("es") }
+        : { kind: "action", id: "language", label: t("language.english"), name: t("language.switchToEnglish"), run: () => setLanguage("en") },
+    );
+    if (!touch) list.push({ kind: "action", id: "shortcuts", label: t("palette.shortcuts"), run: showShortcuts });
     return list;
-  }, [here, router, signedIn, switchAccount, touch]);
+  }, [here, router, signedIn, switchAccount, touch, lang, t]);
 
   function go(target: FocusTarget) {
     requestFocus(target);
@@ -168,7 +174,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
 
   const nodeIndex = useMemo(() => (tree ?? []).map((node) => ({ node, prepared: prepare(`${node.name} ${node.path}`) })), [tree]);
   const itemIndex = useMemo(() => (items ?? []).map((item) => ({ item, prepared: prepare(`${item.title} ${item.body ?? ""}`) })), [items]);
-  const actionIndex = useMemo(() => actions.map((action) => ({ action, prepared: prepare(action.kind === "action" ? action.label : "") })), [actions]);
+  const actionIndex = useMemo(() => actions.map((action) => ({ action, prepared: prepare(action.kind === "action" ? `${action.label} ${action.name ?? ""}` : "") })), [actions]);
 
   const tops = useMemo(() => {
     const roots = (tree ?? []).filter((node) => node.parentId === null);
@@ -181,12 +187,12 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
     const itemHits = q ? rank(q, itemIndex, (hit) => hit.prepared).slice(0, LIMIT.item).map((hit) => hit.entry.item) : [];
     const actionHits = q ? rank(q, actionIndex, (hit) => hit.prepared).map((hit) => hit.entry.action) : actions;
     return [
-      { key: "projects", name: "Clients and projects", entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
-      { key: "items", name: "Tasks and notes", entries: itemHits.map((item): Entry => ({ kind: "item", id: `item-${item.id}`, item })) },
-      { key: "mail", name: "Mail", entries: mailRows.slice(0, LIMIT.mail).map((row): Entry => ({ kind: "mail", id: `mail-${row.accountId}-${row.id}`, row })) },
-      { key: "actions", name: "Actions", entries: actionHits },
+      { key: "projects", name: t("palette.clientsProjects"), entries: nodeHits.map((node): Entry => ({ kind: "node", id: `node-${node.id}`, node })) },
+      { key: "items", name: t("palette.tasksNotes"), entries: itemHits.map((item): Entry => ({ kind: "item", id: `item-${item.id}`, item })) },
+      { key: "mail", name: t("palette.mail"), entries: mailRows.slice(0, LIMIT.mail).map((row): Entry => ({ kind: "mail", id: `mail-${row.accountId}-${row.id}`, row })) },
+      { key: "actions", name: t("palette.actions"), entries: actionHits },
     ].filter((group) => group.entries.length > 0);
-  }, [query, tops, nodeIndex, itemIndex, actionIndex, actions, mailRows]);
+  }, [query, tops, nodeIndex, itemIndex, actionIndex, actions, mailRows, t]);
 
   const flat = groups.flatMap((group) => group.entries);
   const current = activeId === null ? (touch && !query.trim() ? null : flat[0]) : (flat.find((entry) => entry.id === activeId) ?? null);
@@ -223,19 +229,19 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
   const treeFailed = !treeRead && treeError !== null;
   const nothing = flat.length === 0 && accountsSearching === 0;
   const note = treeFailed
-    ? `Clients, projects, tasks and mail could not be loaded: ${treeError.replace(/\.+$/, "")}. Actions still work; open this again to retry.`
+    ? t("palette.loadFailed", { reason: treeError.replace(/\.+$/, "") })
     : searching && (items === null || mailAccounts === null)
-      ? "Loading tasks and notes…"
+      ? t("palette.loadingTasks")
       : nothing && itemsFailed
-        ? `Some tasks and notes could not be loaded, and nothing else matches “${query.trim()}”.`
+        ? t("palette.someNotLoadedNothing", { query: query.trim() })
         : nothing && mailNow.failures.length > 0
-          ? `Nothing matches “${query.trim()}” in what could be searched.`
+          ? t("palette.nothingInSearched", { query: query.trim() })
           : nothing
-            ? `Nothing matches “${query.trim()}”. Try fewer letters or another word.`
+            ? t("palette.nothingMatches", { query: query.trim() })
             : itemsFailed
-              ? "Some tasks and notes could not be loaded; projects and actions still work."
+              ? t("palette.someNotLoaded")
               : accountsSearching > 0
-                ? `Searching the mail of ${count(accountsSearching, "account", "accounts")}…`
+                ? t("palette.searchingMail", { what: counted(accountsSearching, "counted.account", "counted.accounts") })
                 : "";
   const noteFailed = treeFailed || itemsFailed;
   return (
@@ -252,8 +258,8 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
           aria-controls={flat.length > 0 ? "palette-list" : undefined}
           aria-autocomplete="list"
           aria-activedescendant={current ? `palette-${current.id}` : undefined}
-          aria-label={NAME}
-          placeholder={narrow ? SHORT_NAME : NAME}
+          aria-label={t("palette.name")}
+          placeholder={narrow ? t("palette.shortName") : t("palette.name")}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -263,7 +269,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
         />
       </div>
       {flat.length > 0 && (
-        <div className="palette-list" id="palette-list" role="listbox" aria-label="Results" ref={list}>
+        <div className="palette-list" id="palette-list" role="listbox" aria-label={t("palette.results")} ref={list}>
           {groups.map((group) => (
             <div key={group.key} role="group" aria-labelledby={`palette-group-${group.key}`}>
               <div id={`palette-group-${group.key}`} role="presentation" className="palette-group-label">
@@ -274,6 +280,7 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
                   key={entry.id}
                   id={`palette-${entry.id}`}
                   role="option"
+                  aria-label={entry.kind === "action" ? entry.name ?? entry.label : undefined}
                   aria-selected={entry.id === current?.id}
                   data-highlighted={entry.id === current?.id ? "" : undefined}
                   className="option palette-option"
@@ -291,23 +298,23 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
         {note}
       </p>
       <p className="sr-only" role="status">
-        {searching && !note && flat.length > 0 ? `${count(flat.length, "result", "results")} for “${words}”` : ""}
+        {searching && !note && flat.length > 0 ? t("palette.resultsFor", { what: counted(flat.length, "counted.result", "counted.results"), query: words }) : ""}
       </p>
       {mailNow.failures.map((failure) => (
         <p key={failure.accountId} className="palette-note t-help" data-mail-failure>
-          {`Not searched: ${mailFailureText(failure)}`}
+          {t("palette.notSearched", { what: mailFailureText(failure) })}
         </p>
       ))}
       <p className="palette-foot t-meta">
         <span className="palette-keys">
           <kbd className="kbd">↑</kbd>
-          <kbd className="kbd">↓</kbd> Move
+          <kbd className="kbd">↓</kbd> {t("palette.move")}
         </span>
         <span className="palette-keys">
-          <kbd className="kbd">↵</kbd> Open
+          <kbd className="kbd">↵</kbd> {t("palette.open")}
         </span>
         <span className="palette-keys">
-          <kbd className="kbd">Esc</kbd> Close
+          <kbd className="kbd">Esc</kbd> {t("palette.close")}
         </span>
       </p>
     </div>
@@ -315,13 +322,14 @@ function PaletteBody({ dialog, onClose }: { dialog: RefObject<HTMLDialogElement 
 }
 
 function EntryView({ entry }: { entry: Entry }) {
+  const { t } = useStrings();
   if (entry.kind === "node") {
     return (
       <>
         <span className="palette-icon" data-color={entry.node.color ?? undefined} aria-hidden="true">
           <span className="palette-dot" />
         </span>
-        <span className="pill">{KIND_NAMES[entry.node.kind]}</span>
+        <span className="pill">{t(KIND_NAMES[entry.node.kind])}</span>
         <span className="stack palette-text">
           <span className="t-name">{entry.node.name}</span>
           {entry.node.path !== entry.node.name && <span className="t-meta">{entry.node.path.slice(0, entry.node.path.lastIndexOf(" / "))}</span>}
@@ -337,7 +345,7 @@ function EntryView({ entry }: { entry: Entry }) {
           {item.type === "task" ? <TasksIcon /> : item.type === "decision" ? <DecisionIcon /> : <NoteIcon />}
         </span>
         <span className="pill" data-tone={item.status === "done" ? undefined : "accent"}>
-          {item.status === "done" ? "Done" : TYPE_NAMES[item.type]}
+          {item.status === "done" ? t("palette.done") : typeName(item.type)}
         </span>
         <span className="stack palette-text">
           <span className="t-value">{inlinePlain(item.title)}</span>
@@ -352,7 +360,7 @@ function EntryView({ entry }: { entry: Entry }) {
         <span className="palette-icon" aria-hidden="true">
           <MailIcon />
         </span>
-        <span className="pill">Mail</span>
+        <span className="pill">{t("palette.mail")}</span>
         <span className="stack palette-text">
           <span className="t-value">{subjectOf(entry.row)}</span>
           <span className="t-meta">{`${entry.row.from.name ?? entry.row.from.email} · ${entry.row.accountEmail}`}</span>
@@ -366,7 +374,7 @@ function EntryView({ entry }: { entry: Entry }) {
         <NextIcon />
       </span>
       <span className="pill" data-tone="info">
-        Action
+        {t("palette.action")}
       </span>
       <span className="t-value">{entry.label}</span>
     </>

@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore, ViewTransition } from "react
 import { Menu } from "@/components/ui/menu";
 import { firstWeekday, longDay, today } from "@/lib/dates";
 import { ASSISTANT_NAME } from "@/lib/product";
+import { useStrings } from "@/lib/strings";
 import {
   ActivityBoxContent,
   allTasks,
@@ -42,8 +43,6 @@ import { useChatScope, useWorkspace, type Person } from "./workspace";
 
 const OVERVIEW_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes", "activity"];
 
-const NAMES: Record<string, string> = { tasks: "Tasks", calendar: "Calendar", mail: "Mail", no_date: "No date", activity: "Activity", notes: "Notes" };
-
 const noSubscription = () => () => {};
 
 export function Overview({ saved, settled = false }: { saved: BoardLayout | null; settled?: boolean }) {
@@ -56,11 +55,12 @@ export function Overview({ saved, settled = false }: { saved: BoardLayout | null
 }
 
 function FirstUse({ person }: { person: Person }) {
+  const { t } = useStrings();
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-first-use" data-overview data-first-use>
-        <PageHeader title="Overview" count={mounted ? longDay(today()) : <span className="page-count-wait" aria-hidden="true" />} />
+        <PageHeader title={t("overview.title")} count={mounted ? longDay(today()) : <span className="page-count-wait" aria-hidden="true" />} />
         <Welcome person={person} />
       </div>
     </ViewTransition>
@@ -68,6 +68,8 @@ function FirstUse({ person }: { person: Person }) {
 }
 
 function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | null; settled: boolean }) {
+  const { t } = useStrings();
+  const NAMES: Record<string, string> = { tasks: t("box.tasks"), calendar: t("box.calendar"), mail: t("box.mail"), no_date: t("box.noDate"), activity: t("box.activity"), notes: t("box.notes") };
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree } = useWorkspace();
   const settled = useSyncExternalStore(noSubscription, settledInBrowser, () => fromServer);
@@ -112,23 +114,23 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
         tasks: {
           id: "tasks",
           title: NAMES.tasks,
-          purpose: "Overdue, today and the days ahead",
+          purpose: t("box.tasksPurpose"),
           count: tasksCountLabel(tasks.data),
           action: (
-            <HeadLink href={tasksHref} name="Open all tasks">
-              Open
+            <HeadLink href={tasksHref} name={t("box.openAllTasks")}>
+              {t("common.open")}
             </HeadLink>
           ),
-          menu: [{ kind: "action", label: "Go to Tasks", onSelect: () => router.push(tasksHref) }],
+          menu: [{ kind: "action", label: t("box.goToTasks"), onSelect: () => router.push(tasksHref) }],
           content: <TasksBoxContent read={tasks} now={now} place={place} placeId={placeId} showPlace layout="list" allHref={tasksHref} />,
         },
         calendar: {
           id: "calendar",
           title: NAMES.calendar,
-          purpose: "This week in your connected calendars",
+          purpose: t("box.calendarPurposeOverview"),
           action: (
-            <HeadLink href={calendarHref} name="Open the calendar">
-              Open
+            <HeadLink href={calendarHref} name={t("box.openCalendar")}>
+              {t("common.open")}
             </HeadLink>
           ),
           content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(tasks.data)} calendarHref={calendarHref} />,
@@ -136,11 +138,11 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
         mail: {
           id: "mail",
           title: NAMES.mail,
-          purpose: "What may answer your tasks, then what is unread",
+          purpose: t("box.mailPurposeOverview"),
           count: mailCount,
           action: (
-            <HeadLink href="/app/mail" name="Open all mail">
-              Open
+            <HeadLink href="/app/mail" name={t("box.openAllMail")}>
+              {t("common.open")}
             </HeadLink>
           ),
           content: (
@@ -152,14 +154,14 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
               place={place}
               connectHref="/app/settings#accounts-settings"
               connect={<ConnectOffer way={connectWay} quiet />}
-              connectText={connectWords(connectWay, "its mail")}
+              connectText={connectWords(connectWay, t("connect.itsMail"))}
             />
           ),
         },
         no_date: {
           id: "no_date",
           title: NAMES.no_date,
-          purpose: "Tasks you can do whenever",
+          purpose: t("box.noDatePurpose"),
           surface: "rest",
           count: noDateCount(tasks.data),
           action: noDateAdd.trigger,
@@ -169,14 +171,14 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
         activity: {
           id: "activity",
           title: NAMES.activity,
-          purpose: `What ${ASSISTANT_NAME} and your coding agents did`,
+          purpose: t("box.activityPurpose", { assistant: ASSISTANT_NAME }),
           surface: "rest",
           content: <ActivityBoxContent place={place} />,
         },
         notes: {
           id: "notes",
-          title: place.kind === "node" ? NAMES.notes : "Notes in General",
-          purpose: "What to keep in view, apart from the tasks",
+          title: place.kind === "node" ? NAMES.notes : t("box.notesGeneral"),
+          purpose: t("box.notesPurpose"),
           surface: "rest",
           count: notesCount(notes.data?.total),
           action: noteAdd.trigger,
@@ -190,7 +192,7 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-boxes" data-overview data-today={now ?? undefined} data-deciding={deciding || undefined}>
         <PageHeader
-          title="Overview"
+          title={t("overview.title")}
           count={now ? longDay(now) : <span className="page-count-wait" aria-hidden="true" />}
           filters={
             <>
@@ -200,10 +202,10 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
           }
           filtersSet={(place.kind === "all" ? 0 : 1) + (account ? 1 : 0)}
           chat
-          more={<Menu label="More" about="for the Overview" entries={[...customizeEntries(board, NAMES), { kind: "separator" }, { kind: "action", label: "Show the guide", onSelect: guide.start }]} />}
+          more={<Menu label={t("common.more")} about={t("board.moreFor", { name: t("overview.title") })} entries={[...customizeEntries(board, NAMES), { kind: "separator" }, { kind: "action", label: t("box.showGuide"), onSelect: guide.start }]} />}
         />
         <ReplyStrip read={replies} now={now} />
-        {now ? <BoxBoard board={board} boxes={boxes} label="The Overview's boxes" hold={deciding} /> : <BoardShell />}
+        {now ? <BoxBoard board={board} boxes={boxes} label={t("overview.boxesLabel")} hold={deciding} /> : <BoardShell />}
         {guide.layer}
       </div>
     </ViewTransition>
@@ -211,10 +213,11 @@ function OverviewBoard({ saved, settled: fromServer }: { saved: BoardLayout | nu
 }
 
 export function BoardShell() {
+  const { t } = useStrings();
   return (
     <div className="boxes" aria-busy="true">
       <p className="boxes-wait t-meta" role="status">
-        Reading your workspace…
+        {t("overview.reading")}
       </p>
     </div>
   );

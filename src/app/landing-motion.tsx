@@ -60,7 +60,7 @@ function subscribeMotion(listener: () => void): () => void {
 const reducedNow = () => window.matchMedia(REDUCED).matches;
 const noSubscription = () => () => {};
 
-export function Scene({ frames, still, label, glyphs, className, children }: { frames: readonly Frame[]; still: number; label: string; glyphs: SceneGlyphs; className?: string; children: ReactNode }) {
+export function Scene({ frames, still, label, glyphs, className, children, labels }: { frames: readonly Frame[]; still: number; label: string; glyphs: SceneGlyphs; className?: string; children: ReactNode; labels?: { pause: string; play: string } }) {
   const root = useRef<HTMLDivElement>(null);
   const art = useRef<HTMLDivElement>(null);
   const reduced = useSyncExternalStore(subscribeMotion, reducedNow, () => true);
@@ -122,7 +122,7 @@ export function Scene({ frames, still, label, glyphs, className, children }: { f
 
   const flags: Record<string, string> = {};
   for (const flag of frames[reduced ? still : step].set) flags[`data-${flag}`] = "";
-  const action = paused ? "Play the animations" : "Pause the animations";
+  const action = paused ? (labels?.play ?? "Play the animations") : (labels?.pause ?? "Pause the animations");
 
   return (
     <div ref={root} className={cx("scene", className)} data-running={running ? "" : undefined} {...flags}>

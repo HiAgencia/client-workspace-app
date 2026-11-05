@@ -543,11 +543,22 @@ function CalendarBox() {
   );
 }
 
-export function LandingShot({ figures, caption }: { figures: DemoOverview; caption: string }) {
+export function LandingShot({ figures, caption, lang = "en" }: { figures: DemoOverview; caption: string; lang?: "en" | "es" }) {
   const due = figures.overdue + figures.today;
   return (
     <figure className="landing-shot enter" aria-labelledby="shot-caption" data-landing-shot>
-      <Scene frames={FRAMES} still={STILL} glyphs={GLYPHS} className="shot-scene" label="In the picture, a message from Developer Platform arrives, it shows as a possible reply for the task that waits for it, and the task is closed as approved.">
+      <Scene
+        frames={FRAMES}
+        still={STILL}
+        glyphs={GLYPHS}
+        className="shot-scene"
+        labels={lang === "es" ? { pause: "Pausar las animaciones", play: "Reproducir las animaciones" } : undefined}
+        label={
+          lang === "es"
+            ? "En la imagen, llega un mensaje de Developer Platform, se muestra como posible respuesta para la tarea que lo espera y la tarea se cierra como aprobada."
+            : "In the picture, a message from Developer Platform arrives, it shows as a possible reply for the task that waits for it, and the task is closed as approved."
+        }
+      >
         <div className="shot">
           <Sidebar due={due} unread={figures.unread} />
           <div className="shot-topbar topbar">

@@ -14,10 +14,11 @@ import { afterExit, focusAfterClose, handBack } from "@/components/ui/use-exit";
 import { addDays, instantsOf, today, type Day } from "@/lib/dates";
 import { taskPayload } from "@/lib/create-task";
 import { inlinePlain } from "@/lib/inline-links";
+import { translateNow, useStrings } from "@/lib/strings";
 import { tool, type Item } from "./client-api";
 import { dueTimeOptions, NO_TIME } from "./due-times";
 import { readEvents } from "./events-read";
-import { PRIORITIES } from "./item-parts";
+import { priorityOptions } from "./item-parts";
 import { onOpenQuickAdd, type QuickAddStart } from "./quick-add-bus";
 import { openTaskDetail, pasteLinkOver, whenLabel, whenTone } from "./task-row";
 import { menuButton, useWorkspace } from "./workspace";
@@ -61,7 +62,7 @@ function QuickAddEditor({
   start,
   onDone,
   inline = false,
-  submitLabel = "Add task",
+  submitLabel,
   draft,
   onDraft,
 }: {
@@ -72,6 +73,7 @@ function QuickAddEditor({
   draft?: string;
   onDraft?: (text: string) => void;
 }) {
+  const { t, lang } = useStrings();
   const { tree, notify, touch, saving } = useWorkspace();
   const [text, setText] = useState(draft ?? "");
   const [day, setDay] = useState<Day | null>(start.day ?? null);
@@ -103,11 +105,11 @@ function QuickAddEditor({
     void readEvents<ListedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }).then((answer) => {
       if (!live) return;
       if (!answer.ok) {
-        setProblem("The calendars could not be read. Add the task, and link the event from it.");
+        setProblem(translateNow("quick.calendarsUnread"));
         return;
       }
       setEvents(answer.events);
-      if (answer.failures.length > 0) setProblem("Some calendars could not be read. The ones that answered are in the list.");
+      if (answer.failures.length > 0) setProblem(translateNow("quick.someCalendarsUnread"));
     });
     return () => {
       live = false;
@@ -117,12 +119,12 @@ function QuickAddEditor({
   const places = useMemo(() => (tree ?? []).map((node) => ({ id: node.id, name: node.name, path: node.path })), [tree]);
   const place = placeId ? places.find((entry) => entry.id === placeId) ?? null : null;
   const colorOf = (id: string | null) => (id ? (tree?.find((node) => node.id === id)?.color ?? undefined) : undefined);
-  const placeOptions: SelectOption[] = [{ value: GENERAL, label: "General" }, ...places.map((entry) => ({ value: entry.id, label: entry.path }))];
+  const placeOptions: SelectOption[] = [{ value: GENERAL, label: t("quick.general") }, ...places.map((entry) => ({ value: entry.id, label: entry.path }))];
   const hours = time ? dueTimeOptions(time) : dueTimeOptions(null).filter((option) => option.value !== NO_TIME);
   const eventValue = eventChoice.kind === "none" ? NONE : eventChoice.kind === "new" ? NEW_EVENT : eventChoice.kind === "local" ? `local:${eventChoice.id}` : `google:${eventChoice.accountId}:${eventChoice.calendarId}:${eventChoice.id}`;
   const eventOptions: SelectOption[] = [
-    { value: NONE, label: "No event" },
-    { value: NEW_EVENT, label: "New calendar event" },
+    { value: NONE, label: t("quick.noEvent") },
+    { value: NEW_EVENT, label: t("quick.newEvent") },
     ...events.map((event) => ({ value: eventKey(event), label: event.allDay ? `${event.title}, ${event.start.slice(0, 10)}` : `${event.title}, ${event.start.slice(0, 16).replace("T", " ")}` })),
   ];
 
@@ -150,12 +152,12 @@ function QuickAddEditor({
       notes,
     });
     if (!payload.title) {
-      setProblem("Write what has to be done.");
+      setProblem(t("quick.writeWhat"));
       adding.current = false;
       return field.current?.focus();
     }
     if (eventChoice.kind === "new" && !payload.dueOn) {
-      setProblem("Choose a date for the calendar event.");
+      setProblem(t("quick.chooseDate"));
       adding.current = false;
       return field.current?.focus();
     }
@@ -174,18 +176,18 @@ function QuickAddEditor({
       });
       if (answer.ok) trackTaskCreated();
       if (!answer.ok) {
-        setProblem(`The task could not be added: ${answer.message}`);
+        setProblem(t("quick.addFailed", { message: answer.message }));
         return;
       }
       const id = answer.item.id;
       const missed: string[] = [];
       for (const line of payload.subtasks) {
         const child = await tool("create_task", { parent: id, title: line });
-        if (!child.ok) missed.push("A subtask");
+        if (!child.ok) missed.push(t("quick.aSubtask"));
       }
       for (const line of payload.notesToAdd) {
         const note = await tool("add_note", { parent: id, text: line });
-        if (!note.ok) missed.push("A note");
+        if (!note.ok) missed.push(t("quick.aNote"));
       }
       if (eventChoice.kind === "new") {
         const made = await tool<{ event: { id: string } }>("create_event", {
@@ -193,18 +195,18 @@ function QuickAddEditor({
           title: inlinePlain(payload.title),
           ...eventSpan(payload.dueOn ?? today(), payload.dueTime ?? null),
         });
-        if (!made.ok) missed.push("The calendar event");
+        if (!made.ok) missed.push(t("quick.theCalendarEvent"));
         else {
           createdEvent = made.event.id;
           const linked = await tool("link_task_event", { task: id, event: made.event.id });
           if (!linked.ok) {
             await tool("delete_event", { id: made.event.id });
             createdEvent = null;
-            missed.push("The calendar event");
+            missed.push(t("quick.theCalendarEvent"));
           }
         }
       } else if (eventChoice.kind === "local") {
-        if (!(await tool("link_task_event", { task: id, event: eventChoice.id })).ok) missed.push("The calendar event");
+        if (!(await tool("link_task_event", { task: id, event: eventChoice.id })).ok) missed.push(t("quick.theCalendarEvent"));
       } else if (eventChoice.kind === "google") {
         const linked = await tool("link_task_event", {
           task: id,
@@ -212,16 +214,16 @@ function QuickAddEditor({
           calendar: eventChoice.calendarId,
           googleEvent: eventChoice.id,
         });
-        if (!linked.ok) missed.push("The calendar event");
+        if (!linked.ok) missed.push(t("quick.theCalendarEvent"));
       }
       touch();
-      const where = place?.path ?? "General";
+      const where = place?.path ?? t("quick.general");
       const failed = [...new Set(missed)].map((item) => item.charAt(0).toLowerCase() + item.slice(1));
-      const missedText = failed.join(" and ");
+      const missedText = failed.join(t("quick.and"));
       notify({
         text: failed.length
-          ? `Added “${inlinePlain(payload.title)}” in ${where}. ${missedText.charAt(0).toUpperCase()}${missedText.slice(1)} could not be added: it is open, add it there.`
-          : `Added “${inlinePlain(payload.title)}” in ${where}.`,
+          ? t("quick.addedInMissed", { title: inlinePlain(payload.title), where, missed: `${missedText.charAt(0).toUpperCase()}${missedText.slice(1)}` })
+          : t("quick.addedIn", { title: inlinePlain(payload.title), where }),
         tone: failed.length ? "error" : "status",
         undo: () =>
           void saving(
@@ -263,7 +265,7 @@ function QuickAddEditor({
     <div className="qa" data-inline={inline || undefined}>
       <div className="qa-head">
         <label className="t-label" htmlFor={fieldId}>
-          Task
+          {t("quick.task")}
         </label>
         <TextArea
           ref={field}
@@ -271,8 +273,8 @@ function QuickAddEditor({
           className="qa-title"
           rows={2}
           autoFocus
-          lang="en"
-          placeholder="Call the printer"
+          lang={lang}
+          placeholder={t("quick.placeholder")}
           value={text}
           onChange={(event) => {
             setText(event.target.value);
@@ -288,15 +290,15 @@ function QuickAddEditor({
           }}
         />
       </div>
-      <div className="qa-chips" role="group" aria-label="Place, date and priority">
+      <div className="qa-chips" role="group" aria-label={t("quick.placeDatePriority")}>
         <span className="qa-chip task-prop" data-prop="date" data-set={day ? "" : undefined} data-unset={day ? undefined : ""} data-when={day ? whenTone(day, now) : undefined}>
           {time ? <TimeIcon className="task-prop-icon" /> : <DateIcon className="task-prop-icon" />}
-          <DatePicker look="chip" label="Date" value={day} display={whenLabel(day, null, now)} onChange={(next) => { setDay(next); if (!next) setTime(null); }} />
+          <DatePicker look="chip" label={t("quick.date")} value={day} display={whenLabel(day, null, now)} onChange={(next) => { setDay(next); if (!next) setTime(null); }} />
         </span>
         {day && (
           <span className="qa-chip task-prop" data-prop="time" data-set={time ? "" : undefined} data-unset={time ? undefined : ""}>
             <TimeIcon className="task-prop-icon" />
-            <Select look="chip" label="Time" value={time} placeholder="Add time" options={hours} onChange={(value) => setTime(value === NO_TIME ? null : value)} />
+            <Select look="chip" label={t("quick.time")} value={time} placeholder={t("quick.addTime")} options={hours} onChange={(value) => setTime(value === NO_TIME ? null : value)} />
           </span>
         )}
         <span className="qa-chip task-prop" data-prop="place" data-set="" data-color={colorOf(placeId)}>
@@ -305,24 +307,24 @@ function QuickAddEditor({
           ) : (
             <GeneralIcon className="task-prop-icon" />
           )}
-          <Select look="chip" label="Client or project" value={placeId ?? GENERAL} options={placeOptions} onChange={(value) => setPlaceId(value === GENERAL ? null : value)} />
+          <Select look="chip" label={t("quick.clientOrProject")} value={placeId ?? GENERAL} options={placeOptions} onChange={(value) => setPlaceId(value === GENERAL ? null : value)} />
         </span>
         <span className="qa-chip task-prop" data-prop="priority" data-set="" data-priority={priority}>
           <PriorityIcon className="task-prop-icon" />
-          <Select look="chip" label="Priority" value={String(priority)} options={PRIORITIES} onChange={(value) => setPriority(Number(value))} />
+          <Select look="chip" label={t("quick.priority")} value={String(priority)} options={priorityOptions()} onChange={(value) => setPriority(Number(value))} />
         </span>
         <span className="qa-chip task-prop" data-prop="event" data-set={eventChoice.kind === "none" ? undefined : ""} data-unset={eventChoice.kind === "none" ? "" : undefined}>
           <EventIcon className="task-prop-icon" />
-          <Select look="chip" label="Calendar event" value={eventValue} options={eventOptions} onChange={pickEvent} />
+          <Select look="chip" label={t("quick.calendarEvent")} value={eventValue} options={eventOptions} onChange={pickEvent} />
         </span>
       </div>
       <div className="qa-more">
         <label className="t-label" htmlFor={descriptionId}>
-          Description
+          {t("quick.description")}
         </label>
-        <TextArea id={descriptionId} rows={3} lang="en" placeholder="Add a description" value={description} onChange={(event) => setDescription(event.target.value)} />
-        <LineList label="Subtasks" addLabel="Add subtask" lines={subtasks} onChange={setSubtasks} />
-        <LineList label="Notes" addLabel="Add note" lines={notes} onChange={setNotes} />
+        <TextArea id={descriptionId} rows={3} lang={lang} placeholder={t("quick.addDescription")} value={description} onChange={(event) => setDescription(event.target.value)} />
+        <LineList label={t("quick.subtasks")} addLabel={t("quick.addSubtask")} placeholder={t("quick.subtaskPlaceholder")} lines={subtasks} onChange={setSubtasks} />
+        <LineList label={t("quick.notes")} addLabel={t("quick.addNote")} placeholder={t("quick.notePlaceholder")} lines={notes} onChange={setNotes} />
       </div>
       {problem && (
         <p className="inline-note qa-note" data-tone="alert" role="alert">
@@ -330,13 +332,13 @@ function QuickAddEditor({
         </p>
       )}
       <div className="qa-foot">
-        <p className="t-meta qa-hint">The task opens when you add it, in the place and on the date you set.</p>
+        <p className="t-meta qa-hint">{t("quick.hint")}</p>
         <div className="qa-actions">
           <Button size="sm" onClick={() => onDone("discard")}>
-            Cancel
+            {t("quick.cancel")}
           </Button>
           <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !text.trim()} aria-keyshortcuts="Enter">
-            <span className="btn-label">{busy ? "Adding…" : submitLabel}</span>
+            <span className="btn-label">{busy ? t("quick.adding") : submitLabel ?? t("quick.addTask")}</span>
             <kbd className="kbd" aria-hidden="true">
               <EnterKeyIcon />
             </kbd>
@@ -347,7 +349,8 @@ function QuickAddEditor({
   );
 }
 
-function LineList({ label, addLabel, lines, onChange }: { label: string; addLabel: string; lines: string[]; onChange: (lines: string[]) => void }) {
+function LineList({ label, addLabel, placeholder, lines, onChange }: { label: string; addLabel: string; placeholder: string; lines: string[]; onChange: (lines: string[]) => void }) {
+  const { t, lang } = useStrings();
   const [draft, setDraft] = useState("");
   const id = useId();
   function push() {
@@ -366,8 +369,8 @@ function LineList({ label, addLabel, lines, onChange }: { label: string; addLabe
           {lines.map((line, index) => (
             <li key={`${index}-${line}`}>
               <span className="t-body">{line}</span>
-              <button type="button" className="task-add" onClick={() => onChange(lines.filter((_, at) => at !== index))} aria-label={`Remove ${line}`}>
-                Remove
+              <button type="button" className="task-add" onClick={() => onChange(lines.filter((_, at) => at !== index))} aria-label={t("quick.remove", { line })}>
+                {t("quick.removeWord")}
               </button>
             </li>
           ))}
@@ -377,8 +380,8 @@ function LineList({ label, addLabel, lines, onChange }: { label: string; addLabe
         <TextArea
           id={id}
           rows={1}
-          lang="en"
-          placeholder={addLabel === "Add subtask" ? "Confirm the stock" : "Ask for the proof"}
+          lang={lang}
+          placeholder={placeholder}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -397,6 +400,7 @@ function LineList({ label, addLabel, lines, onChange }: { label: string; addLabe
 }
 
 export function QuickAddDialog() {
+  const { t } = useStrings();
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const popupOpen = useRef(false);
@@ -427,7 +431,7 @@ export function QuickAddDialog() {
     <dialog
       ref={dialog}
       className="dialog qa-dialog"
-      aria-label="Add task"
+      aria-label={t("quick.addTask")}
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") popupOpen.current = Boolean(dialog.current?.querySelector("[data-popup-open]"));
       }}
@@ -473,7 +477,9 @@ export function QuickAddDialog() {
   );
 }
 
-export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }: { day?: Day | null; placeId?: string | null; parentId?: string | null; label?: string }) {
+export function useQuickAddInline({ day, placeId, parentId, label }: { day?: Day | null; placeId?: string | null; parentId?: string | null; label?: string }) {
+  const { t } = useStrings();
+  const shownLabel = label ?? t("quick.addTask");
   const [open, setOpen] = useState(false);
   const [round, setRound] = useState(0);
   const button = useRef<HTMLButtonElement>(null);
@@ -492,7 +498,7 @@ export function useQuickAddInline({ day, placeId, parentId, label = "Add task" }
       }}
     >
       <AddIcon />
-      <span className="btn-label">{label}</span>
+      <span className="btn-label">{shownLabel}</span>
     </Button>
   );
   const editor = (

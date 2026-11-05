@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
 import { PRODUCT_NAME } from "@/lib/product";
+import { pageMetadata } from "@/lib/seo";
 import { LegalPage } from "../legal-page";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  lang: "en",
+  path: "/cookies",
   title: "Cookies",
   description: `The cookies and the saved choices ${PRODUCT_NAME} uses, and the ones it does not.`,
-};
+});
 
 export default function CookiesPage() {
   return (
     <LegalPage
+      path="/cookies"
       title="Cookies"
       lede={`${PRODUCT_NAME} does not set advertising or analytics cookies. What it stores is what the workspace needs to keep you signed in and to remember a choice you made.`}
     >
@@ -22,7 +26,7 @@ export default function CookiesPage() {
       <section>
         <h2 className="t-group">Choices kept on this browser</h2>
         <p className="t-body">
-          The theme, whether the guide has been seen, and the last place you opened are kept in this browser’s storage. They are not sent to an advertising network. Clearing the browser’s data for this site removes them, and the next visit asks again where it has to.
+          The theme, the language chosen on the public pages, the dismissal of the offer of the Spanish version, whether the guide has been seen, and the last place you opened are kept in this browser’s storage. They are not sent to an advertising network. Clearing the browser’s data for this site removes them, and the next visit asks again where it has to.
         </p>
       </section>
       <section>

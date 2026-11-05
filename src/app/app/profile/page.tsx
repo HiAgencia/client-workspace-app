@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { SignOutIcon, SwitchAccountIcon } from "@/components/ui/icons";
 import { NAME_MAX, nameToStore } from "@/lib/session-person";
+import { translateNow, useStrings } from "@/lib/strings";
 import { browserClient } from "@/lib/supabase/browser";
 import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import { BoxWait } from "../boxes";
@@ -17,15 +18,16 @@ import "../../styles/settings.css";
 const SAVE_AFTER_MS = 700;
 
 export default function ProfilePage() {
+  const { t } = useStrings();
   const { person } = useWorkspace();
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-settings page-profile">
-        <PageHeader title="Profile" />
+        <PageHeader title={t("profile.title")} />
         {person === null ? (
-          <section className="box settings-box" aria-label="Your profile" data-shown="">
+          <section className="box settings-box" aria-label={t("profile.your")} data-shown="">
             <div className="box-body">
-              <BoxWait what="Reading your profile…" rows={2} />
+              <BoxWait what={t("profile.reading")} rows={2} />
             </div>
           </section>
         ) : person.isAnonymous ? (
@@ -39,6 +41,7 @@ export default function ProfilePage() {
 }
 
 function ProfileBox({ person }: { person: Person }) {
+  const { t } = useStrings();
   const { config, saving, signOut, switchAccount } = useWorkspace();
   const [draft, setDraft] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
@@ -54,7 +57,7 @@ function ProfileBox({ person }: { person: Person }) {
     if (next === kept) return;
     const write = browserClient(config)
       .auth.updateUser({ data: { display_name: next } })
-      .then(({ error }) => (error ? { ok: false, message: `The name could not be saved: ${error.message}` } : { ok: true }));
+      .then(({ error }) => (error ? { ok: false, message: translateNow("profile.nameNotSaved", { message: error.message }) } : { ok: true }));
     await saving(write, { reread: false });
   }
 
@@ -72,14 +75,14 @@ function ProfileBox({ person }: { person: Person }) {
       <div className="box-body">
         <div className="profile-field">
           <label htmlFor="profile-name" className="t-label">
-            Name
+            {t("profile.name")}
           </label>
           <Field
             id="profile-name"
             name="name"
             autoComplete="name"
             maxLength={NAME_MAX}
-            placeholder={person.googleName ?? "Your name"}
+            placeholder={person.googleName ?? t("profile.yourName")}
             aria-describedby="profile-name-help"
             value={shown}
             onFocus={() => setDraft(person.name ?? "")}
@@ -107,13 +110,13 @@ function ProfileBox({ person }: { person: Person }) {
             }}
           />
           <p id="profile-name-help" className="t-help">
-            {person.googleName ? "How the workspace names you. Leave it empty to use the name on your Google account." : "How the workspace names you."}
+            {person.googleName ? t("profile.helpGoogle") : t("profile.help")}
           </p>
         </div>
         <div className="settings-line profile-session">
           <p className="t-help profile-signed">
             <GoogleMark />
-            <span>Signed in with Google. Each Google account has a workspace of its own.</span>
+            <span>{t("profile.signed")}</span>
           </p>
           <div className="profile-actions">
             <Button
@@ -126,11 +129,11 @@ function ProfileBox({ person }: { person: Person }) {
               data-switch-account
             >
               <SwitchAccountIcon />
-              <span className="btn-label">Switch account</span>
+              <span className="btn-label">{t("profile.switch")}</span>
             </Button>
             <Button onClick={signOut} disabled={switching} data-sign-out>
               <SignOutIcon />
-              <span className="btn-label">Sign out</span>
+              <span className="btn-label">{t("nav.signOut")}</span>
             </Button>
           </div>
         </div>
@@ -140,23 +143,24 @@ function ProfileBox({ person }: { person: Person }) {
 }
 
 function DemoProfile() {
+  const { t } = useStrings();
   const { config, signOut } = useWorkspace();
   const [signing, setSigning] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   return (
     <section className="box settings-box profile-box" aria-labelledby="profile-title" data-shown="" data-profile="demo">
       <header className="box-head profile-head">
-        <Avatar className="profile-avatar" src={null} name="Demo session" email={null} />
+        <Avatar className="profile-avatar" src={null} name={t("nav.demoSession")} email={null} />
         <div className="profile-who">
           <h2 id="profile-title" className="t-title box-title" tabIndex={-1}>
-            Demo session
+            {t("nav.demoSession")}
           </h2>
-          <p className="t-meta profile-email">Sample clients and projects</p>
+          <p className="t-meta profile-email">{t("profile.sample")}</p>
         </div>
       </header>
       <div className="box-body">
         <div className="settings-line profile-session">
-          <p className="t-help">The demo has no profile. Sign in with Google to keep a workspace of your own.</p>
+          <p className="t-help">{t("profile.demoText")}</p>
           <div className="profile-actions">
             <Button
               onClick={() => {
@@ -173,17 +177,17 @@ function DemoProfile() {
               data-sign-in
             >
               <GoogleMark />
-              <span className="btn-label">Sign in with Google</span>
+              <span className="btn-label">{t("profile.signInGoogle")}</span>
             </Button>
             <Button onClick={signOut} disabled={signing} data-sign-out>
               <SignOutIcon />
-              <span className="btn-label">Sign out</span>
+              <span className="btn-label">{t("nav.signOut")}</span>
             </Button>
           </div>
         </div>
         {failed && (
           <p role="alert" className="inline-note" data-tone="alert">
-            Google sign-in is not available: {failed}
+            {t("profile.signInUnavailable", { message: failed })}
           </p>
         )}
       </div>

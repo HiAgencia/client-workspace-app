@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { buttonClass } from "./button";
 import { cx } from "@/lib/utils";
 import { MoreIcon, type Icon } from "./icons";
+import { useStrings } from "@/lib/strings";
 import { usePopupContainer } from "./popup-layer";
 import "@/app/styles/task.css";
 
@@ -27,8 +28,9 @@ type MenuProps = {
 };
 
 export function Menu({ label, about, name, entries, variant = "quiet", className, onOpenChange, finalFocus }: MenuProps) {
+  const { t } = useStrings();
   const container = usePopupContainer();
-  const dots = label === "More";
+  const dots = label === "More" || label === t("common.more");
   return (
     <Base.Root modal={false} onOpenChange={(open) => onOpenChange?.(open)}>
       <Base.Trigger

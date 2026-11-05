@@ -7,6 +7,7 @@ import { ChatIcon, CloseIcon, FilterIcon } from "@/components/ui/icons";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { usePiece } from "@/components/ui/use-piece";
 import { PRODUCT_NAME } from "@/lib/product";
+import { useStrings } from "@/lib/strings";
 import { cx } from "@/lib/utils";
 import { useWorkspace } from "./workspace";
 
@@ -29,6 +30,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0, layout, views, chat, more, titleProps, className }: PageHeaderProps) {
+  const { t } = useStrings();
   const hasTools = Boolean(filters || layout || views || chat || more);
   const heading = useRef<HTMLHeadingElement>(null);
   const sheeted = useSyncExternalStore(subscribeSheeted, () => window.matchMedia(SHEETED_QUERY).matches, () => false);
@@ -55,7 +57,7 @@ export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0,
     <header className={cx("page-header", className)} data-page-header>
       <div className="page-header-text">
         {trail && trail.length > 0 && (
-          <nav aria-label="Where this page lives">
+          <nav aria-label={t("common.whereThisPageLives")}>
             <ol className="page-trail">
               {trail.map((crumb, index) => (
                 <li key={`${index}-${crumb.label}`}>
@@ -80,10 +82,10 @@ export function PageHeader({ title, mark, count, trail, filters, filtersSet = 0,
         {count !== undefined && count !== null && count !== false && <p className="page-count">{count}</p>}
       </div>
       {hasTools && (
-        <div className="page-tools" role="group" aria-label="This page's controls">
+        <div className="page-tools" role="group" aria-label={t("common.thisPageControls")}>
           {filters && !sheeted && <div className="page-filters">{filters}</div>}
           {filters && <FilterSheet set={filtersSet} sheeted={sheeted}>{filters}</FilterSheet>}
-          {layout && <ViewSwitch label="View" value={layout.value} options={LAYOUTS} onChange={(value) => layout.onChange(value as PageLayout)} />}
+          {layout && <ViewSwitch label={t("common.view")} value={layout.value} options={[{ value: "list", label: t("common.list") }, { value: "board", label: t("common.board") }]} onChange={(value) => layout.onChange(value as PageLayout)} />}
           {!layout && views && <ViewSwitch label={views.label} value={views.value} options={views.options} onChange={views.onChange} />}
           {chat && <ChatButton />}
           {more}
@@ -102,6 +104,7 @@ function subscribeSheeted(onChange: () => void) {
 }
 
 function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean; children: ReactNode }) {
+  const { t } = useStrings();
   const [open, setOpen] = useState(false);
   const [everOpened, setEverOpened] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -126,11 +129,11 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
         }}
       >
         <FilterIcon />
-        <span className="btn-label">Filter</span>
+        <span className="btn-label">{t("common.filter")}</span>
         {set > 0 && (
           <span className="pill page-filter-set" data-tone="accent">
             {set}
-            <span className="sr-only"> set</span>
+            <span className="sr-only">{t("header.filterSet")}</span>
           </span>
         )}
       </Button>
@@ -152,11 +155,11 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
           <div className="filter-sheet-in" data-cascade>
             <div className="filter-sheet-head">
               <h2 id={titleId} className="t-title">
-                Filter
+                {t("common.filter")}
               </h2>
-              <Button size="sm" variant="quiet" className="btn-icon" onClick={() => setOpen(false)} title="Close">
+              <Button size="sm" variant="quiet" className="btn-icon" onClick={() => setOpen(false)} title={t("common.close")}>
                 <CloseIcon />
-                <span className="sr-only">Close</span>
+                <span className="sr-only">{t("common.close")}</span>
               </Button>
             </div>
             {everOpened && sheeted && <div className="filter-sheet-fields">{children}</div>}
@@ -166,11 +169,6 @@ function FilterSheet({ set, sheeted, children }: { set: number; sheeted: boolean
     </>
   );
 }
-
-const LAYOUTS: Array<{ value: PageLayout; label: string }> = [
-  { value: "list", label: "List" },
-  { value: "board", label: "Board" },
-];
 
 function ViewSwitch({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
   const rail = useRef<HTMLDivElement>(null);
@@ -190,10 +188,11 @@ function ViewSwitch({ label, value, options, onChange }: { label: string; value:
 
 function ChatButton() {
   const { chat } = useWorkspace();
+  const { t } = useStrings();
   return (
     <Button aria-expanded={chat.open} aria-controls={chat.open ? "chat-panel" : undefined} data-chat-toggle onClick={() => chat.setOpen(!chat.open)}>
       <ChatIcon />
-      <span className="btn-label">Chat</span>
+      <span className="btn-label">{t("common.chat")}</span>
     </Button>
   );
 }

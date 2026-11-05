@@ -1,5 +1,5 @@
-import { count } from "@/lib/count";
 import { mailFailureText } from "@/lib/mail/failure-text";
+import { translateNow } from "@/lib/strings";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import type { Answer, TreeNode } from "./client-api";
 
@@ -154,24 +154,24 @@ export function figureOf(counts: Counted[]): MailFigure {
   return {
     unread: counts.reduce((sum, counted) => sum + (counted.unread ?? 0), 0),
     partial: failures.length > 0,
-    why: failures.length === 0 ? null : failures.length === 1 ? mailFailureText(failures[0]) : `${count(failures.length, "account is", "accounts are")} not counted in full: Mail says why.`,
-    note: failures.length === 0 ? null : `${count(failures.length, "account is", "accounts are")} not counted in full: Mail says why.`,
+    why: failures.length === 0 ? null : failures.length === 1 ? mailFailureText(failures[0]) : translateNow(failures.length === 1 ? "mailfig.notCountedOne" : "mailfig.notCountedMany", { n: failures.length }),
+    note: failures.length === 0 ? null : translateNow(failures.length === 1 ? "mailfig.notCountedOne" : "mailfig.notCountedMany", { n: failures.length }),
   };
 }
 
 export function figureText(figure: MailFigure): { shown: string; spoken: string } | null {
-  if (!figure.partial) return figure.unread > 0 ? { shown: String(figure.unread), spoken: `${figure.unread} unread` } : null;
+  if (!figure.partial) return figure.unread > 0 ? { shown: String(figure.unread), spoken: translateNow("mailfig.unreadSpoken", { n: figure.unread }) } : null;
   return figure.unread > 0
-    ? { shown: `${figure.unread}+`, spoken: `at least ${figure.unread} unread. ${figure.why}` }
-    : { shown: "Not counted", spoken: `the unread could not be counted. ${figure.why}` };
+    ? { shown: `${figure.unread}+`, spoken: translateNow("mailfig.atLeast", { n: figure.unread, why: figure.why ?? "" }) }
+    : { shown: translateNow("mailfig.notCountedShown"), spoken: translateNow("mailfig.couldNotCount", { why: figure.why ?? "" }) };
 }
 
-export const lostWords = (status: string) => (status === "revoked" ? "Access revoked: connect it again" : "Connection failed: connect it again");
+export const lostWords = (status: string) => translateNow(status === "revoked" ? "mailfig.accessRevoked" : "mailfig.connectionFailed");
 
 export function figureWords(figure: MailFigure | null): string | null {
   if (!figure) return null;
-  if (!figure.partial) return `${figure.unread} unread`;
-  return figure.unread > 0 ? `At least ${figure.unread} unread` : "Unread not counted";
+  if (!figure.partial) return translateNow("mailfig.unreadSpoken", { n: figure.unread });
+  return figure.unread > 0 ? translateNow("mailfig.atLeastWords", { n: figure.unread }) : translateNow("mailfig.unreadNotCounted");
 }
 
 export function accountsSeenFrom(tree: TreeNode[] | null, accounts: Array<{ id: string; nodeIds: string[] }>, nodeId: string | null): string[] {

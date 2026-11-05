@@ -11,6 +11,7 @@ import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
 import { AddIcon, AlertIcon, CloseIcon, CopiedIcon, MenuIcon } from "@/components/ui/icons";
 import { firstWeekday, today } from "@/lib/dates";
 import type { PublicConfig } from "@/lib/env";
+import { translateNow, useStrings, type StringKey } from "@/lib/strings";
 import { PRODUCT_NAME } from "@/lib/product";
 import { sessionPerson, type SessionPerson } from "@/lib/session-person";
 import { browserClient } from "@/lib/supabase/browser";
@@ -124,7 +125,18 @@ const noSubscription = () => () => {};
 const NO_ACCOUNTS: MailAccountRef[] = [];
 const NO_WAITING: WaitingRead[] = [];
 
+const SCREEN_KEYS: Record<string, StringKey> = {
+  "/app": "screen.overview",
+  "/app/tasks": "screen.tasks",
+  "/app/calendar": "screen.calendar",
+  "/app/mail": "screen.mail",
+  "/app/settings": "screen.settings",
+  "/app/trash": "screen.trash",
+  "/app/profile": "screen.profile",
+};
+
 export function WorkspaceShell({ config, children }: { config: PublicConfig; children: ReactNode }) {
+  const { t, lang } = useStrings();
   const [treeRead, setTreeRead] = useState<TreeRead | null>(null);
   const keptTree = useSyncExternalStore(noSubscription, keptTreeOfLoad, noTree);
   const shownTree = treeRead ?? keptTree;
@@ -308,18 +320,18 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
   const saving = useCallback(
     async (promise: Promise<{ ok: boolean; message?: string }>, { reread = true }: { reread?: boolean } = {}) => {
       clearTimeout(statusTimer.current);
-      setStatus("Saving…");
-      setLastStatus("Saving…");
+      setStatus(translateNow("workspace.saving"));
+      setLastStatus(translateNow("workspace.saving"));
       const answer = await promise;
       if (answer.ok) {
-        setStatus("Saved");
-        setLastStatus("Saved");
+        setStatus(translateNow("workspace.saved"));
+        setLastStatus(translateNow("workspace.saved"));
         statusTimer.current = setTimeout(() => setStatus(""), 2000);
         if (reread) touch();
         return true;
       }
       setStatus("");
-      notify({ text: answer.message ?? "The change could not be saved.", tone: "error" });
+      notify({ text: answer.message ?? translateNow("workspace.changeNotSaved"), tone: "error" });
       return false;
     },
     [notify, touch],
@@ -359,9 +371,10 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
 
   useEffect(() => {
     const id = pathname.match(/^\/app\/node\/([0-9a-f-]{36})/)?.[1];
-    const name = id ? tree?.find((node) => node.id === id)?.name : SCREEN_TITLES[pathname];
+    const key = SCREEN_KEYS[pathname];
+    const name = id ? tree?.find((node) => node.id === id)?.name : key ? translateNow(key) : SCREEN_TITLES[pathname];
     if (name) document.title = `${name} · ${PRODUCT_NAME}`;
-  }, [pathname, tree]);
+  }, [pathname, tree, lang]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -451,7 +464,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
         return notify({ text: answer.message, tone: "error" });
       }
       touch();
-      notify({ text: `Deleted “${item.title}”`, tone: "status", undo: () => void saving(post(`/api/items/${item.id}/restore`, {})) });
+      notify({ text: translateNow("workspace.deletedItem", { title: item.title }), tone: "status", undo: () => void saving(post(`/api/items/${item.id}/restore`, {})) });
     },
     [notify, touch, saving],
   );
@@ -469,15 +482,15 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       <EarlyTree />
       <ReadingLine />
       <a href="#content" className="skip-link btn btn-primary">
-        <span className="btn-label">Skip to content</span>
+        <span className="btn-label">{t("common.skipToContent")}</span>
       </a>
       <div className="shell" data-chat={chatColumn ? "open" : undefined} data-chat-motion={chatMotion || undefined}>
         <header className="topbar">
           <Button className="drawer-trigger btn-icon" size="sm" variant="quiet" onClick={() => setDrawerOpen(true)} aria-haspopup="dialog" aria-expanded={drawerOpen}>
             <MenuIcon />
-            <span className="sr-only">Menu</span>
+            <span className="sr-only">{t("common.menu")}</span>
           </Button>
-          <Link href="/app" className="brand" aria-label={`${PRODUCT_NAME}, Overview`}>
+          <Link href="/app" className="brand" aria-label={t("workspace.overviewBrand", { product: PRODUCT_NAME })}>
             <BrandMark className="brand-mark" />
             <span className="brand-name">{PRODUCT_NAME}</span>
           </Link>
@@ -496,7 +509,7 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
       </div>
       <Button variant="primary" className="add-task-float" data-add-task-float onClick={() => startTask(currentNode)} aria-keyshortcuts="Q">
         <AddIcon />
-        <span className="btn-label">Add task</span>
+        <span className="btn-label">{t("common.addTask")}</span>
       </Button>
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onSignOut={leave} />
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -544,12 +557,12 @@ export function WorkspaceShell({ config, children }: { config: PublicConfig; chi
                     dismiss();
                   }}
                 >
-                  Undo
+                  {t("common.undo")}
                 </Button>
               )}
               {notice.tone === "error" && (
                 <Button size="sm" onClick={dismiss}>
-                  Close
+                  {t("common.close")}
                 </Button>
               )}
             </div>
@@ -593,6 +606,7 @@ function showLayer(element: HTMLElement | null) {
 }
 
 function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => void; onSignOut: () => void }) {
+  const { t } = useStrings();
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = dialog.current;
@@ -617,11 +631,11 @@ function Drawer({ open, onClose, onSignOut }: { open: boolean; onClose: () => vo
       <div className="drawer-in" data-cascade>
         <div className="drawer-head">
           <h2 id="drawer-title" className="t-title">
-            Menu
+            {t("common.menu")}
           </h2>
-          <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} title="Close">
+          <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} title={t("common.close")}>
             <CloseIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("common.close")}</span>
           </Button>
         </div>
         <SideNav inDrawer onLeave={onClose} onSignOut={onSignOut} />

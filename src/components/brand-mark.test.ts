@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { iconFiles, logoFiles, manifestIconFiles, ogFile } from "../../scripts/icons.mjs";
+import { iconFiles, logoFiles, manifestIconFiles } from "../../scripts/icons.mjs";
 
 describe("the site's icons", () => {
   const drawn = iconFiles();
@@ -18,12 +18,6 @@ describe("the site's icons", () => {
       expect(written.equals(manifestDrawn[name])).toBe(true);
     },
   );
-
-  const ogDrawn = ogFile();
-  it.each(Object.keys(ogDrawn) as Array<keyof typeof ogDrawn>)("share image %s matches what the mark draws today", (name) => {
-    const written = readFileSync(new URL(`../../public/${name}`, import.meta.url));
-    expect(written.equals(ogDrawn[name])).toBe(true);
-  });
 
   const logosDrawn = logoFiles();
   it.each(Object.keys(logosDrawn) as Array<keyof typeof logosDrawn>)("logo %s matches what the mark draws today", (name) => {

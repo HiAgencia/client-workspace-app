@@ -1,6 +1,6 @@
-import { count } from "@/lib/count";
+import { countedNow, translateNow } from "@/lib/strings";
 
 export function holds(events: number, tasks: number): string {
-  if (events > 0 && tasks > 0) return `${count(events, "event", "events")} and ${count(tasks, "task", "tasks")}`;
-  return events > 0 ? count(events, "event", "events") : count(tasks, "task", "tasks");
+  if (events > 0 && tasks > 0) return translateNow("calPage.holdsJoin", { events: countedNow(events, "counted.event", "counted.events"), tasks: countedNow(tasks, "counted.task", "counted.tasks") });
+  return events > 0 ? countedNow(events, "counted.event", "counted.events") : countedNow(tasks, "counted.task", "counted.tasks");
 }

@@ -9,6 +9,7 @@ import { inlinePlain } from "@/lib/inline-links";
 import { mailFailureText } from "@/lib/mail/failure-text";
 import { repliesTally } from "@/lib/mail/replies-text";
 import { mailWhen } from "@/lib/mail/when";
+import { translateNow, useStrings } from "@/lib/strings";
 import { BoxFailed, type BoxRead } from "./boxes";
 import { subjectOf } from "./mail/subject";
 import type { TaskReplies } from "./task-replies";
@@ -20,6 +21,7 @@ function inOrder(tasks: TaskReplies[]): TaskReplies[] {
 }
 
 export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[] }>; now: Day | null }) {
+  const { t, counted } = useStrings();
   const [open, setOpen] = useState(false);
   const foldId = useId();
   const titleId = useId();
@@ -27,7 +29,6 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
   const waiting = tasks?.filter((entry) => entry.replies.length === 0 && entry.failures.length === 0).length ?? 0;
   const noneArrived = tasks !== null && tasks.length > 0 && waiting === tasks.length;
   const folded = noneArrived ? tasks : (tasks?.slice(1) ?? []);
-  const unit = (count: number) => (count === 1 ? "task" : "tasks");
   return (
     <section className="reply-strip" data-replies-strip data-stale={read.stale || undefined} aria-labelledby={titleId}>
       <div className="reply-strip-head">
@@ -35,14 +36,14 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
           <RepliesIcon />
         </span>
         <h2 id={titleId} className="t-title reply-strip-title">
-          Possible replies
+          {t("reply.possible")}
         </h2>
-        <p className="sr-only">Mail that may answer the tasks that wait for it. You decide which one does, in the task.</p>
+        <p className="sr-only">{t("reply.sr")}</p>
         {folded.length > 0 && (
           <Button variant="quiet" size="sm" className="reply-strip-more head-action" aria-expanded={open} aria-controls={foldId} onClick={() => setOpen((value) => !value)}>
             <span className="btn-label">
-              <span className="reply-more-long">{open ? "Show less" : noneArrived ? `Show the ${unit(waiting)}` : `Show ${folded.length} more ${unit(folded.length)}`}</span>
-              <span className="reply-more-short">{open ? "Show less" : noneArrived ? `${waiting} ${unit(waiting)}` : `+${folded.length} ${unit(folded.length)}`}</span>
+              <span className="reply-more-long">{open ? t("tasks.showLess") : noneArrived ? (waiting === 1 ? t("reply.showTheOne") : t("reply.showTheMany")) : folded.length === 1 ? t("reply.showMoreOne", { n: folded.length }) : t("reply.showMoreMany", { n: folded.length })}</span>
+              <span className="reply-more-short">{open ? t("tasks.showLess") : noneArrived ? counted(waiting, "counted.task", "counted.tasks") : `+${counted(folded.length, "counted.task", "counted.tasks")}`}</span>
             </span>
             <DownIcon />
           </Button>
@@ -50,10 +51,10 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
       </div>
       {tasks === null ? (
         read.error ? (
-          <BoxFailed what="The possible replies of the tasks" message={read.error} kept={false} onRetry={read.retry} />
+          <BoxFailed what={t("mail.theReplies")} message={read.error} kept={false} onRetry={read.retry} />
         ) : (
           <div className="reply-strip-wait" role="status" aria-busy="true">
-            <span className="sr-only">Loading what may answer your tasks…</span>
+            <span className="sr-only">{t("reply.loading")}</span>
             <span className="reply-strip-wait-task" aria-hidden="true">
               <span className="skeleton" />
               <span className="skeleton" />
@@ -63,12 +64,12 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
         )
       ) : tasks.length === 0 ? (
         <p className="t-help reply-strip-note" data-empty="no-waits">
-          No task waits for mail. Set what a task waits for in its details, and the mail that may answer it shows here.
+          {t("reply.noWaits")}
         </p>
       ) : noneArrived ? (
         <>
           <p className="t-help reply-strip-note" data-empty="nothing-arrived">
-            {`${waiting === 1 ? "One task waits" : `${waiting} tasks wait`} for mail, and nothing arrived for ${waiting === 1 ? "it" : "them"} yet.`}
+            {waiting === 1 ? t("reply.oneWaits") : t("reply.manyWait", { n: waiting })}
           </p>
           <Others open={open} id={foldId} tasks={folded} now={now} />
         </>
@@ -78,7 +79,7 @@ export function ReplyStrip({ read, now }: { read: BoxRead<{ tasks: TaskReplies[]
           {folded.length > 0 && <Others open={open} id={foldId} tasks={folded} now={now} />}
         </>
       )}
-      {read.data && read.error && <BoxFailed what="The possible replies of the tasks" message={read.error} kept onRetry={read.retry} />}
+      {read.data && read.error && <BoxFailed what={t("mail.theReplies")} message={read.error} kept onRetry={read.retry} />}
     </section>
   );
 }
@@ -101,7 +102,7 @@ function ReplyEntry({ entry, now }: { entry: TaskReplies; now: Day | null }) {
   const newest = entry.replies[0];
   const failure = entry.failures[0];
   const unread = entry.replies.length === 0 && failure;
-  const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? "Its mail could not be loaded" : "Nothing arrived yet";
+  const tally = entry.replies.length > 0 ? repliesTally(entry) : failure ? translateNow("reply.mailNotLoaded") : translateNow("reply.nothingArrived");
   return (
     <button type="button" className="reply-entry" data-reply-task={entry.task.id} onClick={() => openTaskDetail({ id: entry.task.id })}>
       <span className="reply-entry-task">
@@ -118,11 +119,11 @@ function ReplyEntry({ entry, now }: { entry: TaskReplies; now: Day | null }) {
         </span>
       ) : (
         <span className="reply-entry-mail">
-          <span className="reply-entry-wait">{unread ? mailFailureText(failure) : `It waits for “${entry.task.waitsFor}”`}</span>
+          <span className="reply-entry-wait">{unread ? mailFailureText(failure) : translateNow("reply.waitsFor", { what: entry.task.waitsFor ?? "" })}</span>
         </span>
       )}
       <span className="reply-entry-go">
-        Open the task
+        {translateNow("reply.openTask")}
         <NextIcon />
       </span>
     </button>

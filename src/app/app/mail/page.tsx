@@ -13,9 +13,9 @@ import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { focusAfterClose } from "@/components/ui/use-exit";
 import { useMedia } from "@/components/ui/use-media";
-import { count } from "@/lib/count";
 import { today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { useStrings, type StringKey } from "@/lib/strings";
 import { mailFailureText } from "@/lib/mail/failure-text";
 import { repliesText } from "@/lib/mail/replies-text";
 import { mailWhen } from "@/lib/mail/when";
@@ -37,11 +37,11 @@ import "../../styles/mail.css";
 
 type TasksAnswer = { groups: { overdue: { tasks: TaskData[] }; today: { tasks: TaskData[] }; upcoming: { days: Array<{ tasks: TaskData[] }> }; noDate: { tasks: TaskData[] } } };
 
-const GROUPS = [
-  { key: "forTasks", label: "For your tasks" },
-  { key: "unread", label: "Unread" },
-  { key: "earlier", label: "Already read" },
-] as const;
+const GROUPS: Array<{ key: "forTasks" | "unread" | "earlier"; label: StringKey }> = [
+  { key: "forTasks", label: "mailPage.forTasks" },
+  { key: "unread", label: "mailPage.unread" },
+  { key: "earlier", label: "mailPage.alreadyRead" },
+];
 
 const REPLIES = 20;
 const LIST_WAIT = 4000;
@@ -72,6 +72,7 @@ const noSubscription = () => () => {};
 const shortWhen = (iso: string): string => mailWhen(iso, today());
 
 function Mail() {
+  const { t, counted } = useStrings();
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const narrow = useMedia("(width < 64rem)");
   const { version, tree, mailAccounts, mailStore } = useWorkspace();
@@ -208,7 +209,7 @@ function Mail() {
   const figure = mail ? mailStore.figure(seenHere) : null;
   const unreadApart = shown.filter((row) => isUnread(row) && !seenHere.some((entry) => entry.id === row.accountId)).length;
   const unread = figure && { ...figure, unread: figure.unread + unreadApart };
-  const unreadWords = unread && !unread.partial && unread.unread === 0 ? "Nothing unread" : figureWords(unread);
+  const unreadWords = unread && !unread.partial && unread.unread === 0 ? t("mailPage.nothingUnread") : figureWords(unread);
 
   const countAgain = useCallback(
     (accountId: string) => {
@@ -252,11 +253,11 @@ function Mail() {
   const offered: { row: MailRow; label: string } | null = !revealed
     ? null
     : newestReply
-      ? { row: newestReply, label: "Open the newest possible reply" }
+      ? { row: newestReply, label: t("mailPage.openNewestReply") }
       : newestUnread
-        ? { row: newestUnread, label: "Open the newest unread" }
+        ? { row: newestUnread, label: t("mailPage.openNewestUnread") }
         : shown.length > 0
-          ? { row: newest(shown) as MailRow, label: "Open the newest message" }
+          ? { row: newest(shown) as MailRow, label: t("mailPage.openNewest") }
           : null;
   const focusSubject = useRef(false);
   const currentKey = current ? keyOf(current) : null;
@@ -301,13 +302,13 @@ function Mail() {
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page mail-page">
         <PageHeader
-          title="Mail"
+          title={t("mailPage.title")}
           count={
             noAccounts
               ? undefined
               : !mail || holding
-                ? "Loading the mail…"
-                : [unreadWords, mail.waiting > 0 ? `${count(mail.waiting, "account", "accounts")} still reading` : null].filter(Boolean).join(", ").replace(/(\d) /g, "$1\u00a0") || undefined
+                ? t("mailPage.loading")
+                : [unreadWords, mail.waiting > 0 ? t("mailPage.stillReading", { what: counted(mail.waiting, "counted.account", "counted.accounts") }) : null].filter(Boolean).join(", ").replace(/(\d) /g, "$1\u00a0") || undefined
           }
           filters={
             mail && !noAccounts ? (
@@ -323,12 +324,12 @@ function Mail() {
 
         {readError && (
           <p role="alert" className="inline-note" data-tone="alert">
-            The mail could not be loaded{mail ? " again" : ""}: {readError}.{mail ? " What shows is from the last read." : ""}
+            {mail ? t("mailPage.notLoadedAgain", { message: readError }) : t("mailPage.notLoaded", { message: readError })}
           </p>
         )}
         {replies.error && replies.error !== readError && (
           <p role="alert" className="inline-note" data-tone="alert">
-            The possible replies of the tasks could not be loaded{replies.data ? " again" : ""}: {replies.error}.{replies.data ? " What shows is from the last read." : ""}
+            {replies.data ? t("mailPage.repliesNotLoadedAgain", { message: replies.error }) : t("mailPage.repliesNotLoaded", { message: replies.error })}
           </p>
         )}
         {failures.map((failure) => (
@@ -338,20 +339,20 @@ function Mail() {
         ))}
         {apartHere?.error && (
           <p role="alert" className="inline-note" data-tone="alert" data-mail-not-opened>
-            That message could not be opened: {apartHere.error}.
+            {t("mailPage.notOpened", { message: apartHere.error })}
           </p>
         )}
 
         {noAccounts ? (
           <div className="mail-empty">
-            <p className="t-help">{connectWords(connectWay, "its mail")}</p>
+            <p className="t-help">{connectWords(connectWay, t("connect.itsMail"))}</p>
             <ConnectOffer way={connectWay} />
           </div>
         ) : (
           <div className="mail-layout" data-reading={current ? "" : undefined}>
-            <section className="card mail-list" aria-label="Messages" aria-busy={!readWhole}>
+            <section className="card mail-list" aria-label={t("mailPage.messages")} aria-busy={!readWhole}>
               {!mail || holding || (mail.waiting > 0 && shown.length === 0) ? (
-                <div className="mail-list-wait" role="status" aria-label="Loading the mail">
+                <div className="mail-list-wait" role="status" aria-label={t("mailPage.loadingMail")}>
                   {Array.from({ length: 5 }, (_, i) => (
                     <span key={i} className="mail-row-wait">
                       <span className="skeleton" />
@@ -361,7 +362,7 @@ function Mail() {
                 </div>
               ) : shown.length === 0 ? (
                 <p className="t-help mail-none">
-                  {place === ALL && account === ALL ? "No mail has arrived in the connected accounts." : "No mail for this client or project and account."}
+                  {place === ALL && account === ALL ? t("mailPage.noMailArrived") : t("mailPage.noMailFor")}
                 </p>
               ) : (
                 groups
@@ -371,8 +372,8 @@ function Mail() {
                     return (
                       <div key={group.key} className="mail-group" role="group" aria-labelledby={`mail-group-${group.key}`}>
                         <h2 id={`mail-group-${group.key}`} className="mail-group-head">
-                          <span className="group-title">{group.label}</span>
-                          {held > 0 && <Figure n={held} one="message" many="messages" className="group-count" />}
+                          <span className="group-title">{t(group.label)}</span>
+                          {held > 0 && <Figure n={held} one="counted.message" many="counted.messages" className="group-count" />}
                         </h2>
                         {group.key === "forTasks" && waiting.map((entry) => <TaskRepliesGroup key={entry.task.id} entry={entry} listed={listed} />)}
                         {group.messages.length > 0 && (
@@ -387,12 +388,12 @@ function Mail() {
             </section>
             {!narrow && (
               <div className="mail-view-column">
-                <section className="card mail-view" aria-label="The open message">
+                <section className="card mail-view" aria-label={t("mailPage.openMessage")}>
                   <div className="mail-view-in">
                     {viewer ?? (
                       <div className="mail-view-none">
                         <div className="mail-view-go">
-                          <h2 className="t-help">No message open</h2>
+                          <h2 className="t-help">{t("mailPage.noMessageOpen")}</h2>
                           {offered && (
                             <Button
                               size="sm"
@@ -407,7 +408,7 @@ function Mail() {
                         </div>
                         {shown.length > 1 && (
                           <p className="t-meta mail-view-keys">
-                            <kbd className="kbd">J</kbd> and <kbd className="kbd">K</kbd> move through the list
+                            <kbd className="kbd">J</kbd>{t("mailPage.andWord")}<kbd className="kbd">K</kbd> {t("mailPage.keysMove")}
                           </p>
                         )}
                       </div>
@@ -425,17 +426,18 @@ function Mail() {
 }
 
 function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (message: MailRow) => ReactNode }) {
+  const { t } = useStrings();
   const title = inlinePlain(entry.task.title);
   const headId = `mail-task-${entry.task.id}`;
   return (
     <div className="mail-task" role="group" aria-labelledby={headId}>
       <div className="mail-task-head">
         <h3 id={headId} className="mail-task-title">
-          <span className="mail-task-tally">{`${repliesText(entry.replies.length, entry.more.length > 0)} for`}</span>
+          <span className="mail-task-tally">{t("mailPage.forWord", { what: repliesText(entry.replies.length, entry.more.length > 0) })}</span>
           <span className="t-value">{title}</span>
         </h3>
-        <Button size="sm" variant="quiet" className="head-action head-link" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={`Open the task “${title}”`}>
-          <span className="btn-label">Open the task</span>
+        <Button size="sm" variant="quiet" className="head-action head-link" onClick={() => openTaskDetail({ id: entry.task.id })} aria-label={t("mailPage.openTaskNamed", { title })}>
+          <span className="btn-label">{t("mailPage.openTheTask")}</span>
           <NextIcon />
         </Button>
       </div>
@@ -447,6 +449,7 @@ function TaskRepliesGroup({ entry, listed }: { entry: TaskReplies; listed: (mess
 }
 
 function MailRowView({ row, unread, current, account, onOpen }: { row: MailRow; unread: boolean; current: boolean; account: boolean; onOpen: () => void }) {
+  const { t } = useStrings();
   const line = taskLine(row);
   return (
     <button type="button" className="mail-row" data-unread={unread ? "" : undefined} aria-current={current ? "true" : undefined} onClick={onOpen} data-mail-row={keyOf(row)}>
@@ -455,13 +458,13 @@ function MailRowView({ row, unread, current, account, onOpen }: { row: MailRow; 
         <span className="t-name mail-row-from">{row.from.name ?? row.from.email}</span>
         {row.important && (
           <span className="pill mail-row-important" data-tone="warn">
-            Important
+            {t("mailPage.important")}
           </span>
         )}
         <span className="mail-row-time">{shortWhen(row.receivedAt)}</span>
       </span>
       <span className="mail-row-subject">
-        {unread && <span className="sr-only">Unread: </span>}
+        {unread && <span className="sr-only">{t("mailPage.unreadSr")}</span>}
         {subjectOf(row)}
       </span>
       <span className="mail-row-where">
@@ -503,6 +506,7 @@ function OpenMessage({
   onNext: (() => void) | null;
   onClose?: () => void;
 }) {
+  const { t } = useStrings();
   const { notify, touch, saving } = useWorkspace();
   const phone = useMedia(MAIL_PHONE);
   const { mode, setMode } = useMailMode();
@@ -521,22 +525,22 @@ function OpenMessage({
 
   async function createTask() {
     const answer = await tool<{ item: Item }>("create_task_from_mail", ref);
-    if (!answer.ok) return notify({ text: `The task could not be created: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("mailPage.taskNotCreated", { message: answer.message }), tone: "error" });
     touch();
     const item = answer.item;
-    notify({ text: `Added task “${inlinePlain(item.title)}”`, tone: "status", undo: () => void saving(tool("delete_item", { id: item.id })) });
+    notify({ text: t("mailPage.addedTask", { title: inlinePlain(item.title) }), tone: "status", undo: () => void saving(tool("delete_item", { id: item.id })) });
   }
   async function link(target: { task: string } | { node: string }, name: string) {
     const answer = await tool("link_mail", { ...ref, ...target });
-    if (!answer.ok) return notify({ text: `The message could not be linked: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("mailPage.messageNotLinked", { message: answer.message }), tone: "error" });
     touch();
-    notify({ text: `Linked the message to ${name}`, tone: "status", undo: () => void saving(tool("unlink_mail", { ...ref, ...target })) });
+    notify({ text: t("mailPage.linkedMessageTo", { name }), tone: "status", undo: () => void saving(tool("unlink_mail", { ...ref, ...target })) });
   }
   async function unlink(target: { task: string } | { node: string }, name: string) {
     const answer = await tool("unlink_mail", { ...ref, ...target });
-    if (!answer.ok) return notify({ text: `The message could not be unlinked: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("mailPage.messageNotUnlinked", { message: answer.message }), tone: "error" });
     touch();
-    notify({ text: `Unlinked the message from ${name}`, tone: "status", undo: () => void saving(tool("link_mail", { ...ref, ...target })) });
+    notify({ text: t("mailPage.unlinkedMessageFrom", { name }), tone: "status", undo: () => void saving(tool("link_mail", { ...ref, ...target })) });
   }
   async function answer(task: { id: string; title: string }, result: string) {
     if (await closeTask(task, row, result)) setAnswering(null);
@@ -550,9 +554,9 @@ function OpenMessage({
   const entries: MenuEntry[] = [
     {
       kind: "action",
-      label: "A task…",
+      label: t("mailPage.aTaskEllipsis"),
       disabled: candidates.length === 0,
-      detail: candidates.length === 0 ? "No open task to link" : undefined,
+      detail: candidates.length === 0 ? t("mailPage.noOpenTaskLink") : undefined,
       onSelect: () => {
         findingTask.current = true;
         setLinking(keyOf(row));
@@ -560,10 +564,10 @@ function OpenMessage({
     },
     {
       kind: "submenu",
-      label: "A client or project",
+      label: t("calPage.aClientOrProject"),
       entries: nodes.length
         ? nodes.map((node): MenuEntry => ({ kind: "action", label: node.path, onSelect: () => void link({ node: node.id }, node.path) }))
-        : [{ kind: "action", label: "Linked to every client and project", disabled: true, onSelect: () => undefined }],
+        : [{ kind: "action", label: t("mailPage.linkedEveryPlace"), disabled: true, onSelect: () => undefined }],
     },
   ];
   const waiting = tasks.filter((task) => task.status === "open" && task.mail);
@@ -572,7 +576,7 @@ function OpenMessage({
     kind: "action",
     id: task.id,
     label: inlinePlain(task.title),
-    detail: task.path ?? "General",
+    detail: task.path ?? t("filter.general"),
     onSelect: () => {
       picked.current = true;
       setAnswering({ message: keyOf(row), task: { id: task.id, title: task.title } });
@@ -582,10 +586,10 @@ function OpenMessage({
   const rest = waiting.filter((task) => !replyOf.has(task.id));
   const answers: MenuEntry[] =
     waiting.length === 0
-      ? [{ kind: "action", label: "No task is waiting for mail. Set one up in a task.", disabled: true, onSelect: () => undefined }]
+      ? [{ kind: "action", label: t("mailPage.noWaiting"), disabled: true, onSelect: () => undefined }]
       : [
-          ...(first.length > 0 ? [{ kind: "group" as const, label: "Possible reply to", entries: first.map(answerEntry) }] : []),
-          ...(rest.length > 0 ? [{ kind: "group" as const, label: first.length > 0 ? "Other tasks that wait for mail" : "Tasks that wait for mail", entries: rest.map(answerEntry) }] : []),
+          ...(first.length > 0 ? [{ kind: "group" as const, label: t("mailPage.possibleReplyTo"), entries: first.map(answerEntry) }] : []),
+          ...(rest.length > 0 ? [{ kind: "group" as const, label: first.length > 0 ? t("mailPage.otherWaiting") : t("mailPage.tasksWaiting"), entries: rest.map(answerEntry) }] : []),
         ];
   const gmail = `https://mail.google.com/mail/?authuser=${encodeURIComponent(row.accountEmail)}#all/${encodeURIComponent(row.threadId || row.id)}`;
   const answersFirst = first.length > 0;
@@ -596,17 +600,17 @@ function OpenMessage({
   };
   const mayAnswer = first.filter((task) => !row.tasks.some((linked) => linked.id === task.id));
   const moreEntries: MenuEntry[] = [
-    { kind: "submenu", label: "Link to…", entries },
+    { kind: "submenu", label: t("mailPage.linkTo"), entries },
     isDemo
-      ? { kind: "action", label: "Open in Gmail", icon: GmailMark, disabled: true, detail: "A sample account has no Gmail", onSelect: () => undefined }
-      : { kind: "action", label: "Open in Gmail", icon: GmailMark, onSelect: () => void window.open(gmail, "_blank", "noopener,noreferrer") },
+      ? { kind: "action", label: t("mailPage.openGmail"), icon: GmailMark, disabled: true, detail: t("mailPage.noGmail"), onSelect: () => undefined }
+      : { kind: "action", label: t("mailPage.openGmail"), icon: GmailMark, onSelect: () => void window.open(gmail, "_blank", "noopener,noreferrer") },
     {
       kind: "choice",
-      label: "Mail colors",
+      label: t("mailPage.mailColors"),
       value: mode,
       options: [
-        { value: "light", label: "Light" },
-        { value: "dark", label: "Dark" },
+        { value: "light", label: t("mailPage.light") },
+        { value: "dark", label: t("mailPage.dark") },
       ],
       onChoose: (value) => setMode(value === "dark" ? "dark" : "light"),
     },
@@ -616,11 +620,11 @@ function OpenMessage({
     <div ref={actions} className="mail-action-row">
       <Button size="sm" variant={answersFirst ? "control" : "primary"} onClick={() => void createTask()}>
         <AddIcon />
-        <span className="btn-label">Add task</span>
+        <span className="btn-label">{t("common.addTask")}</span>
       </Button>
       <Menu
-        label="Mark as answer to…"
-        name={`Mark as answer to… “${row.subject}”`}
+        label={t("mailPage.markAnswer")}
+        name={t("mailPage.markAnswerNamed", { subject: row.subject })}
         entries={answers}
         variant={answersFirst ? "primary" : "control"}
         className="mail-answers-menu"
@@ -632,16 +636,16 @@ function OpenMessage({
       />
       {!phone && (
         <>
-          <Menu label="Link to…" name={`Link to… “${row.subject}”`} entries={entries} variant="control" className="mail-link-menu" finalFocus={linkFocus} />
+          <Menu label={t("mailPage.linkTo")} name={t("mailPage.linkNamed", { subject: row.subject })} entries={entries} variant="control" className="mail-link-menu" finalFocus={linkFocus} />
           {isDemo ? (
             <Button size="sm" disabled aria-describedby="mail-gmail-why">
               <GmailMark />
-              <span className="btn-label">Open in Gmail</span>
+              <span className="btn-label">{t("mailPage.openGmail")}</span>
             </Button>
           ) : (
             <a className={buttonClass({ size: "sm" })} href={gmail} target="_blank" rel="noopener noreferrer">
               <GmailMark />
-              <span className="btn-label">Open in Gmail</span>
+              <span className="btn-label">{t("mailPage.openGmail")}</span>
             </a>
           )}
         </>
@@ -672,7 +676,7 @@ function OpenMessage({
         <div ref={outcome}>
           <TaskOutcome
             key={chosen.id}
-            question={`How did “${inlinePlain(chosen.title)}” end?`}
+            question={t("mailPage.howEnded", { title: inlinePlain(chosen.title) })}
             title={chosen.title}
             onClose={(result) => answer(chosen, result)}
             onCancel={stopAnswering}
@@ -680,11 +684,11 @@ function OpenMessage({
         </div>
       )}
       {(mayAnswer.length > 0 || row.tasks.length > 0 || row.nodes.length > 0) && (
-        <ul className="mail-linked" aria-label="What the message is linked to">
+        <ul className="mail-linked" aria-label={t("mailPage.whatLinked")}>
           {mayAnswer.map((task) => (
             <li key={`reply-${task.id}`} className="mail-linked-row">
               <button type="button" className="mail-linked-open" onClick={() => openTaskDetail({ id: task.id })}>
-                <span className="t-meta">Possible reply to</span>
+                <span className="t-meta">{t("mailPage.possibleReplyToSr")}</span>
                 <span className="t-value">{inlinePlain(task.title)}</span>
               </button>
             </li>
@@ -692,22 +696,22 @@ function OpenMessage({
           {row.tasks.map((task) => (
             <li key={`task-${task.id}`} className="mail-linked-row">
               <button type="button" className="mail-linked-open" onClick={() => openTaskDetail({ id: task.id })}>
-                <span className="t-meta">{task.status === "done" ? "Linked to the task, done" : "Linked to the task"}</span>
+                <span className="t-meta">{task.status === "done" ? t("mailPage.linkedTaskDone") : t("mailPage.linkedTask")}</span>
                 <span className="t-value">{inlinePlain(task.title)}</span>
               </button>
-              <Button size="sm" variant="quiet" onClick={() => void unlink({ task: task.id }, `“${inlinePlain(task.title)}”`)} aria-label={`Unlink the message from “${inlinePlain(task.title)}”`}>
-                Unlink
+              <Button size="sm" variant="quiet" onClick={() => void unlink({ task: task.id }, `“${inlinePlain(task.title)}”`)} aria-label={t("mailPage.unlinkFromNamed", { title: inlinePlain(task.title) })}>
+                {t("calPage.unlink")}
               </Button>
             </li>
           ))}
           {row.nodes.map((node) => (
             <li key={`node-${node.id}`} className="mail-linked-row">
               <Link href={`/app/node/${node.id}`} className="mail-linked-open">
-                <span className="t-meta">Linked to</span>
+                <span className="t-meta">{t("mailPage.linkedTo")}</span>
                 <span className="t-value">{node.path}</span>
               </Link>
-              <Button size="sm" variant="quiet" onClick={() => void unlink({ node: node.id }, node.path)} aria-label={`Unlink the message from ${node.path}`}>
-                Unlink
+              <Button size="sm" variant="quiet" onClick={() => void unlink({ node: node.id }, node.path)} aria-label={t("mailPage.unlinkFromPlace", { path: node.path })}>
+                {t("calPage.unlink")}
               </Button>
             </li>
           ))}
@@ -716,12 +720,12 @@ function OpenMessage({
     </>
   );
 
-  const more = phone ? <Menu label="More" about={`for “${row.subject}”`} entries={moreEntries} variant="control" className="mail-more-menu" finalFocus={linkFocus} /> : null;
+  const more = phone ? <Menu label={t("common.more")} about={t("mailPage.moreForSubject", { subject: row.subject })} entries={moreEntries} variant="control" className="mail-more-menu" finalFocus={linkFocus} /> : null;
 
   const note = isDemo ? (
     <span id="mail-gmail-why" className="pill mail-sample">
-      <span aria-hidden="true">Sample account</span>
-      <span className="sr-only">A sample account: its messages live only in this demo, with no Gmail to open.</span>
+      <span aria-hidden="true">{t("mailPage.sampleAccount")}</span>
+      <span className="sr-only">{t("mailPage.sampleSr")}</span>
     </span>
   ) : null;
 
@@ -731,16 +735,17 @@ function OpenMessage({
 const FOUND_SHOWN = 12;
 
 function TaskFinder({ tasks, onPick, onCancel }: { tasks: TaskData[]; onPick: (task: TaskData) => void; onCancel: () => void }) {
+  const { t, counted } = useStrings();
   const [query, setQuery] = useState("");
   const found = useMemo(() => tasksMatching(tasks, query), [tasks, query]);
   const shown = found.slice(0, FOUND_SHOWN);
   const rest = found.length - shown.length;
   return (
-    <div className="stack" role="group" aria-label="Link the message to a task" data-task-finder>
+    <div className="stack" role="group" aria-label={t("mailPage.linkToTask")} data-task-finder>
       <Field
         autoFocus
-        aria-label="Find a task by its title, client or project"
-        placeholder="Find a task by its title, client or project"
+        aria-label={t("mailPage.findTask")}
+        placeholder={t("mailPage.findTask")}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => {
@@ -752,30 +757,31 @@ function TaskFinder({ tasks, onPick, onCancel }: { tasks: TaskData[]; onPick: (t
         }}
       />
       {shown.length > 0 ? (
-        <ul className="mail-linked" aria-label="Open tasks that match">
+        <ul className="mail-linked" aria-label={t("mailPage.matchingTasks")}>
           {shown.map((task) => (
             <li key={task.id} className="mail-linked-row">
               <button type="button" className="mail-linked-open" onClick={() => onPick(task)}>
-                <span className="t-meta">{task.path ?? "General"}</span>
+                <span className="t-meta">{task.path ?? t("filter.general")}</span>
                 <span className="t-value">{inlinePlain(task.title)}</span>
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="t-help">No open task matches “{query.trim()}”.</p>
+        <p className="t-help">{t("mailPage.noMatch", { query: query.trim() })}</p>
       )}
       <p className="t-meta" role="status">
-        {rest > 0 ? `${count(found.length, "open task matches", "open tasks match")}: type more of its title to reach the other ${rest}.` : count(found.length, "open task matches", "open tasks match")}
+        {rest > 0 ? t("mailPage.matchesMore", { what: counted(found.length, "counted.openTaskMatch", "counted.openTasksMatch"), rest }) : counted(found.length, "counted.openTaskMatch", "counted.openTasksMatch")}
       </p>
       <Button size="sm" onClick={onCancel}>
-        Cancel
+        {t("common.cancel")}
       </Button>
     </div>
   );
 }
 
 function MailSheet({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+  const { t } = useStrings();
   const ref = useRef<HTMLDialogElement>(null);
   const [kept, setKept] = useState<ReactNode>(children);
   if (children && children !== kept) setKept(children);
@@ -786,7 +792,7 @@ function MailSheet({ open, onClose, children }: { open: boolean; onClose: () => 
     if (!open && dialog.open) dialog.close();
   }, [open]);
   return (
-    <dialog ref={ref} className="dialog mail-sheet" aria-label="The open message" onClose={onClose}>
+    <dialog ref={ref} className="dialog mail-sheet" aria-label={t("mailPage.openMessage")} onClose={onClose}>
       <PopupLayerProvider container={ref}>
         <div className="mail-sheet-in">{children ?? kept}</div>
       </PopupLayerProvider>

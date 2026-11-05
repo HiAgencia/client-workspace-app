@@ -14,8 +14,8 @@ import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { Tick } from "@/components/ui/tick";
 import { AddIcon, CalendarIcon, GuideIcon, HelpIcon, MailIcon, OverviewIcon, SearchIcon, SettingsIcon, SignOutIcon, TasksIcon, TrashIcon, type Icon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
-import { count } from "@/lib/count";
 import { PRODUCT_NAME } from "@/lib/product";
+import { useStrings } from "@/lib/strings";
 import { post, type TreeNode } from "./client-api";
 import { plainClick, requestFocus } from "./focus-request";
 import { figureText } from "./mail-store";
@@ -27,6 +27,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
   const pathname = usePathname();
   const router = useRouter();
   const { taskCounts, mailFigure, openPalette, person } = useWorkspace();
+  const { t } = useStrings();
   const mailNumber = mailFigure ? figureText(mailFigure) : null;
   const current = useCurrentNode();
   const mac = useMac();
@@ -39,10 +40,10 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
   const ids = inDrawer ? "drawer" : "side";
 
   return (
-    <nav className="side-nav" aria-label="Workspace">
+    <nav className="side-nav" aria-label={t("nav.workspace")}>
       {!inDrawer && (
         <div className="side-top">
-          <Link href="/app" className="brand side-brand" aria-label={`${PRODUCT_NAME}, Overview`}>
+          <Link href="/app" className="brand side-brand" aria-label={t("workspace.overviewBrand", { product: PRODUCT_NAME })}>
             <BrandMark className="brand-mark" />
             <span className="brand-name">{PRODUCT_NAME}</span>
           </Link>
@@ -60,7 +61,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           }}
         >
           <AddIcon />
-          <span className="btn-label side-link-name">Add task</span>
+          <span className="btn-label side-link-name">{t("common.addTask")}</span>
           <kbd className="kbd side-key" aria-hidden="true">
             Q
           </kbd>
@@ -76,7 +77,7 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           }}
         >
           <SearchIcon />
-          <span className="side-link-name">Search</span>
+          <span className="side-link-name">{t("nav.search")}</span>
           <kbd className="kbd side-key" aria-hidden="true">
             {mac ? "⌘K" : "Ctrl K"}
           </kbd>
@@ -84,26 +85,26 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
       </div>
       <div className="side-scroll">
         <div ref={main} className="side-main side-pieces">
-          <ul className="side-list" aria-label="Views">
+          <ul className="side-list" aria-label={t("nav.views")}>
             <li>
               <Link href="/app" className="side-link side-view" aria-current={here("/app")}>
-                <ViewName icon={OverviewIcon} name="Overview" detail="Your day on one page" />
+                <ViewName icon={OverviewIcon} name={t("nav.overview")} detail={t("nav.overviewDetail")} />
               </Link>
             </li>
             <li>
               <Link href="/app/tasks" className="side-link side-view" aria-current={here("/app/tasks")}>
-                <ViewName icon={TasksIcon} name="Tasks" detail="All your tasks, by date" />
-                {due > 0 && <Count value={due} unit="due" spoken={`${due} overdue or due today`} />}
+                <ViewName icon={TasksIcon} name={t("nav.tasks")} detail={t("nav.tasksDetail")} />
+                {due > 0 && <Count value={due} unit={t("nav.dueUnit")} spoken={t("nav.dueSpoken", { n: due })} />}
               </Link>
             </li>
             <li>
               <Link href="/app/calendar" className="side-link side-view" aria-current={here("/app/calendar")}>
-                <ViewName icon={CalendarIcon} name="Calendar" detail="Events and dated tasks" />
+                <ViewName icon={CalendarIcon} name={t("nav.calendar")} detail={t("nav.calendarDetail")} />
               </Link>
             </li>
             <li>
               <Link href="/app/mail" className="side-link side-view" aria-current={here("/app/mail")}>
-                <ViewName icon={MailIcon} name="Mail" detail="For your tasks, then unread" />
+                <ViewName icon={MailIcon} name={t("nav.mail")} detail={t("nav.mailDetail")} />
                 {mailNumber && <Count value={mailNumber.shown} spoken={mailNumber.spoken} />}
               </Link>
               {mailFigure?.note && (
@@ -130,19 +131,19 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
           }}
         >
           <GuideIcon className="side-icon" />
-          <span className="side-link-name">Guide</span>
+          <span className="side-link-name">{t("nav.guide")}</span>
         </button>
         <Link href="/help" className="side-link" onClick={() => onLeave?.()}>
           <HelpIcon className="side-icon" />
-          <span className="side-link-name">Help</span>
+          <span className="side-link-name">{t("nav.help")}</span>
         </Link>
         <Link href="/app/trash" className="side-link" aria-current={here("/app/trash")}>
           <TrashIcon className="side-icon" />
-          <span className="side-link-name">Trash</span>
+          <span className="side-link-name">{t("nav.trash")}</span>
         </Link>
         <Link href="/app/settings" className="side-link" aria-current={here("/app/settings")}>
           <SettingsIcon className="side-icon" />
-          <span className="side-link-name">Settings</span>
+          <span className="side-link-name">{t("nav.settings")}</span>
         </Link>
         <div className="side-theme">
           <ThemeSwitch />
@@ -152,16 +153,16 @@ export function SideNav({ inDrawer = false, onLeave, onSignOut }: { inDrawer?: b
             <Link href="/app/profile" className="side-link side-profile" aria-current={here("/app/profile")} title={person.email ?? undefined} data-side-profile>
               <Avatar className="side-avatar" src={person.avatarUrl} name={person.name} email={person.email} />
               <span className="t-name side-who">{person.name ?? person.email}</span>
-              <span className="sr-only">, Your profile</span>
+              <span className="sr-only">{t("nav.yourProfile")}</span>
             </Link>
           ) : (
             person && (
               <>
-                <Avatar className="side-avatar" src={null} name="Demo session" email={null} />
-                <span className="t-meta side-who">Demo session</span>
-                <Button size="sm" variant="quiet" className="btn-icon side-sign-out" onClick={onSignOut} title="Sign out">
+                <Avatar className="side-avatar" src={null} name={t("nav.demoSession")} email={null} />
+                <span className="t-meta side-who">{t("nav.demoSession")}</span>
+                <Button size="sm" variant="quiet" className="btn-icon side-sign-out" onClick={onSignOut} title={t("nav.signOut")}>
                   <SignOutIcon />
-                  <span className="sr-only">Sign out</span>
+                  <span className="sr-only">{t("nav.signOut")}</span>
                 </Button>
               </>
             )
@@ -242,13 +243,13 @@ function useOpenState(): Record<string, boolean> {
   return useMemo(() => readOpen(raw), [raw]);
 }
 
-const GROUP = {
-  client: { title: "Clients", add: "Add client", empty: "No clients yet. A client holds its projects." },
-  project: { title: "Projects", add: "Add project", empty: "No projects of your own yet." },
-} as const;
-
 function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current: string | null; ids: string }) {
   const { tree, treeError } = useWorkspace();
+  const { t } = useStrings();
+  const GROUP = {
+    client: { title: t("nav.clients"), add: t("nav.addClient"), empty: t("nav.noClients") },
+    project: { title: t("nav.projects"), add: t("nav.addProject"), empty: t("nav.noProjects") },
+  } as const;
   const openState = useOpenState();
   const [adding, setAdding] = useState(false);
   const key = `group:${kind}`;
@@ -316,7 +317,7 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
           )}
           {tree !== null && treeError && (
             <p role="alert" className="inline-note" data-tone="alert">
-              The list could not be refreshed: {sentence(treeError)} What you see is the last one read.
+              {t("nav.listNotRefreshed", { reason: sentence(treeError) })}
             </p>
           )}
         </div>
@@ -325,9 +326,10 @@ function NodeGroup({ kind, current, ids }: { kind: "client" | "project"; current
   );
 }
 
-const CHILDREN: Record<TreeNode["kind"], string> = { client: "Projects", project: "Subprojects", subproject: "Subprojects" };
+const CHILDREN: Record<TreeNode["kind"], "nav.projectsOf" | "nav.subprojectsOf"> = { client: "nav.projectsOf", project: "nav.subprojectsOf", subproject: "nav.subprojectsOf" };
 
 function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: TreeNode; tree: TreeNode[]; openState: Record<string, boolean>; current: string | null; ids: string; depth?: number }) {
+  const { t, counted } = useStrings();
   const open = openState[node.id] ?? false;
   const children = tree.filter((child) => child.parentId === node.id);
   return (
@@ -339,7 +341,7 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
             className="tree-toggle"
             aria-expanded={open}
             aria-controls={`${ids}-branch-${node.id}`}
-            aria-label={`${CHILDREN[node.kind]} of ${node.name}`}
+            aria-label={t(CHILDREN[node.kind], { name: node.name })}
             onClick={() => writeOpen({ [node.id]: !open })}
           />
         ) : (
@@ -356,7 +358,7 @@ function Branch({ node, tree, openState, current, ids, depth = 1 }: { node: Tree
         >
           <NodeGlyph className="side-icon" kind={node.kind} icon={node.icon} />
           <span className="side-link-name">{node.name}</span>
-          {node.openTasks > 0 && <Count value={node.openTasks} spoken={count(node.openTasks, "open task", "open tasks")} />}
+          {node.openTasks > 0 && <Count value={node.openTasks} spoken={counted(node.openTasks, "counted.openTask", "counted.openTasks")} />}
         </Link>
       </div>
       {children.length > 0 && (
@@ -377,15 +379,16 @@ function sentence(reason: string): string {
 }
 
 function TreeSkeleton({ failed }: { failed: string | null }) {
+  const { t } = useStrings();
   if (failed) {
     return (
       <p role="alert" className="inline-note" data-tone="alert">
-        The list could not be loaded: {sentence(failed)} Reload the page to try again.
+        {t("nav.listNotLoaded", { reason: sentence(failed) })}
       </p>
     );
   }
   return (
-    <div className="stack side-skeleton" role="status" aria-label="Loading the list" aria-busy="true">
+    <div className="stack side-skeleton" role="status" aria-label={t("nav.loadingList")} aria-busy="true">
       {["62%", "48%", "54%"].map((width, index) => (
         <span key={index} className="skeleton" style={{ width }} />
       ))}
@@ -395,6 +398,7 @@ function TreeSkeleton({ failed }: { failed: string | null }) {
 
 export function NewNode({ parent, kind, idPrefix = "new-node", onDone }: { parent?: TreeNode; kind?: "client" | "project"; idPrefix?: string; onDone: () => void }) {
   const { saving } = useWorkspace();
+  const { t } = useStrings();
   const router = useRouter();
   const [name, setName] = useState("");
   const what = parent ? (parent.kind === "client" ? "project" : "subproject") : (kind ?? "client");
@@ -428,15 +432,15 @@ export function NewNode({ parent, kind, idPrefix = "new-node", onDone }: { paren
     <>
       {parent && (
         <p className="t-meta tree-new-where">
-          In <span className="t-name">{parent.path}</span>
+          {t("nav.inPlace")} <span className="t-name">{parent.path}</span>
         </p>
       )}
       <Field
         autoFocus
         id={`${idPrefix}-${parent?.id ?? kind ?? "root"}`}
         name="node-name"
-        aria-label={`New ${what} name`}
-        placeholder={`New ${what} name`}
+        aria-label={t("nav.newName", { what: t(`kindWord.${what}` as "kindWord.client") })}
+        placeholder={t("nav.newName", { what: t(`kindWord.${what}` as "kindWord.client") })}
         value={name}
         onChange={(event) => setName(event.target.value)}
         onKeyDown={onKey}

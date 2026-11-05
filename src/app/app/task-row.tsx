@@ -20,13 +20,14 @@ import { landFrom, useFlip } from "@/components/ui/flip";
 import { Fold } from "@/components/ui/fold";
 import { ByAgentIcon, ByChatIcon, DateIcon, DecisionIcon, DeleteIcon, DuplicateIcon, LinkIcon, MailIcon, MoveIcon, NoteIcon, PriorityIcon, SubtasksIcon, TimeIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
-import { count } from "@/lib/count";
-import { addDays, LOCALE, today, type Day } from "@/lib/dates";
+import { addDays, today, type Day } from "@/lib/dates";
 import { inlineLink, inlinePieces, inlinePlain } from "@/lib/inline-links";
+import { currentLanguage } from "@/lib/language";
+import { countedNow, translateNow, useStrings } from "@/lib/strings";
 import type { TaskRow } from "@/lib/tools/tasks";
 import { cx } from "@/lib/utils";
 import { post, tool, type Item, type TreeNode } from "./client-api";
-import { PathText, PRIORITIES, sourceName } from "./item-parts";
+import { PathText, priorityOptions, sourceName } from "./item-parts";
 import { useWorkspace } from "./workspace";
 import "../styles/task.css";
 
@@ -39,29 +40,31 @@ const dateOf = (day: Day) => {
   return new Date(y, m - 1, d);
 };
 
+const localeNow = () => (typeof document === "undefined" ? "en" : currentLanguage());
+
 export function timeLabel(time: string): string {
   const [h, m] = time.split(":").map(Number);
-  return new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(new Date(2000, 0, 1, h, m));
+  return new Intl.DateTimeFormat(localeNow(), { hour: "numeric", minute: "2-digit" }).format(new Date(2000, 0, 1, h, m));
 }
 
 export function dayName(day: Day, now: Day = today()): string {
-  if (day === now) return "Today";
-  if (day === addDays(now, 1)) return "Tomorrow";
-  if (day === addDays(now, -1)) return "Yesterday";
+  if (day === now) return translateNow("date.today");
+  if (day === addDays(now, 1)) return translateNow("date.tomorrow");
+  if (day === addDays(now, -1)) return translateNow("date.yesterday");
   const date = dateOf(day);
   const near = day > addDays(now, -7) && day < addDays(now, 7);
-  if (near) return `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`;
+  if (near) return `${new Intl.DateTimeFormat(localeNow(), { weekday: "short" }).format(date)} ${date.getDate()}`;
   const sameYear = day.slice(0, 4) === now.slice(0, 4);
-  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
+  return new Intl.DateTimeFormat(localeNow(), { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
 }
 
 export function dayHeading(day: Day, now: Day = today()): string {
   const date = dateOf(day);
   const base =
     day < addDays(now, 7)
-      ? `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`
-      : new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric" }).format(date);
-  return day === addDays(now, 1) ? `Tomorrow, ${base}` : base;
+      ? `${new Intl.DateTimeFormat(localeNow(), { weekday: "short" }).format(date)} ${date.getDate()}`
+      : new Intl.DateTimeFormat(localeNow(), { weekday: "short", month: "short", day: "numeric" }).format(date);
+  return day === addDays(now, 1) ? translateNow("row.tomorrowBase", { base }) : base;
 }
 
 export function whenTone(day: Day, now: Day = today()): WhenTone {
@@ -73,7 +76,7 @@ export function whenTone(day: Day, now: Day = today()): WhenTone {
 }
 
 export function whenLabel(day: Day | null, time: string | null, now: Day = today()): string {
-  if (!day) return "No date";
+  if (!day) return translateNow("date.noDate");
   return time ? `${dayName(day, now)}, ${timeLabel(time)}` : dayName(day, now);
 }
 
@@ -84,7 +87,7 @@ function rowWhen(task: TaskData, dayShown: Day | null | undefined, now: Day): st
 }
 
 function priorityName(priority: number | null): string {
-  return PRIORITIES.find((option) => option.value === String(priority ?? 4))?.label ?? "Low";
+  return priorityOptions().find((option) => option.value === String(priority ?? 4))?.label ?? translateNow("priority.low");
 }
 
 function mailState(mail: unknown): "waiting" | null {
@@ -123,7 +126,7 @@ function LinkedWords({ href, text }: { href: string; text: string }) {
 export function PlaceName({ path, color }: { path: string | null; color: string | null }) {
   return (
     <span className="task-place-name" data-color={color ?? undefined}>
-      {path ? <PathText path={path} /> : "General"}
+      {path ? <PathText path={path} /> : translateNow("filter.general")}
     </span>
   );
 }
@@ -357,14 +360,14 @@ export function useTaskActions() {
     const answer = await tool("update_item", { id: task.id, status: reopening ? "open" : "done" });
     if (!answer.ok) {
       dropOp("hide", task.id);
-      notify({ text: `“${title}” could not be ${reopening ? "reopened" : "completed"}: ${answer.message}`, tone: "error" });
+      notify({ text: translateNow(reopening ? "row.couldNotReopened" : "row.couldNotCompleted", { title, message: answer.message }), tone: "error" });
       if (focusAfter) refocusSoon(focusAfter);
       return false;
     }
     settleOp("hide", task.id);
     touch();
     notify({
-      text: reopening ? `Reopened “${title}”` : `Completed “${title}”`,
+      text: reopening ? translateNow("row.reopened", { title }) : translateNow("row.completed", { title }),
       tone: "status",
       focusAfter,
       undo: () => void bringBack(task, place, Boolean(focusAfter), tool("update_item", { id: task.id, status: was })),
@@ -379,14 +382,14 @@ export function useTaskActions() {
     const answer = await tool("delete_item", { id: task.id });
     if (!answer.ok) {
       dropOp("hide", task.id);
-      notify({ text: `“${inlinePlain(task.title)}” could not be deleted: ${answer.message}`, tone: "error" });
+      notify({ text: translateNow("row.couldNotDelete", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
       if (focusAfter) refocusSoon(focusAfter);
       return;
     }
     settleOp("hide", task.id);
     touch();
     notify({
-      text: `Deleted “${inlinePlain(task.title)}”`,
+      text: translateNow("workspace.deletedItem", { title: inlinePlain(task.title) }),
       tone: "status",
       focusAfter,
       undo: () => void bringBack(task, place, Boolean(focusAfter), post(`/api/items/${task.id}/restore`, {})),
@@ -407,7 +410,7 @@ export function useTaskActions() {
   }
 
   const setPriority = (task: TaskData, priority: number) =>
-    patch(task, { priority }, { priority }, `The priority of “${inlinePlain(task.title)}” could not be changed`);
+    patch(task, { priority }, { priority }, translateNow("row.priorityNotChanged", { title: inlinePlain(task.title) }));
 
   async function moveToDay(task: TaskData, day: Day | null, group: string | null, label: string, at?: number) {
     if (task.dueOn === day) return;
@@ -418,12 +421,12 @@ export function useTaskActions() {
     const kind = group ? "move" : "patch";
     if (!answer.ok) {
       dropOp(kind, task.id);
-      return notify({ text: `“${inlinePlain(task.title)}” could not be moved: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow("row.couldNotMove", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     }
     settleOp(kind, task.id);
     touch();
     notify({
-      text: `Moved “${inlinePlain(task.title)}” to ${label}`,
+      text: translateNow("row.movedTo", { title: inlinePlain(task.title), label }),
       tone: "status",
       undo: () => void saving(tool("update_item", { id: task.id, dueOn: task.dueOn, ...(task.dueTime ? { dueTime: task.dueTime } : {}) })),
     });
@@ -435,13 +438,13 @@ export function useTaskActions() {
     const answer = await tool<{ previous: { nodeId: string | null } }>("move_item", { id: task.id, node: node?.id ?? null });
     if (!answer.ok) {
       dropOp("patch", task.id);
-      return notify({ text: `“${inlinePlain(task.title)}” could not be moved: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow("row.couldNotMove", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     }
     settleOp("patch", task.id);
     touch();
     const back = answer.previous.nodeId;
     notify({
-      text: `Moved “${inlinePlain(task.title)}” to ${node?.path ?? "General"}`,
+      text: translateNow("row.movedTo", { title: inlinePlain(task.title), label: node?.path ?? translateNow("filter.general") }),
       tone: "status",
       undo: () => void saving(tool("move_item", { id: task.id, node: back })),
     });
@@ -452,7 +455,7 @@ export function useTaskActions() {
     const answer = await tool("reorder_items", { ids });
     if (!answer.ok) {
       dropOp("order", group);
-      return notify({ text: `The new order could not be saved: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow("row.orderNotSaved", { message: answer.message }), tone: "error" });
     }
     settleOp("order", group);
     touch();
@@ -469,11 +472,11 @@ export function useTaskActions() {
       ...(task.dueOn ? { dueOn: task.dueOn } : {}),
       ...(task.dueOn && task.dueTime ? { dueTime: task.dueTime } : {}),
     });
-    if (!answer.ok) return notify({ text: `“${inlinePlain(task.title)}” could not be duplicated: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: translateNow("row.couldNotDuplicate", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     touch();
     const copy = answer.item.id;
     notify({
-      text: `Duplicated “${inlinePlain(task.title)}”`,
+      text: translateNow("row.duplicated", { title: inlinePlain(task.title) }),
       tone: "status",
       undo: () => void saving(tool("delete_item", { id: copy })),
     });
@@ -486,10 +489,10 @@ function dayTargets(now: Day): Array<{ label: string; day: Day | null }> {
   const weekday = dateOf(now).getDay();
   const nextMonday = addDays(now, ((8 - weekday) % 7) || 7);
   return [
-    { label: "Today", day: now },
-    { label: "Tomorrow", day: addDays(now, 1) },
-    { label: "Next week", day: nextMonday },
-    { label: "No date", day: null },
+    { label: translateNow("date.today"), day: now },
+    { label: translateNow("date.tomorrow"), day: addDays(now, 1) },
+    { label: translateNow("row.nextWeek"), day: nextMonday },
+    { label: translateNow("date.noDate"), day: null },
   ];
 }
 
@@ -503,7 +506,7 @@ function groupOfDay(day: Day | null, now: Day): string {
 function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode[] | null, list?: TaskData[]): MenuEntry[] {
   const now = today();
   const places: MenuEntry[] = [
-    { kind: "action", label: "General", disabled: task.nodeId === null, onSelect: () => void actions.moveToPlace(task, null) },
+    { kind: "action", label: translateNow("filter.general"), disabled: task.nodeId === null, onSelect: () => void actions.moveToPlace(task, null) },
     ...(tree ?? []).map(
       (node): MenuEntry => ({
         kind: "action",
@@ -516,20 +519,20 @@ function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode[] | nu
   return [
     {
       kind: "choice",
-      label: "Priority",
+      label: translateNow("quick.priority"),
       icon: PriorityIcon,
       value: String(task.priority ?? 4),
-      options: PRIORITIES.map((option) => ({ value: option.value, label: option.label })),
+      options: priorityOptions(),
       onChoose: (value) => void actions.setPriority(task, Number(value)),
     },
     {
       kind: "submenu",
-      label: "Move to…",
+      label: translateNow("row.moveTo"),
       icon: MoveIcon,
       entries: [
         {
           kind: "group",
-          label: "Day",
+          label: translateNow("row.day"),
           entries: dayTargets(now).map(
             (target): MenuEntry => ({
               kind: "action",
@@ -540,13 +543,13 @@ function taskMenuEntries(task: TaskData, actions: Actions, tree: TreeNode[] | nu
           ),
         },
         { kind: "separator" },
-        { kind: "group", label: "Client or project", entries: places },
+        { kind: "group", label: translateNow("filter.clientOrProject"), entries: places },
       ],
     },
-    { kind: "action", label: "Link calendar event…", icon: LinkIcon, onSelect: () => openTaskDetail({ id: task.id, task, list, focus: "event" }) },
-    { kind: "action", label: "Duplicate", icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
+    { kind: "action", label: translateNow("row.linkEvent"), icon: LinkIcon, onSelect: () => openTaskDetail({ id: task.id, task, list, focus: "event" }) },
+    { kind: "action", label: translateNow("row.duplicate"), icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
     { kind: "separator" },
-    { kind: "action", label: "Delete", tone: "danger", icon: DeleteIcon, onSelect: () => void actions.remove(task) },
+    { kind: "action", label: translateNow("row.delete"), tone: "danger", icon: DeleteIcon, onSelect: () => void actions.remove(task) },
   ];
 }
 
@@ -556,7 +559,7 @@ export function TaskCircle({ title, priority, done, onToggle, className }: { tit
       type="button"
       role="checkbox"
       aria-checked={done}
-      aria-label={`${done ? `Reopen “${inlinePlain(title)}”` : `Complete “${inlinePlain(title)}”`}, ${priorityName(priority)} priority`}
+      aria-label={translateNow(done ? "row.reopenNamed" : "row.completeNamed", { title: inlinePlain(title), priority: priorityName(priority) })}
       className={cx("task-circle", className)}
       data-priority={priority ?? 4}
       onClick={(event) => {
@@ -582,6 +585,7 @@ type RowProps = {
 };
 
 function TaskRowView({ task, layout = "list", showPlace = true, pageNode, dayShown, list, onKeyMove, draggable, onDragStart, onDragEnd, leaving }: RowProps) {
+  const { t } = useStrings();
   const { tree } = useWorkspace();
   const actions = useTaskActions();
   const now = today();
@@ -614,7 +618,7 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
         type="button"
         className="task-open"
         data-item-title
-        aria-label={`Open “${plain}”`}
+        aria-label={t("row.openNamed", { title: plain })}
         aria-keyshortcuts={onKeyMove ? "Alt+ArrowUp Alt+ArrowDown Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
         draggable={draggable}
         onDragStart={onDragStart}
@@ -635,10 +639,10 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
                 look="chip"
                 className="task-when-trigger"
                 icon={task.dueTime ? TimeIcon : DateIcon}
-                label={`Date of “${plain}”`}
+                label={t("row.dateOf", { title: plain })}
                 value={task.dueOn}
                 display={when}
-                onChange={(day) => void actions.moveToDay(task, day, groupFor(day), day ? dayName(day, now) : "No date")}
+                onChange={(day) => void actions.moveToDay(task, day, groupFor(day), day ? dayName(day, now) : t("date.noDate"))}
               />
             </span>
           )}
@@ -648,7 +652,7 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
               className="task-subtasks-toggle"
               aria-expanded={open}
               aria-controls={subtasksId}
-              aria-label={`${task.subtasks.done}/${task.subtasks.total} subtasks done`}
+              aria-label={t("row.subtasksDone", { done: task.subtasks.done, total: task.subtasks.total })}
               onClick={(event) => {
                 event.stopPropagation();
                 setOpen((value) => !value);
@@ -667,19 +671,19 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
           {mail && (
             <span className="task-mail" data-mail={mail}>
               <MailIcon />
-              Waiting for mail
+              {t("row.waitingForMail")}
             </span>
           )}
           {task.notes > 0 && (
             <span className="task-notes">
               <NoteIcon />
-              {count(task.notes, "note", "notes")}
+              {countedNow(task.notes, "counted.note", "counted.notes")}
             </span>
           )}
           {task.decisions > 0 && (
             <span className="task-notes">
               <DecisionIcon />
-              {count(task.decisions, "decision", "decisions")}
+              {countedNow(task.decisions, "counted.decision", "counted.decisions")}
             </span>
           )}
           {task.source !== "manual" && (
@@ -696,7 +700,7 @@ function TaskRowView({ task, layout = "list", showPlace = true, pageNode, daySho
         </div>
       )}
       <div className="task-more">
-        <Menu label="More" about={`for “${plain}”`} entries={taskMenuEntries(task, actions, tree, list)} onOpenChange={setMenuOpen} />
+        <Menu label={t("common.more")} about={t("board.moreFor", { name: `“${plain}”` })} entries={taskMenuEntries(task, actions, tree, list)} onOpenChange={setMenuOpen} />
       </div>
       {task.subtasks.total > 0 && (
         <Fold open={open} id={subtasksId} className="task-subtasks" lazy follow>
@@ -724,10 +728,10 @@ function Subtasks({ parent }: { parent: TaskData }) {
       live = false;
     };
   }, [parent.id, version]);
-  if (failed && !items) return <p className="inline-note" data-tone="alert">The subtasks could not be loaded: {failed}</p>;
+  if (failed && !items) return <p className="inline-note" data-tone="alert">{translateNow("row.subtasksNotLoaded", { message: failed })}</p>;
   if (!items) {
     return (
-      <div className="task-subtask-list" role="status" aria-busy="true" aria-label="Loading the subtasks">
+      <div className="task-subtask-list" role="status" aria-busy="true" aria-label={translateNow("row.loadingSubtasks")}>
         <span className="skeleton" />
         <span className="skeleton" />
       </div>
@@ -735,7 +739,7 @@ function Subtasks({ parent }: { parent: TaskData }) {
   }
   const list = items.map((item) => ({ id: item.id, title: item.title, nodeId: item.nodeId }));
   return (
-    <ul className="task-subtask-list" aria-label={`Subtasks of “${inlinePlain(parent.title)}”`}>
+    <ul className="task-subtask-list" aria-label={translateNow("row.subtasksOf", { title: inlinePlain(parent.title) })}>
       {items.map((item) => (
         <li key={item.id} className="task-subtask" data-done={item.status === "done" || undefined}>
           <TaskCircle
@@ -879,10 +883,10 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
       event.preventDefault();
       const step = event.key === "ArrowUp" ? -1 : 1;
       if (!event.shiftKey) {
-        if (!reorderable) return setSaid(`“${inlinePlain(task.title)}” keeps the group's order: ${label} is sorted by date.`);
+        if (!reorderable) return setSaid(translateNow("row.keepsOrder", { title: inlinePlain(task.title), label }));
         const index = ids.indexOf(task.id) + step;
         if (reorderTo(task.id, index)) {
-          setSaid(`“${inlinePlain(task.title)}” is now ${Math.max(1, Math.min(ids.length, index + 1))} of ${ids.length} in ${label}.`);
+          setSaid(translateNow("row.nowOf", { title: inlinePlain(task.title), at: Math.max(1, Math.min(ids.length, index + 1)), total: ids.length, label }));
           refocus(task.id);
         }
         return;
@@ -896,7 +900,7 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
         refocus(task.id);
         return;
       }
-      setSaid(`No group ${step < 0 ? "before" : "after"} ${label} takes a task.`);
+      setSaid(translateNow(step < 0 ? "row.noGroupBefore" : "row.noGroupAfter", { label }));
     };
   }
 
@@ -1010,7 +1014,7 @@ export function TaskList({ group, label, tasks, layout = "list", showPlace = tru
       }}
       onDrop={onDrop}
     >
-      <ul ref={list} className="task-list" data-layout={layout} aria-label={`${label}, ${count(visible.length, "task", "tasks")}`}>
+      <ul ref={list} className="task-list" data-layout={layout} aria-label={`${label}, ${countedNow(visible.length, "counted.task", "counted.tasks")}`}>
         {rows}
       </ul>
       {visible.length === 0 && dropAt === null && empty}

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const PATHS = ["", "/help", "/privacy", "/cookies", "/terms"];
+const PATHS = ["", "/help", "/privacy", "/cookies", "/terms", "/es", "/es/help", "/es/privacy", "/es/cookies", "/es/terms"];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://brief.hiagencia.com";

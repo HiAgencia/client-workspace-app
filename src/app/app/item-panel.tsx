@@ -5,11 +5,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CloseIcon, DecisionIcon, DeleteIcon, NoteIcon, TasksIcon } from "@/components/ui/icons";
 import { RichEditor } from "@/components/ui/rich-editor";
-import { LOCALE } from "@/lib/dates";
+import { currentLanguage } from "@/lib/language";
 import { inlinePlain } from "@/lib/inline-links";
 import { ASSISTANT_NAME } from "@/lib/product";
+import { translateNow, useStrings } from "@/lib/strings";
 import { get, post, tool, type Item } from "./client-api";
-import { Origin, TYPE_NAMES } from "./item-parts";
+import { Origin, typeName } from "./item-parts";
 import { PlaceName } from "./task-row";
 import { useWorkspace } from "./workspace";
 
@@ -23,11 +24,11 @@ type Revision = {
   snapshot: { title: string; status: string; deleted_at: string | null };
 };
 
-const SAY: Record<Exclude<Status, "">, string> = { saving: "Saving…", saved: "Saved", failed: "Not saved" };
+const SAY: Record<Exclude<Status, "">, "workspace.saving" | "workspace.saved" | "detail.notSaved"> = { saving: "workspace.saving", saved: "workspace.saved", failed: "detail.notSaved" };
 
-const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-const stampDay = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric" });
-const by = (source: Revision["source"], label: string | null) => (source === "chat" ? ASSISTANT_NAME : source === "agent" ? `agent ${label}` : "you");
+const stamp = (iso: string) => new Date(iso).toLocaleString(currentLanguage(), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const stampDay = (iso: string) => new Date(iso).toLocaleString(currentLanguage(), { month: "short", day: "numeric" });
+const by = (source: Revision["source"], label: string | null) => (source === "chat" ? ASSISTANT_NAME : source === "agent" ? translateNow("panel.byAgent", { label: label ?? "" }) : translateNow("panel.youWord"));
 
 export function ItemPanel({
   item,
@@ -42,6 +43,7 @@ export function ItemPanel({
   onClose: (id: string, from: HTMLElement | null) => void;
   onDelete: (item: Item) => void;
 }) {
+  const { t, lang } = useStrings();
   const { tree } = useWorkspace();
   const dialog = useRef<HTMLDialogElement>(null);
   const [shown, setShown] = useState<Item | null>(null);
@@ -158,7 +160,7 @@ export function ItemPanel({
     });
   }
 
-  const fieldName = current?.type === "note" ? "Note" : current?.type === "decision" ? "Why" : "Notes";
+  const fieldName = current?.type === "note" ? t("type.note") : current?.type === "decision" ? t("panel.why") : t("box.notes");
 
   return (
     <dialog
@@ -187,12 +189,12 @@ export function ItemPanel({
             <div className="panel-title">
               <p key={current.type} className="t-label panel-kind fade-enter" data-kind={current.type}>
                 {current.type === "decision" ? <DecisionIcon /> : current.type === "note" ? <NoteIcon /> : <TasksIcon />}
-                {TYPE_NAMES[current.type]}
+                {typeName(current.type)}
               </p>
             </div>
-            <Button size="sm" variant="quiet" className="btn-icon" onClick={close} title="Close">
+            <Button size="sm" variant="quiet" className="btn-icon" onClick={close} title={t("common.close")}>
               <CloseIcon />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("common.close")}</span>
             </Button>
           </header>
           <div className="panel-body">
@@ -212,18 +214,18 @@ export function ItemPanel({
               <span className="panel-record" data-panel-record>
                 <Origin item={current} />
               </span>
-              <span className="panel-added">{`Added ${stampDay(current.createdAt)}`}</span>
+              <span className="panel-added">{t("panel.addedOn", { when: stampDay(current.createdAt) })}</span>
             </p>
             <div className="panel-field">
               <label className={current.type === "decision" ? "t-meta panel-field-name" : "sr-only"} htmlFor={notesId}>
                 {fieldName}
               </label>
-              <RichEditor key={current.id} id={notesId} label={fieldName} value={notes} placeholder="Add details…" onChange={edit} onBlur={() => void flush()} onEscape={close} />
+              <RichEditor key={current.id} id={notesId} label={fieldName} lang={lang} value={notes} placeholder={t("panel.addDetails")} onChange={edit} onBlur={() => void flush()} onEscape={close} />
               <div className="panel-field-foot">
                 <p className="t-meta panel-status" role="status" data-panel-status={status || undefined}>
-                  {status ? SAY[status] : ""}
+                  {status ? t(SAY[status]) : ""}
                 </p>
-                <p className="t-meta panel-help">Saves as you type. Select words to make them bold, colored, or a link.</p>
+                <p className="t-meta panel-help">{t("panel.savesAsType")}</p>
               </div>
             </div>
             <Versions revisions={revisions} onRestore={restore} />
@@ -232,7 +234,7 @@ export function ItemPanel({
             {current.type !== "task" && (
               <Button size="sm" data-panel-mark onClick={() => markDecision(current.type === "note")}>
                 {current.type === "note" ? <DecisionIcon /> : <NoteIcon />}
-                <span className="btn-label">{current.type === "note" ? "Mark as decision" : "Mark as note"}</span>
+                <span className="btn-label">{current.type === "note" ? t("detail.markDecision") : t("detail.markNote")}</span>
               </Button>
             )}
             <Button
@@ -248,7 +250,7 @@ export function ItemPanel({
               }}
             >
               <DeleteIcon />
-              <span className="btn-label">{`Delete this ${TYPE_NAMES[current.type].toLowerCase()}`}</span>
+              <span className="btn-label">{t("panel.deleteThis", { type: typeName(current.type).toLowerCase() })}</span>
             </Button>
           </footer>
         </div>
@@ -258,26 +260,27 @@ export function ItemPanel({
 }
 
 function Versions({ revisions, onRestore }: { revisions: Revision[] | null; onRestore: (id: string) => Promise<void> }) {
+  const { t } = useStrings();
   return (
     <section className="panel-section" aria-labelledby="panel-versions" data-panel-versions>
       <h3 id="panel-versions" className="panel-section-head">
-        Versions
+        {t("detail.versions")}
         {revisions && revisions.length > 0 && <span className="panel-section-count">{revisions.length}</span>}
       </h3>
       {revisions === null || revisions.length === 0 ? (
-        <p className="t-meta panel-section-empty">{revisions === null ? "Loading the versions…" : "No earlier versions: every change from now on leaves one here."}</p>
+        <p className="t-meta panel-section-empty">{revisions === null ? t("detail.loadingVersions") : t("detail.noEarlier")}</p>
       ) : (
         <ul className="plain-list panel-versions">
           {revisions.slice(0, 12).map((revision) => (
             <li key={revision.id} className="panel-version" data-revision={revision.id}>
               <span className="panel-version-text">
-                <span className="t-value">{revision.snapshot.deleted_at ? `Deleted: ${revision.snapshot.title}` : revision.snapshot.title}</span>
+                <span className="t-value">{revision.snapshot.deleted_at ? t("panel.deletedPrefix", { title: revision.snapshot.title }) : revision.snapshot.title}</span>
                 <span className="t-meta">
-                  Before a change by {by(revision.source, revision.agentLabel)}, {stamp(revision.createdAt)}
+                  {t("panel.beforeBy", { who: by(revision.source, revision.agentLabel), when: stamp(revision.createdAt) })}
                 </span>
               </span>
-              <Button size="sm" variant="quiet" onClick={() => void onRestore(revision.id)} aria-label={`Restore the version of ${stamp(revision.createdAt)}`}>
-                Restore
+              <Button size="sm" variant="quiet" onClick={() => void onRestore(revision.id)} aria-label={t("detail.restoreVersion", { when: stamp(revision.createdAt) })}>
+                {t("trash.restore")}
               </Button>
             </li>
           ))}

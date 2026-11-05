@@ -18,6 +18,7 @@ import { ActivityIcon, CalendarIcon, GripIcon, MailIcon, NoDateIcon, NoteIcon, T
 import { landFrom, useFlip } from "@/components/ui/flip";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { Tick } from "@/components/ui/tick";
+import { translateNow, useStrings, type StringKey } from "@/lib/strings";
 import { cx } from "@/lib/utils";
 import { columnsOf, isMark, orderDropped, orderMovedTo, settleLayout, steppedOrder, type BoardLayout, type Zone } from "./board-layout";
 import { get, peekTool, post, tool } from "./client-api";
@@ -25,11 +26,12 @@ import { isFresh, keep, peek, refreshEnded, refreshStarted, stamp, type Kept } f
 import { useWorkspace } from "./workspace";
 import "../styles/boxes.css";
 
-const MOVE_ON = ["Move to the second column", "Move to the row below", "Move to the first column"];
-const ZONE_NAMES = ["the first column", "the second column", "the row below"];
+const MOVE_ON: StringKey[] = ["board.moveSecond", "board.moveRowBelow", "board.moveFirst"];
+const ZONE_NAMES: StringKey[] = ["board.zoneFirst", "board.zoneSecond", "board.zoneRow"];
 
 export function useBoardLayout(page: string, defaults: string[], saved: BoardLayout | null, apart: string | null = null) {
   const { notify } = useWorkspace();
+  const { t } = useStrings();
   const [layout, setLayout] = useState(() => settleLayout(saved, defaults));
   const confirmed = useRef(layout);
   const touched = useRef(false);
@@ -62,7 +64,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
       if (answer.ok) confirmed.current = next;
       else if (!wanted.current) {
         setLayout(confirmed.current);
-        notify({ text: `The boxes' order could not be saved: ${answer.message}`, tone: "error" });
+        notify({ text: translateNow("board.orderNotSaved", { message: answer.message }), tone: "error" });
       }
     }
     sending.current = false;
@@ -84,7 +86,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   function step(id: string, by: -1 | 1, name: string, spread: boolean) {
     const order = steppedOrder(layout.order, visible(layout.order), id, by, spread);
     if (!order) return;
-    commit({ ...layout, order }, `${name} moved ${by < 0 ? "up" : "down"}.`);
+    commit({ ...layout, order }, t(by < 0 ? "board.movedUp" : "board.movedDown", { name }));
     refocus(id);
   }
 
@@ -92,7 +94,7 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
     const [first, second] = columnsOf(layout);
     const from: Zone = first.includes(id) ? 0 : second.includes(id) ? 1 : 2;
     const to = spread ? (((from + 1) % 3) as Zone) : 2;
-    commit({ ...layout, order: orderMovedTo(layout.order, id, to) }, `${name} moved to ${spread ? ZONE_NAMES[to] : "the end"}.`);
+    commit({ ...layout, order: orderMovedTo(layout.order, id, to) }, spread ? t("board.movedTo", { name, zone: t(ZONE_NAMES[to]) }) : t("board.movedToEnd", { name }));
     refocus(id);
   }
 
@@ -103,17 +105,17 @@ export function useBoardLayout(page: string, defaults: string[], saved: BoardLay
   }
 
   function hide(id: string, name: string) {
-    commit({ ...layout, hidden: [...layout.hidden, id] }, `${name} hidden. Show it again from More › Customize.`);
+    commit({ ...layout, hidden: [...layout.hidden, id] }, t("board.hidden", { name }));
     requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-page-title]")?.focus({ preventScroll: true }));
   }
 
   function show(id: string, name: string) {
-    commit({ ...layout, hidden: layout.hidden.filter((entry) => entry !== id) }, `${name} is back.`);
+    commit({ ...layout, hidden: layout.hidden.filter((entry) => entry !== id) }, t("board.back", { name }));
     refocus(id);
   }
 
   function reset() {
-    commit({ order: defaults, hidden: [] }, "Layout reset.");
+    commit({ order: defaults, hidden: [] }, t("board.reset"));
   }
 
   return { layout, step, moveOn, place, hide, show, reset, columns: columnsOf({ ...layout, order: visible(layout.order) }) };
@@ -133,14 +135,14 @@ export function customizeEntries(board: Board, names: Record<string, string>): M
   return [
     {
       kind: "submenu",
-      label: "Customize",
-      detail: hidden.length ? `${hidden.length} hidden` : undefined,
+      label: translateNow("board.customize"),
+      detail: hidden.length ? translateNow("board.hiddenCount", { n: hidden.length }) : undefined,
       entries: [
         ...(hidden.length
-          ? hidden.map((id): MenuEntry => ({ kind: "action", label: `Show ${names[id]}`, onSelect: () => board.show(id, names[id]) }))
-          : [{ kind: "action" as const, label: "No hidden boxes", disabled: true, onSelect: () => {} }]),
+          ? hidden.map((id): MenuEntry => ({ kind: "action", label: translateNow("board.showBox", { name: names[id] }), onSelect: () => board.show(id, names[id]) }))
+          : [{ kind: "action" as const, label: translateNow("board.noHidden"), disabled: true, onSelect: () => {} }]),
         { kind: "separator" },
-        { kind: "action", label: "Reset layout", onSelect: () => board.reset() },
+        { kind: "action", label: translateNow("board.resetLayout"), onSelect: () => board.reset() },
       ],
     },
   ];
@@ -249,6 +251,7 @@ export function useBoxSettled(settled: boolean): void {
 }
 
 export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: Board; boxes: Record<string, BoxSpec>; label: string; wide?: BoxSpec | null; hold?: boolean }) {
+  const { t } = useStrings();
   const host = useRef<HTMLDivElement>(null);
   const [settled, setSettled] = useState<Record<string, boolean>>({});
   const capped = useEntryCap();
@@ -427,7 +430,7 @@ export function BoxBoard({ board, boxes, label, wide, hold = false }: { board: B
       </p>
       {revealed.size === 0 && (
         <p className="boxes-wait t-meta" role="status">
-          Reading your workspace…
+          {t("board.reading")}
         </p>
       )}
     </div>
@@ -462,19 +465,20 @@ function Box({
   shown: boolean;
   behind: boolean;
 }) {
+  const { t } = useStrings();
   const [menuOpen, setMenuOpen] = useState(false);
   const titleId = `box-${spec.id}-title`;
   const moves: MenuEntry[] = fixed
     ? []
     : [
-        { kind: "action", label: "Move up", disabled: isFirst, detail: isFirst ? "Already first" : undefined, onSelect: () => board.step(spec.id, -1, spec.title, spread) },
-        { kind: "action", label: "Move down", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.step(spec.id, 1, spec.title, spread) },
+        { kind: "action", label: t("board.moveUp"), disabled: isFirst, detail: isFirst ? t("board.alreadyFirst") : undefined, onSelect: () => board.step(spec.id, -1, spec.title, spread) },
+        { kind: "action", label: t("board.moveDown"), disabled: isLast, detail: isLast ? t("board.lastAlready") : undefined, onSelect: () => board.step(spec.id, 1, spec.title, spread) },
         spread
-          ? { kind: "action", label: MOVE_ON[zone], onSelect: () => board.moveOn(spec.id, spec.title, spread) }
-          : { kind: "action", label: "Move to the end", disabled: isLast, detail: isLast ? "Last already" : undefined, onSelect: () => board.moveOn(spec.id, spec.title, spread) },
+          ? { kind: "action", label: t(MOVE_ON[zone]), onSelect: () => board.moveOn(spec.id, spec.title, spread) }
+          : { kind: "action", label: t("board.moveToEnd"), disabled: isLast, detail: isLast ? t("board.lastAlready") : undefined, onSelect: () => board.moveOn(spec.id, spec.title, spread) },
         { kind: "separator" },
       ];
-  const entries: MenuEntry[] = [...(spec.menu?.length ? [...spec.menu, { kind: "separator" } as const] : []), ...moves, { kind: "action", label: "Hide box", onSelect: () => board.hide(spec.id, spec.title) }];
+  const entries: MenuEntry[] = [...(spec.menu?.length ? [...spec.menu, { kind: "separator" } as const] : []), ...moves, { kind: "action", label: t("board.hideBox"), onSelect: () => board.hide(spec.id, spec.title) }];
 
   return (
     <section
@@ -525,7 +529,7 @@ function Box({
         )}
         <div className="box-tools">
           <div className="box-more">
-            <Menu label="More" about={`for ${spec.title}`} entries={entries} onOpenChange={setMenuOpen} />
+            <Menu label={t("common.more")} about={t("board.moreFor", { name: spec.title })} entries={entries} onOpenChange={setMenuOpen} />
           </div>
           {spec.action && <div className="box-action">{spec.action}</div>}
         </div>
@@ -639,13 +643,14 @@ export function BoxEmpty({ text, children, reason }: { text: ReactNode; children
 }
 
 export function BoxFailed({ what, message, kept, onRetry }: { what: string; message: string; kept: boolean; onRetry: () => void }) {
+  const { t } = useStrings();
   return (
     <div className="box-failed" role="alert" data-failed>
       <p className="inline-note" data-tone="alert">
-        {kept ? `${what} could not be refreshed: ${message}. Showing the last version loaded.` : `${what} could not be loaded: ${message}.`}
+        {kept ? t("board.failedKept", { what, message }) : t("board.failed", { what, message })}
       </p>
       <Button size="sm" onClick={onRetry}>
-        Try again
+        {t("common.tryAgain")}
       </Button>
     </div>
   );

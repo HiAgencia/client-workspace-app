@@ -5,42 +5,45 @@ import { scrollPageTo } from "@/components/page-scroll";
 import { Button } from "@/components/ui/button";
 import { GUIDE_KEY, GUIDE_VERSION } from "@/lib/guide-key";
 import { ASSISTANT_NAME } from "@/lib/product";
+import { translateNow, useStrings, type Stringer } from "@/lib/strings";
 import "../styles/guide.css";
 
 type Step = { targets: string[]; title: string; text: string };
 
-const STEPS: Step[] = [
-  {
-    targets: [".sidebar .side-places", ".topbar .drawer-trigger"],
-    title: "Clients and projects",
-    text: "Each one keeps its tasks, notes, calendars and mail together. Open one from here, and its page shows only what belongs to it.",
-  },
-  {
-    targets: [".reply-strip"],
-    title: "Mail that may answer a task",
-    text: "A task can wait for mail. What may answer it shows up here, and you say whether it did and how it ended.",
-  },
-  {
-    targets: ["[data-box='tasks']"],
-    title: "What is due",
-    text: "Overdue, today and the days ahead, from every client and project. Press a circle to complete a task, or its row to open it.",
-  },
-  {
-    targets: ["[data-box='calendar']"],
-    title: "Your week and your mail",
-    text: "A Google account connected to a client or a project brings its events and its mail here, each labeled with its client or project.",
-  },
-  {
-    targets: ["[data-page-header] [data-chat-toggle]"],
-    title: `${ASSISTANT_NAME}, when you ask`,
-    text: "Tell it what to add or what to look for, in words, with a picture or by voice. It acts only when you ask, and what it did can be undone.",
-  },
-  {
-    targets: [".sidebar .side-foot a[href='/app/settings']", ".topbar .drawer-trigger"],
-    title: "Your coding agents",
-    text: "In Settings, give a coding agent a token for a client or a project. What it adds shows up there, labeled with the token’s name.",
-  },
-];
+function guideSteps(t: Stringer["t"]): Step[] {
+  return [
+    {
+      targets: [".sidebar .side-places", ".topbar .drawer-trigger"],
+      title: t("palette.clientsProjects"),
+      text: t("guide.clientsText"),
+    },
+    {
+      targets: [".reply-strip"],
+      title: t("guide.mailTitle"),
+      text: t("guide.mailText"),
+    },
+    {
+      targets: ["[data-box='tasks']"],
+      title: t("guide.dueTitle"),
+      text: t("guide.dueText"),
+    },
+    {
+      targets: ["[data-box='calendar']"],
+      title: t("guide.weekTitle"),
+      text: t("guide.weekText"),
+    },
+    {
+      targets: ["[data-page-header] [data-chat-toggle]"],
+      title: t("guide.assistantTitle", { assistant: ASSISTANT_NAME }),
+      text: t("guide.assistantText"),
+    },
+    {
+      targets: [".sidebar .side-foot a[href='/app/settings']", ".topbar .drawer-trigger"],
+      title: t("guide.agentsTitle"),
+      text: t("guide.agentsText"),
+    },
+  ];
+}
 
 const FADE_CAP_MS = 400;
 const AFTER_ENTRY_MS = 700;
@@ -131,6 +134,7 @@ function bringIntoView(target: HTMLElement): Promise<void> {
 }
 
 export function useGuide(offer = true): { start: () => void; layer: ReactNode } {
+  const { t } = useStrings();
   const [phase, setPhase] = useState<"none" | "offer" | "steps">("none");
   const [steps, setSteps] = useState<Step[]>([]);
   const [index, setIndex] = useState(0);
@@ -248,7 +252,7 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
 
   const open = useCallback(() => {
     held.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const present = STEPS.filter((candidate) => targetOf(candidate));
+    const present = guideSteps(translateNow as Stringer["t"]).filter((candidate) => targetOf(candidate));
     swap(async () => {
       setSteps(present);
       setIndex(0);
@@ -311,21 +315,21 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
       <>
         {phase === "steps" && <div ref={ring} className="guide-ring" data-leaving={leaving || undefined} aria-hidden="true" />}
         {phase === "offer" ? (
-          <section className="guide-card" data-guide="offer" data-leaving={leaving || undefined} aria-label="A guide to this page">
-            <p className="guide-text">New here? A short guide shows what each part of this page does.</p>
+          <section className="guide-card" data-guide="offer" data-leaving={leaving || undefined} aria-label={t("guide.offerLabel")}>
+            <p className="guide-text">{t("guide.offerText")}</p>
             <div className="guide-actions">
               <Button size="sm" onClick={finish}>
-                Not now
+                {t("guide.notNow")}
               </Button>
               <Button size="sm" variant="primary" onClick={open}>
-                Show me
+                {t("guide.showMe")}
               </Button>
             </div>
           </section>
         ) : (
           <section ref={card} className="guide-card" data-guide="step" data-leaving={leaving || undefined} role="dialog" aria-modal="false" aria-labelledby="guide-title" aria-describedby="guide-text">
             <p className="t-meta guide-count">
-              {index + 1} of {steps.length}
+              {t("guide.ofCount", { n: index + 1, total: steps.length })}
             </p>
             <h2 id="guide-title" className="t-title guide-title">
               {step?.title}
@@ -335,17 +339,17 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
             </p>
             <div className="guide-actions">
               <Button size="sm" variant="quiet" className="guide-skip" onClick={finish}>
-                Skip
+                {t("guide.skip")}
               </Button>
               <Button size="sm" disabled={index === 0} onClick={() => goTo(index - 1)}>
-                Back
+                {t("guide.back")}
               </Button>
               <Button ref={next} size="sm" variant="primary" onClick={() => (index === steps.length - 1 ? finish() : goTo(index + 1))}>
-                {index === steps.length - 1 ? "Done" : "Next"}
+                {index === steps.length - 1 ? t("guide.done") : t("guide.next")}
               </Button>
             </div>
             <p className="sr-only" role="status" aria-live="polite">
-              {step ? `${index + 1} of ${steps.length}. ${step.title}. ${step.text}` : ""}
+              {step ? t("guide.status", { n: index + 1, total: steps.length, title: step.title, text: step.text }) : ""}
             </p>
           </section>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { READ_TOOLS } from "@/lib/tools/read-tools";
+import { translateNow } from "@/lib/strings";
 import { forgetReads, keep, peek, readEnded, readStarted, stamp, wrote, type Kept } from "./read-cache";
 
 export type Failure = { ok: false; code?: string; message: string; candidates?: Array<{ id: string; path: string }> };
@@ -14,7 +15,7 @@ async function ask(url: string, init: RequestInit): Promise<Response | Failure> 
     return await fetch(url, { cache: "no-store", ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (error) {
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
-    return { ok: false, message: timeout ? "The server did not answer in time." : "No connection to the server." };
+    return { ok: false, message: timeout ? translateNow("api.timeout") : translateNow("api.noConnection") };
   }
 }
 
@@ -30,7 +31,7 @@ export async function askOnceMoreIfCut(url: string, init: RequestInit): Promise<
 }
 
 async function adopted(started: Promise<Response>, url: string, init: RequestInit): Promise<Response | Failure> {
-  const first = await started.catch((): Failure => ({ ok: false, message: "No connection to the server." }));
+  const first = await started.catch((): Failure => ({ ok: false, message: translateNow("api.noConnection") }));
   if (!wasCut(first)) return first;
   await new Promise((resolve) => setTimeout(resolve, SECOND_READ_PAUSE_MS));
   return ask(url, init);
@@ -49,12 +50,12 @@ async function send<T>(url: string, init: RequestInit, kind: "read" | "write", e
   if (response.status === 401) {
     forgetReads();
     window.location.assign(new URL("/", window.location.origin));
-    return { ok: false, message: "Your session ended. Sign in again." };
+    return { ok: false, message: translateNow("api.sessionEnded") };
   }
   try {
     return (await response.json()) as Answer<T>;
   } catch {
-    return { ok: false, message: "The server could not answer. Try again." };
+    return { ok: false, message: translateNow("api.serverCouldNot") };
   }
 }
 

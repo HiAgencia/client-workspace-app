@@ -32,15 +32,17 @@ import { RichEditor, RichText } from "@/components/ui/rich-editor";
 import { Select, type SelectOption } from "@/components/ui/select";
 import { useAutoHeight } from "@/components/ui/use-auto-height";
 import { afterExit, focusAfterClose } from "@/components/ui/use-exit";
-import { addDays, instantsOf, LOCALE, today } from "@/lib/dates";
+import { addDays, instantsOf, today } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { currentLanguage } from "@/lib/language";
 import { ASSISTANT_NAME } from "@/lib/product";
+import { translateNow, useStrings } from "@/lib/strings";
 import { richTextToPlain } from "@/lib/rich-text";
 import { cx } from "@/lib/utils";
 import { get, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "./client-api";
 import { dueTimeOptions, NO_TIME } from "./due-times";
 import { readEvents } from "./events-read";
-import { PRIORITIES, SenderMark, sourceName } from "./item-parts";
+import { priorityOptions, SenderMark, sourceName } from "./item-parts";
 import { subjectOf } from "./mail/subject";
 import { startRound, withAccountMail, type ItemMail, type LinkedMail, type LinkedMessage, type MailFailure } from "./task-mail-read";
 import { TaskOutcome, useCompleteTask } from "./task-outcome";
@@ -70,12 +72,12 @@ type BrowsedEvent = { id: string; title: string; start: string; allDay: boolean;
 type Known = TaskDetailRequest["task"];
 type SaveStatus = "" | "saving" | "saved" | "failed";
 
-const SAVE: Record<"saving" | "saved" | "failed", string> = { saving: "Saving…", saved: "Saved", failed: "Not saved" };
+const SAVE: Record<"saving" | "saved" | "failed", "workspace.saving" | "workspace.saved" | "detail.notSaved"> = { saving: "workspace.saving", saved: "workspace.saved", failed: "detail.notSaved" };
 
-const stamp = (iso: string) => new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric" }).format(new Date(iso));
-const stampTime = (iso: string) => new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+const stamp = (iso: string) => new Intl.DateTimeFormat(currentLanguage(), { month: "short", day: "numeric" }).format(new Date(iso));
+const stampTime = (iso: string) => new Intl.DateTimeFormat(currentLanguage(), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 const addedBy = (source: Item["source"], label: string | null, at: string) =>
-  source === "manual" ? `Created ${at}` : `Created by ${source === "chat" ? ASSISTANT_NAME : (label ?? "a coding agent")} · ${at}`;
+  source === "manual" ? translateNow("detail.created", { at }) : translateNow("detail.createdBy", { who: source === "chat" ? ASSISTANT_NAME : (label ?? translateNow("detail.codingAgentLower")), at });
 const colorOf = (tree: TreeNode[] | null, nodeId: string | null) => (nodeId ? (tree?.find((node) => node.id === nodeId)?.color ?? null) : null);
 
 function eventWhen(event: { allDay: boolean; startsOn?: string | null; startsAt?: string | null; start?: string }): string {
@@ -85,7 +87,7 @@ function eventWhen(event: { allDay: boolean; startsOn?: string | null; startsAt?
   if (!at) return "";
   const date = new Date(at);
   const local = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  return `${dayName(local)}, ${new Intl.DateTimeFormat(LOCALE, { hour: "numeric", minute: "2-digit" }).format(date)}`;
+  return `${dayName(local)}, ${new Intl.DateTimeFormat(currentLanguage(), { hour: "numeric", minute: "2-digit" }).format(date)}`;
 }
 
 function paintedFrom(id: string, known: Known): Item | null {
@@ -115,6 +117,7 @@ function focusIsFree(dialog: HTMLDialogElement | null): boolean {
 }
 
 export function TaskDetail() {
+  const { t } = useStrings();
   const { tree, saving, version } = useWorkspace();
   const router = useRouter();
   const actions = useTaskActions();
@@ -176,7 +179,7 @@ export function TaskDetail() {
       setFailed(null);
       const found = await readTaskItem(next.id);
       if (current.current !== next.id) return;
-      if (!found) return setFailed("This task is not here any more: it was deleted.");
+      if (!found) return setFailed(translateNow("detail.notHere"));
       take(found);
     },
     [take],
@@ -297,12 +300,12 @@ export function TaskDetail() {
   const task = item ? taskFromItem(item) : null;
   const more: MenuEntry[] = task
     ? [
-        { kind: "action", label: "Duplicate", icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
-        { kind: "action", label: "Versions", icon: VersionsIcon, onSelect: () => openVersions(true) },
+        { kind: "action", label: t("row.duplicate"), icon: DuplicateIcon, onSelect: () => void actions.duplicate(task) },
+        { kind: "action", label: t("detail.versions"), icon: VersionsIcon, onSelect: () => openVersions(true) },
         { kind: "separator" },
         {
           kind: "action",
-          label: "Delete",
+          label: t("row.delete"),
           tone: "danger",
           icon: DeleteIcon,
           onSelect: () => {
@@ -360,7 +363,7 @@ export function TaskDetail() {
                 ) : (
                   <PlaceName path={null} color={null} />
                 )}
-                {isSubtask && <span className="task-detail-kind">Subtask</span>}
+                {isSubtask && <span className="task-detail-kind">{t("calPage.subtask")}</span>}
               </p>
               <div className="task-detail-bar">
                 {list.length > 1 && index >= 0 && (
@@ -368,37 +371,37 @@ export function TaskDetail() {
                     <span aria-hidden="true">
                       {index + 1} / {list.length}
                     </span>
-                    <span className="sr-only">{`Task ${index + 1} of ${list.length}`}</span>
+                    <span className="sr-only">{t("detail.taskOf", { n: index + 1, total: list.length })}</span>
                   </span>
                 )}
                 <Button
                   size="sm"
                   variant="quiet"
                   className="btn-icon"
-                  title="Previous"
+                  title={t("calPage.previous")}
                   disabled={first}
                   onClick={() => step(-1)}
-                  aria-label={first ? "Previous: this is the first task of the list" : undefined}
+                  aria-label={first ? t("detail.prevFirst") : undefined}
                 >
                   <UpIcon />
-                  <span className="sr-only">Previous</span>
+                  <span className="sr-only">{t("calPage.previous")}</span>
                 </Button>
                 <Button
                   size="sm"
                   variant="quiet"
                   className="btn-icon"
-                  title="Next"
+                  title={t("calPage.next")}
                   disabled={last}
                   onClick={() => step(1)}
-                  aria-label={last ? "Next: this is the last task of the list" : undefined}
+                  aria-label={last ? t("detail.nextLast") : undefined}
                 >
                   <DownIcon />
-                  <span className="sr-only">Next</span>
+                  <span className="sr-only">{t("calPage.next")}</span>
                 </Button>
-                {item && <Menu label="More" about={`for “${inlinePlain(item.title)}”`} entries={more} />}
-                <Button size="sm" variant="quiet" className="btn-icon" title="Close" onClick={close}>
+                {item && <Menu label={t("common.more")} about={t("board.moreFor", { name: `“${inlinePlain(item.title)}”` })} entries={more} />}
+                <Button size="sm" variant="quiet" className="btn-icon" title={t("common.close")} onClick={close}>
                   <CloseIcon />
-                  <span className="sr-only">Close</span>
+                  <span className="sr-only">{t("common.close")}</span>
                 </Button>
               </div>
             </header>
@@ -447,7 +450,7 @@ export function TaskDetail() {
                   {failed}
                 </p>
                 <Button size="sm" autoFocus onClick={() => dialog.current?.close()}>
-                  Close
+                  {t("common.close")}
                 </Button>
               </div>
             ) : (
@@ -485,12 +488,13 @@ type BodyProps = {
 };
 
 function TaskBody(props: BodyProps) {
+  const { t, lang } = useStrings();
   const { item, loaded, known, ids, body, status } = props;
   const { tree, version } = useWorkspace();
   const wait = useTaskMail(item);
   const isSubtask = Boolean(item.parentId);
   const tone = item.dueOn ? whenTone(item.dueOn) : undefined;
-  const places: SelectOption[] = [{ value: "general", label: "General" }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
+  const places: SelectOption[] = [{ value: "general", label: t("filter.general") }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
   const placeColor = colorOf(tree, item.nodeId);
   const hours = item.dueTime ? dueTimeOptions(item.dueTime) : dueTimeOptions(null).filter((option) => option.value !== NO_TIME);
 
@@ -500,19 +504,19 @@ function TaskBody(props: BodyProps) {
         <TaskCircle className="task-check" title={item.title} priority={item.priority} done={item.status === "done"} onToggle={props.onToggle} />
         <TitleField key={item.id} id={ids.title} title={item.title} headingRef={props.headingRef} onSave={props.onTitle} />
       </div>
-      <div className="task-props task-detail-side" role="group" aria-label="Attributes">
+      <div className="task-props task-detail-side" role="group" aria-label={t("detail.attributes")}>
         <span className="task-prop-pair">
           <Prop kind="date" empty={!item.dueOn} data-when={tone}>
             {item.dueOn ? <DateIcon className="task-prop-icon" /> : <AddIcon className="task-prop-icon" />}
-            <DatePicker look="chip" label="Date" value={item.dueOn} display={item.dueOn ? whenLabel(item.dueOn, null) : "Add date"} onChange={(dueOn) => props.onChange({ dueOn })} />
+            <DatePicker look="chip" label={t("quick.date")} value={item.dueOn} display={item.dueOn ? whenLabel(item.dueOn, null) : t("detail.addDate")} onChange={(dueOn) => props.onChange({ dueOn })} />
           </Prop>
           {item.dueOn && (
             <Prop kind="time" data-when={item.dueTime ? tone : undefined} data-unset={item.dueTime ? undefined : ""}>
               <Select
                 look="chip"
-                label="Time"
+                label={t("quick.time")}
                 value={item.dueTime ?? null}
-                placeholder="Add time"
+                placeholder={t("quick.addTime")}
                 options={hours}
                 onChange={(value) => props.onChange({ dueTime: value === NO_TIME ? null : value })}
               />
@@ -521,7 +525,7 @@ function TaskBody(props: BodyProps) {
         </span>
         <Prop kind="priority" data-priority={item.priority ?? 4}>
           <PriorityIcon className="task-prop-icon" />
-          <Select look="chip" label="Priority" value={String(item.priority ?? 4)} options={PRIORITIES} onChange={(value) => props.onChange({ priority: Number(value) })} />
+          <Select look="chip" label={t("quick.priority")} value={String(item.priority ?? 4)} options={priorityOptions()} onChange={(value) => props.onChange({ priority: Number(value) })} />
         </Prop>
         <Prop kind="place" data-color={placeColor ?? undefined}>
           {item.nodeId ? (
@@ -529,7 +533,7 @@ function TaskBody(props: BodyProps) {
           ) : (
             <GeneralIcon className="task-prop-icon" />
           )}
-          <Select look="chip" label="Client or project" value={item.nodeId ?? "general"} options={places} onChange={props.onMove} />
+          <Select look="chip" label={t("filter.clientOrProject")} value={item.nodeId ?? "general"} options={places} onChange={props.onMove} />
         </Prop>
         <EventField key={item.id} task={item} wrapRef={props.eventRef} />
         <MailProp wait={wait} onGo={props.onGo} />
@@ -539,9 +543,9 @@ function TaskBody(props: BodyProps) {
         {loaded ? (
           <>
             <label className="sr-only" htmlFor={ids.desc}>
-              Description
+              {t("quick.description")}
             </label>
-            <RichEditor key={item.id} id={ids.desc} label="Description" value={body} placeholder="Add a description…" onChange={props.onBody} onBlur={props.onBodyBlur} onEscape={props.onEscape} />
+            <RichEditor key={item.id} id={ids.desc} label={t("quick.description")} lang={lang} value={body} placeholder={t("detail.addDescriptionEllipsis")} onChange={props.onBody} onBlur={props.onBodyBlur} onEscape={props.onEscape} />
           </>
         ) : (
           <div className="task-shape-desc" aria-hidden="true">
@@ -550,7 +554,7 @@ function TaskBody(props: BodyProps) {
           </div>
         )}
         <p className="task-detail-status" role="status" data-shown={status || undefined}>
-          {status && <span className="t-meta">{SAVE[status]}</span>}
+          {status && <span className="t-meta">{t(SAVE[status])}</span>}
         </p>
       </div>
       <MailBox wait={wait} task={item} known={known} onLeave={props.onLeave} />
@@ -565,7 +569,7 @@ function TaskBody(props: BodyProps) {
         </p>
         <Button size="sm" variant="quiet" className="head-action" aria-expanded={props.showVersions} onClick={props.onToggleVersions}>
           <VersionsIcon />
-          <span className="btn-label">Versions</span>
+          <span className="btn-label">{t("detail.versions")}</span>
         </Button>
       </footer>
     </div>
@@ -586,7 +590,7 @@ function DetailShape({ known, titleId, shapeRef, arriving }: { known: Known; tit
     if (focusIsFree(dialog)) shapeRef.current?.focus({ preventScroll: true });
   }, [shapeRef]);
   return (
-    <div ref={shapeRef} className={cx("task-detail-body task-detail-shape", arriving && "fade-enter")} role="status" aria-busy="true" aria-label="Loading the task" tabIndex={-1}>
+    <div ref={shapeRef} className={cx("task-detail-body task-detail-shape", arriving && "fade-enter")} role="status" aria-busy="true" aria-label={translateNow("detail.loadingTask")} tabIndex={-1}>
       <div className="task-detail-title-row">
         <span className="task-shape-circle" aria-hidden="true" />
         {known?.title ? (
@@ -656,7 +660,7 @@ function Closing({ task, version }: { task: Item; version: number }) {
       <div className="task-closing-text">
         <p className="task-closing-title">
           <span className="t-name">{inlinePlain(note.title)}</span>
-          <span className="t-meta">{`Completed ${stamp(at)}`}</span>
+          <span className="t-meta">{translateNow("detail.completedOn", { when: stamp(at) })}</span>
         </p>
         {note.body && <RichText className="t-meta task-closing-body" html={note.body} />}
       </div>
@@ -718,7 +722,7 @@ function useTaskMail(task: Item) {
         return { id: task.id, read: { mail: answer.mail, ...startRound(shown, first, answer.mailToRead) }, error: null, reading: answer.mailToRead.length };
       });
       for (const account of answer.mailToRead) {
-        const email = (listed.ok ? listed.accounts.find((entry) => entry.id === account)?.email : undefined) ?? "one account";
+        const email = (listed.ok ? listed.accounts.find((entry) => entry.id === account)?.email : undefined) ?? translateNow("detail.oneAccount");
         void tool<ItemMail>("list_item_mail", { id: task.id, account }).then((mail) => {
           if (!live) return;
           setDetail((now) => (now?.id === task.id && now.read ? { ...now, read: { ...now.read, ...withAccountMail(now.read, { id: account, email }, mail) }, reading: now.reading - 1 } : now));
@@ -737,17 +741,17 @@ function useTaskMail(task: Item) {
   const waitingHere = pending?.id === task.id ? pending : null;
   const seen = new Set(accountsSeenFrom(tree, accounts ?? [], task.nodeId));
   const visible = (accounts ?? []).filter((account) => seen.has(account.id));
-  const placeLabel = task.nodeId === null ? "All accounts" : "All accounts of its client or project";
+  const placeLabel = task.nodeId === null ? translateNow("filter.allAccounts") : translateNow("detail.allAccountsPlace");
   const asking = Boolean(mail) || Boolean(waitingHere);
   const options: SelectOption[] = [
-    ...(asking ? [{ value: WAIT_NONE, label: "Don’t wait for mail" }] : []),
+    ...(asking ? [{ value: WAIT_NONE, label: translateNow("detail.dontWait") }] : []),
     ...(visible.length > 0 ? [{ value: WAIT_PLACE, label: placeLabel }] : []),
     ...visible.map((account) => ({ value: account.id, label: account.email, mark: GoogleMark })),
   ];
   const value = waitingHere ? (waitingHere.account ?? WAIT_PLACE) : mail ? (mail.accountId ?? WAIT_PLACE) : null;
   const wordsValue = words?.id === task.id ? words.value : (mail?.waitsFor ?? "");
   const account = waitingHere ? waitingHere.account : mail ? mail.accountId : undefined;
-  const where = account === undefined ? null : account === null ? placeLabel : (accounts?.find((entry) => entry.id === account)?.email ?? "An account");
+  const where = account === undefined ? null : account === null ? placeLabel : (accounts?.find((entry) => entry.id === account)?.email ?? translateNow("detail.anAccount"));
   const lookIn = mail ? visible.filter((entry) => mail.accountId === null || entry.id === mail.accountId) : [];
   const unseen = mail !== null && accounts !== null && lookIn.length === 0;
   const repliesKey = mail && task.status === "open" && !unseen ? `${task.id}:${mail.accountId ?? ""}:${mail.waitsFor}:${lookIn.map((entry) => entry.id).join(",")}` : null;
@@ -777,13 +781,13 @@ function useTaskMail(task: Item) {
     setReadingMore(true);
     const answers = await Promise.all(pages.map(([entry, pageToken]) => tool<RepliesRead>("list_task_replies", { task: task.id, account: entry, limit: REPLIES, pageToken })));
     setReadingMore(false);
-    const emails = pages.map(([entry]) => ({ id: entry, email: lookIn.find((each) => each.id === entry)?.email ?? "An account" }));
+    const emails = pages.map(([entry]) => ({ id: entry, email: lookIn.find((each) => each.id === entry)?.email ?? translateNow("detail.anAccount") }));
     setReplies((current) => (current?.key === repliesKey && current.read ? { key: repliesKey, read: joinReads(answers, emails, current.read.replies) } : current));
   }
 
   async function save(input: Record<string, unknown>, text: string) {
     const answer = await tool<{ mail: TaskWait | null; previous: TaskWait | null }>("set_task_mail", { task: task.id, ...input });
-    if (!answer.ok) return notify({ text: `What “${inlinePlain(task.title)}” waits for could not be saved: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: translateNow("detail.waitsNotSaved", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     setDetail((current) => (current && current.read ? { ...current, read: { ...current.read, mail: answer.mail } } : current));
     setPending(null);
     setWords(null);
@@ -799,7 +803,7 @@ function useTaskMail(task: Item) {
             previous
               ? { task: task.id, account: previous.accountId, words: previous.waitsFor, since: previous.since, dismissed: previous.dismissed }
               : { task: task.id, waiting: false },
-          ).then((back) => (back.ok ? back : { ...back, message: `What “${inlinePlain(task.title)}” waited for could not come back: ${back.message}` })),
+          ).then((back) => (back.ok ? back : { ...back, message: translateNow("detail.waitedNotBack", { title: inlinePlain(task.title), message: back.message }) })),
         ),
     });
   }
@@ -808,24 +812,24 @@ function useTaskMail(task: Item) {
     if (next === value) return;
     if (next === WAIT_NONE) {
       if (waitingHere) return setPending(null);
-      return void save({ waiting: false }, `“${inlinePlain(task.title)}” waits for no mail now`);
+      return void save({ waiting: false }, translateNow("detail.waitsNoMail", { title: inlinePlain(task.title) }));
     }
     const chosen = next === WAIT_PLACE ? null : next;
     if (!mail) return setPending({ id: task.id, account: chosen });
-    const there = chosen ? (visible.find((entry) => entry.id === chosen)?.email ?? "that account") : placeLabel.toLowerCase();
-    void save({ account: chosen }, `“${inlinePlain(task.title)}” waits for its mail in ${there}`);
+    const there = chosen ? (visible.find((entry) => entry.id === chosen)?.email ?? translateNow("detail.thatAccount")) : placeLabel.toLowerCase();
+    void save({ account: chosen }, translateNow("detail.waitsInThere", { title: inlinePlain(task.title), there }));
   }
 
   function saveWords() {
     const next = wordsValue.trim();
     if (waitingHere) {
-      if (!next) return notify({ text: "Say what it waits for: who sends it or what it is about.", tone: "error" });
-      return void save({ account: waitingHere.account, words: next }, `“${inlinePlain(task.title)}” waits for mail with “${next}”`);
+      if (!next) return notify({ text: translateNow("detail.sayWhat"), tone: "error" });
+      return void save({ account: waitingHere.account, words: next }, translateNow("detail.waitsWith", { title: inlinePlain(task.title), words: next }));
     }
     if (!mail) return;
     if (!next) return setWords(null);
     if (next === mail.waitsFor) return;
-    void save({ words: next }, `“${inlinePlain(task.title)}” waits for mail with “${next}”`);
+    void save({ words: next }, translateNow("detail.waitsWith", { title: inlinePlain(task.title), words: next }));
   }
 
   async function complete(reply: MailMessageRow, outcome: string) {
@@ -839,10 +843,10 @@ function useTaskMail(task: Item) {
 
   async function dismiss(reply: MailMessageRow) {
     const answer = await tool("dismiss_reply", { task: task.id, account: reply.accountId, id: reply.id, dismissed: true });
-    if (!answer.ok) return notify({ text: `“${subjectOf(reply)}” could not be ruled out: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: translateNow("detail.couldNotRuleOut", { subject: subjectOf(reply), message: answer.message }), tone: "error" });
     setReplies((current) => (current?.read ? { ...current, read: { ...current.read, replies: current.read.replies.filter((entry) => replyKey(entry) !== replyKey(reply)) } } : current));
     notify({
-      text: `“${subjectOf(reply)}” is not what “${inlinePlain(task.title)}” waits for`,
+      text: translateNow("detail.isNotWhat", { subject: subjectOf(reply), title: inlinePlain(task.title) }),
       tone: "status",
       undo: () => void saving(tool("dismiss_reply", { task: task.id, account: reply.accountId, id: reply.id, dismissed: false })),
     });
@@ -878,12 +882,13 @@ function useTaskMail(task: Item) {
 type TaskMail = ReturnType<typeof useTaskMail>;
 
 function MailProp({ wait, onGo }: { wait: TaskMail; onGo: (href: string) => void }) {
+  const { t } = useStrings();
   const waiting = wait.mail ? "waiting" : "none";
   if (!wait.read) {
     if (wait.error) return null;
     return (
       <Prop kind="mail" data-task-mail={waiting}>
-        <span className="skeleton task-shape-chip" role="status" aria-label="Loading the mail it waits for" />
+        <span className="skeleton task-shape-chip" role="status" aria-label={t("detail.loadingMailWaits")} />
       </Prop>
     );
   }
@@ -892,11 +897,11 @@ function MailProp({ wait, onGo }: { wait: TaskMail; onGo: (href: string) => void
       <Prop kind="mail" empty data-task-mail={waiting}>
         <AddIcon className="task-prop-icon" />
         <Menu
-          label="Wait for mail"
-          name="Mail: wait for mail"
+          label={t("detail.waitForMail")}
+          name={t("detail.mailWaitName")}
           entries={[
-            { kind: "action", label: "No account is connected here", disabled: true, onSelect: () => {} },
-            { kind: "action", label: "Connect Google account", icon: GoogleMark, onSelect: () => onGo("/app/settings") },
+            { kind: "action", label: t("detail.noAccountHere"), disabled: true, onSelect: () => {} },
+            { kind: "action", label: t("mail.connectGoogle"), icon: GoogleMark, onSelect: () => onGo("/app/settings") },
           ]}
         />
       </Prop>
@@ -905,12 +910,13 @@ function MailProp({ wait, onGo }: { wait: TaskMail; onGo: (href: string) => void
   return (
     <Prop kind="mail" empty={!wait.asking} data-task-mail={waiting} data-waiting={wait.mail ? "" : undefined}>
       {wait.asking ? <MailIcon className="task-prop-icon" /> : <AddIcon className="task-prop-icon" />}
-      <Select look="chip" label="Waits for mail in" value={wait.value} placeholder={wait.mail ? "Choose account" : "Wait for mail"} options={wait.options} onChange={wait.choose} />
+      <Select look="chip" label={t("detail.waitsIn")} value={wait.value} placeholder={wait.mail ? t("detail.chooseAccount") : t("detail.waitForMail")} options={wait.options} onChange={wait.choose} />
     </Prop>
   );
 }
 
 function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; known: Known; onLeave: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const { t, lang } = useStrings();
   const headId = useId();
   const wordsId = useId();
   const wordsHelpId = useId();
@@ -922,13 +928,13 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
     if (wait.error) {
       return (
         <p className="inline-note task-wait-note" data-tone="alert" data-task-mail="none">
-          Its mail could not be loaded: {wait.error}
+          {t("detail.mailNotLoaded", { message: wait.error })}
         </p>
       );
     }
     if (!known?.mail) return null;
     return (
-      <section className="task-wait" aria-busy="true" aria-label="Loading the mail it waits for">
+      <section className="task-wait" aria-busy="true" aria-label={t("detail.loadingMailWaits")}>
         <div className="task-wait-head">
           <MailIcon className="task-wait-icon" />
           <span className="skeleton task-shape-head" />
@@ -943,7 +949,7 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
   const linked = read.messages;
   const readingLinked = linked.length === 0 && wait.reading > 0;
   if (!wait.asking && linked.length === 0 && !readingLinked && read.mailFailures.length === 0 && !wait.error) return null;
-  const title = waitingHere ? "Wait for mail" : mail ? (open ? "Waiting for mail" : "Waited for mail") : "Mail";
+  const title = waitingHere ? t("detail.waitForMail") : mail ? (open ? t("detail.waitingForMail") : t("detail.waitedForMail")) : t("detail.mailWord");
   const failures = shown?.failures ?? [];
 
   return (
@@ -957,25 +963,26 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
         {!wait.asking && linked.length > 0 && <span className="task-wait-where t-meta">{linked.length}</span>}
         {mail && open && !waitingHere && (
           <Button size="sm" variant="quiet" className="head-action task-wait-stop" onClick={() => wait.choose(WAIT_NONE)}>
-            Stop waiting
+            {t("detail.stopWaiting")}
           </Button>
         )}
       </header>
       {wait.error && (
         <p className="inline-note task-wait-note" data-tone="alert">
-          Its mail could not be refreshed: {wait.error}. Showing the last version loaded.
+          {t("detail.mailNotRefreshed", { message: wait.error })}
         </p>
       )}
       {(waitingHere || (mail && open)) && (
         <div className="task-wait-part task-mail-words">
           <label className="t-label" htmlFor={wordsId}>
-            What it waits for
+            {t("detail.whatWaits")}
           </label>
           <input
             id={wordsId}
             className="field"
+            lang={lang}
             value={wait.wordsValue}
-            placeholder="Acme invoice"
+            placeholder={t("detail.wordsPlaceholder")}
             maxLength={200}
             autoFocus={Boolean(waitingHere)}
             aria-describedby={wordsHelpId}
@@ -996,48 +1003,48 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
             }}
           />
           <p id={wordsHelpId} className="t-meta task-mail-help">
-            Every word must appear in the sender or the subject of new mail.
+            {t("detail.wordsHelp")}
           </p>
           {waitingHere && (
             <div className="task-mail-start">
               <Button size="sm" variant="primary" onClick={wait.saveWords} disabled={!wait.wordsValue.trim()}>
-                Start waiting
+                {t("detail.startWaiting")}
               </Button>
               <Button size="sm" variant="quiet" onClick={() => wait.choose(WAIT_NONE)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           )}
         </div>
       )}
-      {mail && !open && !waitingHere && linked.length === 0 && !readingLinked && <p className="t-meta task-wait-part">Completed without choosing a reply.</p>}
+      {mail && !open && !waitingHere && linked.length === 0 && !readingLinked && <p className="t-meta task-wait-part">{t("detail.completedNoReply")}</p>}
       {mail && open && !waitingHere && (
         <section className="task-wait-part task-replies" aria-labelledby={repliesId}>
           <div className="task-replies-head">
             <h4 className="task-replies-title" id={repliesId}>
-              Possible replies
+              {t("reply.possible")}
               {shown && shown.replies.length > 0 && <span className="task-section-count">{shown.replies.length}</span>}
             </h4>
-            <p className="t-meta">Arrived since {stamp(mail.since)}. You decide which one answers it.</p>
+            <p className="t-meta">{t("detail.arrivedSince", { when: stamp(mail.since) })}</p>
           </div>
           {wait.unseen ? (
             wait.visible.length > 0 ? (
-              <p className="t-help">That account is no longer connected here. Choose another.</p>
+              <p className="t-help">{t("detail.accountGone")}</p>
             ) : (
               <div className="task-replies-empty">
-                <p className="t-help">No account is connected where this task lives anymore: connect one, or stop waiting.</p>
+                <p className="t-help">{t("detail.noAccountWhere")}</p>
                 <Link href="/app/settings" className={buttonClass({ size: "sm" })} onClick={onLeave}>
                   <GoogleMark />
-                  <span className="btn-label">Connect Google account</span>
+                  <span className="btn-label">{t("mail.connectGoogle")}</span>
                 </Link>
               </div>
             )
           ) : !shown ? (
-            <div role="status" aria-label="Loading its possible replies">
+            <div role="status" aria-label={t("detail.loadingReplies")}>
               <ShapeRows count={2} mark="sender" />
             </div>
           ) : shown.replies.length === 0 ? (
-            failures.length === 0 && <p className="t-help task-replies-empty">No matching mail yet.</p>
+            failures.length === 0 && <p className="t-help task-replies-empty">{t("detail.noMatching")}</p>
           ) : (
             <ul className="task-reply-list">
               {shown.replies.map((reply, index) => {
@@ -1060,14 +1067,14 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
                         aria-expanded={wait.choosing === key}
                         onClick={() => (wait.choosing === key ? wait.stopChoosing(trigger) : wait.setChoosing(key))}
                       >
-                        Mark as answer
+                        {t("detail.markAnswer")}
                       </Button>
                       <Button size="sm" variant="quiet" onClick={() => void wait.dismiss(reply)}>
-                        Dismiss
+                        {t("detail.dismiss")}
                       </Button>
                     </div>
                     {wait.choosing === key && (
-                      <TaskOutcome question="How did it end?" title={task.title} onClose={(outcome) => wait.complete(reply, outcome)} onCancel={() => wait.stopChoosing(trigger)} />
+                      <TaskOutcome question={t("detail.howEnded")} title={task.title} onClose={(outcome) => wait.complete(reply, outcome)} onCancel={() => wait.stopChoosing(trigger)} />
                     )}
                   </li>
                 );
@@ -1076,26 +1083,26 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
           )}
           {shown && Object.keys(shown.next).length > 0 && (
             <Button size="sm" variant="quiet" className="head-action task-replies-more" onClick={() => void wait.readMore()} disabled={wait.readingMore} aria-busy={wait.readingMore || undefined}>
-              {wait.readingMore ? "Loading more replies…" : "Show more replies"}
+              {wait.readingMore ? t("detail.loadingMore") : t("detail.showMoreReplies")}
             </Button>
           )}
           {failures.map((failure) => (
             <p key={failure.accountEmail} className="inline-note" data-tone="alert">
-              The mail of {failure.accountEmail} could not be loaded: {failure.reason}
+              {t("detail.mailOfFailed", { email: failure.accountEmail, reason: failure.reason })}
             </p>
           ))}
         </section>
       )}
       {(linked.length > 0 || readingLinked) && (
         <div className="task-wait-part task-linked">
-          {wait.asking && <h4 className="task-replies-title">Linked to it</h4>}
+          {wait.asking && <h4 className="task-replies-title">{t("detail.linkedToIt")}</h4>}
           {readingLinked && (
-            <div role="status" aria-label="Loading its mail">
+            <div role="status" aria-label={t("detail.loadingItsMail")}>
               <ShapeRows count={1} mark="sender" />
             </div>
           )}
           {linked.length > 0 && (
-            <ul className="task-mail-list" aria-label="Its mail" aria-busy={wait.reading > 0 || undefined}>
+            <ul className="task-mail-list" aria-label={t("detail.itsMail")} aria-busy={wait.reading > 0 || undefined}>
               {linked.map((message) => {
                 const from = message.from.name ?? message.from.email;
                 return (
@@ -1116,7 +1123,7 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
       )}
       {read.mailFailures.map((failure) => (
         <p key={failure.accountEmail} className="inline-note task-wait-note" data-tone="alert">
-          The mail of {failure.accountEmail} could not be loaded: {failure.reason}
+          {t("detail.mailOfFailed", { email: failure.accountEmail, reason: failure.reason })}
         </p>
       ))}
     </section>
@@ -1124,6 +1131,7 @@ function MailBox({ wait, task, known, onLeave }: { wait: TaskMail; task: Item; k
 }
 
 function TitleField({ id, title, headingRef, onSave }: { id: string; title: string; headingRef: RefObject<HTMLDivElement | null>; onSave: (title: string) => Promise<void> }) {
+  const { t, lang } = useStrings();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(title);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -1155,7 +1163,8 @@ function TitleField({ id, title, headingRef, onSave }: { id: string; title: stri
       <textarea
         ref={field}
         className="field task-detail-title-field"
-        aria-label="Title"
+        aria-label={t("calPage.titleLabel")}
+        lang={lang}
         rows={1}
         value={value}
         onChange={(event) => setValue(event.target.value)}
@@ -1186,12 +1195,13 @@ function TitleField({ id, title, headingRef, onSave }: { id: string; title: stri
       <h2 id={id} className="task-detail-title-text">
         <InlineText text={title} />
       </h2>
-      <button type="button" className="task-detail-title-edit" aria-label={`Edit the title “${inlinePlain(title)}”`} onClick={start} />
+      <button type="button" className="task-detail-title-edit" aria-label={t("detail.editTitle", { title: inlinePlain(title) })} onClick={start} />
     </div>
   );
 }
 
 function AddLine({ label, field, onAdd, onDone }: { label: string; field: string; onAdd: (text: string) => Promise<boolean>; onDone: () => void }) {
+  const { t, lang } = useStrings();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   async function add() {
@@ -1210,6 +1220,7 @@ function AddLine({ label, field, onAdd, onDone }: { label: string; field: string
         className="field"
         aria-label={field}
         placeholder={field}
+        lang={lang}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onPaste={(event) => {
@@ -1232,7 +1243,7 @@ function AddLine({ label, field, onAdd, onDone }: { label: string; field: string
         }}
       />
       <Button size="sm" variant="quiet" onClick={onDone}>
-        Cancel
+        {t("common.cancel")}
       </Button>
       <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !value.trim()}>
         {label}
@@ -1252,6 +1263,7 @@ function SectionHead({ id, name, figure, children, tabIndex }: { id: string; nam
 }
 
 function SubtaskSection({ task, version, expected }: { task: Item; version: number; expected?: number }) {
+  const { t } = useStrings();
   const { saving } = useWorkspace();
   const [items, setItems] = useState<Item[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -1289,7 +1301,7 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
   }));
   return (
     <section className="task-section" data-section="subtasks" aria-labelledby={`sub-${task.id}`}>
-      <SectionHead id={`sub-${task.id}`} name="Subtasks" figure={items && total > 0 ? `${done}/${total}` : null}>
+      <SectionHead id={`sub-${task.id}`} name={t("detail.subtasks")} figure={items && total > 0 ? `${done}/${total}` : null}>
         {items && total > 0 && (
           <span className="task-progress" aria-hidden="true" data-complete={done === total || undefined}>
             <span className="task-progress-fill" style={{ inlineSize: `${(done / total) * 100}%` }} />
@@ -1298,11 +1310,11 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
       </SectionHead>
       {items === null && failed ? (
         <p className="inline-note" data-tone="alert">
-          The subtasks could not be loaded: {failed}
+          {t("row.subtasksNotLoaded", { message: failed })}
         </p>
       ) : items === null ? (
         (expected ?? 1) > 0 && (
-          <div role="status" aria-label="Loading the subtasks">
+          <div role="status" aria-label={t("row.loadingSubtasks")}>
             <ShapeRows count={Math.min(expected ?? 1, 5)} />
           </div>
         )
@@ -1322,8 +1334,8 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
       )}
       {adding ? (
         <AddLine
-          label="Add subtask"
-          field="Subtask"
+          label={t("quick.addSubtask")}
+          field={t("calPage.subtask")}
           onAdd={(title) => saving(tool("create_task", { parent: task.id, title }))}
           onDone={() => {
             setAdding(false);
@@ -1333,7 +1345,7 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
       ) : (
         <button ref={addButton} type="button" className="task-add" onClick={() => setAdding(true)}>
           <AddIcon />
-          Add subtask
+          {t("quick.addSubtask")}
         </button>
       )}
     </section>
@@ -1341,6 +1353,7 @@ function SubtaskSection({ task, version, expected }: { task: Item; version: numb
 }
 
 function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (text: string) => Promise<boolean>; onDecision: () => void; onDelete: () => void }) {
+  const { t, lang } = useStrings();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
@@ -1377,7 +1390,8 @@ function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (
         <textarea
           ref={field}
           className="field task-note-field"
-          aria-label="Note"
+          aria-label={t("type.note")}
+          lang={lang}
           rows={1}
           value={value}
           onChange={(event) => setValue(event.target.value)}
@@ -1406,23 +1420,23 @@ function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (
           <span className="task-note-text">
             <InlineText text={note.title} />
           </span>
-          <button ref={editButton} type="button" className="task-note-edit" aria-label={`Edit the note “${plain}”`} onClick={start} />
+          <button ref={editButton} type="button" className="task-note-edit" aria-label={t("detail.editNote", { title: plain })} onClick={start} />
         </div>
       )}
       {note.decision && (
         <span className="pill" data-tone="accent">
-          Decision
+          {t("notes.decision")}
         </span>
       )}
       <div className="task-note-more">
         <Menu
-          label="More"
-          about={`for the note “${plain}”`}
+          label={t("common.more")}
+          about={t("detail.forNote", { title: plain })}
           entries={[
-            { kind: "action", label: "Edit", onSelect: start },
-            { kind: "action", label: note.decision ? "Mark as note" : "Mark as decision", onSelect: onDecision },
+            { kind: "action", label: t("detail.editWord"), onSelect: start },
+            { kind: "action", label: note.decision ? t("detail.markNote") : t("detail.markDecision"), onSelect: onDecision },
             { kind: "separator" },
-            { kind: "action", label: "Delete", tone: "danger", onSelect: onDelete },
+            { kind: "action", label: t("row.delete"), tone: "danger", onSelect: onDelete },
           ]}
         />
       </div>
@@ -1431,6 +1445,7 @@ function NoteRow({ note, onSave, onDecision, onDelete }: { note: Note; onSave: (
 }
 
 function NoteSection({ task, version, expected }: { task: Item; version: number; expected?: number }) {
+  const { t } = useStrings();
   const { saving, notify, touch } = useWorkspace();
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -1474,7 +1489,7 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
     const answer = await tool("update_item", { id: note.id, notes: text });
     if (!answer.ok) {
       patch(note.id, null);
-      notify({ text: `The note “${before}” could not be saved: ${answer.message}`, tone: "error" });
+      notify({ text: translateNow("detail.noteNotSaved", { title: before, message: answer.message }), tone: "error" });
       return false;
     }
     touch();
@@ -1487,11 +1502,11 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
     const answer = await tool("update_item", { id: note.id, decision });
     if (!answer.ok) {
       patch(note.id, null);
-      return notify({ text: `The note could not be ${decision ? "marked as a decision" : "taken back to a note"}: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow(decision ? "detail.noteNotMarkedDecision" : "detail.noteNotTakenBack", { message: answer.message }), tone: "error" });
     }
     touch();
     notify({
-      text: decision ? `Marked “${inlinePlain(note.title)}” as a decision` : `“${inlinePlain(note.title)}” is a note again`,
+      text: decision ? translateNow("detail.markedDecision", { title: inlinePlain(note.title) }) : translateNow("detail.noteAgain", { title: inlinePlain(note.title) }),
       tone: "status",
       undo: () => void saving(tool("update_item", { id: note.id, decision: !decision })),
     });
@@ -1502,11 +1517,11 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
     const answer = await tool("delete_item", { id: note.id });
     if (!answer.ok) {
       hide(note.id, false);
-      return notify({ text: `The note could not be deleted: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow("detail.noteNotDeleted", { message: answer.message }), tone: "error" });
     }
     touch();
     notify({
-      text: `Deleted the note “${inlinePlain(note.title)}”`,
+      text: translateNow("detail.deletedNote", { title: inlinePlain(note.title) }),
       tone: "status",
       undo: () => {
         hide(note.id, false);
@@ -1519,14 +1534,14 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
   const shownNotes = (notes ?? []).filter((note) => !hidden.has(note.id));
   return (
     <section className="task-section" data-section="notes" aria-labelledby={`notes-${task.id}`}>
-      <SectionHead id={`notes-${task.id}`} name="Notes" figure={notes && shownNotes.length > 0 ? String(shownNotes.length) : null} />
+      <SectionHead id={`notes-${task.id}`} name={t("box.notes")} figure={notes && shownNotes.length > 0 ? String(shownNotes.length) : null} />
       {notes === null && failed ? (
         <p className="inline-note" data-tone="alert">
-          The notes could not be loaded: {failed}
+          {t("detail.notesNotLoaded", { message: failed })}
         </p>
       ) : notes === null ? (
         (expected ?? 1) > 0 && (
-          <div role="status" aria-label="Loading the notes">
+          <div role="status" aria-label={t("detail.loadingNotes")}>
             <ShapeRows count={Math.min(expected ?? 1, 5)} mark="glyph" />
           </div>
         )
@@ -1547,8 +1562,8 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
       )}
       {adding ? (
         <AddLine
-          label="Add note"
-          field="Note"
+          label={t("notes.addNote")}
+          field={t("type.note")}
           onAdd={(text) => saving(tool("add_note", { parent: task.id, text }))}
           onDone={() => {
             setAdding(false);
@@ -1558,7 +1573,7 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
       ) : (
         <button ref={addButton} type="button" className="task-add" onClick={() => setAdding(true)}>
           <AddIcon />
-          Add note
+          {t("notes.addNote")}
         </button>
       )}
     </section>
@@ -1566,6 +1581,7 @@ function NoteSection({ task, version, expected }: { task: Item; version: number;
 }
 
 function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElement> }) {
+  const { t } = useStrings();
   const { saving } = useWorkspace();
   const [state, setState] = useState<EventLink | null>(null);
   const [events, setEvents] = useState<BrowsedEvent[] | null>(null);
@@ -1614,38 +1630,39 @@ function EventField({ task, wrapRef }: { task: Item; wrapRef: Ref<HTMLSpanElemen
     if (await saving(tool("link_task_event", { task: task.id, event: made.event.id }))) read();
   }
 
-  const linked = state?.link ? (state.event ? `${state.event.title}, ${eventWhen(state.event)}` : "A Google Calendar event") : null;
+  const linked = state?.link ? (state.event ? `${state.event.title}, ${eventWhen(state.event)}` : t("detail.googleEvent")) : null;
   const said = (words: string): MenuEntry => ({ kind: "action", label: words, disabled: true, onSelect: () => {} });
-  const notRead = [...new Set(failures.map((failure) => failure.accountEmail || "the workspace's calendar"))].map((who) => said(`Not read: ${who}`));
+  const notRead = [...new Set(failures.map((failure) => failure.accountEmail || t("detail.workspaceCalendarLower")))].map((who) => said(t("detail.notRead", { who })));
   const entries: MenuEntry[] = [
     {
       kind: "group",
-      label: "Upcoming events",
+      label: t("detail.upcomingEvents"),
       entries:
         events === null
-          ? [said(eventsFailed ? "The events could not be loaded" : "Loading the events…")]
+          ? [said(eventsFailed ? t("detail.eventsNotLoaded") : t("detail.loadingEvents"))]
           : [
               ...notRead,
               ...(events.length === 0 && notRead.length === 0
-                ? [said("No events in the next 30 days")]
+                ? [said(t("detail.noEvents30"))]
                 : events.slice(0, 40).map((event): MenuEntry => ({ kind: "action", label: event.title, detail: eventWhen(event), onSelect: () => void link(event) }))),
             ],
     },
     { kind: "separator" },
-    { kind: "action", label: "New calendar event", detail: task.dueOn ? whenLabel(task.dueOn, task.dueTime ?? null) : "Today", onSelect: () => void createAndLink() },
+    { kind: "action", label: t("quick.newEvent"), detail: task.dueOn ? whenLabel(task.dueOn, task.dueTime ?? null) : t("date.today"), onSelect: () => void createAndLink() },
     ...(state?.link
-      ? [{ kind: "action", label: "Unlink calendar event", onSelect: () => void saving(tool("unlink_task_event", { task: task.id })).then((ok) => ok && read()) } as MenuEntry]
+      ? [{ kind: "action", label: t("detail.unlinkEvent"), onSelect: () => void saving(tool("unlink_task_event", { task: task.id })).then((ok) => ok && read()) } as MenuEntry]
       : []),
   ];
   return (
     <Prop kind="event" empty={!linked} ref={wrapRef}>
       {linked ? <EventIcon className="task-prop-icon" /> : <AddIcon className="task-prop-icon" />}
-      <Menu label={linked ?? "Link calendar event"} name={`Calendar event: ${linked ?? "None linked"}`} className="task-attr-menu" entries={entries} onOpenChange={(open) => open && loadEvents()} />
+      <Menu label={linked ?? t("detail.linkEvent")} name={t("detail.calendarEventName", { what: linked ?? t("detail.noneLinked") })} className="task-attr-menu" entries={entries} onOpenChange={(open) => open && loadEvents()} />
     </Prop>
   );
 }
 
 function Versions({ id, task, version, onRestored }: { id: string; task: Item; version: number; onRestored: (restored: Item) => void }) {
+  const { t } = useStrings();
   const { saving } = useWorkspace();
   const [revisions, setRevisions] = useState<Revision[] | null>(null);
   useEffect(() => {
@@ -1662,11 +1679,11 @@ function Versions({ id, task, version, onRestored }: { id: string; task: Item; v
   }
   return (
     <section className="task-section" data-section="versions" aria-labelledby={id}>
-      <SectionHead id={id} name="Versions" figure={revisions && revisions.length > 0 ? String(revisions.length) : null} tabIndex={-1} />
-      {revisions === null && <p className="t-help">Loading the versions…</p>}
+      <SectionHead id={id} name={t("detail.versions")} figure={revisions && revisions.length > 0 ? String(revisions.length) : null} tabIndex={-1} />
+      {revisions === null && <p className="t-help">{t("detail.loadingVersions")}</p>}
       {revisions !== null && (
         <Fold open={revisions.length === 0} id={`${id}-none`}>
-          <p className="t-help">No earlier versions: every change from now on leaves one here.</p>
+          <p className="t-help">{t("detail.noEarlier")}</p>
         </Fold>
       )}
       {revisions !== null && revisions.length > 0 && (
@@ -1676,16 +1693,16 @@ function Versions({ id, task, version, onRestored }: { id: string; task: Item; v
               <span className="task-version-text">
                 <span className="t-value">{inlinePlain(revision.snapshot.title)}</span>
                 <span className="t-meta">
-                  Before a change {sourceName(revision.source, revision.agentLabel).replace(/^By/, "by")}, {stampTime(revision.createdAt)}
+                  {t("detail.beforeChangeBy", { who: sourceName(revision.source, revision.agentLabel).replace(/^(By|Por)/, (first) => first.toLowerCase()), when: stampTime(revision.createdAt) })}
                 </span>
               </span>
               <Button
                 size="sm"
                 variant="quiet"
-                aria-label={`Restore the version of ${stampTime(revision.createdAt)}`}
+                aria-label={t("detail.restoreVersion", { when: stampTime(revision.createdAt) })}
                 onClick={() => void restore(revision.id)}
               >
-                Restore
+                {t("trash.restore")}
               </Button>
             </li>
           ))}

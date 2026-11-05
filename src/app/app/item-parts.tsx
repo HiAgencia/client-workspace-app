@@ -1,6 +1,7 @@
 import type { SelectOption } from "@/components/ui/select";
 import type { Item } from "./client-api";
 import { ASSISTANT_NAME } from "@/lib/product";
+import { translateNow, type StringKey } from "@/lib/strings";
 import { demoSender, nameSeed, OrgMark, Portrait } from "./sender-art";
 
 export const PRIORITIES: SelectOption[] = [
@@ -11,6 +12,17 @@ export const PRIORITIES: SelectOption[] = [
 ];
 
 export const TYPE_NAMES: Record<Item["type"], string> = { task: "Task", note: "Note", decision: "Decision" };
+
+const PRIORITY_KEYS: Record<string, StringKey> = { "1": "priority.urgent", "2": "priority.high", "3": "priority.normal", "4": "priority.low" };
+const TYPE_KEYS: Record<Item["type"], StringKey> = { task: "type.task", note: "type.note", decision: "type.decision" };
+
+export function priorityOptions(): SelectOption[] {
+  return PRIORITIES.map((option) => ({ ...option, label: translateNow(PRIORITY_KEYS[option.value]) }));
+}
+
+export function typeName(type: Item["type"]): string {
+  return translateNow(TYPE_KEYS[type]);
+}
 
 export function PathText({ path }: { path: string }) {
   const places = path.split(" / ");
@@ -27,10 +39,10 @@ export function PathText({ path }: { path: string }) {
 }
 
 export function sourceName(source: Item["source"], agentLabel: string | null): string {
-  if (source === "manual") return "By you";
-  if (source === "chat") return `By ${ASSISTANT_NAME}`;
-  if (source === "review") return "Automatically";
-  return agentLabel ? `By your agent ${agentLabel}` : "By your agent";
+  if (source === "manual") return translateNow("source.byYou");
+  if (source === "chat") return translateNow("source.byAssistant", { assistant: ASSISTANT_NAME });
+  if (source === "review") return translateNow("source.automatically");
+  return agentLabel ? translateNow("source.byAgentNamed", { label: agentLabel }) : translateNow("source.byAgent");
 }
 
 export function Origin({ item }: { item: Item }) {

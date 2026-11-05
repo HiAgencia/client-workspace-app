@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CloseIcon } from "@/components/ui/icons";
 import { useExit } from "@/components/ui/use-exit";
+import { useStrings } from "@/lib/strings";
 import { useMac } from "./side-nav";
 
 const OPEN_EVENT = "client-workspace:shortcuts";
@@ -15,6 +16,7 @@ export function showShortcuts() {
 type Row = { does: string; keys: string[][] };
 
 export function Shortcuts() {
+  const { t } = useStrings();
   const mac = useMac();
   const [open, setOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -49,22 +51,22 @@ export function Shortcuts() {
   const shift = mac ? "⇧" : "Shift";
   const groups: Array<{ name: string; rows: Row[] }> = [
     {
-      name: "Anywhere",
+      name: t("keys.anywhere"),
       rows: [
-        { does: "Add a task where you are", keys: [["Q"]] },
-        { does: "Search and jump anywhere", keys: [[mod, "K"]] },
-        { does: "Show these keys", keys: [["?"]] },
+        { does: t("keys.addTaskWhere"), keys: [["Q"]] },
+        { does: t("keys.searchJump"), keys: [[mod, "K"]] },
+        { does: t("keys.showKeys"), keys: [["?"]] },
       ],
     },
     {
-      name: "On a task in a list",
+      name: t("keys.onTask"),
       rows: [
-        { does: "Move it up or down", keys: [[alt, "↑"], [alt, "↓"]] },
-        { does: "Move it to the group before or after", keys: [[alt, shift, "↑"], [alt, shift, "↓"]] },
+        { does: t("keys.moveUpDown"), keys: [[alt, "↑"], [alt, "↓"]] },
+        { does: t("keys.moveGroup"), keys: [[alt, shift, "↑"], [alt, shift, "↓"]] },
       ],
     },
-    { name: "In Mail", rows: [{ does: "Open the next or the previous message", keys: [["J"], ["K"]] }] },
-    { name: "In a dialog, a menu or a list", rows: [{ does: "Close it", keys: [["Esc"]] }] },
+    { name: t("keys.inMail"), rows: [{ does: t("keys.openNextPrev"), keys: [["J"], ["K"]] }] },
+    { name: t("keys.inDialog"), rows: [{ does: t("keys.closeIt"), keys: [["Esc"]] }] },
   ];
 
   return (
@@ -85,11 +87,11 @@ export function Shortcuts() {
         <div className="shortcuts-in" data-cascade>
           <div className="shortcuts-head">
             <h2 id="shortcuts-title" className="t-title">
-              Keyboard shortcuts
+              {t("keys.title")}
             </h2>
-            <Button size="sm" variant="quiet" className="btn-icon" onClick={() => setOpen(false)} title="Close">
+            <Button size="sm" variant="quiet" className="btn-icon" onClick={() => setOpen(false)} title={t("common.close")}>
               <CloseIcon />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("common.close")}</span>
             </Button>
           </div>
           {groups.map((group) => (
@@ -105,7 +107,7 @@ export function Shortcuts() {
                       {row.keys.map((combo, index) => (
                         <Fragment key={combo.join("+")}>
                           {index > 0 && (
-                            <span className="shortcuts-or" aria-label="or">
+                            <span className="shortcuts-or" aria-label={t("keys.or")}>
                               /
                             </span>
                           )}

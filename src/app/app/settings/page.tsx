@@ -10,10 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Field } from "@/components/ui/field";
 import { Fold } from "@/components/ui/fold";
-import { AccountIcon, AddIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from "@/components/ui/icons";
+import { AccountIcon, AddIcon, ChatIcon, ColorIcon, OpenIcon, TokenIcon, type Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/select";
 import { ThemeSwitch } from "@/components/ui/theme-switch";
 import { mcpJson } from "@/lib/agent-token";
+import { setLanguage, type Language } from "@/lib/language";
+import { useLanguage } from "@/lib/use-language";
+import { useStrings } from "@/lib/strings";
 import { trackAccountConnect, trackKeySaved, trackTokenIssued } from "@/lib/analytics";
 import { LOCALE } from "@/lib/dates";
 import { useMailRead } from "../box-kinds";
@@ -49,6 +52,7 @@ export default function SettingsPage() {
           <SettledContext.Provider value={{ ready: entered, revealed, report }}>
             <div className="settings-boxes" data-ready={entered || undefined} aria-busy={!entered || undefined}>
               <ThemeSection />
+              <LanguageSection />
               <AccountsSection />
               <AgentTokensSection />
               <AiKeySection />
@@ -120,13 +124,36 @@ function ThemeSection() {
   );
 }
 
+function LanguageSection() {
+  const { t } = useStrings();
+  const lang = useLanguage();
+  const options: Array<{ value: Language; label: string }> = [
+    { value: "en", label: t("settings.englishOption") },
+    { value: "es", label: t("settings.spanishOption") },
+  ];
+  return (
+    <SettingsBox id="language-settings" title={t("settings.language")} icon={ChatIcon} order={1}>
+      <div className="settings-line">
+        <p className="t-help">{t("settings.languageLine")}</p>
+        <div role="group" aria-label={t("settings.language")}>
+          {options.map((option) => (
+            <Button key={option.value} size="sm" variant={lang === option.value ? "primary" : "quiet"} aria-pressed={lang === option.value} onClick={() => setLanguage(option.value)}>
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </SettingsBox>
+  );
+}
+
 
 type Calendar = { id: string; name: string; color: string | null; selected: boolean };
 type Account = { id: string; email: string; status: string; isDemo: boolean; nodeIds: string[]; calendars: Calendar[] };
 type ConnectLink = { id: string; nodeId: string; status: string; email: string | null; expiresAt: string };
 
 function AccountsSection() {
-  const { tree, saving, version } = useWorkspace();
+  const { tree, saving, version, refreshTree, touch } = useWorkspace();
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [canConnect, setCanConnect] = useState(false);
   const [connectBlocked, setConnectBlocked] = useState<ConnectBlocked>(null);
@@ -190,7 +217,11 @@ function AccountsSection() {
     const answer = await post("/api/google/connect-links", { action, id });
     setLinkBusy(false);
     if (answer.ok) {
-      if (action === "accept") setRound((n) => n + 1);
+      if (action === "accept") {
+        setRound((n) => n + 1);
+        void refreshTree();
+        touch();
+      }
       void loadLinks();
     }
   }

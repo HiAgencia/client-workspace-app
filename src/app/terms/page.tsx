@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import { AGENCY_NAME, AGENCY_URL } from "@/lib/agency";
 import { ASSISTANT_NAME, PRODUCT_NAME } from "@/lib/product";
+import { pageMetadata } from "@/lib/seo";
 import { LegalPage } from "../legal-page";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  lang: "en",
+  path: "/terms",
   title: "Terms",
   description: `How ${PRODUCT_NAME} may be used, and what a connected account is for.`,
-};
+});
 
 export default function TermsPage() {
   return (
     <LegalPage
+      path="/terms"
       title="Terms"
       lede={`These terms cover the use of ${PRODUCT_NAME}. The workspace is yours. A connected account is used for the calendar and the mail you connect, and for nothing else.`}
     >

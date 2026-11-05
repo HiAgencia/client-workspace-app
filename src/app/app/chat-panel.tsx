@@ -13,6 +13,7 @@ import { BROWSER_READS, leftUnfinished, turnGoesOn } from "@/lib/chat/browser-re
 import { encodeWav, mixToMono, resample } from "@/lib/chat/wav";
 import { inlinePieces } from "@/lib/inline-links";
 import { ASSISTANT_MODELS, ASSISTANT_NAME } from "@/lib/product";
+import { translateNow, useStrings } from "@/lib/strings";
 import { PathText } from "./item-parts";
 import { get, post, tool } from "./client-api";
 import { onFocusRequest } from "./focus-request";
@@ -33,6 +34,7 @@ export function useDocked(): boolean {
 }
 
 export function ChatDock() {
+  const { t } = useStrings();
   const { chat } = useWorkspace();
   const docked = useDocked();
   const { setOpen } = chat;
@@ -53,7 +55,7 @@ export function ChatDock() {
   if (kept === null) return null;
   const panel = <ChatPanel key={`chat-${kept.scope ?? "workspace"}`} nodeId={kept.scope} onClose={close} />;
   return kept.docked ? (
-    <aside ref={dock} className="chat-dock" id="chat-panel" aria-label="Chat" data-leaving={open ? undefined : ""}>
+    <aside ref={dock} className="chat-dock" id="chat-panel" aria-label={t("chat.chat")} data-leaving={open ? undefined : ""}>
       {panel}
     </aside>
   ) : (
@@ -64,6 +66,7 @@ export function ChatDock() {
 }
 
 function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTMLDialogElement | null>; open: boolean; onClose: () => void; children: ReactNode }) {
+  const { t } = useStrings();
   useEffect(() => {
     const el = dialog.current;
     if (!el) return;
@@ -76,7 +79,7 @@ function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTML
       ref={dialog}
       id="chat-panel"
       className="dialog panel chat-sheet"
-      aria-label="Chat"
+      aria-label={t("chat.chat")}
       onClose={onClose}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) event.currentTarget.dataset.downOutside = "";
@@ -95,6 +98,7 @@ function ChatSheet({ dialog, open, onClose, children }: { dialog: RefObject<HTML
 const MAX_IMAGE = 4 * 1024 * 1024;
 
 function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => void }) {
+  const { t } = useStrings();
   const [initial, setInitial] = useState<{ messages: UIMessage[]; off: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
@@ -102,8 +106,8 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
   const [working, setWorking] = useState(false);
   const { tree } = useWorkspace();
   const node = nodeId ? tree?.find((entry) => entry.id === nodeId) : undefined;
-  const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? " and its projects" : " and its subprojects") : "";
-  const reach = nodeId === null ? "Works in all clients and projects" : node ? <>Works in <PathText path={node.path} />{below}</> : "Works in this page's client or project";
+  const below = node && tree?.some((entry) => entry.parentId === node.id) ? (node.kind === "client" ? t("chat.andProjects") : t("chat.andSubprojects")) : "";
+  const reach = nodeId === null ? t("chat.worksAll") : node ? <>{t("chat.worksIn")} <PathText path={node.path} />{below}</> : t("chat.worksThisPage");
 
   useEffect(() => {
     void get<{ messages: UIMessage[]; off: string | null }>(nodeId ? `/api/chat?node=${nodeId}` : "/api/chat").then((answer) => {
@@ -143,18 +147,18 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
               .finally(() => setStarting(false));
           }}
         >
-          <span className="btn-label">{starting ? "Starting…" : "Clear chat"}</span>
+          <span className="btn-label">{starting ? t("chat.starting") : t("chat.clear")}</span>
         </Button>
-        <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title="Close chat">
+        <Button size="sm" variant="quiet" className="btn-icon" onClick={onClose} data-chat-close title={t("chat.close")}>
           <CloseIcon />
-          <span className="sr-only">Close chat</span>
+          <span className="sr-only">{t("chat.close")}</span>
         </Button>
       </div>
       {initial === null ? (
-        <div className="chat-log" role="status" aria-busy="true" aria-label="Loading the conversation">
+        <div className="chat-log" role="status" aria-busy="true" aria-label={t("chat.loadingConversation")}>
           {error ? (
             <p className="inline-note" data-tone="alert">
-              The conversation could not be loaded: {error}. Reload the page to try again.
+              {t("chat.conversationNotLoaded", { message: error })}
             </p>
           ) : (
             <>
@@ -179,6 +183,7 @@ function ChatPanel({ nodeId, onClose }: { nodeId: string | null; onClose: () => 
 }
 
 function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; nodeId: string | null; initial: UIMessage[]; off: string | null; onBusy: (busy: boolean) => void }) {
+  const { t, lang } = useStrings();
   const { touch } = useWorkspace();
   const [input, setInput] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
@@ -221,7 +226,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
     clearError();
     setNotice(null);
     trackChatMessage(nodeId !== null);
-    void sendMessage({ role: "user", parts: [...(image ? [image] : []), { type: "text", text: input.trim() || "Turn this into tasks." }] });
+    void sendMessage({ role: "user", parts: [...(image ? [image] : []), { type: "text", text: input.trim() || t("chat.turnIntoTasks") }] });
     setInput("");
     setImage(null);
     box.current?.focus({ preventScroll: true });
@@ -236,8 +241,8 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
 
   function attach(file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith("image/")) return setNotice("Attach an image: a screenshot or a photo.");
-    if (file.size > MAX_IMAGE) return setNotice("That image is too large. Attach one under 4 MB.");
+    if (!file.type.startsWith("image/")) return setNotice(t("chat.attachImageNotice"));
+    if (file.size > MAX_IMAGE) return setNotice(t("chat.imageTooLarge"));
     trackImageAttach();
     const reader = new FileReader();
     reader.onload = () => setImage({ type: "file", mediaType: file.type, filename: file.name, url: String(reader.result) });
@@ -250,13 +255,13 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
         {!off && (
           <li className="inline-note">
             {nodeId === null
-              ? `Ask what is pending, add a task to any client or project by its name, or check what arrived for the tasks that wait for mail. Attach an image of a message to turn it into tasks. ${ASSISTANT_NAME} acts only when you ask.`
-              : `Ask it to add a task, record a decision, or say what is pending here. Attach an image of a message to turn it into tasks. ${ASSISTANT_NAME} acts only when you ask.`}
+              ? t("chat.askAll", { assistant: ASSISTANT_NAME })
+              : t("chat.askHere", { assistant: ASSISTANT_NAME })}
           </li>
         )}
         {messages.map((message, at) => (
           <li key={message.id} data-role={message.role} className="msg">
-            <span className="t-meta">{message.role === "user" ? "You" : ASSISTANT_NAME}</span>
+            <span className="t-meta">{message.role === "user" ? t("chat.you") : ASSISTANT_NAME}</span>
             {message.parts.map((part, index) => {
               if (part.type === "text") {
                 return message.role === "user" ? (
@@ -280,9 +285,9 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
               if (part.type === "file" && part.mediaType.startsWith("image/")) {
                 return part.url && at >= messages.length - 6 ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the person's own attachment, already a data URL this browser holds: no optimizer to run.
-                  <img key={index} className="msg-thumb" src={part.url} alt={part.filename ?? "Attached image"} />
+                  <img key={index} className="msg-thumb" src={part.url} alt={part.filename ?? t("chat.attachedImage")} />
                 ) : (
-                  <p key={index} className="pill">Image: {part.filename ?? "attached"}</p>
+                  <p key={index} className="pill">{t("chat.imageAttached", { name: part.filename ?? t("chat.attachedFallback") })}</p>
                 );
               }
               if (part.type.startsWith("tool-") && "state" in part && part.state === "output-available") {
@@ -292,7 +297,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
             })}
             {!busy && leftUnfinished(message) && (
               <p className="inline-note" data-chat-unfinished>
-                This answer was left unfinished. Ask again to finish it.
+                {t("chat.unfinished")}
               </p>
             )}
           </li>
@@ -300,7 +305,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
         {(busy || messages.length > 0) && (
           <li className="msg msg-working" data-working={busy || undefined} aria-busy={busy || undefined} aria-hidden={!busy || undefined}>
             <span className="t-meta">{ASSISTANT_NAME}</span>
-            <span className="typing" role={busy ? "status" : undefined} aria-label={busy ? "Working…" : undefined}>
+            <span className="typing" role={busy ? "status" : undefined} aria-label={busy ? t("chat.working") : undefined}>
               <span />
               <span />
               <span />
@@ -318,7 +323,7 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
         <form onSubmit={send} className="chat-compose">
           {error && (
             <p role="alert" className="inline-note" data-tone="alert" data-chat-error>
-              {error.message.includes("limit") ? error.message : `${ASSISTANT_NAME} could not answer. ${readable(error.message)}`}
+              {error.message.includes("limit") ? error.message : t("chat.couldNotAnswer", { assistant: ASSISTANT_NAME, message: readable(error.message) })}
             </p>
           )}
           {notice && (
@@ -332,15 +337,16 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
               <img className="attach-thumb" src={image.url} alt="" />
               <span className="pill">{image.filename}</span>
               <Button variant="quiet" size="sm" onClick={() => setImage(null)}>
-                Remove
+                {t("chat.remove")}
               </Button>
             </p>
           )}
           <div className="compose-line">
             <TextArea
               ref={box}
-              aria-label={`Message to ${ASSISTANT_NAME}`}
-              placeholder={`Ask ${ASSISTANT_NAME}…`}
+              lang={lang}
+              aria-label={t("chat.messageTo", { assistant: ASSISTANT_NAME })}
+              placeholder={t("chat.askAssistant", { assistant: ASSISTANT_NAME })}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -348,13 +354,13 @@ function Conversation({ round, nodeId, initial, off, onBusy }: { round: number; 
             />
             <Button type="submit" variant="primary" disabled={busy} aria-busy={busy || undefined}>
               <SendIcon />
-              <span className="btn-label">Send</span>
+              <span className="btn-label">{t("chat.send")}</span>
             </Button>
           </div>
           <div className="compose-actions">
             <label className={`${buttonClass({ size: "sm", variant: "quiet" })} file-button`}>
               <AttachImageIcon />
-              <span className="btn-label">Attach an image</span>
+              <span className="btn-label">{t("chat.attachAnImage")}</span>
               <input id="chat-image" name="chat-image" type="file" accept="image/*" className="sr-only" onChange={(e) => attach(e.target.files?.[0])} />
             </label>
             <VoiceNote onText={(text) => setInput((current) => (current ? `${current} ${text}` : text))} onNotice={setNotice} />
@@ -375,6 +381,7 @@ function readable(message: string): string {
 }
 
 function ActionCard({ toolName, output }: { toolName: string; output: WriteOutput }) {
+  const { t } = useStrings();
   const { saving } = useWorkspace();
   const [undone, setUndone] = useState(false);
   const counted = useRef(false);
@@ -388,7 +395,7 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
   if (!output?.ok) {
     return (
       <p className="action-card t-help" data-card="failed">
-        That could not be done: {output?.message}
+        {t("chat.couldNotDo", { message: output?.message ?? "" })}
       </p>
     );
   }
@@ -408,11 +415,11 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
       </span>
       <span className="t-value action-text">{card.what}</span>
       {undone ? (
-        <span className="pill">Undone</span>
+        <span className="pill">{t("chat.undone")}</span>
       ) : card.undo ? (
-        <Button size="sm" variant="quiet" onClick={() => void undo()} aria-label={`Undo: ${card.what}`}>
+        <Button size="sm" variant="quiet" onClick={() => void undo()} aria-label={t("chat.undoNamed", { what: card.what })}>
           <UndoIcon />
-          <span className="btn-label">Undo</span>
+          <span className="btn-label">{t("common.undo")}</span>
         </Button>
       ) : (
         card.why && <span className="t-meta action-sentence">{card.why}</span>
@@ -423,6 +430,7 @@ function ActionCard({ toolName, output }: { toolName: string; output: WriteOutpu
 
 
 function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNotice: (text: string) => void }) {
+  const { t } = useStrings();
   const [available, setAvailable] = useState(false);
   const [recording, setRecording] = useState(false);
   const [working, setWorking] = useState(false);
@@ -469,7 +477,7 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
       setRecording(true);
       trackDictation();
     } catch {
-      onNotice("The microphone is not available: allow it in the browser to dictate.");
+      onNotice(translateNow("chat.micUnavailable"));
     }
   }
 
@@ -486,11 +494,11 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
       form.append("audio", new Blob([wav], { type: "audio/wav" }), "note.wav");
       const response = await fetch("/api/transcribe", { method: "POST", body: form });
       const answer = (await response.json()) as { ok: boolean; text?: string; message?: string };
-      if (!answer.ok) onNotice(answer.message ?? "The note could not be transcribed.");
+      if (!answer.ok) onNotice(answer.message ?? translateNow("chat.noteNotTranscribed"));
       else if (answer.text) onText(answer.text);
-      else onNotice("Nothing was heard in that note.");
+      else onNotice(translateNow("chat.nothingHeard"));
     } catch {
-      onNotice("The note could not be processed. Try again.");
+      onNotice(translateNow("chat.noteNotProcessed"));
     } finally {
       setWorking(false);
     }
@@ -499,11 +507,11 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   if (!available) return null;
   if (recording) {
     return (
-      <span className="inline rec-live" role="status" aria-label="Recording your note">
+      <span className="inline rec-live" role="status" aria-label={t("chat.recording")}>
         <span className="rec-dot" aria-hidden="true" />
         <span className="t-value">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</span>
         <Button size="sm" variant="quiet" onClick={() => recorder.current?.stop()}>
-          <span className="btn-label">Stop</span>
+          <span className="btn-label">{t("chat.stop")}</span>
         </Button>
       </span>
     );
@@ -511,7 +519,7 @@ function VoiceNote({ onText, onNotice }: { onText: (text: string) => void; onNot
   return (
     <Button size="sm" variant="quiet" disabled={working} onClick={() => void start()}>
       <MicIcon />
-      <span className="btn-label">{working ? "Transcribing…" : "Dictate"}</span>
+      <span className="btn-label">{working ? t("chat.transcribing") : t("chat.dictate")}</span>
     </Button>
   );
 }

@@ -1,6 +1,13 @@
 export type Day = string;
 
+import { currentLanguage } from "./language";
+import { translateNow } from "./strings";
+
 export const LOCALE = "en";
+
+function locale(): string {
+  return typeof document === "undefined" ? LOCALE : currentLanguage();
+}
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -34,15 +41,15 @@ export function addMonths(day: Day, offset: number): Day {
 function shortDay(day: Day, now: Day = today()): string {
   const date = toDate(day);
   const sameYear = day.slice(0, 4) === now.slice(0, 4);
-  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
+  return new Intl.DateTimeFormat(locale(), { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }).format(date);
 }
 
 export function longDay(day: Day): string {
-  return new Intl.DateTimeFormat(LOCALE, { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(toDate(day));
+  return new Intl.DateTimeFormat(locale(), { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(toDate(day));
 }
 
 export function monthTitle(day: Day): string {
-  return new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" }).format(toDate(day));
+  return new Intl.DateTimeFormat(locale(), { month: "long", year: "numeric" }).format(toDate(day));
 }
 
 export function dueTone(day: Day | null, now: Day = today()): "alert" | "accent" | "neutral" | "muted" {
@@ -53,10 +60,10 @@ export function dueTone(day: Day | null, now: Day = today()): "alert" | "accent"
 }
 
 export function dueLabel(day: Day | null, now: Day = today()): string {
-  if (!day) return "No date";
-  if (day === now) return "Today";
-  if (day === addDays(now, 1)) return "Tomorrow";
-  if (day === addDays(now, -1)) return "Yesterday";
+  if (!day) return translateNow("date.noDate");
+  if (day === now) return translateNow("date.today");
+  if (day === addDays(now, 1)) return translateNow("date.tomorrow");
+  if (day === addDays(now, -1)) return translateNow("date.yesterday");
   return shortDay(day, now);
 }
 
@@ -72,7 +79,7 @@ export function instantsOf(from: Day, to: Day): { from: string; to: string } {
 }
 
 export function rangeLabel(from: Day, to: Day): string {
-  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric" }).formatRange(toDate(from), toDate(to));
+  return new Intl.DateTimeFormat(locale(), { month: "short", day: "numeric" }).formatRange(toDate(from), toDate(to));
 }
 
 export function isDay(value: string | null | undefined): value is Day {
@@ -80,11 +87,11 @@ export function isDay(value: string | null | undefined): value is Day {
 }
 
 export function untilAgain(seconds: number | null): string {
-  if (!seconds || !Number.isFinite(seconds)) return "tomorrow";
+  if (!seconds || !Number.isFinite(seconds)) return translateNow("date.tomorrowLower");
   const hours = Math.round(seconds / 3600);
-  if (hours >= 2) return `in about ${hours} hours`;
-  if (hours === 1) return "in about an hour";
-  return "in a few minutes";
+  if (hours >= 2) return translateNow("date.inAboutHours", { hours });
+  if (hours === 1) return translateNow("date.inAboutHour");
+  return translateNow("date.inFewMinutes");
 }
 
 export function firstWeekday(): number {
@@ -128,8 +135,8 @@ export function weekdayNames(weekStart: number): Array<{ short: string; long: st
     const date = new Date(base);
     date.setDate(base.getDate() + ((weekStart % 7) + i));
     return {
-      short: new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date),
-      long: new Intl.DateTimeFormat(LOCALE, { weekday: "long" }).format(date),
+      short: new Intl.DateTimeFormat(locale(), { weekday: "short" }).format(date),
+      long: new Intl.DateTimeFormat(locale(), { weekday: "long" }).format(date),
     };
   });
 }

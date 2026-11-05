@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useStrings } from "@/lib/strings";
 import { lastNode } from "../last-node";
 
 export default function Resume() {
+  const { t } = useStrings();
   const router = useRouter();
   useEffect(() => {
     const last = lastNode();
@@ -12,7 +14,7 @@ export default function Resume() {
   }, [router]);
   return (
     <div className="card stack" role="status" aria-busy="true">
-      <p className="t-help">Opening where you left off…</p>
+      <p className="t-help">{t("resume.opening")}</p>
       <span className="skeleton" style={{ width: "40%" }} />
     </div>
   );

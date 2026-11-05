@@ -3,8 +3,8 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useSyncExternalStore, ViewTransition } from "react";
 import { Menu } from "@/components/ui/menu";
-import { count } from "@/lib/count";
 import { today } from "@/lib/dates";
+import { useStrings } from "@/lib/strings";
 import { BoxFailed, GroupsWait, savePreference } from "../boxes";
 import { placeValue, TaskGroups, useTasksRead, type Sort } from "../box-kinds";
 import { PageHeader, type PageLayout } from "../page-header";
@@ -12,15 +12,15 @@ import { TasksPlaceFilter, useAddress, usePlaceParam } from "../page-filters";
 import { useSwap } from "../use-swap";
 import { useChatScope, useWorkspace } from "../workspace";
 
-const SORTS: Array<{ value: Sort; label: string }> = [
-  { value: "date", label: "By date" },
-  { value: "priority", label: "By priority" },
-  { value: "manual", label: "Manual" },
-];
-
 const noSubscription = () => () => {};
 
 export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
+  const { t, counted } = useStrings();
+  const SORTS: Array<{ value: Sort; label: string }> = [
+    { value: "date", label: t("tasksPage.byDate") },
+    { value: "priority", label: t("tasksPage.byPriority") },
+    { value: "manual", label: t("tasksPage.manual") },
+  ];
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree, notify } = useWorkspace();
   useChatScope(null);
@@ -44,7 +44,7 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
   function chooseLayout(value: PageLayout) {
     set({ layout: value });
     void savePreference({ page: "tasks", layout: value }).then((answer) => {
-      if (!answer.ok) notify({ text: `The layout could not be remembered: ${answer.message}`, tone: "error" });
+      if (!answer.ok) notify({ text: t("tasksPage.layoutNotRemembered", { message: answer.message }), tone: "error" });
     });
   }
 
@@ -56,14 +56,14 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-tasks" data-tasks-page data-layout={swap.shown}>
         <PageHeader
-          title="Tasks"
+          title={t("tasksPage.title")}
           count={
             open === null ? (
               <span className="page-count-wait" aria-hidden="true" />
             ) : (
               <>
-                {count(open, "open task", "open tasks")}.{" "}
-                {due === 0 ? "Nothing is overdue or due today." : `${due === 1 ? "1 is" : `${due} are`} overdue or due today.`}
+                {counted(open, "counted.openTask", "counted.openTasks")}.{" "}
+                {due === 0 ? t("tasksPage.nothingDue") : due === 1 ? t("tasksPage.oneDue") : t("tasksPage.manyDue", { n: due ?? 0 })}
               </>
             )
           }
@@ -73,30 +73,30 @@ export function TasksView({ savedLayout }: { savedLayout: PageLayout | null }) {
           chat
           more={
             <Menu
-              label="More"
-              about="for Tasks"
+              label={t("common.more")}
+              about={t("tasksPage.moreFor")}
               entries={[
-                { kind: "action", label: completed ? "Hide completed" : "Show completed", onSelect: () => set({ completed: completed ? null : "1" }) },
-                { kind: "choice", label: "Sort", value: sort, options: SORTS, onChoose: (value) => set({ sort: value === "date" ? null : value }) },
+                { kind: "action", label: completed ? t("tasksPage.hideCompleted") : t("tasksPage.showCompleted"), onSelect: () => set({ completed: completed ? null : "1" }) },
+                { kind: "choice", label: t("tasksPage.sort"), value: sort, options: SORTS, onChoose: (value) => set({ sort: value === "date" ? null : value }) },
               ]}
             />
           }
         />
         <section className="tasks-page" aria-labelledby="tasks-page-title" aria-busy={!data || stale || undefined}>
           <h2 id="tasks-page-title" className="sr-only">
-            Every task
+            {t("tasksPage.everyTask")}
           </h2>
           {!data ? (
             error ? (
               <div className="card">
-                <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} />
+                <BoxFailed what={t("tasks.theTasks")} message={error} kept={false} onRetry={retry} />
               </div>
             ) : (
-              <GroupsWait what="Loading every task…" layout={layout} />
+              <GroupsWait what={t("tasksPage.loadingEvery")} layout={layout} />
             )
           ) : (
             <div className="box-read fade-enter" data-stale={stale || undefined} data-leaving={swap.leaving || undefined}>
-              {error && <BoxFailed what="The tasks" message={error} kept onRetry={retry} />}
+              {error && <BoxFailed what={t("tasks.theTasks")} message={error} kept onRetry={retry} />}
               <TaskGroups view={data} now={now!} mode="page" layout={swap.shown} placeId={placeId} place={place} showPlace sort={sort} />
             </div>
           )}

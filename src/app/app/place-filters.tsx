@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { GoogleMark } from "@/components/ui/brands";
 import { AccountIcon, PlaceIcon, type Icon } from "@/components/ui/icons";
 import { Select, type SelectOption } from "@/components/ui/select";
-import { count } from "@/lib/count";
+import { countedNow, translateNow, useStrings, type StringKey } from "@/lib/strings";
 import type { TreeNode } from "./client-api";
 
 export const ALL = "all";
@@ -69,7 +69,17 @@ export const MESSAGES: FilterUnit = { one: "message", many: "messages" };
 export const ITEMS: FilterUnit = { one: "item", many: "items" };
 export const EVENTS: FilterUnit = { one: "event", many: "events" };
 
-export const whatItBrings = (n: number, unit: FilterUnit) => count(n, unit.one, unit.many);
+const UNIT_KEYS: Record<string, [StringKey, StringKey]> = {
+  task: ["counted.task", "counted.tasks"],
+  message: ["counted.message", "counted.messages"],
+  item: ["counted.item", "counted.items"],
+  event: ["counted.event", "counted.events"],
+};
+
+export const whatItBrings = (n: number, unit: FilterUnit) => {
+  const keys = UNIT_KEYS[unit.one];
+  return keys ? countedNow(n, keys[0], keys[1]) : `${n} ${n === 1 ? unit.one : unit.many}`;
+};
 
 type PlaceOptions = {
   value: string;
@@ -84,8 +94,8 @@ export function placeOptions({ value, tree, counts, unit, noGeneral = false, sho
   const brings = (id: string) => counts?.get(id) ?? 0;
   const option = (id: string, label: string) => ({ value: id, label, ...(counts ? { detail: whatItBrings(brings(id), unit) } : {}) });
   return [
-    option(ALL, "All clients and projects"),
-    ...(!noGeneral && (brings(GENERAL) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [option(GENERAL, "General")] : []),
+    option(ALL, translateNow("filter.allPlaces")),
+    ...(!noGeneral && (brings(GENERAL) > 0 || shows?.has(GENERAL) || value === GENERAL) ? [option(GENERAL, translateNow("filter.general"))] : []),
     ...(tree ?? []).filter((node) => brings(node.id) > 0 || shows?.has(node.id) || node.id === value).map((node) => option(node.id, node.path)),
   ];
 }
@@ -103,9 +113,10 @@ function NamedFilter({ name, icon: Glyph, children }: { name: string; icon: Icon
 }
 
 export function PlaceFilter({ onChange, ...read }: PlaceOptions & { onChange: (value: string) => void }) {
+  const { t } = useStrings();
   return (
-    <NamedFilter name="Client or project" icon={PlaceIcon}>
-      <Select label="Client or project" value={read.value} options={placeOptions(read)} onChange={onChange} />
+    <NamedFilter name={t("filter.clientOrProject")} icon={PlaceIcon}>
+      <Select label={t("filter.clientOrProject")} value={read.value} options={placeOptions(read)} onChange={onChange} />
     </NamedFilter>
   );
 }
@@ -174,13 +185,13 @@ export function accountOptions({ value, accounts, tree, counts, unit }: AccountO
   const groups = accountGroups(accounts, tree);
   const apart = groups.length > 1;
   return [
-    { value: ALL, label: "All accounts", ...said(ALL) },
+    { value: ALL, label: translateNow("filter.allAccounts"), ...said(ALL) },
     ...groups.flatMap(({ client, accounts: own }) => {
-      const group = apart ? { key: client?.id ?? "nowhere", label: client?.name ?? "No client or project", color: client?.color } : undefined;
+      const group = apart ? { key: client?.id ?? "nowhere", label: client?.name ?? translateNow("filter.noClient"), color: client?.color } : undefined;
       const together = client ? ACCOUNTS_OF + client.id : null;
       const offerTogether = together !== null && apart && ((chosenAccounts(together, accounts, tree)?.size ?? 0) > 1 || value === together);
       return [
-        ...(offerTogether ? [{ value: together, label: `All ${client!.name} accounts`, group, ...said(together) }] : []),
+        ...(offerTogether ? [{ value: together, label: translateNow("filter.allClientAccounts", { name: client!.name }), group, ...said(together) }] : []),
         ...own.map((account) => ({ value: account.id, label: account.email, mark: GoogleMark, group, ...said(account.id) })),
       ];
     }),
@@ -188,18 +199,19 @@ export function accountOptions({ value, accounts, tree, counts, unit }: AccountO
 }
 
 export function AccountFilter({ onChange, pending, known, ...read }: AccountOptions & { onChange: (value: string) => void; pending?: boolean; known?: FilterAccount[] | null }) {
+  const { t } = useStrings();
   const options = pending ? waitingOptions(read.value, known ?? []) : accountOptions(read);
   if (options.length === 0) return null;
   return (
-    <NamedFilter name="Account" icon={AccountIcon}>
-      <Select label="Account" value={read.value} options={options} onChange={onChange} />
+    <NamedFilter name={t("filter.account")} icon={AccountIcon}>
+      <Select label={t("filter.account")} value={read.value} options={options} onChange={onChange} />
     </NamedFilter>
   );
 }
 
 function waitingOptions(value: string, known: FilterAccount[]): SelectOption[] {
-  const all = { value: ALL, label: "All accounts" };
+  const all = { value: ALL, label: translateNow("filter.allAccounts") };
   if (value === ALL) return [all];
   const chosen = known.find((account) => account.id === value);
-  return [all, chosen ? { value, label: chosen.email, mark: GoogleMark } : { value, label: "One account" }];
+  return [all, chosen ? { value, label: chosen.email, mark: GoogleMark } : { value, label: translateNow("filter.oneAccount") }];
 }

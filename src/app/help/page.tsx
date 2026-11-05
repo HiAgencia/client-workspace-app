@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Link } from "@/components/ui/link";
 import { ASSISTANT_NAME, PRODUCT_NAME } from "@/lib/product";
+import { pageMetadata } from "@/lib/seo";
 import { LegalPage } from "../legal-page";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  lang: "en",
+  path: "/help",
   title: "Help",
   description: `How to add a task, find it, and use the guide in ${PRODUCT_NAME}.`,
-};
+});
 
 const QUESTIONS = [
   {
@@ -29,7 +32,7 @@ const QUESTIONS = [
 
 export default function HelpPage() {
   return (
-    <LegalPage title="Help" lede={`${PRODUCT_NAME} keeps each client and project’s tasks, notes, calendar and mail in one place. These are the questions the first visit usually has.`}>
+    <LegalPage path="/help" title="Help" lede={`${PRODUCT_NAME} keeps each client and project’s tasks, notes, calendar and mail in one place. These are the questions the first visit usually has.`}>
       {QUESTIONS.map((item) => (
         <section key={item.title}>
           <h2 className="t-group">{item.title}</h2>

@@ -94,14 +94,21 @@ const PLACE_FRAMES: readonly Frame[] = [
   { set: ["at-3"], ms: 3600 },
 ];
 
-function PlacesScene() {
+const PAUSE_ES = { pause: "Pausar las animaciones", play: "Reproducir las animaciones" };
+
+function PlacesScene({ lang = "en" }: { lang?: "en" | "es" }) {
   return (
     <Scene
       frames={PLACE_FRAMES}
       still={0}
       glyphs={GLYPHS}
       className="story-scene places-scene"
-      label="In the picture, the sidebar moves from Larkspur Bakery to Studio Atlas and to Operations, and each one's page shows its own account, its next task, its meeting and its mail."
+      labels={lang === "es" ? PAUSE_ES : undefined}
+      label={
+        lang === "es"
+          ? "En la imagen, la barra lateral pasa de Larkspur Bakery a Studio Atlas y a Operations, y la página de cada uno muestra su propia cuenta, su tarea siguiente, su reunión y su correo."
+          : "In the picture, the sidebar moves from Larkspur Bakery to Studio Atlas and to Operations, and each one's page shows its own account, its next task, its meeting and its mail."
+      }
     >
       <div className="story-stage places-stage">
         <div className="places-side side-nav">
@@ -238,7 +245,7 @@ const REPLY_FRAMES: readonly Frame[] = [
   { set: ["asked", "closed", "quiet"], ms: 1200 },
 ];
 
-function RepliesScene() {
+function RepliesScene({ lang = "en" }: { lang?: "en" | "es" }) {
   const reply = (subject: string, offset: number, aim: boolean) => (
     <>
       <SenderMark name="Developer Platform" email="noreply@developers.example" />
@@ -312,7 +319,12 @@ function RepliesScene() {
       still={3}
       glyphs={GLYPHS}
       className="story-scene replies-scene"
-      label="In the picture, the task that waits for the app review shows two possible replies; the first one is chosen, and the task is closed as approved."
+      labels={lang === "es" ? PAUSE_ES : undefined}
+      label={
+        lang === "es"
+          ? "En la imagen, la tarea que espera la revisión de la aplicación muestra dos posibles respuestas; se elige la primera y la tarea se cierra como aprobada."
+          : "In the picture, the task that waits for the app review shows two possible replies; the first one is chosen, and the task is closed as approved."
+      }
     >
       <div className="story-stage replies-stage">
         <div className="replies-room">
@@ -341,14 +353,19 @@ const CHAT_FRAMES: readonly Frame[] = [
   { set: ["sent", "acted", "told"], ms: 4200 },
 ];
 
-function ChatScene() {
+function ChatScene({ lang = "en" }: { lang?: "en" | "es" }) {
   return (
     <Scene
       frames={CHAT_FRAMES}
       still={4}
       glyphs={GLYPHS}
       className="story-scene chat-scene"
-      label={`In the picture, the person asks the chat to remind them to chase the Studio Atlas payment today; ${ASSISTANT_NAME} adds the task, offers its Undo, and says where it put it.`}
+      labels={lang === "es" ? PAUSE_ES : undefined}
+      label={
+        lang === "es"
+          ? `En la imagen, se pide al chat que recuerde reclamar hoy el pago de Studio Atlas; ${ASSISTANT_NAME} agrega la tarea, ofrece su Deshacer e indica dónde la puso.`
+          : `In the picture, the person asks the chat to remind them to chase the Studio Atlas payment today; ${ASSISTANT_NAME} adds the task, offers its Undo, and says where it put it.`
+      }
     >
       <div className="story-stage chat-stage">
         <div className="card chat landing-chat">
@@ -433,14 +450,19 @@ const AGENT_FRAMES: readonly Frame[] = [
   { set: ["asked-1", "answered-1", "asked-2", "answered-2", "added"], ms: 3800 },
 ];
 
-function AgentScene() {
+function AgentScene({ lang = "en" }: { lang?: "en" | "es" }) {
   return (
     <Scene
       frames={AGENT_FRAMES}
       still={5}
       glyphs={GLYPHS}
       className="story-scene agent-scene"
-      label="In the picture, a coding agent asks the workspace what changed since its last session, then asks for a review of a pull request, and the review lands among today's tasks marked as the agent's."
+      labels={lang === "es" ? PAUSE_ES : undefined}
+      label={
+        lang === "es"
+          ? "En la imagen, un agente de código pregunta al espacio de trabajo qué cambió desde su última sesión, después pide una revisión de un pull request, y la revisión llega entre las tareas de hoy marcada como del agente."
+          : "In the picture, a coding agent asks the workspace what changed since its last session, then asks for a review of a pull request, and the review lands among today's tasks marked as the agent's."
+      }
     >
       <div className="story-stage agent-stage">
         <pre className="read-block t-code agent-log">
@@ -499,25 +521,35 @@ function AgentScene() {
   );
 }
 
-export function LandingStories({ endpoint }: { endpoint: string }) {
+export function LandingStories({ endpoint, lang = "en" }: { endpoint: string; lang?: "en" | "es" }) {
+  const es = lang === "es";
   return (
     <RevealColumn className="stories">
-      <Story id="story-places" title="Every client keeps its own accounts." scene={<PlacesScene />}>
-        Hang a Google account on the client or project it serves. Its calendar and its mail land there, beside the tasks, and an
-        account on a client reaches every one of its projects.
+      <Story id="story-places" title={es ? "Cada cliente conserva sus propias cuentas." : "Every client keeps its own accounts."} scene={<PlacesScene lang={lang} />}>
+        {es
+          ? "Conviene colgar una cuenta de Google del cliente o proyecto al que sirve. Su calendario y su correo llegan ahí, junto a las tareas, y una cuenta en un cliente alcanza a cada uno de sus proyectos."
+          : "Hang a Google account on the client or project it serves. Its calendar and its mail land there, beside the tasks, and an account on a client reaches every one of its projects."}
       </Story>
-      <Story id="story-replies" title="The workspace finds the reply. You decide." scene={<RepliesScene />}>
-        Say in your words what a task waits for. What arrives with those words shows up as a possible reply, and the task stays
-        open until you say which one answered it and how it ended.
+      <Story id="story-replies" title={es ? "El espacio de trabajo encuentra la respuesta. La decisión queda en la persona." : "The workspace finds the reply. You decide."} scene={<RepliesScene lang={lang} />}>
+        {es
+          ? "Se dice con palabras propias qué espera una tarea. Lo que llega con esas palabras se muestra como posible respuesta, y la tarea permanece abierta hasta que se indica cuál la respondió y cómo terminó."
+          : "Say in your words what a task waits for. What arrives with those words shows up as a possible reply, and the task stays open until you say which one answered it and how it ended."}
       </Story>
-      <Story id="story-chat" title="A chat that acts only when you ask." scene={<ChatScene />}>
-        It runs on {ASSISTANT_MODELS}, with the tools you use: it adds tasks, records decisions and tells you
-        what is pending. It takes your voice and your screenshots too, and every change it makes comes with its Undo.
+      <Story id="story-chat" title={es ? "Un chat que actúa solo cuando se le pide." : "A chat that acts only when you ask."} scene={<ChatScene lang={lang} />}>
+        {es ? (
+          <>
+            Funciona con los modelos Muse de Meta, con las herramientas de uso habitual: agrega tareas, registra decisiones e indica qué está pendiente. También recibe voz y capturas, y cada cambio que hace viene con su Deshacer.
+          </>
+        ) : (
+          <>
+            It runs on {ASSISTANT_MODELS}, with the tools you use: it adds tasks, records decisions and tells you what is pending. It takes your voice and your screenshots too, and every change it makes comes with its Undo.
+          </>
+        )}
       </Story>
       <Story
         id="story-agent"
-        title="Your coding agent works on the same projects."
-        scene={<AgentScene />}
+        title={es ? "El agente de código trabaja en los mismos proyectos." : "Your coding agent works on the same projects."}
+        scene={<AgentScene lang={lang} />}
         text={
           <div className="agent-config">
             <p className="t-code agent-config-name">
@@ -529,8 +561,9 @@ export function LandingStories({ endpoint }: { endpoint: string }) {
           </div>
         }
       >
-        Issue a token on a client or a project and add one block to the repository’s .mcp.json. The agent asks what changed
-        since its last session, and what it adds shows up marked as its own.
+        {es
+          ? "Se emite un token en un cliente o un proyecto y se agrega un bloque al .mcp.json del repositorio. El agente pregunta qué cambió desde su última sesión, y lo que agrega se muestra marcado como propio."
+          : "Issue a token on a client or a project and add one block to the repository’s .mcp.json. The agent asks what changed since its last session, and what it adds shows up marked as its own."}
       </Story>
     </RevealColumn>
   );

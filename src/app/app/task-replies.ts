@@ -1,4 +1,5 @@
 import type { Day } from "@/lib/dates";
+import { translateNow } from "@/lib/strings";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { useBoxRead, type BoxRead } from "./boxes";
 import { peekTool, tool, type Answer, type TreeNode } from "./client-api";
@@ -42,7 +43,7 @@ function repliesOf(known: Known, reads: Asked[], answers: RepliesAnswer[]): Task
   answers.forEach((answer, index) => {
     const { row, account } = reads[index];
     const entry = byTask.get(row.id)!;
-    if (!answer.ok) entry.failures.push({ accountId: account, accountEmail: emails.get(account) ?? "An account", reason: answer.message });
+    if (!answer.ok) entry.failures.push({ accountId: account, accountEmail: emails.get(account) ?? translateNow("detail.anAccount"), reason: answer.message });
     else {
       entry.replies.push(...answer.replies);
       entry.more.push(...answer.more);

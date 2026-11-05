@@ -12,8 +12,8 @@ import { GoogleCalendarMark, GoogleMark } from "@/components/ui/brands";
 import { AddIcon, ByAgentIcon, ByChatIcon, OpenIcon, RescheduleIcon, UndoIcon } from "@/components/ui/icons";
 import { focusAfterClose } from "@/components/ui/use-exit";
 import { usePiece } from "@/components/ui/use-piece";
-import { count } from "@/lib/count";
-import { addDays, instantsOf, LOCALE, longDay, weekOf, type Day } from "@/lib/dates";
+import { addDays, instantsOf, longDay, weekOf, type Day } from "@/lib/dates";
+import { translateNow, useStrings, type StringKey } from "@/lib/strings";
 import { inlinePlain } from "@/lib/inline-links";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { mailFailureText } from "@/lib/mail/failure-text";
@@ -93,6 +93,7 @@ type Group = {
 };
 
 export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace, pageNode, sort = "date", allHref }: GroupsProps) {
+  const { t } = useStrings();
   const manual = sort === "manual";
   const folded = mode === "box" && layout === "list";
   const upcomingDays: Group[] = view.groups.upcoming.days.map((entry) => ({
@@ -109,38 +110,38 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
   const groups: Group[] = [
     {
       key: "overdue",
-      label: "Overdue",
+      label: t("group.overdue"),
       tone: "overdue",
       tasks: view.groups.overdue.tasks,
       count: view.groups.overdue.count,
       dropDay: undefined,
-      empty: "Nothing is overdue.",
+      empty: t("group.nothingOverdue"),
       action: view.groups.overdue.count > 0 ? <Reschedule count={view.groups.overdue.count} place={place} now={now} /> : undefined,
     },
     {
       key: "today",
-      label: "Today",
+      label: t("group.today"),
       tone: "today",
       tasks: view.groups.today.tasks,
       count: view.groups.today.count,
       dropDay: now,
       dayShown: now,
       add: now,
-      empty: "Nothing is due today.",
+      empty: t("group.nothingToday"),
     },
     {
       key: "upcoming",
-      label: "Upcoming",
+      label: t("group.upcoming"),
       tasks: [],
       count: view.groups.upcoming.count,
       dropDay: undefined,
       add: mode === "box" && !folded ? addDays(now, 1) : undefined,
-      empty: "Nothing is coming up.",
+      empty: t("group.nothingUpcoming"),
       days: upcomingDays,
       action:
         mode === "box" && allHref && view.groups.upcoming.count > 0 ? (
-          <HeadLink href={allHref} name="View all upcoming">
-            View all
+          <HeadLink href={allHref} name={t("group.viewAllUpcoming")}>
+            {t("group.viewAll")}
           </HeadLink>
         ) : undefined,
     },
@@ -148,12 +149,12 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       ? [
           {
             key: "noDate",
-            label: "No date",
+            label: t("group.noDate"),
             tasks: view.groups.noDate.tasks,
             count: view.groups.noDate.count,
             dropDay: null,
             add: null,
-            empty: view.groups.overdue.count + view.groups.today.count + view.groups.upcoming.count > 0 ? "Every open task has a date." : "No tasks without a date.",
+            empty: view.groups.overdue.count + view.groups.today.count + view.groups.upcoming.count > 0 ? t("group.everyDated") : t("group.noDateless"),
           } satisfies Group,
         ]
       : []),
@@ -161,11 +162,11 @@ export function TaskGroups({ view, now, mode, layout, placeId, place, showPlace,
       ? [
           {
             key: "completed",
-            label: "Completed",
+            label: t("group.completed"),
             tasks: view.completed.tasks,
             count: view.completed.count,
             dropDay: undefined,
-            empty: "Nothing is completed yet.",
+            empty: t("group.nothingCompleted"),
           } satisfies Group,
         ]
       : []),
@@ -243,7 +244,7 @@ function GroupSection({ group, layout, placeId, children }: { group: Group; layo
             <h3 id={`group-${group.key}`} className="group-title" data-when={group.tone}>
               {group.label}
             </h3>
-            {group.count > 0 && <Figure n={group.count} one="task" many="tasks" className="group-count" />}
+            {group.count > 0 && <Figure n={group.count} one="counted.task" many="counted.tasks" className="group-count" />}
             {(group.action || adds) && (
               <div className="group-action">
                 {group.action}
@@ -322,7 +323,7 @@ function UpcomingDay({ day, tasks, now, children }: { day: Group; tasks: TaskDat
             {day.label}
           </span>
           {day.tasks[0] && <span className="upcoming-day-first">{inlinePlain(day.tasks[0].title)}</span>}
-          {others > 0 && <span className="upcoming-day-more">{`+${others} more`}</span>}
+          {others > 0 && <span className="upcoming-day-more">{translateNow("group.moreCount", { n: others })}</span>}
         </button>
       </h4>
       <Fold open={open} id={foldId}>
@@ -339,19 +340,20 @@ export function allTasks(view: TasksView | null): TaskData[] {
 
 function Reschedule({ count: overdue, place, now }: { count: number; place: Place; now: Day }) {
   const { notify, touch, saving } = useWorkspace();
+  const { t, counted } = useStrings();
   async function move(day: Day | null) {
     if (!day) return;
     const answer = await tool<{ count: number; changed: Array<{ id: string; previousDueOn: string }> }>("reschedule_overdue", { ...placeInput(place), today: now, to: day });
-    if (!answer.ok) return notify({ text: `The overdue tasks could not be moved: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("group.rescheduleFailed", { message: answer.message }), tone: "error" });
     touch();
     const back = answer.changed;
     notify({
-      text: `Moved ${count(answer.count, "overdue task", "overdue tasks")} to ${dayName(day, now)}`,
+      text: t("group.movedTo", { what: counted(answer.count, "counted.overdueTask", "counted.overdueTasks"), day: dayName(day, now) }),
       tone: "status",
       undo: () => void saving(Promise.all(back.map((task) => tool("update_item", { id: task.id, dueOn: task.previousDueOn }))).then((all) => all.find((one) => !one.ok) ?? { ok: true })),
     });
   }
-  return <DatePicker look="chip" className="reschedule head-action" icon={RescheduleIcon} label={`Reschedule the ${count(overdue, "overdue task", "overdue tasks")}`} value={null} display="Reschedule" onChange={(day) => void move(day)} />;
+  return <DatePicker look="chip" className="reschedule head-action" icon={RescheduleIcon} label={t("group.rescheduleLabel", { what: counted(overdue, "counted.overdueTask", "counted.overdueTasks") })} value={null} display={t("group.reschedule")} onChange={(day) => void move(day)} />;
 }
 
 export function useTasksRead(place: Place, now: Day | null, extra: Record<string, unknown> = {}): BoxRead<TasksView> {
@@ -359,12 +361,13 @@ export function useTasksRead(place: Place, now: Day | null, extra: Record<string
 }
 
 export function TasksBoxContent({ read, now, place, placeId, showPlace, pageNode, layout, allHref }: { read: BoxRead<TasksView>; now: Day; place: Place; placeId: string | null; showPlace: boolean; pageNode?: string | null; layout: "list" | "board"; allHref: string }) {
+  const { t } = useStrings();
   const { data, error, stale, retry } = read;
   useBoxSettled(read.settled);
-  if (!data) return error ? <BoxFailed what="The tasks" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the tasks…" shape="tasks" rows={6} />;
+  if (!data) return error ? <BoxFailed what={t("tasks.theTasks")} message={error} kept={false} onRetry={retry} /> : <BoxWait what={t("tasks.loading")} shape="tasks" rows={6} />;
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
-      {error && <BoxFailed what="The tasks" message={error} kept onRetry={retry} />}
+      {error && <BoxFailed what={t("tasks.theTasks")} message={error} kept onRetry={retry} />}
       <TaskGroups view={data} now={now} mode="box" layout={layout} placeId={placeId} place={place} showPlace={showPlace} pageNode={pageNode} allHref={allHref} />
     </div>
   );
@@ -372,23 +375,24 @@ export function TasksBoxContent({ read, now, place, placeId, showPlace, pageNode
 
 export function tasksCountLabel(view: TasksView | null): string | undefined {
   const due = view ? view.groups.overdue.count + view.groups.today.count : 0;
-  return due > 0 ? `${due} due` : undefined;
+  return due > 0 ? translateNow("tasks.dueFigure", { n: due }) : undefined;
 }
 
 export function noDateCount(view: TasksView | null): ReactNode {
   const tasks = view?.groups.noDate.count ?? 0;
-  return tasks > 0 ? <Figure n={tasks} one="task" many="tasks" /> : undefined;
+  return tasks > 0 ? <Figure n={tasks} one="counted.task" many="counted.tasks" /> : undefined;
 }
 
 export function notesCount(total: number | undefined): ReactNode {
-  return total ? <Figure n={total} one="note" many="notes" /> : undefined;
+  return total ? <Figure n={total} one="counted.note" many="counted.notes" /> : undefined;
 }
 
-export function Figure({ n, one, many, className }: { n: number; one: string; many: string; className?: string }) {
+export function Figure({ n, one, many, className }: { n: number; one: StringKey; many: StringKey; className?: string }) {
+  const { t, lang } = useStrings();
   return (
     <span className={className}>
       <Tick value={n} />
-      <span className="sr-only"> {n === 1 ? one : many}</span>
+      <span className="sr-only"> {new Intl.PluralRules(lang).select(n) === "one" ? t(one) : t(many)}</span>
     </span>
   );
 }
@@ -396,25 +400,26 @@ export function Figure({ n, one, many, className }: { n: number; one: string; ma
 const FIRST_SHOWN = 5;
 
 export function NoDateBoxContent({ read, showPlace, pageNode }: { read: BoxRead<TasksView>; showPlace: boolean; pageNode?: string | null }) {
+  const { t, counted } = useStrings();
   const { data, error, stale, retry } = read;
   const [all, setAll] = useState(false);
   const rowsId = useId();
   const landing = useTaskLanding("noDate");
   if (landing && !all) setAll(true);
   useBoxSettled(read.settled);
-  if (!data) return error ? <BoxFailed what="The tasks without a date" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the tasks without a date…" shape="tasks" rows={3} />;
+  if (!data) return error ? <BoxFailed what={t("tasks.theNoDate")} message={error} kept={false} onRetry={retry} /> : <BoxWait what={t("tasks.loadingNoDate")} shape="tasks" rows={3} />;
   const group = data.groups.noDate;
   const folds = group.tasks.length > FIRST_SHOWN;
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
-      {error && <BoxFailed what="The tasks without a date" message={error} kept onRetry={retry} />}
+      {error && <BoxFailed what={t("tasks.theNoDate")} message={error} kept onRetry={retry} />}
       <div id={rowsId} className="first-rows" data-open={all || !folds}>
-        <TaskList group="noDate" label="No date" tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
+        <TaskList group="noDate" label={t("group.noDate")} tasks={group.tasks} showPlace={showPlace} pageNode={pageNode} dropDay={null} reorderable />
       </div>
-      {group.tasks.length === 0 && <BoxEmpty text="No tasks without a date." reason="no-date-empty" />}
+      {group.tasks.length === 0 && <BoxEmpty text={t("tasks.noDateEmpty")} reason="no-date-empty" />}
       {folds && (
         <button type="button" className="task-add" aria-controls={rowsId} aria-expanded={all} onClick={() => setAll((value) => !value)}>
-          {all ? "Show less" : `Show ${count(group.tasks.length - FIRST_SHOWN, "more task", "more tasks")}`}
+          {all ? t("tasks.showLess") : t("tasks.showMore", { what: counted(group.tasks.length - FIRST_SHOWN, "counted.moreTask", "counted.moreTasks") })}
         </button>
       )}
     </div>
@@ -448,6 +453,7 @@ if (typeof window !== "undefined") {
 }
 
 export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref }: { place: Place; now: Day; weekStart: number; tasks: TaskData[]; calendarHref: string }) {
+  const { t, counted } = useStrings();
   const { tree } = useWorkspace();
   const actions = useTaskActions();
   const week = weekOf(now, weekStart);
@@ -480,36 +486,36 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
     void actions.moveToDay(task, day, group, dayName(day, now));
   }
 
-  if (!read.data && read.error) return <BoxFailed what="The calendar" message={read.error} kept={false} onRetry={read.retry} />;
-  if (!read.data) return <BoxWait what="Loading this week's events…" shape="week" rows={3} />;
+  if (!read.data && read.error) return <BoxFailed what={t("cal.theCalendar")} message={read.error} kept={false} onRetry={read.retry} />;
+  if (!read.data) return <BoxWait what={t("cal.loadingWeek")} shape="week" rows={3} />;
   const chosenEvents = ofDay(chosen);
   const unanswered = read.data.waiting;
   const reading = !read.error && unanswered > 0;
   return (
     <div className="box-read" data-stale={read.stale || undefined} aria-busy={read.stale || reading || undefined}>
-      {read.error && <BoxFailed what="The calendar" message={read.error} kept onRetry={read.retry} />}
+      {read.error && <BoxFailed what={t("cal.theCalendar")} message={read.error} kept onRetry={read.retry} />}
       {[...new Set(read.data.failures.map((failure) => failure.reason))].map((reason) => {
-        const who = read.data!.failures.filter((failure) => failure.reason === reason).map((failure) => failure.accountEmail || "The workspace's calendar");
+        const who = read.data!.failures.filter((failure) => failure.reason === reason).map((failure) => failure.accountEmail || t("cal.workspaceCalendar"));
         return (
           <p key={reason} className="inline-note" data-tone="alert">
-            {`${who.length === 1 ? who[0] : count(who.length, "calendar", "calendars")} could not be loaded: ${reason}.`}
+            {t("cal.couldNotLoad", { who: who.length === 1 ? who[0] : counted(who.length, "counted.calendar", "counted.calendars"), reason })}
             {who.length > 1 && <span className="calendar-failed-who">{who.join(", ")}</span>}
           </p>
         );
       })}
-      <WeekStrip label={`The week of ${longDay(week.from)}`} days={days} chosen={chosen} now={now} eventsOn={(day) => ofDay(day).length} onChoose={setChosen} onDrop={onDrop} />
+      <WeekStrip label={t("cal.weekOf", { day: longDay(week.from) })} days={days} chosen={chosen} now={now} eventsOn={(day) => ofDay(day).length} onChoose={setChosen} onDrop={onDrop} />
       <div className="day-events">
         <h3 className="group-title" data-when={chosen === now ? "today" : undefined}>
-          {chosen === now ? "Today" : dayHeading(chosen, now)}
+          {chosen === now ? t("date.today") : dayHeading(chosen, now)}
         </h3>
         {chosenEvents.length === 0 && reading ? (
-          <BoxWait what="Loading this week's events…" shape="events" rows={2} />
+          <BoxWait what={t("cal.loadingWeek")} shape="events" rows={2} />
         ) : chosenEvents.length === 0 && unanswered > 0 ? (
-          <p className="t-help group-empty">This day could not be loaded.</p>
+          <p className="t-help group-empty">{t("cal.dayNotLoaded")}</p>
         ) : chosenEvents.length === 0 ? (
-          <BoxEmpty text={`No events ${chosen === now ? "today" : `on ${longDay(chosen)}`}.`} reason="no-events">
+          <BoxEmpty text={chosen === now ? t("cal.noEventsToday") : t("cal.noEventsOn", { day: longDay(chosen) })} reason="no-events">
             <Link className={buttonClass({ variant: "quiet", size: "sm" })} href={calendarHref}>
-              <span className="btn-label">Open calendar</span>
+              <span className="btn-label">{t("cal.openCalendar")}</span>
             </Link>
           </BoxEmpty>
         ) : (
@@ -519,10 +525,10 @@ export function CalendarBoxContent({ place, now, weekStart, tasks, calendarHref 
               const own = place.kind === "node" && where === names.get(place.id);
               return (
                 <li key={`${event.origin}:${event.accountId}:${event.id}`} className="event-row" data-color={colorOf(event)}>
-                  <span className="event-when">{event.allDay ? "All day" : timeLabel(new Date(event.start).toTimeString().slice(0, 5))}</span>
+                  <span className="event-when">{event.allDay ? t("cal.allDay") : timeLabel(new Date(event.start).toTimeString().slice(0, 5))}</span>
                   <span className="event-what">
                     <span className="event-title">{event.title}</span>
-                    {!own && <span className="event-where">{where ? <PathText path={where} /> : event.origin === "google" ? event.accountEmail : "General"}</span>}
+                    {!own && <span className="event-where">{where ? <PathText path={where} /> : event.origin === "google" ? event.accountEmail : t("cal.general")}</span>}
                     {event.origin === "google" && <GoogleCalendarMark className="event-source" />}
                   </span>
                 </li>
@@ -552,6 +558,7 @@ function WeekStrip({
   onChoose: (day: Day) => void;
   onDrop: (event: DragEvent<HTMLElement>, day: Day) => void;
 }) {
+  const { counted, lang } = useStrings();
   const rail = useRef<HTMLDivElement>(null);
   const [over, setOver] = useState<Day | null>(null);
   usePiece(rail, '[aria-pressed="true"]');
@@ -560,7 +567,7 @@ function WeekStrip({
       {days.map((day) => {
         const many = eventsOn(day);
         const date = new Date(`${day}T00:00:00`);
-        const shown = `${new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(date)} ${date.getDate()}`;
+        const shown = `${new Intl.DateTimeFormat(lang, { weekday: "short" }).format(date)} ${date.getDate()}`;
         return (
           <button
             key={day}
@@ -569,7 +576,7 @@ function WeekStrip({
             data-day={day}
             aria-pressed={day === chosen}
             aria-current={day === now ? "date" : undefined}
-            aria-label={`${shown}, ${longDay(day)}, ${count(many, "event", "events")}`}
+            aria-label={`${shown}, ${longDay(day)}, ${counted(many, "counted.event", "counted.events")}`}
             data-over={over === day || undefined}
             onClick={() => onChoose(day)}
             onDragOver={(event) => {
@@ -650,7 +657,7 @@ export function mailBoxRows(mail: MailList, replies: TaskReplies[], accounts: Se
     if (!shown) continue;
     seen.add(mailKey(shown));
     const more = entry.more.some((id) => accounts === null || accounts.has(id));
-    rows.push({ message: shown, label: `${repliesText(own.length, more)} for “${inlinePlain(entry.task.title)}”` });
+    rows.push({ message: shown, label: translateNow("mail.forTask", { what: repliesText(own.length, more), title: inlinePlain(entry.task.title) }) });
   }
   const toDone = mail.groups.earlier.messages.filter((message) => message.tasks.length > 0);
   for (const message of [...mail.groups.forTasks.messages, ...mail.groups.unread.messages, ...toDone]) {
@@ -680,11 +687,12 @@ export function MailBoxContent({
   connect?: ReactNode;
   connectText?: string;
 }) {
+  const { t } = useStrings();
   const { tree, mailAccounts } = useWorkspace();
   const { data, error, stale, retry } = read;
   const chosen = chosenAccounts(account, mailAccounts ?? [], tree);
   useBoxSettled(read.settled && replies.settled);
-  if (!data) return error ? <BoxFailed what="The mail" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the mail…" shape="mail" rows={3} />;
+  if (!data) return error ? <BoxFailed what={t("mail.theMail")} message={error} kept={false} onRetry={retry} /> : <BoxWait what={t("mail.loading")} shape="mail" rows={3} />;
   const rows = mailBoxRows(data, replies.data?.tasks ?? [], chosen).slice(0, MAIL_ROWS);
   const failures = [...data.failures, ...(replies.data?.tasks ?? []).flatMap((entry) => entry.failures).filter((failure) => chosen === null || chosen.has(failure.accountId))].filter(
     (failure, index, all) => all.findIndex((other) => other.accountId === failure.accountId) === index,
@@ -693,28 +701,28 @@ export function MailBoxContent({
   const body = () => {
     if (data.accounts.length === 0) {
       return place.kind === "general" ? (
-        <BoxEmpty text="General has no mail account of its own." reason="general">
+        <BoxEmpty text={t("mail.generalNoAccount")} reason="general">
           <Link className={buttonClass({ variant: "quiet", size: "sm" })} href="/app/mail">
-            <span className="btn-label">Open all mail</span>
+            <span className="btn-label">{t("mail.openAll")}</span>
           </Link>
         </BoxEmpty>
       ) : (
-        <BoxEmpty text={connectText ?? "Connect a Google account to see its mail here."} reason="no-account">
+        <BoxEmpty text={connectText ?? t("mail.connectToSee")} reason="no-account">
           {connect ?? (
             <LinkOrAnchor className={buttonClass({ variant: "quiet", size: "sm" })} href={connectHref}>
               <GoogleMark />
-              <span className="btn-label">Connect Google account</span>
+              <span className="btn-label">{t("mail.connectGoogle")}</span>
             </LinkOrAnchor>
           )}
         </BoxEmpty>
       );
     }
     if (rows.length === 0) {
-      if (reading) return <BoxWait what="Loading the mail…" shape="mail" rows={3} />;
+      if (reading) return <BoxWait what={t("mail.loading")} shape="mail" rows={3} />;
       return (
-        <BoxEmpty text="Nothing unread." reason="nothing-unread">
+        <BoxEmpty text={t("mail.nothingUnread")} reason="nothing-unread">
           <Link className={buttonClass({ variant: "quiet", size: "sm" })} href="/app/mail">
-            <span className="btn-label">Open all mail</span>
+            <span className="btn-label">{t("mail.openAll")}</span>
           </Link>
         </BoxEmpty>
       );
@@ -732,7 +740,7 @@ export function MailBoxContent({
                 <span className="mail-side">
                   {message.important && (
                     <span className="pill mail-important" data-tone="warn">
-                      Important
+                      {t("mail.important")}
                     </span>
                   )}
                   <span className="mail-when">{mailWhen(message.receivedAt, now)}</span>
@@ -758,8 +766,8 @@ export function MailBoxContent({
   };
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
-      {error && <BoxFailed what="The mail" message={error} kept onRetry={retry} />}
-      {replies.error && <BoxFailed what="The possible replies of the tasks" message={replies.error} kept={replies.data !== null} onRetry={replies.retry} />}
+      {error && <BoxFailed what={t("mail.theMail")} message={error} kept onRetry={retry} />}
+      {replies.error && <BoxFailed what={t("mail.theReplies")} message={replies.error} kept={replies.data !== null} onRetry={replies.retry} />}
       {failures.map((failure) => (
         <p key={failure.accountId} className="inline-note" data-tone={failure.partial ? undefined : "alert"} data-mail-failure>
           {mailFailureText(failure)}
@@ -796,27 +804,28 @@ function noteItem(note: NoteRow): Item {
 }
 
 export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: Place }) {
+  const { t } = useStrings();
   const { openItem, tree } = useWorkspace();
   const { data, error, stale, retry } = read;
   const node = place.kind === "node" ? place.id : null;
   useBoxSettled(read.settled);
-  if (!data) return error ? <BoxFailed what="The notes" message={error} kept={false} onRetry={retry} /> : <BoxWait what="Loading the notes…" shape="notes" rows={3} />;
+  if (!data) return error ? <BoxFailed what={t("notes.theNotes")} message={error} kept={false} onRetry={retry} /> : <BoxWait what={t("notes.loading")} shape="notes" rows={3} />;
   return (
     <div className="box-read" data-stale={stale || undefined} aria-busy={stale || undefined}>
-      {error && <BoxFailed what="The notes" message={error} kept onRetry={retry} />}
+      {error && <BoxFailed what={t("notes.theNotes")} message={error} kept onRetry={retry} />}
       {data.notes.length === 0 ? (
-        <BoxEmpty text={node ? "No notes here yet." : "No notes in General yet."} reason="no-notes" />
+        <BoxEmpty text={node ? t("notes.noneHere") : t("notes.noneGeneral")} reason="no-notes" />
       ) : (
         <FlipList className="note-list">
           {data.notes.map((note) => {
             const where = placeOnPage({ nodeId: note.nodeId, path: note.path }, note.path !== null, node, tree);
             return (
               <li key={note.id} className="note-row" data-item={note.id}>
-                <button type="button" className="note-open" data-item-title aria-label={`Open “${inlinePlain(note.title)}”`} onClick={() => openItem(noteItem(note))} />
+                <button type="button" className="note-open" data-item-title aria-label={t("notes.openNamed", { title: inlinePlain(note.title) })} onClick={() => openItem(noteItem(note))} />
                 <span className="note-title">
                   <InlineText text={note.title} />
                 </span>
-                {note.decision && <span className="pill note-decision">Decision</span>}
+                {note.decision && <span className="pill note-decision">{t("notes.decision")}</span>}
                 {where.shown && (
                   <span className="note-where">
                     <PlaceName path={where.path} color={note.color} />
@@ -827,12 +836,13 @@ export function NotesBoxContent({ read, place }: { read: BoxRead<Notes>; place: 
           })}
         </FlipList>
       )}
-      {data.total > data.notes.length && <p className="t-meta">{`The latest ${data.notes.length} of ${data.total}. Search finds the others.`}</p>}
+      {data.total > data.notes.length && <p className="t-meta">{t("notes.latestOf", { shown: data.notes.length, total: data.total })}</p>}
     </div>
   );
 }
 
 export function useAddNote(node: string | null) {
+  const { t } = useStrings();
   const { saving, notify } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [round, setRound] = useState(0);
@@ -849,7 +859,7 @@ export function useAddNote(node: string | null) {
     setBusy(false);
     if (!(await saving(Promise.resolve(answer)))) return;
     setText("");
-    if (answer.ok) notify({ text: `Added note “${inlinePlain(value)}”`, tone: "status", undo: () => void saving(tool("delete_item", { id: answer.item.id })) });
+    if (answer.ok) notify({ text: t("notes.added", { title: inlinePlain(value) }), tone: "status", undo: () => void saving(tool("delete_item", { id: answer.item.id })) });
   }
 
   function onKey(event: KeyboardEvent<HTMLInputElement>) {
@@ -885,7 +895,7 @@ export function useAddNote(node: string | null) {
       }}
     >
       <AddIcon />
-      <span className="btn-label">Add note</span>
+      <span className="btn-label">{t("notes.addNote")}</span>
     </Button>
   );
   const editor = (
@@ -894,8 +904,8 @@ export function useAddNote(node: string | null) {
         <div key={round} className="task-add-line note-add">
           <Field
             autoFocus
-            aria-label="New note"
-            placeholder="Write a note, and press Enter"
+            aria-label={t("notes.newNote")}
+            placeholder={t("notes.placeholder")}
             value={text}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={onKey}
@@ -907,10 +917,10 @@ export function useAddNote(node: string | null) {
             }}
           />
           <Button size="sm" onClick={close}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button size="sm" variant="primary" onClick={() => void add()} disabled={!text.trim() || busy}>
-            Add note
+            {t("notes.addNote")}
           </Button>
         </div>
       )}
@@ -942,22 +952,24 @@ export function activitySince(now = Date.now()): string {
 
 function ago(at: string, now: number): string {
   const minutes = Math.max(0, Math.round((now - Date.parse(at)) / 60_000));
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return translateNow("activity.justNow");
+  if (minutes < 60) return translateNow("activity.minAgo", { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  if (hours < 24) return hours === 1 ? translateNow("activity.hourAgo") : translateNow("activity.hoursAgo", { n: hours });
   const days = Math.round(hours / 24);
-  return days === 1 ? "Yesterday" : `${days} days ago`;
+  return days === 1 ? translateNow("activity.yesterday") : translateNow("activity.daysAgo", { n: days });
 }
 
 function actor(source: Item["source"], label: string | null): string {
   if (source === "chat") return ASSISTANT_NAME;
-  return label ?? "A coding agent";
+  return label ?? translateNow("activity.codingAgent");
 }
 
-const TYPE_WORD: Record<Item["type"], string> = { task: "a task", note: "a note", decision: "a decision" };
+const TYPE_WORD: Record<Item["type"], StringKey> = { task: "activity.aTask", note: "activity.aNote", decision: "activity.aDecision" };
+const VERB_WORD: Record<string, StringKey> = { added: "activity.added", completed: "activity.completedVerb", changed: "activity.changed", deleted: "activity.deletedVerb" };
 
 export function ActivityBoxContent({ place }: { place: Place }) {
+  const { t, counted } = useStrings();
   const { openItem, saving, chat } = useWorkspace();
   const [all, setAll] = useState(false);
   const [sinceIso] = useState(() => activitySince());
@@ -985,7 +997,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
             key: `${as}:${item.id}`,
             at: as === "created" ? item.createdAt : as === "completed" ? (item.completedAt ?? item.updatedAt ?? item.createdAt) : (item.updatedAt ?? item.createdAt),
             by: who,
-            what: `${actor(who, label)} ${changedByOther ? "changed" : verb} ${TYPE_WORD[item.type]}`,
+            what: `${actor(who, label)} ${translateNow(changedByOther ? "activity.changed" : VERB_WORD[verb])} ${translateNow(TYPE_WORD[item.type])}`,
             title: item.title,
             undo: () => undoUpdate(as, item, who, label),
             open: kind === "deleted" ? undefined : () => openItem(item),
@@ -999,16 +1011,16 @@ export function ActivityBoxContent({ place }: { place: Place }) {
   const failed = updates.error;
   useBoxSettled(updates.settled);
   if (!updates.data) {
-    if (failed) return <BoxFailed what="The activity" message={failed} kept={false} onRetry={updates.retry} />;
-    return <BoxWait what={`Loading what ${ASSISTANT_NAME} and your coding agents did…`} shape="activity" rows={3} />;
+    if (failed) return <BoxFailed what={t("activity.theActivity")} message={failed} kept={false} onRetry={updates.retry} />;
+    return <BoxWait what={t("activity.loading", { assistant: ASSISTANT_NAME })} shape="activity" rows={3} />;
   }
   return (
     <div className="box-read" data-stale={updates.stale || undefined}>
-      {failed && <BoxFailed what="The activity" message={failed} kept onRetry={updates.retry} />}
+      {failed && <BoxFailed what={t("activity.theActivity")} message={failed} kept onRetry={updates.retry} />}
       {entries.length === 0 ? (
-        <BoxEmpty text={`Nothing done by ${ASSISTANT_NAME} or a coding agent in the last ${count(ACTIVITY_DAYS, "day", "days")}.`} reason="no-activity">
+        <BoxEmpty text={t("activity.nothing", { assistant: ASSISTANT_NAME, span: counted(ACTIVITY_DAYS, "counted.day", "counted.days") })} reason="no-activity">
           <Button variant="quiet" size="sm" onClick={() => chat.setOpen(true)}>
-            Open chat
+            {t("activity.openChat")}
           </Button>
         </BoxEmpty>
       ) : (
@@ -1025,9 +1037,9 @@ export function ActivityBoxContent({ place }: { place: Place }) {
                       {entry.what}
                       <span className="activity-when">{ago(entry.at, readAt)}</span>
                     </span>
-                    <Button size="sm" variant="quiet" className="activity-undo head-action" aria-label={`Undo: ${entry.what}, “${inlinePlain(entry.title)}”`} onClick={() => void saving(entry.undo())}>
+                    <Button size="sm" variant="quiet" className="activity-undo head-action" aria-label={t("activity.undoNamed", { what: entry.what, title: inlinePlain(entry.title) })} onClick={() => void saving(entry.undo())}>
                       <UndoIcon />
-                      <span className="btn-label">Undo</span>
+                      <span className="btn-label">{t("common.undo")}</span>
                     </Button>
                     {entry.open ? (
                       <button type="button" className="activity-title" onClick={entry.open}>
@@ -1043,7 +1055,7 @@ export function ActivityBoxContent({ place }: { place: Place }) {
           </FlipList>
           {entries.length > FIRST_SHOWN && (
             <button type="button" className="task-add" aria-controls="activity-entries" aria-expanded={all} onClick={() => setAll((value) => !value)}>
-              {all ? "Show less" : `Show ${count(entries.length - FIRST_SHOWN, "more entry", "more entries")}`}
+              {all ? t("tasks.showLess") : t("tasks.showMore", { what: counted(entries.length - FIRST_SHOWN, "counted.moreEntry", "counted.moreEntries") })}
             </button>
           )}
         </>
@@ -1060,11 +1072,11 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const name = `“${inlinePlain(item.title)}”`;
   const byOther = (revision: Revision) => revision.source !== who || (who === "agent" && revision.agentLabel !== label);
   if (kind === "created") {
-    if (versions.revisions.some(byOther)) return { ok: false, message: `${name} was changed after it was added, so it stays. To remove it, delete it from its “More”.` };
+    if (versions.revisions.some(byOther)) return { ok: false, message: translateNow("activity.changedAfterAdded", { name }) };
     return tool("delete_item", { id: item.id });
   }
   const at = versions.revisions.findIndex((revision) => !byOther(revision));
-  if (at < 0) return { ok: false, message: `${name} has no earlier version to go back to.` };
+  if (at < 0) return { ok: false, message: translateNow("activity.noEarlier", { name }) };
   const before = versions.revisions[at].snapshot;
   const later = versions.revisions.slice(0, at);
   const current = await tool<{ item: Item }>("get_item", { id: item.id });
@@ -1082,10 +1094,10 @@ async function undoUpdate(kind: keyof Updates, item: Item, who: Item["source"], 
   const hour = (value: string | null) => value?.slice(0, 5) ?? null;
   const same = (field: keyof Snapshot, a: Snapshot, b: Snapshot) => (field === "due_time" ? hour(a[field]) === hour(b[field]) : a[field] === b[field]);
   const fields = (["title", "body", "status", "priority", "due_on", "due_time", "parent_item_id"] as const).filter((field) => !same(field, before, after));
-  if (fields.length === 0) return { ok: false, message: `Nothing to undo: ${name} already reads as it did before this change.` };
+  if (fields.length === 0) return { ok: false, message: translateNow("activity.nothingToUndo", { name }) };
   const touched = fields.filter((field) => !same(field, after, now));
-  if (touched.length > 0) return { ok: false, message: `${name} was changed again since, so it stays as it is. Open it to go back from its “Versions”.` };
-  if (fields.includes("parent_item_id")) return { ok: false, message: `This change moved ${name}. Open it to go back from its “Versions”.` };
+  if (touched.length > 0) return { ok: false, message: translateNow("activity.changedAgain", { name }) };
+  if (fields.includes("parent_item_id")) return { ok: false, message: translateNow("activity.movedItem", { name }) };
   const note = item.type !== "task";
   const input: Record<string, unknown> = { id: item.id };
   if (fields.includes("title") && !note) input.title = before.title;

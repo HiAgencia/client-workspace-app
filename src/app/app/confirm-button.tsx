@@ -3,8 +3,10 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { focusAfterClose } from "@/components/ui/use-exit";
+import { useStrings } from "@/lib/strings";
 
 export function ConfirmButton({ children, confirm, label, onConfirm }: { children: ReactNode; confirm: string; label?: string; onConfirm: () => void }) {
+  const { t } = useStrings();
   const [asking, setAsking] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
 
@@ -36,7 +38,7 @@ export function ConfirmButton({ children, confirm, label, onConfirm }: { childre
       <span className="confirm-text">{confirm}</span>
       <span className="inline">
         <Button size="sm" autoFocus onClick={back}>
-          Back
+          {t("guide.back")}
         </Button>
         <Button
           variant="danger"
@@ -46,7 +48,7 @@ export function ConfirmButton({ children, confirm, label, onConfirm }: { childre
             onConfirm();
           }}
         >
-          Yes, {String(children).toLowerCase()}
+          {t("confirm.yes", { action: String(children).toLowerCase() })}
         </Button>
       </span>
     </span>

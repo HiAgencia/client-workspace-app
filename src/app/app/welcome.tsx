@@ -9,41 +9,43 @@ import { Fold } from "@/components/ui/fold";
 import { AddIcon, ClientIcon, OwnProjectIcon, type Icon } from "@/components/ui/icons";
 import { focusAfterClose } from "@/components/ui/use-exit";
 import { firstName } from "@/lib/session-person";
+import { useStrings } from "@/lib/strings";
 import { post } from "./client-api";
 import { requestFocus } from "./focus-request";
 import { useWorkspace, type Person } from "./workspace";
 
 export function Welcome({ person }: { person: Person }) {
+  const { t } = useStrings();
   const first = firstName(person.name);
   return (
     <section className="welcome" aria-labelledby="welcome-title" data-welcome>
       <div className="welcome-head" data-cascade style={{ "--cascade-from": "calc(var(--enter-step) * 2)" } as CSSProperties}>
         <Avatar className="welcome-avatar" src={person.avatarUrl} name={person.name} email={person.email} />
         <h2 id="welcome-title" className="t-h1 welcome-title">
-          {first ? `Welcome, ${first}` : "Welcome"}
+          {first ? t("welcome.helloName", { name: first }) : t("welcome.hello")}
         </h2>
-        <p className="welcome-lead">Start with your own work or with a client. Each one keeps its tasks, notes, calendar and mail together.</p>
+        <p className="welcome-lead">{t("welcome.lead")}</p>
       </div>
       <div className="welcome-paths">
         <WelcomePath
           kind="project"
           order={0}
           icon={OwnProjectIcon}
-          title="Your own project"
-          text={person.email ? `Your business or your own work. The calendar and mail of ${person.email} come into it.` : "Your business or your own work."}
-          add="Add your own project"
-          field="The name of your business or your work"
-          submit="Add project"
+          title={t("welcome.ownTitle")}
+          text={person.email ? t("welcome.ownTextEmail", { email: person.email }) : t("welcome.ownText")}
+          add={t("welcome.addOwn")}
+          field={t("welcome.ownField")}
+          submit={t("welcome.addProject")}
         />
         <WelcomePath
           kind="client"
           order={1}
           icon={ClientIcon}
-          title="A client"
-          text="Someone you work for. Their projects, and the Google account you share with them, live in it."
-          add="Add a client"
-          field="The client's name"
-          submit="Add client"
+          title={t("welcome.clientTitle")}
+          text={t("welcome.clientText")}
+          add={t("welcome.addClient")}
+          field={t("welcome.clientField")}
+          submit={t("welcome.addClientSubmit")}
         />
       </div>
     </section>
@@ -53,6 +55,7 @@ export function Welcome({ person }: { person: Person }) {
 type PathProps = { kind: "project" | "client"; order: number; icon: Icon; title: string; text: string; add: string; field: string; submit: string };
 
 function WelcomePath({ kind, order, icon: Glyph, title, text, add, field, submit }: PathProps) {
+  const { t } = useStrings();
   const { saving } = useWorkspace();
   const router = useRouter();
   const id = useId();
@@ -116,7 +119,7 @@ function WelcomePath({ kind, order, icon: Glyph, title, text, add, field, submit
           />
           <div className="welcome-form-actions">
             <Button size="sm" variant="quiet" onClick={close} disabled={busy}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button size="sm" variant="primary" type="submit" disabled={!name.trim() || busy} aria-busy={busy || undefined}>
               {submit}

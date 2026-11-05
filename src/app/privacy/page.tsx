@@ -2,16 +2,20 @@ import type { Metadata } from "next";
 import { Link } from "@/components/ui/link";
 import { AGENCY_NAME, AGENCY_URL } from "@/lib/agency";
 import { ASSISTANT_NAME, PRODUCT_NAME } from "@/lib/product";
+import { pageMetadata } from "@/lib/seo";
 import { LegalPage } from "../legal-page";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  lang: "en",
+  path: "/privacy",
   title: "Privacy",
   description: `What ${PRODUCT_NAME} keeps, what a connected account is used for, and how to remove it.`,
-};
+});
 
 export default function PrivacyPage() {
   return (
     <LegalPage
+      path="/privacy"
       title="Privacy"
       lede={`${PRODUCT_NAME} keeps what you put in your workspace, and what a sign-in or a connected account needs in order to work. This is that list.`}
     >
@@ -36,7 +40,7 @@ export default function PrivacyPage() {
       <section>
         <h2 className="t-group">On this browser</h2>
         <p className="t-body">
-          This browser remembers the theme, whether you have seen the guide, and the last place you opened, so the next visit can resume there. Those are not advertising cookies. The list is on the <Link href="/cookies">Cookies</Link> page.
+          This browser remembers the theme, the language chosen on the public pages, whether the offer of the Spanish version was dismissed, whether you have seen the guide, and the last place you opened, so the next visit can resume there. Those are not advertising cookies. The list is on the <Link href="/cookies">Cookies</Link> page.
         </p>
       </section>
       <section>

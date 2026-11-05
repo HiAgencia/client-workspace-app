@@ -227,51 +227,8 @@ export function manifestIconFiles() {
   };
 }
 
-// The share image (1200 × 630): a black field and the mark large at the left, drawn with the same sampler and the
-// same geometry as the icons, with no rasterized text. The tile and the field are the same black, so the bars and
-// their shadow carry the picture.
-const OG_WIDTH = 1200;
-const OG_HEIGHT = 630;
-const OG_MARK = 432;
-function drawOg() {
-  const samples = 4;
-  const pixels = Buffer.alloc(OG_WIDTH * OG_HEIGHT * 4);
-  const markX = 84;
-  const markY = (OG_HEIGHT - OG_MARK) / 2;
-  for (let row = 0; row < OG_HEIGHT; row++) {
-    for (let col = 0; col < OG_WIDTH; col++) {
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      for (let sy = 0; sy < samples; sy++) {
-        for (let sx = 0; sx < samples; sx++) {
-          const px = col + (sx + 0.5) / samples;
-          const py = row + (sy + 0.5) / samples;
-          let color = TILE;
-          if (px >= markX && px < markX + OG_MARK && py >= markY && py < markY + OG_MARK) {
-            const gx = ((px - markX) / OG_MARK) * UNITS;
-            const gy = ((py - markY) / OG_MARK) * UNITS;
-            color = colorAt(gx, gy, true) ?? TILE;
-          }
-          r += color[0];
-          g += color[1];
-          b += color[2];
-        }
-      }
-      const i = (row * OG_WIDTH + col) * 4;
-      const count = samples * samples;
-      pixels[i] = Math.round(r / count);
-      pixels[i + 1] = Math.round(g / count);
-      pixels[i + 2] = Math.round(b / count);
-      pixels[i + 3] = 255;
-    }
-  }
-  return pixels;
-}
-
-export function ogFile() {
-  return { "og.png": png(OG_WIDTH, OG_HEIGHT, drawOg()) };
-}
+// The share image (public/og.png, 1200 × 630) is a supplied design, not drawn here: this script never writes it,
+// so running it cannot replace the chosen picture with a drawn one.
 
 // The mark as a logo at 1000 × 1000, drawn by the same source as the icons so the two never drift: the primary
 // (a black tile, white bars, their shadow), its light tone (a white tile, black bars), and the two monochromes
@@ -329,8 +286,8 @@ export function webManifest() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const publicDir = new URL("../public/", import.meta.url);
   mkdirSync(new URL("brand/", publicDir), { recursive: true });
-  for (const [name, data] of Object.entries({ ...iconFiles(), ...manifestIconFiles(), ...ogFile(), ...logoFiles() }))
+  for (const [name, data] of Object.entries({ ...iconFiles(), ...manifestIconFiles(), ...logoFiles() }))
     writeFileSync(new URL(name, publicDir), data);
   writeFileSync(new URL("manifest.webmanifest", publicDir), `${JSON.stringify(webManifest(), null, 2)}\n`);
-  console.log("icon.svg, favicon.ico (16, 32, 48), apple-icon.png (180), icon-192.png, icon-512.png, icon-maskable-512.png, og.png (1200x630), the four logos in public/brand/ (1000x1000, PNG and SVG) and manifest.webmanifest written in public/");
+  console.log("icon.svg, favicon.ico (16, 32, 48), apple-icon.png (180), icon-192.png, icon-512.png, icon-maskable-512.png, the four logos in public/brand/ (1000x1000, PNG and SVG) and manifest.webmanifest written in public/");
 }

@@ -2,6 +2,7 @@
 
 import { Select as Base } from "@base-ui/react/select";
 import { Fragment, useId, type ReactElement } from "react";
+import { useStrings } from "@/lib/strings";
 import { cx } from "@/lib/utils";
 import { usePopupContainer } from "./popup-layer";
 
@@ -49,7 +50,9 @@ const item = (option: SelectOption, marked: boolean) => (
   </Base.Item>
 );
 
-export function Select({ value, onChange, options, label, labelledBy, placeholder = "Choose…", look = "field", id, invalid, describedBy }: SelectProps) {
+export function Select({ value, onChange, options, label, labelledBy, placeholder, look = "field", id, invalid, describedBy }: SelectProps) {
+  const { t } = useStrings();
+  const shownPlaceholder = placeholder ?? t("select.choose");
   const chosen = options.find((option) => option.value === value);
   const marked = options.some((option) => option.mark);
   const container = usePopupContainer();
@@ -66,7 +69,7 @@ export function Select({ value, onChange, options, label, labelledBy, placeholde
     >
       <Base.Trigger
         id={labelledBy ? triggerId : id}
-        aria-label={labelledBy ? undefined : `${label}: ${chosen?.label ?? placeholder}`}
+        aria-label={labelledBy ? undefined : `${label}: ${chosen?.label ?? shownPlaceholder}`}
         aria-labelledby={labelledBy ? `${labelledBy} ${triggerId}` : undefined}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
@@ -74,7 +77,7 @@ export function Select({ value, onChange, options, label, labelledBy, placeholde
         data-tone={look === "chip" ? chosen?.tone : undefined}
       >
         {chosen?.mark && <chosen.mark className="picker-mark" />}
-        <Base.Value className="picker-value" placeholder={placeholder} />
+        <Base.Value className="picker-value" placeholder={shownPlaceholder} />
       </Base.Trigger>
       <Base.Portal container={container}>
         <Base.Positioner className="positioner" sideOffset={6} align="start" alignItemWithTrigger={false}>

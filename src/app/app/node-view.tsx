@@ -1,11 +1,12 @@
 "use client";
 
-import { Link, LinkOrAnchor } from "@/components/ui/link";
+import { Link } from "@/components/ui/link";
 import { Menu as Base } from "@base-ui/react/menu";
 import { usePopupContainer } from "@/components/ui/popup-layer";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, ViewTransition, type FormEvent } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Field } from "@/components/ui/field";
 import { FlipList } from "@/components/ui/flip-list";
 import { Fold } from "@/components/ui/fold";
@@ -13,11 +14,11 @@ import { GoogleMark } from "@/components/ui/brands";
 import { NodeGlyph, glyphOf } from "@/components/node-glyph";
 import { AddIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
-import { count } from "@/lib/count";
 import { firstWeekday, today } from "@/lib/dates";
+import { countedNow, translateNow, useStrings, type StringKey } from "@/lib/strings";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { NODE_COLORS } from "@/lib/node-colors";
-import { NODE_ICON_LABELS, NODE_ICONS, shownIcon } from "@/lib/node-icons";
+import { NODE_ICONS, shownIcon } from "@/lib/node-icons";
 import { cx } from "@/lib/utils";
 import { get, post, type TreeNode } from "./client-api";
 import {
@@ -59,17 +60,17 @@ const NODE_BOXES = ["tasks", SPLIT, "calendar", "mail", FOOT, "no_date", "notes"
 type Account = { id: string; email: string; status: string; nodeIds: string[]; calendars: Array<{ selected: boolean }> };
 type Accounts = { accounts: Account[]; canConnect: boolean; connectBlocked: ConnectBlocked };
 
-const COLOR_NAMES: Record<(typeof NODE_COLORS)[number], string> = {
-  red: "Red",
-  orange: "Orange",
-  amber: "Amber",
-  green: "Green",
-  teal: "Teal",
-  blue: "Blue",
-  indigo: "Indigo",
-  violet: "Violet",
-  pink: "Pink",
-  gray: "Gray",
+const COLOR_NAMES: Record<(typeof NODE_COLORS)[number], StringKey> = {
+  red: "color.red",
+  orange: "color.orange",
+  amber: "color.amber",
+  green: "color.green",
+  teal: "color.teal",
+  blue: "color.blue",
+  indigo: "color.indigo",
+  violet: "color.violet",
+  pink: "color.pink",
+  gray: "color.gray",
 };
 
 function chainOf(tree: TreeNode[], id: string): TreeNode[] {
@@ -81,6 +82,7 @@ function chainOf(tree: TreeNode[], id: string): TreeNode[] {
 const noSubscription = () => () => {};
 
 export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved: BoardLayout | null; savedLayout: PageLayout | null }) {
+  const { t, counted } = useStrings();
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const { tree, notify, saving, refreshTree, person } = useWorkspace();
   const router = useRouter();
@@ -121,8 +123,8 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
         requestAnimationFrame(() => {
           void land(request.target, { acted: request.acted }).then((landing) => {
             if (request.target.kind !== "item") return;
-            if (landing === "missing") notify({ text: `“${request.target.title}” is not on this page.`, tone: "status" });
-            if (landing === "hidden") notify({ text: `“${request.target.title}” could not be shown on this page.`, tone: "status" });
+            if (landing === "missing") notify({ text: translateNow("node.isNotOnPage", { title: request.target.title }), tone: "status" });
+            if (landing === "hidden") notify({ text: translateNow("node.couldNotShow", { title: request.target.title }), tone: "status" });
           });
         }),
       );
@@ -136,21 +138,22 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
 
   const root = chain[0];
   const sessionEmail = root.kind === "project" && person && !person.isAnonymous ? person.email : null;
-  const blocked = accounts.data && !accounts.data.canConnect ? (accounts.data.connectBlocked === "demo" ? "Connecting needs a Google sign-in" : "Connecting Google accounts is not set up on this server") : null;
-  const trail = [{ label: root.kind === "client" ? "Clients" : "Projects" }, ...chain.slice(0, -1).map((entry) => ({ label: entry.name, href: `/app/node/${entry.id}` }))];
+  const blocked = accounts.data && !accounts.data.canConnect ? (accounts.data.connectBlocked === "demo" ? t("node.connectNeedsSignIn") : t("node.connectNotSetUp")) : null;
+  const trail = [{ label: root.kind === "client" ? t("nav.clients") : t("nav.projects") }, ...chain.slice(0, -1).map((entry) => ({ label: entry.name, href: `/app/node/${entry.id}` }))];
   const ids = new Set(chain.map((entry) => entry.id));
   const seen = (accounts.data?.accounts ?? []).filter((account) => account.nodeIds.some((id) => ids.has(id)));
   const connectHref = accounts.data?.canConnect ? `/api/google/connect?node=${nodeId}` : "/app/settings#accounts-settings";
   const one = node.kind === "client" ? "project" : "subproject";
-  const childName = node.kind === "client" ? "Projects" : "Subprojects";
-  const names: Record<string, string> = { tasks: "Tasks", no_date: "No date", calendar: "Calendar", mail: "Mail", notes: "Notes", activity: "Activity" };
+  const oneWord = t(`kindWord.${one}` as "kindWord.project");
+  const childName = node.kind === "client" ? t("nav.projectsWord") : t("nav.subprojectsWord");
+  const names: Record<string, string> = { tasks: t("box.tasks"), no_date: t("box.noDate"), calendar: t("box.calendar"), mail: t("box.mail"), notes: t("box.notes"), activity: t("box.activity") };
   const view = tasks.data;
   const tasksRead = tasks;
 
   function chooseLayout(value: PageLayout) {
     set({ layout: value });
     void savePreference({ page, layout: value }).then((answer) => {
-      if (!answer.ok) notify({ text: `The layout could not be remembered: ${answer.message}`, tone: "error" });
+      if (!answer.ok) notify({ text: t("node.layoutNotRemembered", { message: answer.message }), tone: "error" });
     });
   }
 
@@ -167,7 +170,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     if (!(await saving(Promise.resolve(answer)))) return;
     router.push("/app");
     notify({
-      text: `Deleted “${node!.name}”`,
+      text: t("node.deleted", { name: node!.name }),
       tone: "status",
       undo: () => void saving(post(`/api/nodes/${nodeId}`, { archived: false }, "PATCH")).then((ok) => ok && router.push(`/app/node/${nodeId}`)),
     });
@@ -179,53 +182,53 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
   }
 
   const more: MenuEntry[] = [
-    { kind: "action", label: "Rename…", onSelect: () => setRenaming(true) },
-    { kind: "action", label: `New ${one}`, onSelect: addChild },
-    { kind: "action", label: "Agent token…", onSelect: () => router.push(`/app/settings?node=${nodeId}#agent-tokens`) },
+    { kind: "action", label: t("node.renameEllipsis"), onSelect: () => setRenaming(true) },
+    { kind: "action", label: t("node.newKind", { what: oneWord }), onSelect: addChild },
+    { kind: "action", label: t("node.agentToken"), onSelect: () => router.push(`/app/settings?node=${nodeId}#agent-tokens`) },
     {
       kind: "submenu",
-      label: "Google accounts",
+      label: t("node.googleAccounts"),
       detail: seen.length ? String(seen.length) : undefined,
       entries: [
-        ...seen.map((account): MenuEntry => ({ kind: "action", label: account.email, icon: GoogleMark, detail: account.nodeIds.includes(nodeId) ? "Connected here" : "Inherited", disabled: true, onSelect: () => {} })),
+        ...seen.map((account): MenuEntry => ({ kind: "action", label: account.email, icon: GoogleMark, detail: account.nodeIds.includes(nodeId) ? t("node.connectedHere") : t("node.inherited"), disabled: true, onSelect: () => {} })),
         ...(seen.length ? [{ kind: "separator" } as const] : []),
         accounts.data?.canConnect
-          ? { kind: "action", label: "Connect Google account", icon: GoogleMark, onSelect: () => window.location.assign(new URL(`/api/google/connect?node=${nodeId}`, window.location.origin).toString()) }
-          : { kind: "action", label: "Connect Google account", icon: GoogleMark, disabled: true, detail: accounts.data?.connectBlocked === "demo" ? "Needs a Google sign-in" : "Not set up on this server", onSelect: () => {} },
-        { kind: "action", label: "Manage them in Settings", onSelect: () => router.push("/app/settings#accounts-settings") },
+          ? { kind: "action", label: t("node.connectGoogle"), icon: GoogleMark, onSelect: () => window.location.assign(new URL(`/api/google/connect?node=${nodeId}`, window.location.origin).toString()) }
+          : { kind: "action", label: t("node.connectGoogle"), icon: GoogleMark, disabled: true, detail: accounts.data?.connectBlocked === "demo" ? t("node.needsSignIn") : t("node.notSetUp"), onSelect: () => {} },
+        { kind: "action", label: t("node.manageSettings"), onSelect: () => router.push("/app/settings#accounts-settings") },
       ],
     },
     {
       kind: "choice",
-      label: "Color",
+      label: t("node.color"),
       value: node.ownColor ?? "none",
-      options: [{ value: "none", label: node.color && !node.ownColor ? "Inherited" : "None" }, ...NODE_COLORS.map((color) => ({ value: color, label: COLOR_NAMES[color] }))],
+      options: [{ value: "none", label: node.color && !node.ownColor ? t("node.inheritedWord") : t("node.none") }, ...NODE_COLORS.map((color) => ({ value: color, label: t(COLOR_NAMES[color]) }))],
       onChoose: (value) => void setColor(value === "none" ? null : value),
     },
     {
       kind: "choice",
-      label: "Icon",
+      label: t("node.icon"),
       icon: glyphOf(shownIcon(node.kind, node.icon)),
       value: node.ownIcon ?? "default",
       options: [
-        { value: "default", label: node.icon && !node.ownIcon ? "Inherited" : "Default", icon: glyphOf(shownIcon(node.kind, node.icon && !node.ownIcon ? node.icon : null)) },
-        ...NODE_ICONS.map((icon) => ({ value: icon, label: NODE_ICON_LABELS[icon], icon: glyphOf(icon) })),
+        { value: "default", label: node.icon && !node.ownIcon ? t("node.inheritedWord") : t("node.default"), icon: glyphOf(shownIcon(node.kind, node.icon && !node.ownIcon ? node.icon : null)) },
+        ...NODE_ICONS.map((icon) => ({ value: icon, label: t(icon === "client" ? "kind.client" : icon === "project" ? "kind.project" : icon === "place" ? "icon.place" : icon === "task" ? "type.task" : icon === "calendar" ? "box.calendar" : icon === "mail" ? "box.mail" : icon === "note" ? "type.note" : "filter.account"), icon: glyphOf(icon) })),
       ],
       onChoose: (value) => void setIcon(value === "default" ? null : value),
     },
     ...customizeEntries(board, names),
     { kind: "separator" },
-    { kind: "action", label: `Delete ${node.kind === "client" ? "this client" : `this ${node.kind}`}`, tone: "danger", onSelect: () => void remove() },
+    { kind: "action", label: node.kind === "client" ? t("node.deleteClient") : t("node.deleteKind", { kind: oneWord }), tone: "danger", onSelect: () => void remove() },
   ];
 
   const tasksBox: BoxSpec = {
     id: "tasks",
-    title: "Tasks",
-    purpose: "Overdue, today and the days ahead",
+    title: t("box.tasks"),
+    purpose: t("box.tasksPurpose"),
     count: tasksCountLabel(view),
     action: (
-      <HeadLink href={`/app/tasks?place=${nodeId}`} name="Open all its tasks">
-        Open
+      <HeadLink href={`/app/tasks?place=${nodeId}`} name={t("box.openAllItsTasks")}>
+        {t("common.open")}
       </HeadLink>
     ),
     content: <TasksBoxContent read={tasksRead} now={now} place={place} placeId={nodeId} showPlace pageNode={nodeId} layout={layout} allHref={`/app/tasks?place=${nodeId}`} />,
@@ -234,8 +237,8 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     tasks: tasksBox,
     no_date: {
       id: "no_date",
-      title: "No date",
-      purpose: "Tasks you can do whenever",
+      title: t("box.noDate"),
+      purpose: t("box.noDatePurpose"),
       surface: "rest",
       count: noDateCount(view),
       action: noDateAdd.trigger,
@@ -244,23 +247,23 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     },
     calendar: {
       id: "calendar",
-      title: "Calendar",
-      purpose: "This week in the calendars it sees",
+      title: t("box.calendar"),
+      purpose: t("box.calendarPurposeNode"),
       action: (
-        <HeadLink href={`/app/calendar?place=${nodeId}`} name="Open the calendar">
-          Open
+        <HeadLink href={`/app/calendar?place=${nodeId}`} name={t("box.openCalendar")}>
+          {t("common.open")}
         </HeadLink>
       ),
       content: <CalendarBoxContent place={place} now={now} weekStart={weekStart} tasks={allTasks(view)} calendarHref={`/app/calendar?place=${nodeId}`} />,
     },
     mail: {
       id: "mail",
-      title: "Mail",
-      purpose: "What may answer its tasks, then what is unread",
+      title: t("box.mail"),
+      purpose: t("box.mailPurposeNode"),
       count: mailCount,
       action: (
-        <HeadLink href="/app/mail" name="Open all mail">
-          Open
+        <HeadLink href="/app/mail" name={t("box.openAllMail")}>
+          {t("common.open")}
         </HeadLink>
       ),
       content: (
@@ -277,8 +280,8 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     },
     notes: {
       id: "notes",
-      title: "Notes",
-      purpose: "What to keep in view, apart from the tasks",
+      title: t("box.notes"),
+      purpose: t("box.notesPurpose"),
       surface: "rest",
       count: notesCount(notes.data?.total),
       action: noteAdd.trigger,
@@ -287,8 +290,8 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
     },
     activity: {
       id: "activity",
-      title: "Activity",
-      purpose: `What ${ASSISTANT_NAME} and your coding agents did here`,
+      title: t("box.activity"),
+      purpose: t("box.activityPurposeHere", { assistant: ASSISTANT_NAME }),
       surface: "rest",
       content: <ActivityBoxContent place={place} />,
     },
@@ -302,10 +305,10 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
         title={node.name}
         mark={<NodeMark node={node} />}
         titleProps={{ "data-node-title": "" }}
-        count={<span data-node-count={node.openTasks}>{node.openTasks === 0 ? "No open tasks" : count(node.openTasks, "open task", "open tasks")}</span>}
+        count={<span data-node-count={node.openTasks}>{node.openTasks === 0 ? t("node.noOpenTasks") : counted(node.openTasks, "counted.openTask", "counted.openTasks")}</span>}
         layout={{ value: layout, onChange: chooseLayout }}
         chat
-        more={<Menu label="More" about={`for ${node.name}`} entries={more} />}
+        more={<Menu label={t("common.more")} about={t("board.moreFor", { name: node.name })} entries={more} />}
       />
       <NodeStrip
         node={node}
@@ -321,7 +324,7 @@ export function NodeView({ nodeId, saved, savedLayout }: { nodeId: string; saved
         onAdd={addChild}
         onAddDone={() => setAdding(false)}
       />
-      <BoxBoard board={board} boxes={boxes} label={`The boxes of ${node.name}`} wide={layout === "board" ? tasksBox : null} />
+      <BoxBoard board={board} boxes={boxes} label={t("node.boxesOf", { name: node.name })} wide={layout === "board" ? tasksBox : null} />
       <RenameDialog open={renaming} name={node.name} nodeId={nodeId} onClose={() => setRenaming(false)} />
     </div>
     </ViewTransition>
@@ -337,12 +340,11 @@ function NodeMark({ node }: { node: TreeNode }) {
 }
 
 function accountFacts(figure: MailFigure | null, calendars: number | null): string {
-  const unread = figure && !figure.partial && figure.unread === 0 ? "nothing unread" : figureWords(figure);
-  const shown = calendars === null ? null : calendars === 0 ? "no calendars" : count(calendars, "calendar", "calendars");
+  const unread = figure && !figure.partial && figure.unread === 0 ? translateNow("node.nothingUnread") : figureWords(figure);
+  const shown = calendars === null ? null : calendars === 0 ? translateNow("node.noCalendars") : countedNow(calendars, "counted.calendar", "counted.calendars");
   const words = [unread, shown].filter(Boolean).join(", ");
-  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : READING;
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : translateNow("node.reading");
 }
-const READING = "Reading…";
 
 function NodeStrip({
   node,
@@ -371,7 +373,8 @@ function NodeStrip({
   onAdd: () => void;
   onAddDone: () => void;
 }) {
-  const { tree, mailAccounts, mailStore } = useWorkspace();
+  const { t, counted } = useStrings();
+  const { tree, mailAccounts, mailStore, notify, refreshTree, touch } = useWorkspace();
   const container = usePopupContainer();
   const addButton = useRef<HTMLButtonElement>(null);
   const fold = useRef<HTMLDivElement>(null);
@@ -380,6 +383,72 @@ function NodeStrip({
   const address = sessionEmail?.toLowerCase() ?? null;
   const accounts = (mailAccounts ?? []).filter((account) => seen.has(account.id)).sort((a, b) => Number(b.email === address) - Number(a.email === address));
   const offerOwn = sessionEmail !== null && mailAccounts !== null && !accounts.some((account) => account.email === address);
+
+  type ConnectLinkRow = { id: string; nodeId: string; status: string; email: string | null; expiresAt: string };
+  const [links, setLinks] = useState<ConnectLinkRow[]>([]);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const loadLinks = useCallback(async () => {
+    const answer = await get<{ links: ConnectLinkRow[] }>("/api/google/connect-links");
+    if (answer.ok) setLinks(answer.links.filter((link) => link.nodeId === node.id));
+  }, [node.id]);
+  useEffect(() => {
+    let live = true;
+    void get<{ links: ConnectLinkRow[] }>("/api/google/connect-links").then((answer) => {
+      if (live && answer.ok) setLinks(answer.links.filter((link) => link.nodeId === node.id));
+    });
+    const timer = window.setInterval(() => void loadLinks(), 4000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [loadLinks, node.id]);
+
+  async function createLink() {
+    setLinkBusy(true);
+    const answer = await post<{ url: string }>("/api/google/connect-links", { action: "create", nodeId: node.id });
+    setLinkBusy(false);
+    if (answer.ok) {
+      setLinkUrl(answer.url);
+      void loadLinks();
+    } else {
+      notify({ text: answer.message, tone: "error" });
+    }
+  }
+
+  async function actOnLink(linkId: string, action: "accept" | "reject" | "cancel") {
+    const link = links.find((entry) => entry.id === linkId);
+    setLinkBusy(true);
+    const answer = await post("/api/google/connect-links", { action, id: linkId });
+    setLinkBusy(false);
+    if (answer.ok) {
+      setLinkUrl(null);
+      if (action === "accept") {
+        void refreshTree();
+        touch();
+        if (link?.email) notify({ text: t("node.linkConnected", { email: link.email }), tone: "status" });
+      }
+      void loadLinks();
+    } else {
+      notify({ text: answer.message, tone: "error" });
+    }
+  }
+
+  const connectMenu = (
+    <>
+      <Base.LinkItem className="option menu-item" label={t("node.connectHere")} href={connectHref ?? "/app/settings#accounts-settings"}>
+        <span className="menu-item-text">
+          <span className="menu-item-label">{t("node.connectHere")}</span>
+        </span>
+      </Base.LinkItem>
+      <Base.Item className="option menu-item" disabled={linkBusy || Boolean(blocked)} onClick={() => void createLink()}>
+        <span className="menu-item-text">
+          <span className="menu-item-label">{t("node.connectFromAnother")}</span>
+        </span>
+      </Base.Item>
+    </>
+  );
+
   return (
     <div className="node-strip">
       <section className="node-strip-group" aria-labelledby={`${id}below`}>
@@ -393,14 +462,14 @@ function NodeStrip({
                 <span className="node-chip-name task-place-name" data-color={child.color ?? undefined}>
                   {child.name}
                 </span>
-                <span className="node-chip-detail">{child.openTasks === 0 ? "No open tasks" : count(child.openTasks, "open task", "open tasks")}</span>
+                <span className="node-chip-detail">{child.openTasks === 0 ? t("node.noOpenTasks") : counted(child.openTasks, "counted.openTask", "counted.openTasks")}</span>
               </Link>
             </li>
           ))}
           <li data-flip-key="add">
             <Button ref={addButton} className="node-add" data-add-child aria-expanded={adding} aria-controls={`${id}new`} onClick={onAdd}>
               <AddIcon />
-              <span className="btn-label">{`Add ${one}`}</span>
+              <span className="btn-label">{t("node.addKind", { what: t(`kindWord.${one}` as "kindWord.project") })}</span>
             </Button>
           </li>
         </FlipList>
@@ -426,12 +495,12 @@ function NodeStrip({
       </section>
       <section className="node-strip-group" aria-labelledby={`${id}accounts`}>
         <h2 id={`${id}accounts`} className="t-label named-label">
-          Accounts
+          {t("node.accounts")}
         </h2>
         <FlipList className="node-chips" layout="grid">
           {offerOwn && (
             <li data-flip-key="connect-own">
-              <ConnectSession nodeId={node.id} email={sessionEmail!} primary={accounts.length === 0} detail="Brings its calendar and mail here" blocked={blocked} />
+              <ConnectSession nodeId={node.id} email={sessionEmail!} primary={accounts.length === 0} detail={t("node.bringsHere")} blocked={blocked} />
             </li>
           )}
           {accounts.map((account) => {
@@ -465,8 +534,8 @@ function NodeStrip({
                     <span className="node-chip-detail">
                       {own ? (
                         <>
-                          <span className="node-chip-own">Connected</span>
-                          {facts === READING ? null : ` · ${facts}`}
+                          <span className="node-chip-own">{t("node.connected")}</span>
+                          {facts === t("node.reading") ? null : ` · ${facts}`}
                         </>
                       ) : (
                         facts
@@ -476,14 +545,14 @@ function NodeStrip({
                   <Base.Portal container={container}>
                     <Base.Positioner className="positioner" sideOffset={6}>
                       <Base.Popup className="popup menu-popup">
-                        <Base.LinkItem className="option menu-item" label="View mail" href={`/app/mail?account=${account.id}`}>
+                        <Base.LinkItem className="option menu-item" label={t("node.viewMail")} href={`/app/mail?account=${account.id}`}>
                           <span className="menu-item-text">
-                            <span className="menu-item-label">View mail</span>
+                            <span className="menu-item-label">{t("node.viewMail")}</span>
                           </span>
                         </Base.LinkItem>
-                        <Base.LinkItem className="option menu-item" label="Manage in Settings" href="/app/settings#accounts-settings">
+                        <Base.LinkItem className="option menu-item" label={t("node.manageInSettings")} href="/app/settings#accounts-settings">
                           <span className="menu-item-text">
-                            <span className="menu-item-label">Manage in Settings</span>
+                            <span className="menu-item-label">{t("node.manageInSettings")}</span>
                           </span>
                         </Base.LinkItem>
                       </Base.Popup>
@@ -493,36 +562,82 @@ function NodeStrip({
               </li>
             );
           })}
-          {mailAccounts && connectHref && accounts.length > 0 && !blocked && (
+          {mailAccounts && connectHref && accounts.length > 0 && !blocked && !offerOwn && (
             <li data-flip-key="connect-more">
-              <LinkOrAnchor className={cx(buttonClass({}), "node-chip", "node-add")} href={connectHref}>
-                <span className="node-chip-name">
-                  <AddIcon className="node-chip-mark" />
-                  Connect account
-                </span>
-              </LinkOrAnchor>
+              <Base.Root modal={false}>
+                <Base.Trigger className={cx(buttonClass({}), "node-chip", "node-add")}>
+                  <span className="node-chip-name">
+                    <AddIcon className="node-chip-mark" />
+                    {t("node.connectAccount")}
+                  </span>
+                </Base.Trigger>
+                <Base.Portal container={container}>
+                  <Base.Positioner className="positioner" sideOffset={6}>
+                    <Base.Popup className="popup menu-popup">{connectMenu}</Base.Popup>
+                  </Base.Positioner>
+                </Base.Portal>
+              </Base.Root>
             </li>
           )}
           {mailAccounts && connectHref && accounts.length === 0 && !offerOwn && (
             <li data-flip-key="connect">
-              <LinkOrAnchor className={cx(buttonClass({}), "node-chip node-connect")} href={connectHref} aria-describedby={`${id}connect`}>
-                <span className="node-chip-name">
-                  <GoogleMark className="node-chip-mark" />
-                  Connect Google account
-                </span>
-                <span id={`${id}connect`} className="node-chip-detail">
-                  {`The one you use with ${node.name}`}
-                </span>
-              </LinkOrAnchor>
+              <Base.Root modal={false}>
+                <Base.Trigger className={cx(buttonClass({}), "node-chip node-connect")} aria-describedby={`${id}connect`}>
+                  <span className="node-chip-name">
+                    <GoogleMark className="node-chip-mark" />
+                    {t("node.connectGoogleAccount")}
+                  </span>
+                  <span id={`${id}connect`} className="node-chip-detail">
+                    {t("node.theOneUsedWith", { name: node.name })}
+                  </span>
+                </Base.Trigger>
+                <Base.Portal container={container}>
+                  <Base.Positioner className="positioner" sideOffset={6}>
+                    <Base.Popup className="popup menu-popup">{connectMenu}</Base.Popup>
+                  </Base.Positioner>
+                </Base.Portal>
+              </Base.Root>
             </li>
           )}
         </FlipList>
+        {(linkUrl || links.length > 0) && (
+          <div className="node-link-rows">
+            {linkUrl && (
+              <span className="node-link-row">
+                <code id={`${id}link-url`} className="t-name node-link-url">{linkUrl}</code>
+                <CopyButton text={linkUrl} target={`${id}link-url`} label={t("node.copyLink")} />
+              </span>
+            )}
+            {links.map((link) =>
+              link.status === "authorized" ? (
+                <span key={link.id} className="node-link-row">
+                  <span className="t-name">{link.email}</span>
+                  <span className="t-help">{t("node.linkAuthorized")}</span>
+                  <Button size="sm" variant="primary" onClick={() => void actOnLink(link.id, "accept")} disabled={linkBusy}>
+                    <span className="btn-label">{t("node.accept")}</span>
+                  </Button>
+                  <Button size="sm" onClick={() => void actOnLink(link.id, "reject")} disabled={linkBusy}>
+                    <span className="btn-label">{t("node.reject")}</span>
+                  </Button>
+                </span>
+              ) : (
+                <span key={link.id} className="node-link-row">
+                  <span className="t-help">{t("node.linkWaiting")}</span>
+                  <Button size="sm" onClick={() => void actOnLink(link.id, "cancel")} disabled={linkBusy}>
+                    <span className="btn-label">{t("node.cancelLink")}</span>
+                  </Button>
+                </span>
+              ),
+            )}
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
 function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: string; nodeId: string; onClose: () => void }) {
+  const { t } = useStrings();
   const { saving } = useWorkspace();
   const dialog = useRef<HTMLDialogElement>(null);
   const [value, setValue] = useState(name);
@@ -547,15 +662,15 @@ function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: st
     <dialog ref={dialog} className="dialog rename-dialog" aria-labelledby="rename-title" onClose={onClose}>
       <form className="rename-form" onSubmit={(event) => void submit(event)} data-cascade>
         <h2 id="rename-title" className="t-title">
-          Rename
+          {t("node.rename")}
         </h2>
-        <Field autoFocus aria-label="Name" value={value} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setValue(event.target.value)} />
+        <Field autoFocus aria-label={t("node.name")} value={value} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setValue(event.target.value)} />
         <div className="rename-actions">
           <Button size="sm" onClick={onClose}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button size="sm" variant="primary" type="submit" disabled={!value.trim()}>
-            Rename
+            {t("node.rename")}
           </Button>
         </div>
       </form>
@@ -564,15 +679,16 @@ function RenameDialog({ open, name, nodeId, onClose }: { open: boolean; name: st
 }
 
 function NotHere() {
+  const { t } = useStrings();
   return (
     <section className="card not-here" aria-labelledby="missing">
       <h1 id="missing" className="t-h1" tabIndex={-1} data-page-title>
-        This client or project is not here
+        {t("node.notHereTitle")}
       </h1>
-      <p className="t-help">It was deleted, or it belongs to another account. Pick one in the sidebar, or go back to the Overview.</p>
+      <p className="t-help">{t("node.notHereBody")}</p>
       <div>
         <Link className={buttonClass({ variant: "primary" })} href="/app">
-          <span className="btn-label">Go to Overview</span>
+          <span className="btn-label">{t("node.goOverview")}</span>
         </Link>
       </div>
     </section>

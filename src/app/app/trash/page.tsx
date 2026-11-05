@@ -4,12 +4,12 @@ import { Link } from "@/components/ui/link";
 import { useEffect, useState, ViewTransition } from "react";
 import { Button, buttonClass } from "@/components/ui/button";
 import { RestoreIcon } from "@/components/ui/icons";
-import { count } from "@/lib/count";
-import { LOCALE } from "@/lib/dates";
+import { currentLanguage } from "@/lib/language";
+import { useStrings } from "@/lib/strings";
 import { inlinePlain } from "@/lib/inline-links";
 import { BoxEmpty, BoxFailed, BoxWait } from "../boxes";
 import { get, post, type Item } from "../client-api";
-import { PathText, TYPE_NAMES } from "../item-parts";
+import { PathText, typeName } from "../item-parts";
 import { PageHeader } from "../page-header";
 import { useWorkspace } from "../workspace";
 import { broughtBack, type DeletedWith } from "./brought-back";
@@ -17,12 +17,12 @@ import "../../styles/settings.css";
 
 type Entry = Item & { with: DeletedWith; deletedAt: string };
 
-const stamp = (iso: string) => new Date(iso).toLocaleString(LOCALE, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const stamp = (iso: string) => new Date(iso).toLocaleString(currentLanguage(), { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 const FOLD_MS = 220;
-const RESTORES = "Brings back everything deleted with it";
 
 export default function TrashPage() {
+  const { t, counted } = useStrings();
   const { saving, version } = useWorkspace();
   const [items, setItems] = useState<Entry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,27 +53,27 @@ export default function TrashPage() {
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page page-settings">
-        <PageHeader title="Trash" count={items && items.length > 0 ? count(items.length, "deleted item", "deleted items") : undefined} />
-        <section className="box settings-box" aria-label="Deleted items" data-settings="trash" data-shown="">
+        <PageHeader title={t("trash.title")} count={items && items.length > 0 ? counted(items.length, "counted.deletedItem", "counted.deletedItems") : undefined} />
+        <section className="box settings-box" aria-label={t("trash.deletedItems")} data-settings="trash" data-shown="">
           <div className="box-body">
             {items === null ? (
               error ? (
-                <BoxFailed what="The trash" message={error} kept={false} onRetry={() => setRound((n) => n + 1)} />
+                <BoxFailed what={t("trash.the")} message={error} kept={false} onRetry={() => setRound((n) => n + 1)} />
               ) : (
-                <BoxWait what="Loading the trash…" rows={3} />
+                <BoxWait what={t("trash.loading")} rows={3} />
               )
             ) : (
               <>
-                {error && <BoxFailed what="The trash" message={error} kept onRetry={() => setRound((n) => n + 1)} />}
+                {error && <BoxFailed what={t("trash.the")} message={error} kept onRetry={() => setRound((n) => n + 1)} />}
                 {items.length === 0 ? (
-                  <BoxEmpty text="Trash is empty. What you delete waits here until you restore it." reason="empty-trash">
+                  <BoxEmpty text={t("trash.empty")} reason="empty-trash">
                     <Link className={buttonClass({ variant: "quiet", size: "sm" })} href="/app">
-                      <span className="btn-label">Go to Overview</span>
+                      <span className="btn-label">{t("node.goOverview")}</span>
                     </Link>
                   </BoxEmpty>
                 ) : (
                   <>
-                  <p className="t-help">What you delete waits here until you restore it.</p>
+                  <p className="t-help">{t("trash.waits")}</p>
                   <ul className="plain-list trash-list fade-enter">
                     {items.map((item) => {
                       const title = inlinePlain(item.title);
@@ -84,13 +84,13 @@ export default function TrashPage() {
                             <div className="trash-main">
                               <span className="t-value trash-title">{title}</span>
                               <span className="t-meta">
-                                {TYPE_NAMES[item.type]} in {item.nodePath ? <PathText path={item.nodePath} /> : "General"}, deleted {stamp(item.deletedAt)}
+                                {typeName(item.type)} {t("trash.in")} {item.nodePath ? <PathText path={item.nodePath} /> : t("filter.general")}, {t("trash.deletedWord")} {stamp(item.deletedAt)}
                               </span>
-                              {back && <span className="t-meta">{`Restore also brings back ${back} deleted with it`}</span>}
+                              {back && <span className="t-meta">{t("trash.restoreAlso", { back })}</span>}
                             </div>
-                            <Button size="sm" disabled={leaving !== null} onClick={() => void restore(item)} aria-label={`Restore “${title}”`} title={RESTORES}>
+                            <Button size="sm" disabled={leaving !== null} onClick={() => void restore(item)} aria-label={t("trash.restoreNamed", { title })} title={t("trash.restores")}>
                               <RestoreIcon />
-                              <span className="btn-label">Restore</span>
+                              <span className="btn-label">{t("trash.restore")}</span>
                             </Button>
                           </div>
                         </li>

@@ -31,10 +31,11 @@ import { AddIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Menu, type MenuEntry } from "@/components/ui/menu";
 import { PopupLayerProvider } from "@/components/ui/popup-layer";
 import { Select } from "@/components/ui/select";
-import { count, plural } from "@/lib/count";
-import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, LOCALE, monthGrid, monthTitle, rangeLabel, today, weekdayNames, weekOf, type Day } from "@/lib/dates";
+import { addDays, addMonths, dayOf, firstWeekday, instantsOf, isDay, monthGrid, monthTitle, rangeLabel, today, weekdayNames, weekOf, type Day } from "@/lib/dates";
 import { inlinePlain } from "@/lib/inline-links";
+import { currentLanguage } from "@/lib/language";
 import { PRODUCT_NAME } from "@/lib/product";
+import { countedNow, translateNow, useStrings, type StringKey } from "@/lib/strings";
 import { BoxFailed } from "../boxes";
 import { get, peekGet, peekTool, post, tool, type Answer, type EventsFailure, type Item, type TreeNode } from "../client-api";
 import { keptEvents, readEvents, type EventsRead } from "../events-read";
@@ -77,16 +78,12 @@ type TasksAnswer = {
 type Loaded = { key: string; view: View; anchor: Day; from: Day; to: Day; events: CalEvent[]; tasks: TaskData[]; failures: EventsFailure[]; waiting: number; accounts: Account[] };
 
 type EmptyDay = "nothing" | "reading" | "unread";
-const EMPTY_DAY: Record<EmptyDay, string> = { nothing: "Nothing this day.", reading: "Loading this day…", unread: "This day could not be loaded." };
-const EMPTY_MONTH_DAY: Record<EmptyDay, string> = { nothing: "nothing", reading: "still reading", unread: "not read" };
+const EMPTY_DAY: Record<EmptyDay, StringKey> = { nothing: "calPage.emptyNothing", reading: "calPage.emptyReading", unread: "calPage.emptyUnread" };
+const EMPTY_MONTH_DAY: Record<EmptyDay, StringKey> = { nothing: "calPage.monthNothing", reading: "calPage.monthReading", unread: "calPage.monthUnread" };
 type View = "week" | "month";
 type Draft = { day: Day; time: string | null };
 
-const VIEWS = [
-  { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
-];
-const OWN_CALENDAR = `${PRODUCT_NAME} calendar`;
+const ownCalendar = () => translateNow("calPage.ownCalendar", { product: PRODUCT_NAME });
 const BAND_PIECES = 2;
 const folds = (count: number) => count > BAND_PIECES + 1;
 
@@ -133,7 +130,8 @@ function daysOf(event: CalEvent): Day[] {
 }
 
 const onHours = (event: CalEvent) => !event.allDay && daysOf(event).length === 1;
-const clock = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" });
+const localeNow = () => (typeof document === "undefined" ? "en" : currentLanguage());
+const clock = (iso: string) => new Date(iso).toLocaleTimeString(localeNow(), { hour: "numeric", minute: "2-digit" });
 const minutesOf = (iso: string) => {
   const date = new Date(iso);
   return date.getHours() * 60 + date.getMinutes();
@@ -151,20 +149,20 @@ const minutesOfDay = (time: string) => {
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 const fullDay = (day: Day) => {
   const [y, m, d] = day.split("-").map(Number);
-  return new Intl.DateTimeFormat(LOCALE, { weekday: "long", month: "long", day: "numeric" }).format(new Date(y, m - 1, d));
+  return new Intl.DateTimeFormat(localeNow(), { weekday: "long", month: "long", day: "numeric" }).format(new Date(y, m - 1, d));
 };
 const shortDay = (day: Day) => {
   const [y, m, d] = day.split("-").map(Number);
-  return new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric" }).format(new Date(y, m - 1, d));
+  return new Intl.DateTimeFormat(localeNow(), { weekday: "short", month: "short", day: "numeric" }).format(new Date(y, m - 1, d));
 };
-const hourName = (hour: number) => new Intl.DateTimeFormat(LOCALE, { hour: "numeric" }).format(new Date(2000, 0, 1, hour));
+const hourName = (hour: number) => new Intl.DateTimeFormat(localeNow(), { hour: "numeric" }).format(new Date(2000, 0, 1, hour));
 
 function whenText(event: CalEvent): string {
   const days = daysOf(event);
-  if (event.allDay) return days.length > 1 ? `${shortDay(days[0])} to ${shortDay(days.at(-1)!)}, all day` : `${shortDay(days[0])}, all day`;
+  if (event.allDay) return days.length > 1 ? translateNow("calPage.allDayRange", { from: shortDay(days[0]), to: shortDay(days.at(-1)!) }) : translateNow("calPage.allDayWhen", { day: shortDay(days[0]) });
   return days.length > 1
-    ? `${shortDay(days[0])}, ${clock(event.start)} to ${shortDay(days.at(-1)!)}, ${clock(event.end)}`
-    : `${shortDay(days[0])}, ${clock(event.start)} to ${clock(event.end)}`;
+    ? translateNow("calPage.timedRange", { from: shortDay(days[0]), start: clock(event.start), to: shortDay(days.at(-1)!), end: clock(event.end) })
+    : translateNow("calPage.timedSame", { day: shortDay(days[0]), start: clock(event.start), end: clock(event.end) });
 }
 
 const NARROW_REM = 52;
@@ -186,6 +184,7 @@ const noSubscription = () => () => {};
 const onFreeSpace = (event: MouseEvent<HTMLElement>) => !(event.target as Element).closest("button, a, [draggable='true'], [role='menu']");
 
 function Calendar() {
+  const { t, counted } = useStrings();
   const mounted = useSyncExternalStore(noSubscription, () => true, () => false);
   const card = useRef<HTMLElement>(null);
   const narrow = useNarrow(card, mounted);
@@ -352,11 +351,11 @@ function Calendar() {
         next.delete(task.id);
         return next;
       });
-      return notify({ text: `“${inlinePlain(task.title)}” could not be moved: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow("row.couldNotMove", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     }
     touch();
     notify({
-      text: `Moved “${inlinePlain(task.title)}” to ${shortDay(day)}`,
+      text: translateNow("calPage.movedToDay", { title: inlinePlain(task.title), day: shortDay(day) }),
       tone: "status",
       undo: () => void saving(tool("update_item", { id: task.id, dueOn: from })),
     });
@@ -417,14 +416,14 @@ function Calendar() {
   const addTask = (day: Day) => openQuickAdd(place === ALL ? { day } : { day, placeId: place === GENERAL ? null : place });
 
   if (!mounted) return null;
-  const counted = `${count(events.length, "event", "events")} and ${count(tasks.length, "task", "tasks")}`;
-  const filteredBy = [place === ALL ? null : "client or project", account === ALL ? null : "account"].filter(Boolean);
+  const countedLine = t("calPage.countLine", { events: counted(events.length, "counted.event", "counted.events"), tasks: counted(tasks.length, "counted.task", "counted.tasks") });
+  const filteredBy = [place === ALL ? null : t("calPage.clientOrProjectWord"), account === ALL ? null : t("calPage.accountWord")].filter(Boolean);
   return (
     <ViewTransition enter="page-in" exit="page-out" default="none">
       <div className="page cal-page" data-calendar={view}>
         <PageHeader
-          title="Calendar"
-          count={loaded ? `${[counted, reading ? `${count(unanswered, "account", "accounts")} still reading` : null].filter(Boolean).join(", ")}.` : readError === null ? "Loading the calendar…" : "Events and the tasks with a date."}
+          title={t("calPage.title")}
+          count={loaded ? `${[countedLine, reading ? t("calPage.stillReading", { what: counted(unanswered, "counted.account", "counted.accounts") }) : null].filter(Boolean).join(", ")}.` : readError === null ? t("calPage.loading") : t("calPage.eventsAndTasks")}
           filters={
             <>
               <PlaceFilter value={place} tree={tree} counts={placeCounts} unit={ITEMS} onChange={(value) => set({ place: value === ALL ? null : value })} />
@@ -439,7 +438,7 @@ function Calendar() {
             </>
           }
           filtersSet={(place === ALL ? 0 : 1) + (account === ALL ? 0 : 1)}
-          views={{ label: "View", value: view, options: VIEWS, onChange: (value) => set({ view: value === "week" ? null : value }) }}
+          views={{ label: t("common.view"), value: view, options: [{ value: "week", label: t("calPage.week") }, { value: "month", label: t("calPage.month") }], onChange: (value) => set({ view: value === "week" ? null : value }) }}
           chat
         />
 
@@ -448,40 +447,40 @@ function Calendar() {
             <h2 id="cal-range" className="t-title cal-range" aria-live="polite">
               {title}
             </h2>
-            <div className="cal-steps" role="group" aria-label="Move through the calendar">
+            <div className="cal-steps" role="group" aria-label={t("calPage.moveThrough")}>
               <div className="btn-group">
-                <Button size="sm" className="btn-icon" onClick={() => step(-1)} title="Previous">
+                <Button size="sm" className="btn-icon" onClick={() => step(-1)} title={t("calPage.previous")}>
                   <PreviousIcon />
-                  <span className="sr-only">Previous</span>
+                  <span className="sr-only">{t("calPage.previous")}</span>
                 </Button>
-                <Button size="sm" onClick={() => set({ date: null })} disabled={isCurrent} aria-label={view === "week" ? "Today: back to this week" : "Today: back to this month"}>
-                  Today
+                <Button size="sm" onClick={() => set({ date: null })} disabled={isCurrent} aria-label={view === "week" ? t("calPage.todayWeek") : t("calPage.todayMonth")}>
+                  {t("date.today")}
                 </Button>
-                <Button size="sm" className="btn-icon" onClick={() => step(1)} title="Next">
+                <Button size="sm" className="btn-icon" onClick={() => step(1)} title={t("calPage.next")}>
                   <NextIcon />
-                  <span className="sr-only">Next</span>
+                  <span className="sr-only">{t("calPage.next")}</span>
                 </Button>
               </div>
               <Button size="sm" variant="primary" onClick={() => setDraft({ day: chosenDay ?? (isCurrent ? todayDay : range.from), time: null })}>
                 <AddIcon />
-                <span className="btn-label">New event</span>
+                <span className="btn-label">{t("calPage.newEvent")}</span>
               </Button>
             </div>
           </div>
 
           {readError && shown && (
             <p role="alert" className="inline-note" data-tone="alert">
-              The calendar could not be loaded again: {readError}. Showing the last read.
+              {t("calPage.notLoadedAgain", { message: readError })}
             </p>
           )}
           {loaded?.failures.filter((failure) => !loaded.accounts.some((entry) => entry.id === failure.accountId && entry.isDemo)).map((failure) => (
             <p key={failure.accountId || "accounts"} role="alert" className="inline-note" data-tone="alert">
-              {failure.accountEmail ? `${failure.accountEmail}'s calendar could not be loaded: ${failure.reason}` : `Some calendars could not be loaded: ${failure.reason}`}
+              {failure.accountEmail ? t("calPage.accountCalendarFailed", { email: failure.accountEmail, reason: failure.reason }) : t("calPage.someCalendarsFailed", { reason: failure.reason })}
             </p>
           ))}
 
           {!shown && readError ? (
-            <BoxFailed what="The calendar" message={readError} kept={false} onRetry={() => setRound((value) => value + 1)} />
+            <BoxFailed what={t("cal.theCalendar")} message={readError} kept={false} onRetry={() => setRound((value) => value + 1)} />
           ) : !shown ? (
             <CalendarSkeleton view={view} />
           ) : (
@@ -523,8 +522,8 @@ function Calendar() {
               {!stale && unanswered === 0 && events.length === 0 && tasks.length === 0 && (
                 <div className="cal-empty">
                   <p className="t-help">
-                    {`Nothing this ${view === "week" ? "week" : "month"}${filteredBy.length ? ` for the chosen ${filteredBy.join(" and ")}` : ""}.`}
-                    {noAccounts && ` ${connectWords(connectWay, "its events")}`}
+                    {`${view === "week" ? t("calPage.nothingWeek") : t("calPage.nothingMonth")}${filteredBy.length ? t("calPage.forChosen", { what: filteredBy.join(t("calPage.andJoin")) }) : ""}.`}
+                    {noAccounts && ` ${connectWords(connectWay, t("connect.itsEvents"))}`}
                   </p>
                   {noAccounts && <ConnectOffer way={connectWay} />}
                 </div>
@@ -576,7 +575,7 @@ function nodeColor(tree: TreeNode[] | null, id: string | null | undefined): stri
 function EventChip({ event, chips, style, timed, minutes, lead, flipKey }: { event: CalEvent; chips: ChipHandlers; style?: CSSProperties; timed?: boolean; minutes?: number; lead?: boolean; flipKey?: string }) {
   const { tree } = useWorkspace();
   const color = nodeColor(tree, event.nodeId ?? event.linkedNodeIds[0] ?? event.fromNodeId);
-  const moment = <span className="cal-event-when">{event.allDay ? "All day" : clock(event.start)}</span>;
+  const moment = <span className="cal-event-when">{event.allDay ? translateNow("calPage.allDay") : clock(event.start)}</span>;
   return (
     <button
       type="button"
@@ -594,7 +593,7 @@ function EventChip({ event, chips, style, timed, minutes, lead, flipKey }: { eve
       {lead && moment}
       <span className="cal-event-title">{event.title}</span>
       {!lead && !event.allDay && moment}
-      <span className="sr-only">, event, {whenText(event)}</span>
+      <span className="sr-only">{translateNow("calPage.eventSr", { when: whenText(event) })}</span>
     </button>
   );
 }
@@ -609,11 +608,11 @@ function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: 
     const answer = await tool("update_item", { id: task.id, status: next ? "done" : "open" });
     if (!answer.ok) {
       setDone(!next);
-      return notify({ text: `“${inlinePlain(task.title)}” could not be changed: ${answer.message}`, tone: "error" });
+      return notify({ text: translateNow("calPage.couldNotChange", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     }
     touch();
     notify({
-      text: next ? `Completed “${inlinePlain(task.title)}”` : `Reopened “${inlinePlain(task.title)}”`,
+      text: next ? translateNow("row.completed", { title: inlinePlain(task.title) }) : translateNow("row.reopened", { title: inlinePlain(task.title) }),
       tone: "status",
       undo: () => void saving(tool("update_item", { id: task.id, status: next ? "open" : "done" })),
     });
@@ -651,7 +650,7 @@ function TaskChip({ task, chips, style, timed, lead }: { task: TaskData; chips: 
         <span className="cal-task-title">{plain}</span>
         {hourShown && <span className="cal-task-when">{hour}</span>}
         <span className="sr-only">
-          , task{hour && !hourShown ? ` at ${hour}` : ""}. Alt with the arrows moves it to another day
+          {translateNow("calPage.taskSr", { at: hour && !hourShown ? translateNow("calPage.taskAt", { hour }) : "" })}
         </span>
       </button>
     </div>
@@ -716,28 +715,28 @@ function WeekGrid({
     <div
       className="cal-week"
       role="grid"
-      aria-label="The week"
+      aria-label={translateNow("calPage.theWeek")}
       aria-describedby={hint}
       style={{ "--days": days.length } as CSSProperties}
       onKeyDown={grid.onKeyDown}
       onFocus={grid.onFocus}
     >
       <span id={hint} className="sr-only">
-        The arrows move between days and hours; Enter adds there.
+        {translateNow("calPage.weekHint")}
       </span>
       <div className="cal-week-row cal-week-head" role="row">
         <span className="cal-gutter" aria-hidden="true" />
         {days.map((day) => (
           <div key={day} role="columnheader" className="cal-week-day" aria-current={day === now ? "date" : undefined}>
-            <span className="cal-week-name">{new Intl.DateTimeFormat(LOCALE, { weekday: "short" }).format(new Date(`${day}T12:00:00`))}</span>
+            <span className="cal-week-name">{new Intl.DateTimeFormat(localeNow(), { weekday: "short" }).format(new Date(`${day}T12:00:00`))}</span>
             <span className="cal-week-num">{Number(day.slice(8))}</span>
           </div>
         ))}
       </div>
       <WeekBand
-        label="All day"
-        about="all day"
-        hint="Add event"
+        label={translateNow("calPage.allDay")}
+        about={translateNow("calPage.aboutAllDay")}
+        hint={translateNow("calPage.addEvent")}
         days={days}
         row={0}
         grid={grid}
@@ -747,9 +746,9 @@ function WeekGrid({
       />
       {withTasks && (
         <WeekBand
-          label="Tasks"
-          about="tasks without an hour"
-          hint="Add task"
+          label={translateNow("calPage.tasksBand")}
+          about={translateNow("calPage.aboutTasksNoHour")}
+          hint={translateNow("calPage.addTask")}
           days={days}
           row={1}
           grid={grid}
@@ -784,7 +783,7 @@ function WeekGrid({
                   type="button"
                   className="cal-hour-slot"
                   style={{ top: top(hour * 60) }}
-                  aria-label={`${fullDay(day)}, ${hourName(hour)}: add event`}
+                  aria-label={translateNow("calPage.addEventOn", { day: fullDay(day), hour: hourName(hour) })}
                   onClick={(event) => {
                     const box = event.currentTarget.getBoundingClientRect();
                     onCreate(day, hhmm(hour * 60 + (event.detail > 0 && event.clientY - box.top >= box.height / 2 ? 30 : 0)));
@@ -792,7 +791,7 @@ function WeekGrid({
                   {...grid.cell(index + firstHourRow, column)}
                 >
                   <span className="cal-add-hint" aria-hidden="true">
-                    Add event
+                    {translateNow("calPage.addEvent")}
                   </span>
                 </button>
               ))}
@@ -819,7 +818,7 @@ function WeekGrid({
                 return <EventChip key={item.key} event={item.event} chips={chips} style={style} timed minutes={minutes} flipKey={`${day}:${item.key}`} />;
               })}
               {day === now && <NowLine first={first} last={last} />}
-              <span className="sr-only">{fullDay(day)}, by the hour</span>
+              <span className="sr-only">{translateNow("calPage.byHour", { day: fullDay(day) })}</span>
             </FlipBox>
           );
         })}
@@ -898,10 +897,10 @@ function WeekBand({
                   className="cal-more"
                   aria-expanded={unfolded}
                   aria-controls={`${id}${day}`}
-                  aria-label={unfolded ? `Show less on ${fullDay(day)}` : `${rest} more on ${fullDay(day)}`}
+                  aria-label={unfolded ? translateNow("calPage.showLessOn", { day: fullDay(day) }) : translateNow("calPage.moreOn", { n: rest, day: fullDay(day) })}
                   onClick={() => toggle(day)}
                 >
-                  {unfolded ? "Show less" : `${rest} more`}
+                  {unfolded ? translateNow("tasks.showLess") : translateNow("calPage.moreCount", { n: rest })}
                 </button>
               </>
             )}
@@ -949,7 +948,7 @@ function WeekList({
 }) {
   const now = today();
   return (
-    <ol className="cal-list" aria-label="Day by day">
+    <ol className="cal-list" aria-label={translateNow("calPage.dayByDay")}>
       {days.map((day) => {
         const events = byDay.get(day)?.events ?? [];
         const tasks = byDay.get(day)?.tasks ?? [];
@@ -962,7 +961,7 @@ function WeekList({
           <li key={day} className="cal-list-day" data-day={day} data-empty={empty ? "" : undefined} aria-current={day === now ? "date" : undefined} {...dropOn(day)}>
             <div className="cal-list-head">
               <h3 className="t-label">
-                {day === now ? `Today, ${fullDay(day)}` : fullDay(day)}
+                {day === now ? translateNow("calPage.todayFull", { day: fullDay(day) }) : fullDay(day)}
                 {counted && !empty && (
                   <>
                     <span className="sr-only">, </span>
@@ -970,12 +969,12 @@ function WeekList({
                   </>
                 )}
               </h3>
-              <Button size="sm" variant="quiet" onClick={() => onAdd(day)} aria-label={`Add event on ${fullDay(day)}`}>
-                Add event
+              <Button size="sm" variant="quiet" onClick={() => onAdd(day)} aria-label={translateNow("calPage.addEventOnDay", { day: fullDay(day) })}>
+                {translateNow("calPage.addEvent")}
               </Button>
             </div>
             {empty ? (
-              <p className="t-help">{EMPTY_DAY[emptyDay]}</p>
+              <p className="t-help">{translateNow(EMPTY_DAY[emptyDay])}</p>
             ) : (
               <div className="cal-list-items">
                 {events.filter((event) => !onHours(event)).map((event) => <EventChip key={eventKey(event)} event={event} chips={chips} lead />)}
@@ -1037,7 +1036,7 @@ function MonthGrid({
       onFocus={grid.onFocus}
     >
       <span id={hint} className="sr-only">
-        {narrow ? "The arrows move between days; Enter chooses one." : "The arrows move between days; Enter adds an event on one."}
+        {narrow ? translateNow("calPage.monthHintNarrow") : translateNow("calPage.monthHint")}
       </span>
       <div className="cal-month-row cal-month-head" role="row">
         {names.map((name) => (
@@ -1069,7 +1068,7 @@ function MonthGrid({
                     <span className="cal-month-num">{Number(day.slice(8))}</span>
                     <span className="sr-only">, {fullDay(day)}: </span>
                     <span className="cal-month-count">{total > 0 ? total : null}</span>
-                    <span className="sr-only">{total > 0 ? ` ${plural(total, "item", "items")}` : EMPTY_MONTH_DAY[emptyDay]}</span>
+                    <span className="sr-only">{total > 0 ? ` ${countedNow(total, "counted.item", "counted.items").replace(/^\d+ /, "")}` : translateNow(EMPTY_MONTH_DAY[emptyDay])}</span>
                   </button>
                 </div>
               );
@@ -1097,13 +1096,13 @@ function MonthGrid({
                 <div className="cal-month-items">
                   {shown}
                   {total > shown.length && (
-                    <button type="button" className="cal-more" onClick={() => onMore(day)} aria-label={`${total - shown.length} more on ${fullDay(day)}: open its week`}>
-                      {total - shown.length} more
+                    <button type="button" className="cal-more" onClick={() => onMore(day)} aria-label={translateNow("calPage.moreOnOpen", { n: total - shown.length, day: fullDay(day) })}>
+                      {translateNow("calPage.moreCount", { n: total - shown.length })}
                     </button>
                   )}
                 </div>
                 <span className="cal-add-hint" aria-hidden="true">
-                  Add event
+                  {translateNow("calPage.addEvent")}
                 </span>
               </div>
             );
@@ -1118,7 +1117,7 @@ const WAITING_EVENTS = [2, 1, 3, 1, 2, 0, 1];
 
 function CalendarSkeleton({ view }: { view: View }) {
   return (
-    <div className="cal-skeleton" data-view={view} role="status" aria-label="Loading the calendar">
+    <div className="cal-skeleton" data-view={view} role="status" aria-label={translateNow("calPage.loadingCalendar")}>
       <div className="cal-skeleton-in" aria-hidden="true">
         <span className="cal-skeleton-head">
           {Array.from({ length: 7 }, (_, i) => (
@@ -1162,7 +1161,7 @@ function useDialog<T>(value: T | null, onClose: () => void) {
   return { ref, kept, props };
 }
 
-const TIMES = [{ value: "all", label: "All day" }, ...Array.from({ length: 48 }, (_, i) => ({ value: hhmm(i * 30), label: timeLabel(hhmm(i * 30)) }))];
+const times = () => [{ value: "all", label: translateNow("calPage.allDay") }, ...Array.from({ length: 48 }, (_, i) => ({ value: hhmm(i * 30), label: timeLabel(hhmm(i * 30)) }))];
 
 function EventComposer({
   draft,
@@ -1179,6 +1178,7 @@ function EventComposer({
   demoOnly: boolean;
   onClose: () => void;
 }) {
+  const { t, lang } = useStrings();
   const { notify, touch, saving } = useWorkspace();
   const { ref, kept, props } = useDialog(draft, onClose);
   const [title, setTitle] = useState("");
@@ -1197,12 +1197,12 @@ function EventComposer({
     setWhere(place === ALL ? GENERAL : place);
   }
   const calendars = [
-    { value: "own", label: OWN_CALENDAR, mark: BrandMark },
+    { value: "own", label: ownCalendar(), mark: BrandMark },
     ...accounts.flatMap((account) =>
       account.calendars.filter((entry) => entry.selected).map((entry) => ({ value: `${account.id}|${entry.id}`, label: `${entry.name}, ${account.email}`, mark: GoogleCalendarMark })),
     ),
   ];
-  const places = [{ value: GENERAL, label: "General" }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
+  const places = [{ value: GENERAL, label: t("filter.general") }, ...(tree ?? []).map((node) => ({ value: node.id, label: node.path }))];
 
   async function add() {
     if (!title.trim() || !day || busy) return;
@@ -1212,18 +1212,18 @@ function EventComposer({
     if (calendar === "own") {
       const answer = await tool<{ event: { id: string } }>("create_event", { node, title: title.trim(), ...when });
       setBusy(false);
-      if (!answer.ok) return notify({ text: `The event could not be added: ${answer.message}`, tone: "error" });
+      if (!answer.ok) return notify({ text: t("calPage.eventNotAdded", { message: answer.message }), tone: "error" });
       onClose();
       touch();
       const id = answer.event.id;
-      notify({ text: `Added event “${title.trim()}”`, tone: "status", undo: () => void saving(tool("delete_event", { id })) });
+      notify({ text: t("calPage.addedEvent", { title: title.trim() }), tone: "status", undo: () => void saving(tool("delete_event", { id })) });
       return;
     }
     const [account, calendarId] = calendar.split("|");
     const answer = await tool<{ event: { id: string; accountId: string; calendarId: string } }>("create_google_event", { account, calendar: calendarId, title: title.trim(), ...when });
     if (!answer.ok) {
       setBusy(false);
-      return notify({ text: `The event could not be added: ${answer.message}`, tone: "error" });
+      return notify({ text: t("calPage.eventNotAdded", { message: answer.message }), tone: "error" });
     }
     if (node) await tool("link_node_event", { node, account, calendar: calendarId, googleEvent: answer.event.id });
     setBusy(false);
@@ -1231,7 +1231,7 @@ function EventComposer({
     touch();
     const created = answer.event;
     notify({
-      text: `Added event “${title.trim()}”`,
+      text: t("calPage.addedEvent", { title: title.trim() }),
       tone: "status",
       undo: () => void saving(tool("delete_google_event", { account: created.accountId, calendar: created.calendarId, event: created.id })),
     });
@@ -1250,46 +1250,46 @@ function EventComposer({
           >
             <div className="cal-dialog-head">
               <h2 id="new-event-title" className="t-title">
-                New event
+                {t("calPage.newEvent")}
               </h2>
             </div>
             <label className="cal-field">
-              <span className="t-label">Title</span>
-              <Field autoFocus name="title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Homepage review with the client" maxLength={500} />
+              <span className="t-label">{t("calPage.titleLabel")}</span>
+              <Field autoFocus name="title" lang={lang} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("calPage.titlePlaceholder")} maxLength={500} />
             </label>
             <div className="cal-fields">
               <div className="cal-field">
-                <span className="t-label">Day</span>
-                <DatePicker label="Day" value={day} onChange={setDay} />
+                <span className="t-label">{t("calPage.dayLabel")}</span>
+                <DatePicker label={t("calPage.dayLabel")} value={day} onChange={setDay} />
               </div>
               <div className="cal-field">
-                <span className="t-label">Time</span>
-                <Select label="Time" value={time} options={TIMES} onChange={setTime} />
+                <span className="t-label">{t("calPage.timeLabel")}</span>
+                <Select label={t("calPage.timeLabel")} value={time} options={times()} onChange={setTime} />
               </div>
             </div>
             <div className="cal-field">
-              <span className="t-label">Calendar</span>
+              <span className="t-label">{t("calPage.calendarLabel")}</span>
               {calendars.length > 1 ? (
-                <Select label="Calendar" value={calendar} options={calendars} onChange={setCalendar} />
+                <Select label={t("calPage.calendarLabel")} value={calendar} options={calendars} onChange={setCalendar} />
               ) : (
-                <p className="t-value cal-read">{OWN_CALENDAR}</p>
+                <p className="t-value cal-read">{ownCalendar()}</p>
               )}
               {calendars.length === 1 && (
                 <p className="t-help">
                   {demoOnly
-                    ? "The sample accounts are read-only, so the event goes to the workspace's own calendar."
-                    : "With a Google account connected, its calendars are offered here too."}
+                    ? t("calPage.sampleReadOnly")
+                    : t("calPage.withGoogle")}
                 </p>
               )}
             </div>
             <div className="cal-field">
-              <span className="t-label">Client or project</span>
-              <Select label="Client or project" value={where} options={places} onChange={setWhere} />
+              <span className="t-label">{t("filter.clientOrProject")}</span>
+              <Select label={t("filter.clientOrProject")} value={where} options={places} onChange={setWhere} />
             </div>
             <div className="cal-dialog-foot">
-              <Button onClick={onClose}>Cancel</Button>
+              <Button onClick={onClose}>{t("common.cancel")}</Button>
               <Button type="submit" variant="primary" disabled={!title.trim() || !day || busy}>
-                {busy ? "Adding…" : "Add event"}
+                {busy ? t("quick.adding") : t("calPage.addEvent")}
               </Button>
             </div>
           </form>
@@ -1300,6 +1300,7 @@ function EventComposer({
 }
 
 function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent | null; sample: boolean; tree: TreeNode[] | null; tasks: TaskData[]; onClose: () => void }) {
+  const { t } = useStrings();
   const { notify, touch, saving } = useWorkspace();
   const { ref, kept, props } = useDialog(event, onClose);
   const shown = event ?? kept;
@@ -1318,7 +1319,7 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
     };
   }, [event, reread]);
 
-  if (!shown) return <dialog {...props} className="dialog cal-dialog" aria-label="Event" />;
+  if (!shown) return <dialog {...props} className="dialog cal-dialog" aria-label={t("calPage.event")} />;
   const items = inside?.key === key ? inside.items : null;
   const linkedNodes = shown.linkedNodeIds.map((id) => tree?.find((node) => node.id === id)).filter((node): node is TreeNode => Boolean(node));
   const target = shown.origin === "local" ? { event: shown.localId } : { account: shown.accountId, calendar: shown.calendarId, googleEvent: shown.id };
@@ -1329,62 +1330,62 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
 
   async function linkTask(task: TaskData) {
     const answer = await tool("link_task_event", { task: task.id, ...target });
-    if (!answer.ok) return notify({ text: `“${inlinePlain(task.title)}” could not be linked: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("calPage.couldNotLink", { title: inlinePlain(task.title), message: answer.message }), tone: "error" });
     setReread((n) => n + 1);
     touch();
-    notify({ text: `Linked “${inlinePlain(task.title)}” to “${shown!.title}”`, tone: "status", undo: () => void saving(tool("unlink_task_event", { task: task.id })) });
+    notify({ text: t("calPage.linkedTo", { title: inlinePlain(task.title), event: shown!.title }), tone: "status", undo: () => void saving(tool("unlink_task_event", { task: task.id })) });
   }
   async function unlinkTask(item: Item) {
     const answer = await tool("unlink_task_event", { task: item.id });
-    if (!answer.ok) return notify({ text: `“${inlinePlain(item.title)}” could not be unlinked: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("calPage.couldNotUnlink", { title: inlinePlain(item.title), message: answer.message }), tone: "error" });
     setReread((n) => n + 1);
     touch();
-    notify({ text: `Unlinked “${inlinePlain(item.title)}” from “${shown!.title}”`, tone: "status", undo: () => void saving(tool("link_task_event", { task: item.id, ...target })) });
+    notify({ text: t("calPage.unlinkedFrom", { title: inlinePlain(item.title), event: shown!.title }), tone: "status", undo: () => void saving(tool("link_task_event", { task: item.id, ...target })) });
   }
   async function linkNode(node: TreeNode) {
     const answer = await tool("link_node_event", { node: node.id, ...target });
-    if (!answer.ok) return notify({ text: `${node.path} could not be linked: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("calPage.placeCouldNotLink", { path: node.path, message: answer.message }), tone: "error" });
     touch();
-    notify({ text: `Linked ${node.path} to “${shown!.title}”`, tone: "status", undo: () => void saving(tool("unlink_node_event", { node: node.id, ...target })) });
+    notify({ text: t("calPage.placeLinkedTo", { path: node.path, event: shown!.title }), tone: "status", undo: () => void saving(tool("unlink_node_event", { node: node.id, ...target })) });
   }
   async function unlinkNode(node: TreeNode) {
     const answer = await tool("unlink_node_event", { node: node.id, ...target });
-    if (!answer.ok) return notify({ text: `${node.path} could not be unlinked: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("calPage.placeCouldNotUnlink", { path: node.path, message: answer.message }), tone: "error" });
     touch();
-    notify({ text: `Unlinked ${node.path} from “${shown!.title}”`, tone: "status", undo: () => void saving(tool("link_node_event", { node: node.id, ...target })) });
+    notify({ text: t("calPage.placeUnlinkedFrom", { path: node.path, event: shown!.title }), tone: "status", undo: () => void saving(tool("link_node_event", { node: node.id, ...target })) });
   }
   async function remove() {
     const current = shown!;
     if (current.origin === "local" && current.localId) {
       const id = current.localId;
       const answer = await tool("delete_event", { id });
-      if (!answer.ok) return notify({ text: `“${current.title}” could not be deleted: ${answer.message}`, tone: "error" });
+      if (!answer.ok) return notify({ text: t("row.couldNotDelete", { title: current.title, message: answer.message }), tone: "error" });
       onClose();
       touch();
-      notify({ text: `Deleted “${current.title}”`, tone: "status", undo: () => void saving(post(`/api/events/${id}/restore`, {})) });
+      notify({ text: t("workspace.deletedItem", { title: current.title }), tone: "status", undo: () => void saving(post(`/api/events/${id}/restore`, {})) });
       return;
     }
     const answer = await tool("delete_google_event", { account: current.accountId, calendar: current.calendarId, event: current.id });
-    if (!answer.ok) return notify({ text: `“${current.title}” could not be deleted: ${answer.message}`, tone: "error" });
+    if (!answer.ok) return notify({ text: t("row.couldNotDelete", { title: current.title, message: answer.message }), tone: "error" });
     onClose();
     touch();
-    notify({ text: `Deleted “${current.title}” from its Google calendar`, tone: "status" });
+    notify({ text: t("calPage.deletedFromGoogle", { title: current.title }), tone: "status" });
   }
 
   const linkEntries: MenuEntry[] = [
     {
       kind: "submenu",
-      label: "A task",
+      label: t("calPage.aTask"),
       entries: candidates.length
-        ? candidates.slice(0, 40).map((task): MenuEntry => ({ kind: "action", label: inlinePlain(task.title), detail: task.path ?? "General", onSelect: () => void linkTask(task) }))
-        : [{ kind: "action", label: "No open task to link", disabled: true, onSelect: () => undefined }],
+        ? candidates.slice(0, 40).map((task): MenuEntry => ({ kind: "action", label: inlinePlain(task.title), detail: task.path ?? t("filter.general"), onSelect: () => void linkTask(task) }))
+        : [{ kind: "action", label: t("calPage.noOpenTask"), disabled: true, onSelect: () => undefined }],
     },
     {
       kind: "submenu",
-      label: "A client or project",
+      label: t("calPage.aClientOrProject"),
       entries: nodeCandidates.length
         ? nodeCandidates.map((node): MenuEntry => ({ kind: "action", label: node.path, onSelect: () => void linkNode(node) }))
-        : [{ kind: "action", label: "Every client and project is linked", disabled: true, onSelect: () => undefined }],
+        : [{ kind: "action", label: t("calPage.everyLinked"), disabled: true, onSelect: () => undefined }],
     },
   ];
 
@@ -1395,16 +1396,16 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
           <div className="cal-dialog-head">
             <p className="t-meta cal-dialog-origin">
               {shown.origin === "local" ? <BrandMark className="cal-origin-mark" /> : <GoogleCalendarMark className="cal-origin-mark" />}
-              {shown.origin === "local" ? OWN_CALENDAR : `Google calendar, ${shown.accountEmail}`}
+              {shown.origin === "local" ? ownCalendar() : t("calPage.googleCalendar", { email: shown.accountEmail })}
             </p>
             <div className="cal-dialog-tools">
               <Menu
-                label="More"
-                about={`for “${shown.title}”`}
-                entries={[{ kind: "action", label: "Delete", tone: "danger", disabled: sample, detail: sample ? "The sample accounts are read-only" : undefined, onSelect: () => void remove() }]}
+                label={t("common.more")}
+                about={t("board.moreFor", { name: `“${shown.title}”` })}
+                entries={[{ kind: "action", label: t("calPage.delete"), tone: "danger", disabled: sample, detail: sample ? t("calPage.sampleReadOnlyShort") : undefined, onSelect: () => void remove() }]}
               />
               <Button size="sm" onClick={onClose}>
-                Close
+                {t("common.close")}
               </Button>
             </div>
           </div>
@@ -1413,16 +1414,16 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
           </h2>
           <dl className="cal-facts">
             <div>
-              <dt className="t-label">When</dt>
+              <dt className="t-label">{t("calPage.when")}</dt>
               <dd className="t-value">{whenText(shown)}</dd>
             </div>
             <div>
-              <dt className="t-label">Client or project</dt>
-              <dd className="t-value">{place ?? "General"}</dd>
+              <dt className="t-label">{t("filter.clientOrProject")}</dt>
+              <dd className="t-value">{place ?? t("filter.general")}</dd>
             </div>
             {shown.location && (
               <div>
-                <dt className="t-label">Location</dt>
+                <dt className="t-label">{t("calPage.location")}</dt>
                 <dd className="t-value">{shown.location}</dd>
               </div>
             )}
@@ -1431,23 +1432,23 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
           <section className="cal-linked" aria-labelledby="event-linked">
             <div className="cal-linked-head">
               <h3 id="event-linked" className="t-label">
-                Linked
+                {t("calPage.linked")}
               </h3>
-              <Menu label="Link to…" name={`Link “${shown.title}” to…`} entries={linkEntries} className="cal-link-menu" />
+              <Menu label={t("calPage.linkTo")} name={t("calPage.linkNamed", { title: shown.title })} entries={linkEntries} className="cal-link-menu" />
             </div>
-            <h4 className="t-meta cal-linked-kind">Tasks and subtasks</h4>
+            <h4 className="t-meta cal-linked-kind">{t("calPage.tasksSubtasks")}</h4>
             {shown.origin === "google" ? (
-              <p className="t-help">Linked tasks show this event in their own detail.</p>
+              <p className="t-help">{t("calPage.linkedTasksShow")}</p>
             ) : items === null ? (
               inside?.key === key && inside.error ? (
                 <p className="inline-note" data-tone="alert">
-                  This event&apos;s tasks could not be loaded: {inside.error}
+                  {t("calPage.eventTasksNotLoaded", { message: inside.error })}
                 </p>
               ) : (
-                <span className="skeleton" aria-label="Loading the tasks of the event" />
+                <span className="skeleton" aria-label={t("calPage.loadingEventTasks")} />
               )
             ) : items.length === 0 ? (
-              <p className="t-help">No linked tasks.</p>
+              <p className="t-help">{t("calPage.noLinkedTasks")}</p>
             ) : (
               <ul className="cal-linked-list">
                 {items.map((item) => (
@@ -1461,18 +1462,18 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
                       }}
                     >
                       <span className="t-value">{inlinePlain(item.title)}</span>
-                      <span className="t-meta">{item.parentId ? "Subtask" : "Task"}, {item.nodePath ?? "General"}</span>
+                      <span className="t-meta">{item.parentId ? t("calPage.subtask") : t("type.task")}, {item.nodePath ?? t("filter.general")}</span>
                     </button>
-                    <Button size="sm" variant="quiet" onClick={() => void unlinkTask(item)} aria-label={`Unlink “${inlinePlain(item.title)}” from the event`}>
-                      Unlink
+                    <Button size="sm" variant="quiet" onClick={() => void unlinkTask(item)} aria-label={t("calPage.unlinkNamed", { title: inlinePlain(item.title) })}>
+                      {t("calPage.unlink")}
                     </Button>
                   </li>
                 ))}
               </ul>
             )}
-            <h4 className="t-meta cal-linked-kind">Clients and projects</h4>
+            <h4 className="t-meta cal-linked-kind">{t("calPage.clientsProjects")}</h4>
             {linkedNodes.length === 0 ? (
-              <p className="t-help">No linked clients or projects.</p>
+              <p className="t-help">{t("calPage.noLinkedPlaces")}</p>
             ) : (
               <ul className="cal-linked-list">
                 {linkedNodes.map((node) => (
@@ -1480,8 +1481,8 @@ function EventDetail({ event, sample, tree, tasks, onClose }: { event: CalEvent 
                     <span className="t-value cal-linked-node" data-color={node.color ?? undefined}>
                       {node.path}
                     </span>
-                    <Button size="sm" variant="quiet" onClick={() => void unlinkNode(node)} aria-label={`Unlink ${node.path} from the event`}>
-                      Unlink
+                    <Button size="sm" variant="quiet" onClick={() => void unlinkNode(node)} aria-label={t("calPage.unlinkPlace", { path: node.path })}>
+                      {t("calPage.unlink")}
                     </Button>
                   </li>
                 ))}

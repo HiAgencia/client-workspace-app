@@ -5,6 +5,7 @@ import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { safeHref, sanitizeRichText, TONES, type Tone } from "@/lib/rich-text";
+import { useStrings, type StringKey } from "@/lib/strings";
 import { cx } from "@/lib/utils";
 import { BoldIcon, BulletsIcon, ItalicIcon, LinkIcon, NumbersIcon, type Icon } from "./icons";
 
@@ -30,20 +31,22 @@ const ToneMark = Mark.create<{ tone: Tone | null }>({
   },
 });
 
-const TONE_NAMES: Record<Tone, string> = { red: "Red", amber: "Amber", green: "Green", blue: "Blue", violet: "Violet" };
+const TONE_NAMES: Record<Tone, StringKey> = { red: "color.red", amber: "color.amber", green: "color.green", blue: "color.blue", violet: "color.violet" };
 
 type RichEditorProps = {
   value: string;
   onChange: (html: string) => void;
   onBlur?: () => void;
   label: string;
+  lang?: string;
   placeholder?: string;
   autoFocus?: boolean;
   id?: string;
   onEscape?: () => void;
 };
 
-export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFocus = false, id, onEscape }: RichEditorProps) {
+export function RichEditor({ value, onChange, onBlur, label, lang, placeholder, autoFocus = false, id, onEscape }: RichEditorProps) {
+  const { t } = useStrings();
   const own = useId();
   const editorId = id ?? `editor-${own.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [linking, setLinking] = useState(false);
@@ -83,6 +86,7 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": label,
+        ...(lang ? { lang } : {}),
         class: "field rich-field",
         ...(placeholder ? { "data-placeholder": placeholder } : {}),
       },
@@ -94,6 +98,10 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
     },
     onBlur: () => onBlur?.(),
   });
+
+  useEffect(() => {
+    if (editor && lang) editor.view.dom.setAttribute("lang", lang);
+  }, [editor, lang]);
 
   useEffect(() => {
     if (!editor || value === emitted.current) return;
@@ -173,13 +181,13 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
 
   return (
     <div className="rich" data-rich-editor data-empty={state?.empty || undefined}>
-      <div className="rich-bar" role="toolbar" aria-label={`Formatting of ${label}`} aria-controls={editorId}>
-        {tool("Bold", state?.bold, () => editor?.chain().focus().toggleBold().run(), BoldIcon)}
-        {tool("Italic", state?.italic, () => editor?.chain().focus().toggleItalic().run(), ItalicIcon)}
-        {tool("List", state?.bullet, () => editor?.chain().focus().toggleBulletList().run(), BulletsIcon)}
-        {tool("Numbered", state?.ordered, () => editor?.chain().focus().toggleOrderedList().run(), NumbersIcon)}
+      <div className="rich-bar" role="toolbar" aria-label={t("rich.formattingOf", { label })} aria-controls={editorId}>
+        {tool(t("rich.bold"), state?.bold, () => editor?.chain().focus().toggleBold().run(), BoldIcon)}
+        {tool(t("rich.italic"), state?.italic, () => editor?.chain().focus().toggleItalic().run(), ItalicIcon)}
+        {tool(t("rich.list"), state?.bullet, () => editor?.chain().focus().toggleBulletList().run(), BulletsIcon)}
+        {tool(t("rich.numbered"), state?.ordered, () => editor?.chain().focus().toggleOrderedList().run(), NumbersIcon)}
         {tool(
-          "Link",
+          t("rich.link"),
           state?.link || linking,
           () => {
             setAddress((editor?.getAttributes("link").href as string | undefined) ?? "");
@@ -189,22 +197,22 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
           LinkIcon,
         )}
         <span className="rich-sep" aria-hidden="true" />
-        <span className="rich-tones" role="group" aria-label={`Color of the selected text in ${label}`}>
+        <span className="rich-tones" role="group" aria-label={t("rich.colorOf", { label })}>
           {TONES.map((tone) => (
             <button
               key={tone}
               type="button"
               className={cx("btn btn-quiet btn-sm btn-icon rich-tool", `tc-${tone}`)}
               aria-pressed={state?.tone === tone}
-              title={TONE_NAMES[tone]}
+              title={t(TONE_NAMES[tone])}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => editor?.chain().focus().setMark("tone", { tone }).run()}
             >
               <span className="rich-swatch" aria-hidden="true" />
-              <span className="sr-only">{TONE_NAMES[tone]}</span>
+              <span className="sr-only">{t(TONE_NAMES[tone])}</span>
             </button>
           ))}
-          {state && state.tone !== "none" && tool("No color", false, () => editor?.chain().focus().unsetMark("tone").run())}
+          {state && state.tone !== "none" && tool(t("rich.noColor"), false, () => editor?.chain().focus().unsetMark("tone").run())}
         </span>
       </div>
       {linking && (
@@ -214,7 +222,7 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
             id={`${editorId}-link`}
             name={`${editorId}-link`}
             className={cx("field", linkError && "field-invalid")}
-            aria-label="Link address"
+            aria-label={t("rich.linkAddress")}
             aria-invalid={linkError || undefined}
             placeholder="https://… or mailto:…"
             value={address}
@@ -222,11 +230,11 @@ export function RichEditor({ value, onChange, onBlur, label, placeholder, autoFo
             onKeyDown={onLinkKey}
           />
           <button type="button" className="btn btn-sm" onClick={applyLink}>
-            <span className="btn-label">{address.trim() ? "Apply" : "Remove link"}</span>
+            <span className="btn-label">{address.trim() ? t("rich.apply") : t("rich.removeLink")}</span>
           </button>
           {linkError && (
             <p className="inline-note" data-tone="alert">
-              Only web (http, https) and email (mailto) addresses are kept.
+              {t("rich.onlyAddresses")}
             </p>
           )}
         </div>

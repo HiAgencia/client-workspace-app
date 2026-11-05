@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useMedia } from "@/components/ui/use-media";
 import { DarkIcon, DownIcon, ImageIcon, LightIcon, UpIcon } from "@/components/ui/icons";
 import { usePiece } from "@/components/ui/use-piece";
-import { count } from "@/lib/count";
-import { LOCALE } from "@/lib/dates";
+import { currentLanguage } from "@/lib/language";
+import { translateNow, useStrings } from "@/lib/strings";
 import { currentTheme, subscribeTheme, type Theme } from "@/lib/theme";
 import type { MailRow } from "@/lib/tools/mail-schema";
 import { tool } from "../client-api";
@@ -56,7 +56,7 @@ export function useMailMode(): { mode: Theme; setMode: (next: Theme) => void } {
 export const MAIL_PHONE = "(width < 40rem)";
 
 const fullTime = (iso: string) =>
-  new Intl.DateTimeFormat(LOCALE, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+  new Intl.DateTimeFormat(currentLanguage(), { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 
 type ViewerProps = {
   row: MailRow;
@@ -70,6 +70,7 @@ type ViewerProps = {
 };
 
 export function MailViewer({ row, onPrevious, onNext, note, actions, below, more, onClose }: ViewerProps) {
+  const { t, counted } = useStrings();
   const key = `${row.accountId}:${row.id}`;
   const [read, setRead] = useState<{ key: string; message: MailContent | null; error: string | null } | null>(null);
   const { mode, setMode } = useMailMode();
@@ -98,24 +99,24 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
 
   const moving = (
     <div className="mail-bar-move">
-      <div className="btn-group" role="group" aria-label="Move through the list">
+      <div className="btn-group" role="group" aria-label={t("viewer.moveThrough")}>
         {onClose && (
-          <Button size="sm" onClick={onClose} aria-label="Back to the list">
-            Back
+          <Button size="sm" onClick={onClose} aria-label={t("viewer.backToList")}>
+            {t("viewer.back")}
           </Button>
         )}
         <Button
           size="sm"
           className="btn-icon"
-          title="Previous message (K)"
+          title={t("viewer.prevTitle")}
           aria-keyshortcuts="K"
           onClick={onPrevious ?? undefined}
           disabled={!onPrevious}
-          aria-label={onPrevious ? "Previous message" : "Previous message: none in the list"}
+          aria-label={onPrevious ? t("viewer.prev") : t("viewer.prevNone")}
         >
           <UpIcon />
         </Button>
-        <Button size="sm" className="btn-icon" title="Next message (J)" aria-keyshortcuts="J" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? "Next message" : "Next message: none in the list"}>
+        <Button size="sm" className="btn-icon" title={t("viewer.nextTitle")} aria-keyshortcuts="J" onClick={onNext ?? undefined} disabled={!onNext} aria-label={onNext ? t("viewer.next") : t("viewer.nextNone")}>
           <DownIcon />
         </Button>
       </div>
@@ -144,21 +145,21 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
         </div>
         <div className="t-meta mail-where-line">
           <span>
-            To <span className="mail-address">{row.accountEmail}</span>
+            {t("viewer.to")} <span className="mail-address">{row.accountEmail}</span>
             {note}
           </span>
           <span className="mail-where-place">
             {row.place ? (
               <>
-                In <PlaceName path={row.place.path} color={row.place.color} />
+                {t("viewer.in")} <PlaceName path={row.place.path} color={row.place.color} />
               </>
             ) : (
-              "Not linked to a client or project"
+              t("viewer.notLinked")
             )}
           </span>
           {row.important && (
             <span className="pill" data-tone="warn">
-              Important
+              {t("mailPage.important")}
             </span>
           )}
         </div>
@@ -171,18 +172,18 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
           <ImageIcon className="mail-images-icon" />
           <p className="t-meta">
             {imagesOn
-              ? `Images from ${row.from.email} load automatically.`
-              : `${count(message.remoteImages, "image", "images")} hidden. Loading ${message.remoteImages === 1 ? "it" : "them"} tells the sender you opened this message.`}
+              ? t("viewer.imagesAuto", { email: row.from.email })
+              : t(message.remoteImages === 1 ? "viewer.imageHidden" : "viewer.imagesHidden", { what: counted(message.remoteImages, "counted.image", "counted.images") })}
           </p>
           <Button size="sm" variant="quiet" onClick={() => setImages(!imagesOn)} data-show-images={imagesOn ? undefined : ""}>
-            {imagesOn ? "Stop loading images" : "Show images"}
+            {imagesOn ? t("viewer.stopImages") : t("viewer.showImages")}
           </Button>
         </div>
       )}
 
       {read?.key === key && read.error ? (
         <p role="alert" className="inline-note" data-tone="alert">
-          This message could not be loaded: {read.error}
+          {t("viewer.notLoaded", { message: read.error })}
         </p>
       ) : (
         <MailFrame message={message} messageKey={key} mode={mode} images={imagesOn} />
@@ -192,14 +193,15 @@ export function MailViewer({ row, onPrevious, onNext, note, actions, below, more
 }
 
 function ModeSwitch({ value, onChange }: { value: Theme; onChange: (value: Theme) => void }) {
+  const { t } = useStrings();
   const rail = useRef<HTMLDivElement>(null);
   usePiece(rail, '[aria-pressed="true"]');
   return (
-    <div ref={rail} role="group" aria-label="Mail colors" className="seg mail-mode" data-mail-mode={value}>
+    <div ref={rail} role="group" aria-label={t("mailPage.mailColors")} className="seg mail-mode" data-mail-mode={value}>
       {(["light", "dark"] as const).map((option) => (
-        <button key={option} type="button" className="seg-option" aria-pressed={option === value} title={option === "light" ? "Light" : "Dark"} onClick={() => onChange(option)}>
+        <button key={option} type="button" className="seg-option" aria-pressed={option === value} title={option === "light" ? t("mailPage.light") : t("mailPage.dark")} onClick={() => onChange(option)}>
           {option === "light" ? <LightIcon /> : <DarkIcon />}
-          <span className="sr-only">{option === "light" ? "Light" : "Dark"}</span>
+          <span className="sr-only">{option === "light" ? t("mailPage.light") : t("mailPage.dark")}</span>
         </button>
       ))}
     </div>
@@ -271,7 +273,7 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
       aria-busy={!ready}
     >
       {!shown ? (
-        <div className="mail-frame-wait" role="status" aria-label="Loading the message">
+        <div className="mail-frame-wait" role="status" aria-label={translateNow("viewer.loadingMessage")}>
           <span className="skeleton skeleton-title" />
           <span className="skeleton" />
           <span className="skeleton" />
@@ -281,7 +283,7 @@ function MailFrame({ message, messageKey, mode, images }: { message: MailContent
           <iframe
             key={shownKey}
             ref={frame}
-            title="The message"
+            title={translateNow("viewer.theMessage")}
             className="mail-iframe"
             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
             referrerPolicy="no-referrer"

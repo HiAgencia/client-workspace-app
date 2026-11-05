@@ -15,6 +15,7 @@ import {
   weekdayNames,
   type Day,
 } from "@/lib/dates";
+import { useStrings } from "@/lib/strings";
 import { cx } from "@/lib/utils";
 import { NextIcon, PreviousIcon, type Icon } from "./icons";
 import { usePopupContainer } from "./popup-layer";
@@ -69,10 +70,11 @@ export function DatePicker({ value, onChange, label, look = "field", className, 
 }
 
 function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | null) => void }) {
+  const { t, lang } = useStrings();
   const now = today();
   const [active, setActive] = useState<Day>(value ?? now);
   const weekStart = useMemo(() => firstWeekday(), []);
-  const names = useMemo(() => weekdayNames(weekStart), [weekStart]);
+  const names = useMemo(() => (lang ? weekdayNames(weekStart) : weekdayNames(weekStart)), [weekStart, lang]);
   const weeks = monthGrid(active, weekStart);
   const month = active.slice(0, 7);
   const grid = useRef<HTMLTableElement>(null);
@@ -113,18 +115,18 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
   return (
     <div className="cal">
       <div className="cal-head">
-        <button type="button" className="btn btn-quiet btn-sm btn-icon" title="Previous month" onClick={() => move(addMonths(active, -1))}>
+        <button type="button" className="btn btn-quiet btn-sm btn-icon" title={t("picker.previousMonth")} onClick={() => move(addMonths(active, -1))}>
           <PreviousIcon />
-          <span className="sr-only">Previous</span>
+          <span className="sr-only">{t("picker.previous")}</span>
         </button>
         <p className="t-group cal-month-title" aria-live="polite">
           <span key={month} className="cal-month-name" data-from={from ?? undefined}>
             {monthTitle(active)}
           </span>
         </p>
-        <button type="button" className="btn btn-quiet btn-sm btn-icon" title="Next month" onClick={() => move(addMonths(active, 1))}>
+        <button type="button" className="btn btn-quiet btn-sm btn-icon" title={t("picker.nextMonth")} onClick={() => move(addMonths(active, 1))}>
           <NextIcon />
-          <span className="sr-only">Next</span>
+          <span className="sr-only">{t("picker.next")}</span>
         </button>
       </div>
       <table className="cal-grid" role="grid" ref={grid} onKeyDown={onKey} aria-label={monthTitle(active)}>
@@ -166,13 +168,13 @@ function Calendar({ value, onPick }: { value: Day | null; onPick: (day: Day | nu
       </table>
       <div className="cal-foot">
         <button type="button" className="btn btn-quiet btn-sm" onClick={() => onPick(now)}>
-          Today
+          {t("date.today")}
         </button>
         <button type="button" className="btn btn-quiet btn-sm" onClick={() => onPick(addDays(now, 1))}>
-          Tomorrow
+          {t("date.tomorrow")}
         </button>
         <button type="button" className="btn btn-quiet btn-sm" onClick={() => onPick(null)} disabled={value === null}>
-          No date
+          {t("date.noDate")}
         </button>
       </div>
     </div>
