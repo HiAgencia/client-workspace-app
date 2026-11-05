@@ -1,9 +1,10 @@
-// Draws the site's icons from the brand mark's geometry (src/components/brand-geometry.json) and the accent's colors in
-// the light theme (src/app/styles/tokens.css), and writes the web manifest that names them, all in public/: a file there is
-// served before the app runs, so a page's icons spend none of the Worker's CPU. `icon.svg`, `favicon.ico` (16, 32 and 48
-// px), `apple-icon.png` (180 px, square: the system rounds it). Each pixel is the average of an 8 × 8 grid of samples, so
-// the rounded ends read smooth at 16 px. `brand-mark.test.ts` and `manifest.test.ts` fail when what is written no longer
-// matches what this draws.
+// Draws the site's icons from the brand mark's geometry (src/components/brand-geometry.json): a black tile, the three
+// bars in white, and a thin outline in the brand's light blue (the light theme's `--brand-tile` in
+// src/app/styles/tokens.css) around each bar. It writes the web manifest that names them, all in public/: a file there
+// is served before the app runs, so a page's icons spend none of the Worker's CPU. `icon.svg`, `favicon.ico` (16, 32
+// and 48 px), `apple-icon.png` (180 px, square: the system rounds it). Each pixel is the average of an 8 × 8 grid of
+// samples, so the rounded ends read smooth at 16 px. `brand-mark.test.ts` and `manifest.test.ts` fail when what is
+// written no longer matches what this draws.
 // Usage: node scripts/icons.mjs
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -19,8 +20,11 @@ function token(name) {
   return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
 }
 
-const ACCENT = token("--brand-tile");
-const ON_ACCENT = token("--brand-ink");
+const OUTLINE = token("--brand-tile");
+const TILE = [0, 0, 0];
+const BAR = [255, 255, 255];
+// The outline's thickness around each bar, in geometry units: at 16 px it reads as a fine line, never a second bar.
+const OUTLINE_W = 1;
 const CANVAS = token("--canvas");
 // In a square of `size` units: the tile, then three bars stepping in.
 const UNITS = geometry.size;
@@ -37,7 +41,14 @@ function insideRounded(px, py, x, y, w, h, r) {
 // The mark's color at a point in geometry units, or null where the tile does not paint.
 function colorAt(px, py, rounded) {
   if (!insideRounded(px, py, 0, 0, UNITS, UNITS, rounded ? TILE_RADIUS : 0)) return null;
-  return BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2)) ? ON_ACCENT : ACCENT;
+  if (BARS.some((bar) => insideRounded(px, py, bar.x, bar.y, bar.w, bar.h, bar.h / 2))) return BAR;
+  if (
+    BARS.some((bar) =>
+      insideRounded(px, py, bar.x - OUTLINE_W, bar.y - OUTLINE_W, bar.w + 2 * OUTLINE_W, bar.h + 2 * OUTLINE_W, bar.h / 2 + OUTLINE_W),
+    )
+  )
+    return OUTLINE;
+  return TILE;
 }
 
 function draw(size, { rounded, background = null, scale = 1 }) {
@@ -138,7 +149,10 @@ function ico(images) {
 const hex = (rgb) => `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 // The three files as they should be on disk.
 export function iconFiles() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNITS} ${UNITS}"><rect width="${UNITS}" height="${UNITS}" rx="${TILE_RADIUS}" fill="${hex(ACCENT)}"/><g fill="${hex(ON_ACCENT)}">${BARS.map(
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${UNITS} ${UNITS}"><rect width="${UNITS}" height="${UNITS}" rx="${TILE_RADIUS}" fill="${hex(TILE)}"/><g fill="${hex(OUTLINE)}">${BARS.map(
+    (bar) =>
+      `<rect x="${bar.x - OUTLINE_W}" y="${bar.y - OUTLINE_W}" width="${bar.w + 2 * OUTLINE_W}" height="${bar.h + 2 * OUTLINE_W}" rx="${bar.h / 2 + OUTLINE_W}"/>`,
+  ).join("")}</g><g fill="${hex(BAR)}">${BARS.map(
     (bar) => `<rect x="${bar.x}" y="${bar.y}" width="${bar.w}" height="${bar.h}" rx="${bar.h / 2}"/>`,
   ).join("")}</g></svg>\n`;
   return {
