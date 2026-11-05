@@ -12,7 +12,9 @@
 	"vars": {
 		"NEXT_PUBLIC_SUPABASE_URL": "https://qtbfjdlcpqydhrkyvtac.supabase.co",
 		"NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_arRwwtxUt08Gmt09zvSmiw_yx57vEOM",
-		"GOOGLE_CLIENT_ID": "904917103058-tnu76vq3p9tlf3spka0e09o1nr33ssfb.apps.googleusercontent.com"
+		"GOOGLE_CLIENT_ID": "904917103058-tnu76vq3p9tlf3spka0e09o1nr33ssfb.apps.googleusercontent.com",
+		// The GA4 measurement ID, public by design: every page with analytics ships it.
+		"GA_MEASUREMENT_ID": "G-BCN6X6BNFF"
 	},
 	"assets": {
 		"directory": ".open-next/assets",

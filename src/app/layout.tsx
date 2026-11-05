@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/product";
 import { SmoothScroll } from "@/components/smooth-scroll";
+import { serverEnv } from "@/lib/env";
+import { Analytics } from "./analytics";
 import { BROWSER_BAR, THEME_KEY } from "@/lib/theme";
 import "./globals.css";
 
@@ -31,6 +33,7 @@ const BEFORE_PAINT = `(function(){var d=document.documentElement,k=${JSON.string
 )},m=matchMedia("(prefers-color-scheme: dark)");function s(){try{var v=localStorage.getItem(k);return v==="dark"||v==="light"?v:null}catch(e){return null}}function a(t){d.dataset.theme=t;var e=document.querySelector('meta[name="theme-color"]');if(!e){e=document.createElement("meta");e.name="theme-color";document.head.appendChild(e)}e.content=b[t]}function w(){return s()||(m.matches?"dark":"light")}a(w());m.addEventListener("change",function(){if(!s())a(w())});addEventListener("storage",function(e){if(e.key===k)a(w())});var v=function(){d.classList.toggle("page-hidden",document.hidden)};v();document.addEventListener("visibilitychange",v);})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const gaId = serverEnv("GA_MEASUREMENT_ID");
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
@@ -39,6 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         {children}
         <SmoothScroll />
+        {gaId && <Analytics id={gaId} />}
       </body>
     </html>
   );

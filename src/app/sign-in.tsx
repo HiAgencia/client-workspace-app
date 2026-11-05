@@ -9,6 +9,7 @@ import { dayOf } from "@/lib/dates";
 import { browserClient } from "@/lib/supabase/browser";
 import { signInWithGoogle } from "@/lib/supabase/google-sign-in";
 import type { SessionUser } from "@/lib/supabase/server";
+import { trackDemoStart, trackSignIn } from "@/lib/analytics";
 import { askOnceMoreIfCut, forgetLayout } from "./app/client-api";
 
 type Session = { kind: "loading" } | { kind: "out" } | { kind: "in"; user: SessionUser };
@@ -69,6 +70,7 @@ function useWay(config: PublicConfig): Way {
 
 async function withGoogle(config: PublicConfig, at: Spot) {
   const of = round;
+  trackSignIn(at);
   put({ busy: { what: "google", at }, error: null }, of);
   const { error } = await signInWithGoogle(config);
   if (error) put({ busy: null, error: { text: `Google sign-in is not available: ${error.message}`, at } }, of);
@@ -76,6 +78,7 @@ async function withGoogle(config: PublicConfig, at: Spot) {
 
 async function tryDemo(config: PublicConfig, at: Spot, enter: () => void) {
   const of = round;
+  trackDemoStart(at);
   const fail = (text: string) => put({ busy: null, error: { text, at } }, of);
   put({ busy: { what: "demo", at }, error: null }, of);
   const { data: existing } = await browserClient(config).auth.getSession();
