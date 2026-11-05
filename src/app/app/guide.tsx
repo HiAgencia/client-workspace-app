@@ -42,7 +42,7 @@ const STEPS: Step[] = [
   },
 ];
 
-const LEAVE_MS = 130;
+const FADE_CAP_MS = 400;
 const AFTER_ENTRY_MS = 700;
 const ENTRY_CAP_MS = 8000;
 const SCROLL_CAP_MS = 900;
@@ -190,13 +190,29 @@ export function useGuide(offer = true): { start: () => void; layer: ReactNode } 
     (change: () => Promise<void> | void) => {
       if (moving.current) return;
       moving.current = true;
+      const node = document.querySelector(".guide-card");
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       setLeaving(true);
-      after(LEAVE_MS, () => {
+      let settled = false;
+      const go = () => {
+        if (settled) return;
+        settled = true;
+        node?.removeEventListener("transitionend", onEnd);
         void Promise.resolve(change()).then(() => {
           moving.current = false;
           setLeaving(false);
         });
-      });
+      };
+      const onEnd: EventListener = (event) => {
+        if (event.target !== node || !("propertyName" in event) || event.propertyName !== "opacity") return;
+        go();
+      };
+      if (!node || reduced) {
+        after(0, go);
+        return;
+      }
+      node.addEventListener("transitionend", onEnd);
+      after(FADE_CAP_MS, go);
     },
     [after],
   );
