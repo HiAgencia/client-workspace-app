@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { authorizeAccount, connectAccount, encryptAuthorized } from "@/lib/google/connect";
 import { googleDeps } from "@/lib/google/deps";
-import { NONCE_COOKIE, verifyLinkState, verifyState } from "@/lib/google/state";
+import { linkIdOfState, NONCE_COOKIE, verifyLinkState, verifyState } from "@/lib/google/state";
 import { serverEnv } from "@/lib/env";
 import { SESSION_HEADERS } from "@/lib/http";
 import { readSession, userClient } from "@/lib/supabase/server";
@@ -20,9 +20,11 @@ export async function GET(request: NextRequest) {
   const secret = serverEnv("TOKEN_ENCRYPTION_KEY");
   if (!deps || !secret) return back(null, "not-configured");
 
-  const linkState = await verifyLinkState(secret, url.searchParams.get("state") ?? "");
-  if (linkState) {
+  const rawState = url.searchParams.get("state") ?? "";
+  const linkState = await verifyLinkState(secret, rawState);
+  if (linkState || linkIdOfState(rawState)) {
     const done = (outcome: string) => NextResponse.redirect(new URL(`/connect/google/done?outcome=${outcome}`, url.origin), { headers: SESSION_HEADERS });
+    if (!linkState) return done("invalid-link");
     if (url.searchParams.get("error")) return done("cancelled");
     const code = url.searchParams.get("code");
     if (!code) return done("cancelled");

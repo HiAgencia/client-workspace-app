@@ -24,6 +24,12 @@ export async function GET() {
   const who = await requireUser(db);
   if (!who.ok) return who.response;
   const service = serviceClient();
+  await service
+    .from("google_connect_links")
+    .update({ status: "cancelled", refresh_token: null, access_token: null })
+    .eq("owner_id", who.user.id)
+    .in("status", ["pending", "authorized"])
+    .lte("expires_at", new Date().toISOString());
   const { data, error } = await service
     .from("google_connect_links")
     .select("id, node_id, status, email, expires_at, created_at")
@@ -58,6 +64,12 @@ export async function POST(request: Request) {
     const { data: node, error } = await db.from("nodes").select("id").eq("id", value.nodeId).maybeSingle();
     if (error) return problem(500, "the node could not be loaded");
     if (!node) return problem(404, "no such node");
+    await service
+      .from("google_connect_links")
+      .update({ status: "cancelled", refresh_token: null, access_token: null })
+      .eq("owner_id", user.id)
+      .eq("node_id", value.nodeId)
+      .eq("status", "pending");
     const token = newLinkToken();
     const expiresAt = new Date(Date.now() + LINK_LIFETIME_MS).toISOString();
     const { data, error: insertError } = await service
@@ -93,9 +105,22 @@ export async function POST(request: Request) {
   if (link.status !== "authorized" || !link.email || !link.refresh_token || !link.access_token || !link.access_token_expires_at) {
     return problem(422, "this link has no authorized account waiting");
   }
-  if (Date.parse(link.expires_at) < Date.now()) return problem(422, "this connect link has expired");
+  if (Date.parse(link.expires_at) < Date.now()) {
+    await service.from("google_connect_links").update({ status: "cancelled", refresh_token: null, access_token: null }).eq("id", link.id).eq("status", "authorized");
+    return problem(422, "this connect link has expired");
+  }
   const deps = await googleDeps();
   if (!deps) return problem(503, `connecting accounts is not configured: ${missingGoogleConfig().join(", ")}`);
+  const claim = await service
+    .from("google_connect_links")
+    .update({ status: "accepted" })
+    .eq("id", link.id)
+    .eq("owner_id", user.id)
+    .eq("status", "authorized")
+    .gt("expires_at", new Date().toISOString())
+    .select("id");
+  if (claim.error) return problem(500, "the connect link could not be accepted");
+  if (!claim.data || claim.data.length === 0) return problem(422, "this link is no longer waiting to be accepted");
   try {
     const authorized = await decryptAuthorized(deps, {
       email: link.email,
@@ -107,13 +132,14 @@ export async function POST(request: Request) {
     await storeAuthorizedAccount(deps, { ownerId: user.id, nodeId: link.node_id }, authorized);
   } catch (caught) {
     console.error("connect link accept:", caught instanceof Error ? caught.message : caught);
+    await service.from("google_connect_links").update({ status: "authorized" }).eq("id", link.id).eq("status", "accepted");
     return problem(422, "the authorized account could not be connected: connect it again");
   }
   const { error: updateError } = await service
     .from("google_connect_links")
-    .update({ status: "accepted", refresh_token: null, access_token: null })
+    .update({ refresh_token: null, access_token: null })
     .eq("id", link.id)
-    .eq("status", "authorized");
-  if (updateError) console.error("connect link accept, closing the link:", updateError.message);
+    .eq("status", "accepted");
+  if (updateError) console.error("connect link accept, clearing its tokens:", updateError.message);
   return json({ ok: true });
 }
