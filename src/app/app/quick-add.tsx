@@ -85,6 +85,7 @@ function QuickAddEditor({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  const adding = useRef(false);
   const fieldId = useId();
   const descriptionId = useId();
   const now = today();
@@ -98,8 +99,14 @@ function QuickAddEditor({
     const from = today();
     const to = addDays(from, 30);
     const range = instantsOf(from, to);
-    void readEvents<ListedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }, { withAccounts: false }).then((answer) => {
-      if (live && answer.ok) setEvents(answer.events.slice(0, 20));
+    void readEvents<ListedEvent>({ from: range.from, to: range.to, fromDay: from, toDay: to }).then((answer) => {
+      if (!live) return;
+      if (!answer.ok) {
+        setProblem("The calendars could not be read.");
+        return;
+      }
+      setEvents(answer.events);
+      if (answer.failures.length > 0) setProblem("Some calendars could not be read.");
     });
     return () => {
       live = false;
@@ -128,7 +135,8 @@ function QuickAddEditor({
   }
 
   async function add() {
-    if (busy) return;
+    if (adding.current) return;
+    adding.current = true;
     const payload = taskPayload({
       title: text,
       day,
@@ -142,10 +150,17 @@ function QuickAddEditor({
     });
     if (!payload.title) {
       setProblem("Write what has to be done.");
+      adding.current = false;
+      return field.current?.focus();
+    }
+    if (eventChoice.kind === "new" && !payload.dueOn) {
+      setProblem("Choose a date for the calendar event.");
+      adding.current = false;
       return field.current?.focus();
     }
     setBusy(true);
     setProblem(null);
+    let createdEvent: string | null = null;
     try {
       const answer = await tool<{ item: Item }>("create_task", {
         node: payload.node,
@@ -176,8 +191,16 @@ function QuickAddEditor({
           title: inlinePlain(payload.title),
           ...eventSpan(payload.dueOn ?? today(), payload.dueTime ?? null),
         });
-        const linked = made.ok && (await tool("link_task_event", { task: id, event: made.event.id })).ok;
-        if (!linked) missed.push("The calendar event");
+        if (!made.ok) missed.push("The calendar event");
+        else {
+          createdEvent = made.event.id;
+          const linked = await tool("link_task_event", { task: id, event: made.event.id });
+          if (!linked.ok) {
+            await tool("delete_event", { id: made.event.id });
+            createdEvent = null;
+            missed.push("The calendar event");
+          }
+        }
       } else if (eventChoice.kind === "local") {
         if (!(await tool("link_task_event", { task: id, event: eventChoice.id })).ok) missed.push("The calendar event");
       } else if (eventChoice.kind === "google") {
@@ -198,7 +221,17 @@ function QuickAddEditor({
           ? `Added “${inlinePlain(payload.title)}” in ${where}. ${missedText.charAt(0).toUpperCase()}${missedText.slice(1)} could not be added: it is open, add it there.`
           : `Added “${inlinePlain(payload.title)}” in ${where}.`,
         tone: failed.length ? "error" : "status",
-        undo: () => void saving(tool("delete_item", { id })),
+        undo: () =>
+          void saving(
+            (async () => {
+              const removed = await tool("delete_item", { id });
+              if (createdEvent) {
+                const event = await tool("delete_event", { id: createdEvent });
+                if (!event.ok) return event;
+              }
+              return removed;
+            })(),
+          ),
       });
       setText("");
       setDescription("");
@@ -207,6 +240,7 @@ function QuickAddEditor({
       setEventChoice({ kind: "none" });
       onDone("added", id);
     } finally {
+      adding.current = false;
       setBusy(false);
     }
   }
@@ -299,7 +333,7 @@ function QuickAddEditor({
           <Button size="sm" onClick={() => onDone("discard")}>
             Cancel
           </Button>
-          <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={!text.trim()} aria-keyshortcuts="Enter">
+          <Button size="sm" variant="primary" onClick={() => void add()} aria-busy={busy} disabled={busy || !text.trim()} aria-keyshortcuts="Enter">
             <span className="btn-label">{busy ? "Adding…" : submitLabel}</span>
             <kbd className="kbd" aria-hidden="true">
               <EnterKeyIcon />
